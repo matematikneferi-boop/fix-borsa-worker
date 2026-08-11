@@ -1,8 +1,8 @@
 const e=new Set(["6819672343"]),t="kolayfix",a="9.9";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo"]),d=t=>e.has(String(t));function u(e){
 const t=[[{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],[{text:"🎯 Güçlü sinyaller",callback_data:"tavan"}],[{text:"📈 Yüksek potansiyel",callback_data:"potansiyel"}],[{
-text:"📐 Yeni kırılımlar",callback_data:"fibo"}],[{text:"📊 Son 7 gün karnesi",callback_data:"karne7"}],[{text:"⭐ Takip listem",callback_data:"fav"},{text:"🏆 Liderlik",callback_data:"lider"}]]
-;return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([{text:"🎁 Davet linkim",callback_data:"davet"}]),t.push([{
+text:"📐 Yeni kırılımlar",callback_data:"fibo"}],[{text:"📊 Son 7 gün karnesi",callback_data:"karne7"}],[{text:"⭐ Takip listem",callback_data:"fav"}]]
+;return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
 const f="👋 <b>Fix Borsa</b>\n\nAşağıdaki düğmelerden istediğin listeyi aç.\nListeler gün içinde düzenli güncellenir.\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — o hissenin güncel sinyal durumunu gönderirim.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>"
 ;async function b(e,t,a){return fetch(`https://api.telegram.org/bot${e}/${t}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(a)}).then(e=>e.json()).catch(()=>null)}
@@ -114,7 +114,8 @@ const J=["H4sIAM6Qe2oC/71c6XbbOJZ+FQQ5ZYstipK8xaEsubN4Uu44lTpxUudkUvkBkZCEEgWqSd
 ;let G=null;async function X(e,t){if(!e.VERI)return[];const a=await e.VERI.get("fav:"+t);return a?JSON.parse(a):[]}function Z(e,t){if(!e||!e.kartlar)return null;for(const a of Object.keys(e.kartlar)){
 if("sira"===a)continue;const n=(e.kartlar[a]||[]).find(e=>e&&e.kod===t);if(n)return n}return null}function P(e,t){const a=Z(e,t)
 ;return a?"🔎 <b>"+t+"</b> için güncel durum\n\n"+j(a):"🔎 <b>"+t+"</b>\n\nBu hisse güncel tarama listelerinde yok — şu an aktif bir sinyali bulunmuyor.\n\n<i>Yeni tarama sonrası tekrar sorabilirsin.</i>"
-}const Q={tavan:"🟥 <b>GÜÇLÜ SİNYALLER</b>",potansiyel:"🟩 <b>YÜKSEK POTANSİYEL</b>",fibo:"🟦 <b>YENİ KIRILIMLAR</b>"};export default{async fetch(p,A,q){const $=new URL(p.url);if(n=$.origin,
+}function PY(uname,userId,chatId){const link="https://t.me/"+uname+"?start=r"+userId,metin="📈 Fix Borsa botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:",paylas="https://t.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(metin),menu=u(userId);menu.inline_keyboard=[[{text:"📤 Paylaş",url:paylas}]].concat(menu.inline_keyboard);return{chat_id:chatId,parse_mode:"HTML",disable_web_page_preview:!0,text:"📤 <b>Sistemi paylaş</b>\n\nAşağıdaki düğmeye dokun, Telegram'da kime göndereceğini seç. Davet bağlantın otomatik olarak gönderilir.",reply_markup:menu}}
+const Q={tavan:"🟥 <b>GÜÇLÜ SİNYALLER</b>",potansiyel:"🟩 <b>YÜKSEK POTANSİYEL</b>",fibo:"🟦 <b>YENİ KIRILIMLAR</b>"};export default{async fetch(p,A,q){const $=new URL(p.url);if(n=$.origin,
 i=A.PANEL_KEY||A.PUSH_KEY||t,"/surum"===$.pathname)return new Response("Fix Borsa worker surum "+a,{headers:{"content-type":"text/plain; charset=utf-8","Access-Control-Allow-Origin":"*"}})
 ;if("/setup"===$.pathname){
 const e=(e,t)=>new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#0d1117;color:#e6edf3;font:15px/1.6 system-ui,sans-serif;padding:18px"><h2 style="margin:0 0 10px">'+e+"</h2>"+t+'<p style="margin-top:18px"><a href="/" style="color:#388bfd">← Durum sayfasına dön</a></p></body>',{
@@ -171,15 +172,13 @@ a&&String(a)!==String(t.id)){const t=await F(e);t[a]=(t[a]||0)+1,await e.VERI.pu
 i&&(n.startsWith("/panel")||n.startsWith("/yonetici")))return d(t.from.id)?(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_web_page_preview:!0,
 text:"🛠 <b>Yönetici paneli</b>\n\nAşağıdaki düğmeye dokun — panel tarayıcıda açılır.\n\nAdres:\n<code>"+r()+"</code>",reply_markup:{inline_keyboard:[[{text:"🛠 Paneli aç",url:r()}],[{text:"◀️ Menü",
 callback_data:"menu"}]]}})),new Response("ok")):(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"Bu komut yöneticiye özeldir.",reply_markup:u(t.from.id)})),new Response("ok"))
-;if(i&&n.startsWith("/davet")){const e=(await b(A.BOT_TOKEN,"getMe",{}))?.result?.username||"bot";(await F(A))[String(t.from.id)];return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
-parse_mode:"HTML",disable_web_page_preview:!0,text:"<code>https://t.me/"+e+"?start=r"+t.from.id+"</code>",reply_markup:u(t.from.id)})),new Response("ok")}
+;if(i&&n.startsWith("/davet"))return q.waitUntil((async()=>{const e=(await b(A.BOT_TOKEN,"getMe",{}))?.result?.username||"bot";await b(A.BOT_TOKEN,"sendMessage",PY(e,t.from.id,t.chat.id))})()),new Response("ok")
 const o=a.toUpperCase().replace(/[^A-ZÇĞİÖŞÜ]/g,"");return i&&!a.startsWith("/")&&o.length>=3&&o.length<=6&&o.length===a.trim().length?(q.waitUntil((async()=>{const e=await g(A)
 ;await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_web_page_preview:!0,text:P(e,o),reply_markup:u(t.from.id)})})()),
 new Response("ok")):((i||n.startsWith("/start")||n.startsWith("/liste"))&&q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:f,parse_mode:"HTML",reply_markup:u(t.from.id)})),
 new Response("ok"))}if(e.callback_query){const t=e.callback_query,a=t.from.id,n="private"!==t.message.chat.type,i=n?a:t.message.chat.id,r=t.data
 ;if(await B(A,a))return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"Erişimin kapatılmış.",show_alert:!0}),new Response("ok");if("davet"===r){
-await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id});const e=(await b(A.BOT_TOKEN,"getMe",{}))?.result?.username||"bot";await F(A);return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{
-chat_id:i,parse_mode:"HTML",disable_web_page_preview:!0,text:"<code>https://t.me/"+e+"?start=r"+a+"</code>",reply_markup:u(a)})),new Response("ok")}
+await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id});const e=(await b(A.BOT_TOKEN,"getMe",{}))?.result?.username||"bot";return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",PY(e,a,i))),new Response("ok")}
 if("menu"===r)return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id}),q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:f,parse_mode:"HTML",reply_markup:u(a)})),
 new Response("ok");if("karne"===r&&!d(a))return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"🔐 Bu bölüm yöneticiye özeldir.",show_alert:!0}),new Response("ok")
 ;const s=c.has(r)&&!await async function(e,t){return!!d(t)||(await E(e)).includes(String(t))}(A,a)?await async function(e,t){const a=caches.default,n=M(t),i=await a.match(n);if(i){
@@ -210,11 +209,7 @@ if(!t.length)return"⭐ <b>TAKİP LİSTEM</b>\n\nListen boş.\n\nBir hissenin de
 ;let a="⭐ <b>TAKİP LİSTEM</b>\n<i>"+t.length+" hisse</i>\n\n",n=0,i=0;for(const r of t){const t=Z(e,r);if(!t){a+="▫️ <b>"+r+"</b> — güncel listede yok\n";continue}const s=I(t);null!==s&&(n+=s,i++),
 a+=(null===s?"▫️":s>=0?"🟢":"🔴")+" <b>"+r+"</b>  "+Number(t.fiyat).toFixed(2)+" ₺"+(null===s?"":"  ·  <b>"+(s>=0?"+":"")+s.toFixed(2)+"%</b>")+(void 0!==t.potansiyel&&null!==t.potansiyel?"  ·  hedefe +"+Number(t.potansiyel).toFixed(1)+"%":"")+"\n"
 }if(i){const e=n/i;a+="\n"+(e>=0?"🟢":"🔴")+" <b>Ortalama: "+(e>=0?"+":"")+e.toFixed(2)+"%</b>"}return a+="\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>",a}(l,e),u(a),!1)})()),new Response("ok")
-;if("lider"===r)return q.waitUntil((async()=>{await V(A,t,i,n,await async function(e,t){const a=await F(e),n=Object.entries(a).map(([e,t])=>({id:e,n:t})).sort((e,t)=>t.n-e.n)
-;let i="🏆 <b>DAVET LİDERLİK TABLOSU</b>\n\n";if(n.length){const e=["🥇","🥈","🥉"];n.slice(0,10).forEach((a,n)=>{const r=String(a.id)===String(t)
-;i+=(e[n]||n+1+".")+" "+(r?"<b>SEN</b>":"•••"+String(a.id).slice(-3))+" — <b>"+a.n+"</b> davet\n"})}else i+="Henüz kimse davet etmedi — ilk sen ol.\n"
-;const r=a[String(t)]||0,s=n.findIndex(e=>String(e.id)===String(t));return i+="\n━━━━━━━━━━━━━━━━\n",i+="📊 Senin davetin: <b>"+r+" kişi</b>"+(s>=0?"  ·  sıra <b>"+(s+1)+"</b>":"")+"\n",
-i+="<i>Davet linkini menüdeki 🎁 düğmesinden alabilirsin.</i>",i}(A,a),u(a),!1)})()),new Response("ok");if("ilk3"===r){const e=l&&l.kartlar&&l.kartlar.ilk3&&l.kartlar.ilk3.length
+if("ilk3"===r){const e=l&&l.kartlar&&l.kartlar.ilk3&&l.kartlar.ilk3.length
 ;return q.waitUntil(V(A,t,i,n,e?function(e){const t=e.kartlar&&e.kartlar.ilk3||[],a=e=>Number(e).toFixed(2),n=["🥇","🥈","🥉"];let i="🏅 <b>BU TARAMANIN İLK 3'Ü</b>\n";if(e.guncelleme){
 const t=new Date(e.guncelleme);i+="<i>"+String((t.getUTCHours()+3)%24).padStart(2,"0")+":"+String(t.getUTCMinutes()).padStart(2,"0")+" taramasından</i>\n"}return i+="\n",t.forEach((e,t)=>{
 i+="━━━━━━━━━━━━━━━━\n"+n[t]+" <b>"+e.kod+"</b>"+(e.tf?"  ·  <i>"+e.tf+"</i>":"")+(e.neden?"  ·  <i>"+e.neden+"</i>":"")+"\n",
