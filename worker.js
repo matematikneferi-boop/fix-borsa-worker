@@ -1,17 +1,20 @@
 const e=new Set(["6819672343"]),t="kolayfix",a="9.9";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo"]),d=t=>e.has(String(t));function u(e){
 const t=[[{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],[{text:"🎯 Güçlü sinyaller",callback_data:"tavan"}],[{text:"📈 Yüksek potansiyel",callback_data:"potansiyel"}],[{
-text:"📐 Yeni kırılımlar",callback_data:"fibo"}],[{text:"📊 Son 7 gün karnesi",callback_data:"karne7"}],[{text:"⭐ Takip listem",callback_data:"fav"}]]
+text:"📐 Yeni kırılımlar",callback_data:"fibo"}],[{text:"📊 Son 7 gün karnesi",callback_data:"karne7"},{text:"📆 Uzun vadeli özet",callback_data:"yillik"}],[{text:"⭐ Takip listem",callback_data:"fav"}]]
 ;return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
 const f="👋 <b>Fix Borsa</b>\n\nAşağıdaki düğmelerden istediğin listeyi aç.\nListeler gün içinde düzenli güncellenir.\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — o hissenin güncel sinyal durumunu gönderirim.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>"
 ;async function b(e,t,a){return fetch(`https://api.telegram.org/bot${e}/${t}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(a)}).then(e=>e.json()).catch(()=>null)}
-let p=0;async function y(e){if(!e.VERI)return{gunler:{}};const t=await e.VERI.get("gecmis");return t?JSON.parse(t):{gunler:{}}}async function k(e,t,a){if(!e.VERI)return;if(!a&&Date.now()-p<6e5)return
+let p=0;const DETAY_GUN=90,OZET_GUN=365;async function y(e){if(!e.VERI)return{gunler:{},ozet:{}};const t=await e.VERI.get("gecmis");return t?JSON.parse(t):{gunler:{},ozet:{}}}async function k(e,t,a){if(!e.VERI)return;if(!a&&Date.now()-p<6e5)return
 ;p=Date.now();const n=await y(e),i=new Date((r||Date.now())+108e5).toISOString().slice(0,10);var r;const s=function(e){const t={};if(!e||!e.kartlar)return t
 ;for(const a of Object.keys(e.kartlar))if("sira"!==a)for(const n of e.kartlar[a]||[])n&&n.kod&&n.fiyat>0&&(t[n.kod]=Number(n.fiyat));return t}(t);if(n.gunler[i]=n.gunler[i]||{kayitlar:{}},
 t.kartlar)for(const e of Object.keys(t.kartlar))if("sira"!==e)for(const a of t.kartlar[e]||[])a&&a.kod&&a.giris>0&&(n.gunler[i].kayitlar[a.kod]||(n.gunler[i].kayitlar[a.kod]={g:Number(a.giris),
 s:Number(a.fiyat)||Number(a.giris),t:a.tf||""}));for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayitlar))s[t]>0&&(n.gunler[e].kayitlar[t].s=s[t])
-;const l=Object.keys(n.gunler).sort().reverse().slice(0,7),o={};for(const e of l)o[e]=n.gunler[e];n.gunler=o,n.guncelleme=(new Date).toISOString(),await e.VERI.put("gecmis",JSON.stringify(n))}
+;n.ozet=n.ozet||{};const gt=Object.keys(n.gunler).sort().reverse(),gk=gt.slice(0,DETAY_GUN),gs=gt.slice(DETAY_GUN)
+;for(const e of gs){if(!n.ozet[e]){const o=m(e,n.gunler[e]);if(o)n.ozet[e]=o}}const go={};for(const e of gk)go[e]=n.gunler[e];n.gunler=go
+;const ot=Object.keys(n.ozet).sort().reverse();if(ot.length>OZET_GUN){const oo={};for(const e of ot.slice(0,OZET_GUN))oo[e]=n.ozet[e];n.ozet=oo}
+;n.guncelleme=(new Date).toISOString(),await e.VERI.put("gecmis",JSON.stringify(n))}
 function m(e,t){const a=Object.keys(t.kayitlar||{});if(!a.length)return null;let n=0,i=null,r=null;for(const e of a){const a=t.kayitlar[e];if(!(a.g>0&&a.s>0))continue;const s=100*(a.s/a.g-1);n+=s,
 (!i||s>i.y)&&(i={kod:e,y:s}),(!r||s<r.y)&&(r={kod:e,y:s})}const s=a.length,l=s?n/s:0;return{gun:e,n:s,ort:l,deger:1e5*(1+l/100),eniyi:i,enkotu:r}}async function g(e){if(o)return o;if(e.VERI){
 const t=await e.VERI.get("listeler");if(t)return o=JSON.parse(t),o}const t=await caches.default.match(new Request(l));return t?(o=await t.json().catch(()=>null),o):null}const h={kisitMin:10,
@@ -194,7 +197,7 @@ const a=t[e]||(t[e]={});for(const t of Object.keys(s[e]))"son"===t?a.son=s[e].so
 const[,e,s,o,c]=r.split(":"),d=o||"pot",f=Number(c||0),b=l&&l.kartlar&&l.kartlar[e],p=b&&b[Number(s)];let y=u(a);return b&&b.length&&(y=K(l,e,d,f,z(l,e,d))),q.waitUntil((async()=>{
 if(p&&y&&y.inline_keyboard){const e=(await X(A,a)).includes(p.kod);y={inline_keyboard:[[{text:(e?"⭐ Takipten çıkar":"⭐ Takibe al")+" · "+p.kod,callback_data:"fav:"+p.kod}]].concat(y.inline_keyboard)}}
 await V(A,t,i,n,p?j(p):"Bu hisse artık listede değil. Menüden yeniden bak.",y,!0)})()),new Response("ok")}if("karne7"===r)return q.waitUntil((async()=>{let e;try{e=await async function(e){
-const t=await y(e),a=Object.keys(t.gunler||{}).sort().reverse()
+const t=await y(e),a=Object.keys(t.gunler||{}).sort().reverse().slice(0,7)
 ;if(!a.length)return"📊 <b>SON 7 GÜN KARNESİ</b>\n\nHenüz yeterli geçmiş birikmedi. Kayıt her taramada işleniyor; birkaç gün sonra burada dolu bir tablo olacak.";let n="📊 <b>SON 7 GÜN KARNESİ</b>\n"
 ;n+="<i>Her gün o günün sinyallerine 100.000 TL eşit dağıtılsaydı</i>\n\n";let i=0,r=0,s=0;for(const e of a){const a=m(e,t.gunler[e]);if(!a)continue;r++,i+=a.deger,s+=a.n
 ;const[l,o,c]=e.split("-"),d=a.ort>=0?"🟢":"🔴";n+="━━━━━━━━━━━━━━━━\n",n+="<b>"+c+"/"+o+"</b>  ·  "+a.n+" sinyal\n",n+=d+" Ortalama: <b>"+(a.ort>=0?"+":"")+a.ort.toFixed(2)+"%</b>\n",
@@ -202,7 +205,19 @@ n+="💰 100.000 ₺ → <b>"+Math.round(a.deger).toLocaleString("tr-TR")+" ₺<
 a.enkotu&&(n+="   🔻 "+a.enkotu.kod+" "+(a.enkotu.y>=0?"+":"")+a.enkotu.y.toFixed(1)+"%"),n+="\n"}if(r){const e=i/r,t=100*(e/1e5-1);n+="━━━━━━━━━━━━━━━━\n",
 n+="<b>"+r+" günün ortalaması</b>  ·  "+s+" sinyal\n",n+=(t>=0?"🟢":"🔴")+" <b>"+(t>=0?"+":"")+t.toFixed(2)+"%</b>  ·  100.000 ₺ → <b>"+Math.round(e).toLocaleString("tr-TR")+" ₺</b>\n"}
 return n+="━━━━━━━━━━━━━━━━\n<i>Fiyatlar son taramaya göredir. Geçmiş performans geleceği garanti etmez.</i>\n<i>⚠️ Yatırım tavsiyesi değildir.</i>",n}(A)}catch(t){
-e="📊 Karne şu an hazırlanamadı, birazdan tekrar dene."}await V(A,t,i,n,e,u(a),!1)})()),new Response("ok");if("fav"===r||r.startsWith("fav:"))return q.waitUntil((async()=>{let e=await X(A,a)
+e="📊 Karne şu an hazırlanamadı, birazdan tekrar dene."}await V(A,t,i,n,e,u(a),!1)})()),new Response("ok");if("yillik"===r)return q.waitUntil((async()=>{let e;try{e=await async function(e){
+const g=await y(e),oy=Object.keys(g.ozet||{}),gy=Object.keys(g.gunler||{}),tum=[...oy];for(const d of gy)oy.includes(d)||tum.push(d);tum.sort()
+;if(!tum.length)return"📆 <b>UZUN VADELİ ÖZET</b>\n\nHenüz yeterli geçmiş birikmedi. Kayıt her taramada işleniyor; sistem kendi geçmişini biriktirdikçe burası dolacak."
+;let bakiye=1e5,toplamN=0,ilk=null,eniyi=null,enkotu=null;for(const d of tum){const rec=g.ozet[d]||m(d,g.gunler[d]);if(!rec)continue;ilk=ilk||d,bakiye*=1+rec.ort/100,toplamN+=rec.n
+;(!eniyi||rec.ort>eniyi.ort)&&(eniyi={gun:d,ort:rec.ort}),(!enkotu||rec.ort<enkotu.ort)&&(enkotu={gun:d,ort:rec.ort})}
+const getiri=100*(bakiye/1e5-1);let n="📆 <b>UZUN VADELİ ÖZET</b>\n<i>"+(ilk||tum[0])+" ↦ bugün · "+tum.length+" günlük kayıt · "+toplamN+" sinyal</i>\n\n"
+;n+="<i>İlk günden bu yana her günün ortalama getirisi zincirleme (bileşik) uygulansaydı</i>\n\n"
+;n+=(getiri>=0?"🟢":"🔴")+" Bileşik getiri: <b>"+(getiri>=0?"+":"")+getiri.toFixed(1)+"%</b>\n"
+;n+="💰 100.000 ₺ → <b>"+Math.round(bakiye).toLocaleString("tr-TR")+" ₺</b>\n"
+;eniyi&&(n+="🔝 En iyi gün: "+eniyi.gun+"  "+(eniyi.ort>=0?"+":"")+eniyi.ort.toFixed(1)+"%\n")
+;enkotu&&(n+="🔻 En kötü gün: "+enkotu.gun+"  "+(enkotu.ort>=0?"+":"")+enkotu.ort.toFixed(1)+"%\n")
+;return n+"\n<i>Detaylı (hisse bazlı) kayıtlar son "+DETAY_GUN+" gün için tutulur; daha eskisi günlük özet olarak "+OZET_GUN+" güne kadar saklanır.</i>\n<i>⚠️ Yatırım tavsiyesi değildir.</i>"
+}(A)}catch(t){e="📆 Özet şu an hazırlanamadı, birazdan tekrar dene."}await V(A,t,i,n,e,u(a),!1)})()),new Response("ok");if("fav"===r||r.startsWith("fav:"))return q.waitUntil((async()=>{let e=await X(A,a)
 ;if(r.startsWith("fav:")){const t=r.slice(4);e=e.includes(t)?e.filter(e=>e!==t):[t,...e],await async function(e,t,a){return e.VERI&&await e.VERI.put("fav:"+t,JSON.stringify(a.slice(0,30))),a}(A,a,e)}
 await V(A,t,i,n,function(e,t){
 if(!t.length)return"⭐ <b>TAKİP LİSTEM</b>\n\nListen boş.\n\nBir hissenin detayını açtığında <b>⭐ Takibe al</b> düğmesi çıkar. Eklediklerin burada, anlık kâr/zararıyla toplanır."
