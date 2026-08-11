@@ -5,10 +5,6 @@ compatibility_date = "2026-08-01"
 # Telegram bot token gibi gizli bilgileri buraya YAZMA.
 # Onları Cloudflare panelinden "Settings > Variables" kısmından ekleyeceksin.
 
-# Eğer kod içinde e.VERI.get(...) gibi KV kullanımı varsa,
-# KV namespace oluşturduktan sonra aşağıdaki satırların başındaki # işaretini kaldır
-# ve "id" kısmına kendi namespace ID'ni yaz:
-
-# [[kv_namespaces]]
-# binding = "VERI"
-# id = "BURAYA_KV_NAMESPACE_ID_YAZ"
+[[kv_namespaces]]
+binding = "VERI"
+id = "90aa260cfa1343e3a91bf96ea9615958"
