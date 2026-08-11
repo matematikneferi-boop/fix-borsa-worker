@@ -1,12 +1,12 @@
 const e=new Set(["6819672343"]),t="kolayfix",a="9.9";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo"]),d=t=>e.has(String(t));function u(e){
 const t=[[{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],[{text:"🎯 Güçlü sinyaller",callback_data:"tavan"}],[{text:"📈 Yüksek potansiyel",callback_data:"potansiyel"}],[{
-text:"📐 Yeni kırılımlar",callback_data:"fibo"}],[{text:"📊 Son 7 gün karnesi",callback_data:"karne7"},{text:"📆 Uzun vadeli özet",callback_data:"yillik"}],[{text:"⭐ Takip listem",callback_data:"fav"}]]
+text:"📐 Yeni kırılımlar",callback_data:"fibo"}],[{text:"📊 Son 7 gün karnesi",callback_data:"karne7"},{text:"📆 Uzun vadeli özet",callback_data:"yillik"}],[{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"🔔 Anlık uyarı ayarları",callback_data:"alarm"}]]
 ;return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
 const f="👋 <b>Fix Borsa</b>\n\nAşağıdaki düğmelerden istediğin listeyi aç.\nListeler gün içinde düzenli güncellenir.\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — o hissenin güncel sinyal durumunu gönderirim.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>"
 ;async function b(e,t,a){return fetch(`https://api.telegram.org/bot${e}/${t}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(a)}).then(e=>e.json()).catch(()=>null)}
-let p=0;const DETAY_GUN=90,OZET_GUN=365;async function y(e){if(!e.VERI)return{gunler:{},ozet:{}};const t=await e.VERI.get("gecmis");return t?JSON.parse(t):{gunler:{},ozet:{}}}async function k(e,t,a){if(!e.VERI)return;if(!a&&Date.now()-p<6e5)return
+let p=0;const DETAY_GUN=90,OZET_GUN=365;async function y(e){if(!e.VERI)return{gunler:{},ozet:{}};const t=await e.VERI.get("gecmis");if(!t)return{gunler:{},ozet:{}};const gp=JSON.parse(t);return gp.gunler=gp.gunler||{},gp.ozet=gp.ozet||{},gp}async function k(e,t,a){if(!e.VERI)return;if(!a&&Date.now()-p<6e5)return
 ;p=Date.now();const n=await y(e),i=new Date((r||Date.now())+108e5).toISOString().slice(0,10);var r;const s=function(e){const t={};if(!e||!e.kartlar)return t
 ;for(const a of Object.keys(e.kartlar))if("sira"!==a)for(const n of e.kartlar[a]||[])n&&n.kod&&n.fiyat>0&&(t[n.kod]=Number(n.fiyat));return t}(t);if(n.gunler[i]=n.gunler[i]||{kayitlar:{}},
 t.kartlar)for(const e of Object.keys(t.kartlar))if("sira"!==e)for(const a of t.kartlar[e]||[])a&&a.kod&&a.giris>0&&(n.gunler[i].kayitlar[a.kod]||(n.gunler[i].kayitlar[a.kod]={g:Number(a.giris),
@@ -16,7 +16,34 @@ s:Number(a.fiyat)||Number(a.giris),t:a.tf||""}));for(const e of Object.keys(n.gu
 ;const ot=Object.keys(n.ozet).sort().reverse();if(ot.length>OZET_GUN){const oo={};for(const e of ot.slice(0,OZET_GUN))oo[e]=n.ozet[e];n.ozet=oo}
 ;n.guncelleme=(new Date).toISOString(),await e.VERI.put("gecmis",JSON.stringify(n))}
 function m(e,t){const a=Object.keys(t.kayitlar||{});if(!a.length)return null;let n=0,i=null,r=null;for(const e of a){const a=t.kayitlar[e];if(!(a.g>0&&a.s>0))continue;const s=100*(a.s/a.g-1);n+=s,
-(!i||s>i.y)&&(i={kod:e,y:s}),(!r||s<r.y)&&(r={kod:e,y:s})}const s=a.length,l=s?n/s:0;return{gun:e,n:s,ort:l,deger:1e5*(1+l/100),eniyi:i,enkotu:r}}async function g(e){if(o)return o;if(e.VERI){
+(!i||s>i.y)&&(i={kod:e,y:s}),(!r||s<r.y)&&(r={kod:e,y:s})}const s=a.length,l=s?n/s:0;return{gun:e,n:s,ort:l,deger:1e5*(1+l/100),eniyi:i,enkotu:r}}async function yfKapanislar(kod){try{const u="https://query1.finance.yahoo.com/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=1y&interval=1d"
+;const res=await fetch(u,{headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}});if(!res.ok)return null;const j=await res.json().catch(()=>null)
+;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp)return null
+;const kap=rz.indicators&&rz.indicators.quote&&rz.indicators.quote[0]&&rz.indicators.quote[0].close;if(!kap)return null;const out={}
+;rz.timestamp.forEach((ts,idx)=>{const c=kap[idx];if(c==null||!(c>0))return;const gun=new Date(1e3*ts+108e5).toISOString().slice(0,10);out[gun]=Number(c)})
+;return out}catch(e){return null}}
+async function gecmisiDoldur(e,t){if(!e.VERI)return;if(await e.VERI.get("gecmisDolduruldu"))return
+;const kodlar=new Set();if(t&&t.kartlar)for(const k of Object.keys(t.kartlar))if("sira"!==k)for(const rc of t.kartlar[k]||[])rc&&rc.kod&&kodlar.add(rc.kod)
+;if(!kodlar.size)return;const simdi={};for(const k of Object.keys(t.kartlar))if("sira"!==k)for(const rc of t.kartlar[k]||[])rc&&rc.kod&&rc.fiyat>0&&(simdi[rc.kod]=Number(rc.fiyat))
+;const n=await y(e),bugun=new Date(Date.now()+108e5).toISOString().slice(0,10);let eklendi=0,denendi=0
+;const liste=[...kodlar];for(let i=0;i<liste.length;i+=6){const grup=liste.slice(i,i+6),sonuclar=await Promise.all(grup.map(k=>yfKapanislar(k)))
+;grup.forEach((kod,gi)=>{denendi++;const kap=sonuclar[gi];if(!kap)return;for(const gun of Object.keys(kap)){if(gun>=bugun)continue
+;n.gunler[gun]=n.gunler[gun]||{kayitlar:{}};if(!n.gunler[gun].kayitlar[kod]){n.gunler[gun].kayitlar[kod]={g:kap[gun],s:simdi[kod]||kap[gun],t:"1G"},eklendi++}}})}
+if(eklendi){n.ozet=n.ozet||{};const gt=Object.keys(n.gunler).sort().reverse(),gk=gt.slice(0,DETAY_GUN),gs=gt.slice(DETAY_GUN)
+;for(const gg of gs){if(!n.ozet[gg]){const oz=m(gg,n.gunler[gg]);if(oz)n.ozet[gg]=oz}}const go={};for(const gg of gk)go[gg]=n.gunler[gg];n.gunler=go
+;const ot=Object.keys(n.ozet).sort().reverse();if(ot.length>OZET_GUN){const oo={};for(const gg of ot.slice(0,OZET_GUN))oo[gg]=n.ozet[gg];n.ozet=oo}
+;n.guncelleme=(new Date).toISOString(),await e.VERI.put("gecmis",JSON.stringify(n))}
+if(eklendi||denendi>=kodlar.size)await e.VERI.put("gecmisDolduruldu",(new Date).toISOString())}
+async function alarmKullanicilari(e){if(!e.VERI)return[];const out=[];let cursor=void 0
+;for(;;){const liste=await e.VERI.list({prefix:"alarm:",limit:1e3,cursor});for(const k of liste.keys)out.push(k.name.slice(6))
+;if(liste.list_complete||!liste.cursor)break;cursor=liste.cursor}return out}
+async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;const yeniListe=yeni&&yeni.kartlar&&yeni.kartlar.tavan||[];if(!yeniListe.length)return
+;const eskiKodlar=new Set((eski&&eski.kartlar&&eski.kartlar.tavan||[]).map(x=>x&&x.kod).filter(Boolean))
+;const yeniGirenler=yeniListe.filter(x=>x&&x.kod&&!eskiKodlar.has(x.kod));if(!yeniGirenler.length)return
+;const kullanicilar=await alarmKullanicilari(e);if(!kullanicilar.length)return
+;for(const hisse of yeniGirenler){const metin="🚨 <b>GÜÇLÜ SİNYALE GİRDİ</b>\n\n"+j(hisse)
+;for(const uid of kullanicilar)await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,text:metin,parse_mode:"HTML",disable_web_page_preview:!0})}}
+async function g(e){if(o)return o;if(e.VERI){
 const t=await e.VERI.get("listeler");if(t)return o=JSON.parse(t),o}const t=await caches.default.match(new Request(l));return t?(o=await t.json().catch(()=>null),o):null}const h={kisitMin:10,
 kisitMax:30};let w=null,O=0;async function S(e,t){if(!t&&w&&Date.now()-O<6e4)return w;let a={...h};if(e.VERI){const t=await e.VERI.get("ayar");t&&(a={...a,...JSON.parse(t)})}return w=a,O=Date.now(),a}
 let T=null,x=0;async function E(e,t){if(!t&&T&&Date.now()-x<6e4)return T;if(!e.VERI)return T=[],x=Date.now(),T;const a=await e.VERI.get("vip");return T=a?JSON.parse(a):[],x=Date.now(),T}let v=null,R=0
@@ -131,9 +158,11 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 }const ee={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, GET, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"86400"}
 ;if("OPTIONS"===p.method)return new Response(null,{status:204,headers:ee});if("/push"===$.pathname){const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({
 "content-type":"application/json; charset=utf-8"},ee)});if("POST"!==p.method)return e({ok:!1,hata:"POST bekleniyor"},405);if(!s(A,$))return e({ok:!1,hata:"Şifre yanlış"},401)
-;const t=await p.json().catch(()=>null);if(!t||"object"!=typeof t)return e({ok:!1,hata:"Paket okunamadı"},400);t.guncelleme=(new Date).toISOString(),await async function(e,t){o=t,
+;const t=await p.json().catch(()=>null);if(!t||"object"!=typeof t)return e({ok:!1,hata:"Paket okunamadı"},400);t.guncelleme=(new Date).toISOString()
+;const eskiListe=await g(A).catch(()=>null);await async function(e,t){o=t,
 e.VERI&&await e.VERI.put("listeler",JSON.stringify(t)),await caches.default.put(new Request(l),new Response(JSON.stringify(t),{headers:{"Cache-Control":"max-age=86400",
-"content-type":"application/json"}}))}(A,t),q.waitUntil(k(A,t).catch(()=>{}));const n=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+(t.kartlar[e]||[]).length).join(" · "):""
+"content-type":"application/json"}}))}(A,t),q.waitUntil(k(A,t).catch(()=>{})),q.waitUntil(gecmisiDoldur(A,t).catch(()=>{})),q.waitUntil(alarmGonder(A,eskiListe,t).catch(()=>{}))
+;const n=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+(t.kartlar[e]||[]).length).join(" · "):""
 ;return e({ok:!0,surum:a,depo:!!A.VERI,sayim:n,guncelleme:t.guncelleme})}if($.pathname.startsWith("/panel")){if(!s(A,$))return new Response("yetkisiz",{status:401})
 ;const t="POST"===p.method?await p.json().catch(()=>({})):{},a=async e=>{const t=[];if(!A.VERI)return t;let a=null;for(;t.length<e;){const n=await A.VERI.list({prefix:"u:",limit:1e3,cursor:a||void 0})
 ;for(const a of n.keys){const n=await A.VERI.get(a.name);if(n&&t.push(JSON.parse(n)),t.length>=e)break}if(n.list_complete||!n.cursor)break;a=n.cursor}return t};if("/panel/vip"===$.pathname){
@@ -217,7 +246,11 @@ const getiri=100*(bakiye/1e5-1);let n="📆 <b>UZUN VADELİ ÖZET</b>\n<i>"+(ilk
 ;eniyi&&(n+="🔝 En iyi gün: "+eniyi.gun+"  "+(eniyi.ort>=0?"+":"")+eniyi.ort.toFixed(1)+"%\n")
 ;enkotu&&(n+="🔻 En kötü gün: "+enkotu.gun+"  "+(enkotu.ort>=0?"+":"")+enkotu.ort.toFixed(1)+"%\n")
 ;return n+"\n<i>Detaylı (hisse bazlı) kayıtlar son "+DETAY_GUN+" gün için tutulur; daha eskisi günlük özet olarak "+OZET_GUN+" güne kadar saklanır.</i>\n<i>⚠️ Yatırım tavsiyesi değildir.</i>"
-}(A)}catch(t){e="📆 Özet şu an hazırlanamadı, birazdan tekrar dene."}await V(A,t,i,n,e,u(a),!1)})()),new Response("ok");if("fav"===r||r.startsWith("fav:"))return q.waitUntil((async()=>{let e=await X(A,a)
+}(A)}catch(t){e="📆 Özet şu an hazırlanamadı, birazdan tekrar dene."}await V(A,t,i,n,e,u(a),!1)})()),new Response("ok");if("alarm"===r||"alarm:on"===r||"alarm:off"===r)return q.waitUntil((async()=>{if(A.VERI){if("alarm:on"===r)await A.VERI.put("alarm:"+a,"1");else if("alarm:off"===r)await A.VERI.delete("alarm:"+a)}
+const acik=!!(A.VERI&&await A.VERI.get("alarm:"+a))
+;const metin="🔔 <b>ANLIK UYARI AYARLARI</b>\n\n"+(acik?"✅ Şu an <b>açık</b>.\n\nBir hisse 🎯 <b>Güçlü sinyaller</b> listesine girdiği an sana özelden mesaj gönderilir.":"🔕 Şu an <b>kapalı</b>.\n\nAçarsan, bir hisse 🎯 <b>Güçlü sinyaller</b> listesine girdiği an sana özelden mesaj gönderilir.")+"\n\n<i>İstediğin zaman değiştirebilirsin.</i>"
+;await V(A,t,i,n,metin,{inline_keyboard:[[{text:acik?"🔕 Kapat":"🔔 Aç",callback_data:acik?"alarm:off":"alarm:on"}],[{text:"◀️ Menü",callback_data:"menu"}]]},!0)})()),new Response("ok")
+;if("fav"===r||r.startsWith("fav:"))return q.waitUntil((async()=>{let e=await X(A,a)
 ;if(r.startsWith("fav:")){const t=r.slice(4);e=e.includes(t)?e.filter(e=>e!==t):[t,...e],await async function(e,t,a){return e.VERI&&await e.VERI.put("fav:"+t,JSON.stringify(a.slice(0,30))),a}(A,a,e)}
 await V(A,t,i,n,function(e,t){
 if(!t.length)return"⭐ <b>TAKİP LİSTEM</b>\n\nListen boş.\n\nBir hissenin detayını açtığında <b>⭐ Takibe al</b> düğmesi çıkar. Eklediklerin burada, anlık kâr/zararıyla toplanır."
