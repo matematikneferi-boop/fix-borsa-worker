@@ -8,7 +8,7 @@ const t=[[{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],[{text:"�
 text:"📐 Yeni kırılımlar",callback_data:"fibo"}],[{text:"📊 Son 7 gün karnesi",callback_data:"karne7"},{text:"📆 Uzun vadeli özet",callback_data:"yillik"}],[{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]]
 ;return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
-const f="👋 <b>Fix Borsa</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n🎯 <b>Güçlü sinyaller</b> — en net kurulumlar\n🪜 <b>Güçlü sinyal adayları</b> 👑 — henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n📈 <b>Yüksek potansiyel</b> — hedefi en uzak olanlar\n📐 <b>Yeni kırılımlar</b> — bugün taze kıranlar\n📊 <b>Karneler</b> — geçen hafta ne dedik, ne oldu\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n<i>⚠️ Yatırım tavsiyesi değildir. Geçmiş performans geleceği garanti etmez.</i>"
+const f="👋 <b>Fix Borsa</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n🎯 <b>Güçlü sinyaller</b> — en net kurulumlar\n🪜 <b>Güçlü sinyal adayları</b> 👑 — henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n📈 <b>Yüksek potansiyel</b> — hedefi en uzak olanlar\n📐 <b>Yeni kırılımlar</b> — bugün taze kıranlar\n📊 <b>Karneler</b> — geçen hafta ne dedik, ne oldu\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
 ;async function b(e,t,a){return fetch(`https://api.telegram.org/bot${e}/${t}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(a)}).then(e=>e.json()).catch(()=>null)}
 let p=0;const DETAY_GUN=90,OZET_GUN=365;async function y(e){if(!e.VERI)return{gunler:{},ozet:{}};const t=await e.VERI.get("gecmis");if(!t)return{gunler:{},ozet:{}};const gp=JSON.parse(t);return gp.gunler=gp.gunler||{},gp.ozet=gp.ozet||{},gp}async function k(e,t,a){if(!e.VERI)return;if(!a&&Date.now()-p<6e5)return
 ;p=Date.now();const n=await y(e),i=new Date((r||Date.now())+108e5).toISOString().slice(0,10);var r;const s=function(e){const t={};if(!e||!e.kartlar)return t
@@ -47,6 +47,32 @@ const YF_PARTI=30;async function gecmisiDoldur(e,t){if(!e.VERI)return;if(await e
 async function suparUyeSuresi(e,uid){if(!e.VERI)return 0;const t=await e.VERI.get("vipsure:"+uid);return t?Number(t):0}
 async function suparUyeSuresiUzat(e,uid){if(!e.VERI)return;const simdi=Date.now(),mevcut=await suparUyeSuresi(e,uid),baslangic=Math.max(simdi,mevcut);await e.VERI.put("vipsure:"+uid,String(baslangic+2592e6))}
 async function suparUyeMi(e,uid){if(d(uid))return!0;if((await suparUyeSuresi(e,uid))>Date.now())return!0;const toplam=(await F(e))[String(uid)]||0;return toplam>=20}
+/* ================== ✅ GÜNLÜK RİSK ONAYI ==================
+   Kullanıcı sistemi kullanmadan önce uyarıyı okuyup onaylamak zorunda.
+   Onay HER GÜN saat 09:00'dan (TR) sonra yeniden istenir. Dönem hesabı:
+   09:00'dan önceyse hâlâ ÖNCEKİ günün dönemindeyiz; 09:00'dan sonra yeni
+   dönem başlar. Böylece gece yarısı değil, seans öncesi tazelenir. */
+function onayDonemi(){const d=new Date(Date.now()+108e5);
+if(d.getUTCHours()<9)d.setUTCDate(d.getUTCDate()-1);
+const ik=n=>String(n).padStart(2,"0");
+return d.getUTCFullYear()+"-"+ik(d.getUTCMonth()+1)+"-"+ik(d.getUTCDate())}
+async function onayVarMi(e,uid){if(!e.VERI)return!0;
+const t=await e.VERI.get("onay:"+uid);return t===onayDonemi()}
+async function onayVer(e,uid){if(e.VERI)await e.VERI.put("onay:"+uid,onayDonemi())}
+const ONAY_METIN="⚠️ <b>OKUMADAN GEÇME</b>\n\n"+
+"Bu sistem bir <b>yapay zekâdır</b>. Sonuçlar <b>120.657 barlık</b> geçmiş veri üzerinde "+
+"çalışan otomatik bir tarama motorundan çıkar. İnsan görüşü, şirket bilgisi ya da "+
+"haber değerlendirmesi <b>içermez</b>.\n\n"+
+"🔴 <b>Buradaki hiçbir çıktı yatırım tavsiyesi değildir.</b>\n"+
+"🔴 Teknik tarama <b>geleceği bilmez</b>; hedefler tutmayabilir, zarar edebilirsin.\n"+
+"🔴 Geçmiş performans gelecek için <b>garanti vermez</b>.\n"+
+"🔴 Borsada <b>anaparanın tamamını kaybedebilirsin</b>.\n\n"+
+"Devam etmek için aşağıdaki metni onaylaman gerekiyor:\n\n"+
+"<b>«Bu sistemden çıkan sonuçlara dayanarak işlem yapmayacağım. Aldığım her "+
+"kararın sorumluluğu bana aittir.»</b>\n\n"+
+"<i>Bu onay her gün saat 09:00'dan sonra bir kez daha istenir.</i>";
+const ONAY_KLAVYE={inline_keyboard:[[{text:"✅ Okudum, anladım, onaylıyorum",callback_data:"onay"}]]};
+
 async function alarmKullanicilari(e){if(!e.VERI)return[];const out=[];let cursor=void 0
 ;for(;;){const liste=await e.VERI.list({prefix:"alarm:",limit:1e3,cursor});for(const k of liste.keys)out.push(k.name.slice(6))
 ;if(liste.list_complete||!liste.cursor)break;cursor=liste.cursor}if(!out.length)return[]
@@ -74,7 +100,7 @@ o+="<i>Düğmede: solda hedefe kalan · sağda "+("aday"===a?"tetiğe kalan 🔓
 void 0!==e.giris&&null!==e.giris?n+="💵 Sinyal <b>"+a(e.giris)+"</b> → Şimdi <b>"+a(e.fiyat)+"</b>\n":n+="💵 Şimdi <b>"+a(e.fiyat)+"</b>\n";const i=I(e)
 ;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🎯 1. hedef (günlük TP1) <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+=(null!=e.hedef1?"🏁 Son hedef <b>":"🎯 Hedef <b>")+a(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  🏆 <b>TUTTU</b>":"  ·  hedefe <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),n+="\n");const r=e.sinyalZaman||e.zaman
-;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}const BILGI_METIN="ℹ️ <b>FIX BORSA NEDİR?</b>\n\nBIST hisseleri için otomatik teknik tarama yapan bir sistemdir. Gün içinde düzenli aralıklarla taranır, sonuçlar burada listelenir.\n\n<b>3 ana tarama:</b>\n🎯 <b>Güçlü sinyaller</b> — en net kurulumlar\n📈 <b>Yüksek potansiyel</b> — hedefe uzaklığı yüksek adaylar\n📐 <b>Yeni kırılımlar</b> — henüz oluşmuş taze sinyaller\n\n🔎 <b>Hisse sorgulama</b>\nSohbete hisse kodunu yaz (örn. <code>THYAO</code>). O hissenin <b>iki yönünü birden</b> gönderirim: yukarı için direnç ve yükseliş hedefi, aşağı için destek ve düşüş hedefi. Hisse listelerde olmasa bile cevap alırsın.\n\n<b>Diğer düğmeler:</b>\n🏅 <b>İlk 3\'ü</b> — son taramanın en iyi 3 sonucu\n📊 <b>Son 7 gün / 📆 Uzun vadeli özet</b> — geçmiş performans karneleri\n⭐ <b>Takip listem</b> — seçtiğin hisseleri anlık kâr/zararıyla takip et; eklemek/çıkarmak için hep aynı ⭐ düğmesine dokun\n🪜 <b>Güçlü sinyal adayları</b> 👑 — <i>henüz kırmadı ama merdiveni hazır.</i> Tetik seviyesini ve kırarsa gideceği günlük hedefi gösterir; yani sinyal oluşmadan ÖNCE görürsün <b>(Süper Üyelik)</b>\n👑 <b>Anlık uyarı (Süper Üyelik)</b> — bir hisse Güçlü sinyaller listesine girdiği an sana özel mesaj gelir\n\n<b>Süper Üyelikte neler açılıyor?</b>\n🪜 Güçlü sinyal adayları listesi\n👑 Anlık uyarı mesajları\n⏳ Bekleme yok — listeler ve hisse sorguları anında\n\n<b>Süper Üyelik nasıl kazanılır?</b>\n📤 Sistemi paylaş düğmesiyle arkadaşlarını davet et. Davet sayacın hiç sıfırlanmaz, tüm zamanların toplamı olarak birikir. <b>Her 20 davette</b> süper üyeliğin <b>1 ay</b> açılır ya da (zaten süper üyeysen) mevcut süren üzerine <b>1 ay daha eklenir</b> — yani davet etmeye devam ettikçe süper üyeliğin otomatik uzar.\n\n<b>Neden bazen bekleme çıkıyor?</b>\nSistem çok sayıda kullanıcıya aynı anda hizmet verir; bu yüzden bazı işlemlerde kısa bir bekleme uygulanır. Bu, herkesin hizmeti düzgün alabilmesi içindir.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";function FAVKB(e){const t=[];for(let a=0;a<e.length;a+=2)t.push(e.slice(a,a+2).map(a=>({text:"❌ "+a,callback_data:"fav:"+a})));return t.push([{text:"◀️ Menü",callback_data:"menu"}]),{inline_keyboard:t}}
+;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}const BILGI_METIN="ℹ️ <b>FIX BORSA NEDİR?</b>\n\nBIST hisseleri için otomatik teknik tarama yapan bir <b>yapay zekâ</b> sistemidir. Sonuçlar <b>120.657 barlık</b> geçmiş veri üzerinde çalışan tarama motorundan çıkar. Gün içinde düzenli aralıklarla taranır, sonuçlar burada listelenir.\n\n<b>İçermez:</b> insan görüşü, şirket analizi, haber ya da bilanço değerlendirmesi. Yalnızca fiyat ve hacim matematiğidir.\n\n<b>3 ana tarama:</b>\n🎯 <b>Güçlü sinyaller</b> — en net kurulumlar\n📈 <b>Yüksek potansiyel</b> — hedefe uzaklığı yüksek adaylar\n📐 <b>Yeni kırılımlar</b> — henüz oluşmuş taze sinyaller\n\n🔎 <b>Hisse sorgulama</b>\nSohbete hisse kodunu yaz (örn. <code>THYAO</code>). O hissenin <b>iki yönünü birden</b> gönderirim: yukarı için direnç ve yükseliş hedefi, aşağı için destek ve düşüş hedefi. Hisse listelerde olmasa bile cevap alırsın.\n\n<b>Diğer düğmeler:</b>\n🏅 <b>İlk 3\'ü</b> — son taramanın en iyi 3 sonucu\n📊 <b>Son 7 gün / 📆 Uzun vadeli özet</b> — geçmiş performans karneleri\n⭐ <b>Takip listem</b> — seçtiğin hisseleri anlık kâr/zararıyla takip et; eklemek/çıkarmak için hep aynı ⭐ düğmesine dokun\n🪜 <b>Güçlü sinyal adayları</b> 👑 — <i>henüz kırmadı ama merdiveni hazır.</i> Tetik seviyesini ve kırarsa gideceği günlük hedefi gösterir; yani sinyal oluşmadan ÖNCE görürsün <b>(Süper Üyelik)</b>\n👑 <b>Anlık uyarı (Süper Üyelik)</b> — bir hisse Güçlü sinyaller listesine girdiği an sana özel mesaj gelir\n\n<b>Süper Üyelikte neler açılıyor?</b>\n🪜 Güçlü sinyal adayları listesi\n👑 Anlık uyarı mesajları\n⏳ Bekleme yok — listeler ve hisse sorguları anında\n\n<b>Süper Üyelik nasıl kazanılır?</b>\n📤 Sistemi paylaş düğmesiyle arkadaşlarını davet et. Davet sayacın hiç sıfırlanmaz, tüm zamanların toplamı olarak birikir. <b>Her 20 davette</b> süper üyeliğin <b>1 ay</b> açılır ya da (zaten süper üyeysen) mevcut süren üzerine <b>1 ay daha eklenir</b> — yani davet etmeye devam ettikçe süper üyeliğin otomatik uzar.\n\n<b>Neden bazen bekleme çıkıyor?</b>\nSistem çok sayıda kullanıcıya aynı anda hizmet verir; bu yüzden bazı işlemlerde kısa bir bekleme uygulanır. Bu, herkesin hizmeti düzgün alabilmesi içindir.\n\n<b>🔴 RİSK UYARISI</b>\n• Buradaki hiçbir çıktı <b>yatırım tavsiyesi değildir</b>.\n• Teknik tarama <b>geleceği bilmez</b>; hedefler tutmayabilir.\n• Geçmiş performans gelecek için <b>garanti vermez</b>.\n• Borsada <b>anaparanın tamamını kaybedebilirsin</b>.\n• Bu sonuçlara dayanarak işlem yapmak <b>tehlikelidir</b>. Sorumluluk tamamen sana aittir.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";function FAVKB(e){const t=[];for(let a=0;a<e.length;a+=2)t.push(e.slice(a,a+2).map(a=>({text:"❌ "+a,callback_data:"fav:"+a})));return t.push([{text:"◀️ Menü",callback_data:"menu"}]),{inline_keyboard:t}}
 function K(e,t,a,n,i){
 const r=e.kartlar[t],s=Math.max(1,Math.ceil(i.length/8)),l=[];l.push(["pot","kar","yeni"].map(e=>({text:(e===a?"✅ ":"")+A[e],callback_data:"l:"+t+":"+e+":0"})));const o=8*n,c=i.slice(o,o+8),d=e=>{
 const t=I(e),a=void 0!==e.potansiyel&&null!==e.potansiyel?Number(e.potansiyel):null,n=null===a?"":a<=0?"🏆 ":"+"+a.toFixed(1)+"% ",i=null!==t?"  "+(t>=0?"+":"")+t.toFixed(1)+"%":(null!=e.tetikYuzde?"  🔓"+Number(e.tetikYuzde).toFixed(1)+"%":"")
@@ -162,22 +188,51 @@ const J=["H4sIAM6Qe2oC/71c6XbbOJZ+FQQ5ZYstipK8xaEsubN4Uu44lTpxUudkUvkBkZCEEgWqSd
 ;let G=null;async function X(e,t){if(!e.VERI)return[];const a=await e.VERI.get("fav:"+t);return a?JSON.parse(a):[]}function Z(e,t){if(!e||!e.kartlar)return null;for(const a of Object.keys(e.kartlar)){
 if("sira"===a)continue;const n=(e.kartlar[a]||[]).find(e=>e&&e.kod===t);if(n)return n}return null}function AYNA_TS(ts){const d=new Date(ts*1000+108e5),ik=n=>String(n).padStart(2,"0");return ik(d.getUTCDate())+"/"+ik(d.getUTCMonth()+1)+" "+ik(d.getUTCHours())+":"+ik(d.getUTCMinutes())}
 function AYNA(kod,z){const f=v=>Number(v).toFixed(2),yz=y=>(y>=0?"+":"")+Number(y).toFixed(1)+"%",fiyat=z.f;
+const yukHed=z.yuk&&z.yuk.length?z.yuk[z.yuk.length-1].v:null;
+const asgHed=z.asg&&z.asg.length?z.asg[z.asg.length-1].v:null;
 let m="🔎 <b>"+kod+"</b>  ·  <b>"+f(fiyat)+" ₺</b>"+(z.tf?"  ·  <i>"+z.tf+"</i>":"")+"\n";
-m+="boga"===z.yon?"🟢 <b>Üst pivotu kırdı</b> — yukarı yönlü\n":"ayi"===z.yon?"🔴 <b>Alt pivotu kırdı</b> — aşağı yönlü\n":"🟡 <b>Ara bölgede</b> — iki seviyenin arasında\n";
-if(z.taze){const ne="boga"===z.taze.yon?"yukarı":"aşağı",zm=z.taze.ts?AYNA_TS(z.taze.ts):null;
-m+="🕐 Son kırılım: <b>"+ne+"</b> · "+z.taze.tf+(zm?" · "+zm:"")+(z.taze.seviye?" · "+f(z.taze.seviye):"")+"\n"}
-m+="\n🟩🟩🟩🟩🟩🟩🟩🟩\n▲ <b>YUKARI</b>\n";
-if(null!=z.ust)m+="🚪 Kırılım seviyesi: <b>"+f(z.ust)+"</b>"+(fiyat>0?"  ("+yz(100*(z.ust/fiyat-1))+")":"")+"\n";
-if(z.yuk&&z.yuk.length){m+="🧱 Dirençler: "+z.yuk.slice(0,2).map(x=>f(x.v)).join(" · ")+"\n";
-const h=z.yuk[z.yuk.length-1];m+="🎯 Yükseliş hedefi: <b>"+f(h.v)+"</b>  ·  <b>"+yz(h.y)+"</b>"+(z.yukTf?"  <i>("+z.yukTf+")</i>":"")+"\n"}
+/* ---------- DURUM 1: YUKARI KIRILIM ZATEN OLDU ---------- */
+if("boga"===z.yon&&null!=z.ust){const giris=z.ust,kar=100*(fiyat/giris-1);
+m+="\n🟢🟢🟢🟢🟢🟢🟢🟢\n<b>YUKARI KIRILIM AKTİF</b>\n";
+m+="🚪 <b>GİRİŞ (kırılan seviye): "+f(giris)+"</b>\n";
+if(z.taze&&z.taze.ts)m+="🕐 Kırılım anı: <b>"+AYNA_TS(z.taze.ts)+"</b>"+(z.taze.tf?" · "+z.taze.tf:"")+"\n";
+m+="💵 Şimdi <b>"+f(fiyat)+"</b>  ·  girişten <b>"+yz(kar)+"</b>\n";
+if(null!=yukHed){const yol=yukHed>giris?100*(fiyat-giris)/(yukHed-giris):0;
+m+="🎯 <b>HEDEF: "+f(yukHed)+"</b>  ·  girişten "+yz(100*(yukHed/giris-1))+"  ·  buradan <b>"+yz(100*(yukHed/fiyat-1))+"</b>\n";
+m+="📍 Yolun <b>%"+Math.max(0,Math.min(100,yol)).toFixed(0)+"</b>'i tamamlandı\n";
+if(z.yuk.length>1)m+="🧱 Ara dirençler: "+z.yuk.slice(0,z.yuk.length-1).map(x=>f(x.v)).join(" · ")+"\n"}
+if(null!=z.alt)m+="⛔ <b>Geçersiz olur:</b> "+f(z.alt)+" altına inerse ("+yz(100*(z.alt/fiyat-1))+")\n";
+if(null!=asgHed)m+="<i>O durumda aşağı hedef: "+f(asgHed)+"</i>\n"}
+/* ---------- DURUM 2: AŞAĞI KIRILIM ZATEN OLDU ---------- */
+else if("ayi"===z.yon&&null!=z.alt){const giris=z.alt,kar=100*(fiyat/giris-1);
+m+="\n🔴🔴🔴🔴🔴🔴🔴🔴\n<b>AŞAĞI KIRILIM AKTİF</b>\n";
+m+="🚪 <b>GİRİŞ (kırılan seviye): "+f(giris)+"</b>\n";
+if(z.taze&&z.taze.ts)m+="🕐 Kırılım anı: <b>"+AYNA_TS(z.taze.ts)+"</b>"+(z.taze.tf?" · "+z.taze.tf:"")+"\n";
+m+="💵 Şimdi <b>"+f(fiyat)+"</b>  ·  girişten <b>"+yz(kar)+"</b>\n";
+if(null!=asgHed){const yol=giris>asgHed?100*(giris-fiyat)/(giris-asgHed):0;
+m+="🎯 <b>DÜŞÜŞ HEDEFİ: "+f(asgHed)+"</b>  ·  girişten "+yz(100*(asgHed/giris-1))+"  ·  buradan <b>"+yz(100*(asgHed/fiyat-1))+"</b>\n";
+m+="📍 Yolun <b>%"+Math.max(0,Math.min(100,yol)).toFixed(0)+"</b>'i tamamlandı\n";
+if(z.asg.length>1)m+="🧱 Ara destekler: "+z.asg.slice(0,z.asg.length-1).map(x=>f(x.v)).join(" · ")+"\n"}
+if(null!=z.ust)m+="⛔ <b>Geçersiz olur:</b> "+f(z.ust)+" üstüne çıkarsa ("+yz(100*(z.ust/fiyat-1))+")\n";
+if(null!=yukHed)m+="<i>O durumda yukarı hedef: "+f(yukHed)+"</i>\n"}
+/* ---------- DURUM 3: ARA BÖLGE — İKİ SENARYO ---------- */
+else{m+="🟡 <b>ARA BÖLGE — henüz kırılım yok</b>\n<i>Hangi seviye kırılırsa ne olacağı aşağıda.</i>\n";
+m+="\n🟩🟩🟩🟩🟩🟩🟩🟩\n▲ <b>YUKARI SENARYO</b>\n";
+if(null!=z.ust){m+="🚪 <b>GİRİŞ: "+f(z.ust)+"</b> üstünde kapanış  ("+yz(100*(z.ust/fiyat-1))+" uzakta)\n";
+if(z.yuk&&z.yuk.length){if(z.yuk.length>1)m+="🧱 Dirençler: "+z.yuk.slice(0,z.yuk.length-1).map(x=>f(x.v)).join(" · ")+"\n";
+m+="🎯 <b>HEDEF: "+f(yukHed)+"</b>  ·  girişten <b>"+yz(100*(yukHed/z.ust-1))+"</b>"+(z.yukTf?"  <i>("+z.yukTf+")</i>":"")+"\n"}
 else m+="<i>yukarı bacak oluşmamış</i>\n";
-m+="\n🟥🟥🟥🟥🟥🟥🟥🟥\n▼ <b>AŞAĞI</b>\n";
-if(null!=z.alt)m+="🚪 Kırılım seviyesi: <b>"+f(z.alt)+"</b>"+(fiyat>0?"  ("+yz(100*(z.alt/fiyat-1))+")":"")+"\n";
-if(z.asg&&z.asg.length){m+="🧱 Destekler: "+z.asg.slice(0,2).map(x=>f(x.v)).join(" · ")+"\n";
-const d=z.asg[z.asg.length-1];m+="🎯 Düşüş hedefi: <b>"+f(d.v)+"</b>  ·  <b>"+yz(d.y)+"</b>"+(z.asgTf?"  <i>("+z.asgTf+")</i>":"")+"\n"}
+if(null!=z.alt)m+="⛔ Kırılmazsa / "+f(z.alt)+" altına inerse bu senaryo iptal\n"}
+else m+="<i>üst seviye belirlenemedi</i>\n";
+m+="\n🟥🟥🟥🟥🟥🟥🟥🟥\n▼ <b>AŞAĞI SENARYO</b>\n";
+if(null!=z.alt){m+="🚪 <b>GİRİŞ: "+f(z.alt)+"</b> altında kapanış  ("+yz(100*(z.alt/fiyat-1))+" uzakta)\n";
+if(z.asg&&z.asg.length){if(z.asg.length>1)m+="🧱 Destekler: "+z.asg.slice(0,z.asg.length-1).map(x=>f(x.v)).join(" · ")+"\n";
+m+="🎯 <b>HEDEF: "+f(asgHed)+"</b>  ·  girişten <b>"+yz(100*(asgHed/z.alt-1))+"</b>"+(z.asgTf?"  <i>("+z.asgTf+")</i>":"")+"\n"}
 else m+="<i>aşağı bacak oluşmamış</i>\n";
+if(null!=z.ust)m+="⛔ "+f(z.ust)+" üstüne çıkarsa bu senaryo iptal\n"}
+else m+="<i>alt seviye belirlenemedi</i>\n"}
 if(z.atr)m+="\n📏 Günlük oynaklık (ATR): <b>"+z.atr+"%</b>\n";
-return m+"\n<i>⚠️ Yatırım tavsiyesi değildir.</i>"}
+return m+"\n<i>Seviyeler kapanışa göre değerlendirilir. Fitil kırılımı sinyal sayılmaz.</i>\n<i>⚠️ Yatırım tavsiyesi değildir.</i>"}
 function P(e,t){const a=Z(e,t),z=e&&e.sozluk&&e.sozluk[t];
 if(z&&a)return j(a)+"\n\n"+AYNA(t,z);
 if(z)return AYNA(t,z);
@@ -235,7 +290,9 @@ n:p.kartlar[e].length})):[],depo:!!A.VERI}),{headers:{"content-type":"applicatio
 ;if(!t)return new Response(e+"\nliste yok — telefondan yükle");const a=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+t.kartlar[e].length).join(" · "):"kart yok"
 ;return new Response(e+"\nliste var · "+Object.keys(t).filter(e=>"guncelleme"!==e).join(", ")+"\nkartlar: "+a+"\ngüncelleme: "+t.guncelleme)}if("/tg"===$.pathname&&"POST"===p.method){
 const e=await p.json().catch(()=>null);if(!e)return new Response("ok");await botAd(A).catch(()=>{});if(e.message){const t=e.message,a=(t.text||"").trim(),n=a.toLowerCase(),i="private"===t.chat.type;let s=null
-;const l=a.match(/^\/start\s+r(\d+)/i);if(l&&(s=l[1]),await B(A,t.from.id))return new Response("ok");if(i&&q.waitUntil(async function(e,t,a){if(!e.VERI)return!1;const n="u:"+t.id
+;const l=a.match(/^\/start\s+r(\d+)/i);if(l&&(s=l[1]),await B(A,t.from.id))return new Response("ok");
+if(i&&!await onayVarMi(A,t.from.id)){if(s)q.waitUntil(async function(e,tt,aa){if(!e.VERI)return;const n="u:"+tt.id;if(await e.VERI.get(n))return;await e.VERI.put(n,JSON.stringify({id:tt.id,ad:((tt.first_name||"")+" "+(tt.last_name||"")).trim(),kullanici:tt.username||"",katilim:(new Date).toISOString(),ref:aa||null,basis:0}))}(A,t.from,s).catch(()=>{}));
+return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:ONAY_METIN,parse_mode:"HTML",reply_markup:ONAY_KLAVYE})),new Response("ok")}if(i&&q.waitUntil(async function(e,t,a){if(!e.VERI)return!1;const n="u:"+t.id
 ;if(await e.VERI.get(n))return!1;const i={id:t.id,ad:((t.first_name||"")+" "+(t.last_name||"")).trim(),kullanici:t.username||"",katilim:(new Date).toISOString(),ref:a||null,basis:0}
 ;await e.VERI.put(n,JSON.stringify(i));const r=await L(e);if(r.toplam=(r.toplam||0)+1,r.gun=r.gun||{},r.gun[W()]=(r.gun[W()]||0)+1,await e.VERI.put("istatistik",JSON.stringify(r)),
 a&&String(a)!==String(t.id)){const t=await F(e);t[a]=(t[a]||0)+1,await e.VERI.put("referanslar",JSON.stringify(t))
@@ -250,7 +307,9 @@ const o=a.toUpperCase().replace(/[^A-ZÇĞİÖŞÜ]/g,"");return i&&!a.startsWit
 ;await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_web_page_preview:!0,text:P(e,o),reply_markup:u(t.from.id)})})()),
 new Response("ok")):((i||n.startsWith("/start")||n.startsWith("/liste"))&&q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:f,parse_mode:"HTML",reply_markup:u(t.from.id)})),
 new Response("ok"))}if(e.callback_query){const t=e.callback_query,a=t.from.id,n="private"!==t.message.chat.type,i=n?a:t.message.chat.id,r=t.data
-;if(await B(A,a))return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"Erişimin kapatılmış.",show_alert:!0}),new Response("ok");if("bilgi"===r)return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id}),q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:BILGI_METIN,parse_mode:"HTML",disable_web_page_preview:!0,reply_markup:{inline_keyboard:[[{text:"◀️ Menü",callback_data:"menu"}]]}})),new Response("ok");if("davet"===r){
+;if(await B(A,a))return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"Erişimin kapatılmış.",show_alert:!0}),new Response("ok");
+if("onay"===r){await onayVer(A,a);await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"Onaylandı. İyi çalışmalar."});return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:f,parse_mode:"HTML",reply_markup:u(a)})),new Response("ok")}
+if(!await onayVarMi(A,a))return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id}),q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:ONAY_METIN,parse_mode:"HTML",reply_markup:ONAY_KLAVYE})),new Response("ok");if("bilgi"===r)return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id}),q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:BILGI_METIN,parse_mode:"HTML",disable_web_page_preview:!0,reply_markup:{inline_keyboard:[[{text:"◀️ Menü",callback_data:"menu"}]]}})),new Response("ok");if("davet"===r){
 await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id});const e=(await b(A.BOT_TOKEN,"getMe",{}))?.result?.username||"bot";return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",PY(e,a,i))),new Response("ok")}
 if("menu"===r)return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id}),q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:f,parse_mode:"HTML",reply_markup:u(a)})),
 new Response("ok");if("karne"===r&&!d(a))return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"🔐 Bu bölüm yöneticiye özeldir.",show_alert:!0}),new Response("ok")
