@@ -13,8 +13,7 @@ const f="👋 <b>Fix Borsa</b>\n<i>BIST hisselerini gün boyu tarar, kırılım 
 let p=0;const DETAY_GUN=90,OZET_GUN=365;async function y(e){if(!e.VERI)return{gunler:{},ozet:{}};const t=await e.VERI.get("gecmis");if(!t)return{gunler:{},ozet:{}};const gp=JSON.parse(t);return gp.gunler=gp.gunler||{},gp.ozet=gp.ozet||{},gp}async function k(e,t,a){if(!e.VERI)return;if(!a&&Date.now()-p<6e5)return
 ;p=Date.now();const n=await y(e),i=new Date((r||Date.now())+108e5).toISOString().slice(0,10);var r;const s=function(e){const t={};if(!e||!e.kartlar)return t
 ;for(const a of Object.keys(e.kartlar))if("sira"!==a)for(const n of e.kartlar[a]||[])n&&n.kod&&n.fiyat>0&&(t[n.kod]=Number(n.fiyat));return t}(t);if(n.gunler[i]=n.gunler[i]||{kayitlar:{}},
-t.kartlar)for(const e of Object.keys(t.kartlar))if("sira"!==e)for(const a of t.kartlar[e]||[])a&&a.kod&&a.giris>0&&(n.gunler[i].kayitlar[a.kod]||(n.gunler[i].kayitlar[a.kod]={g:Number(a.giris),
-s:Number(a.fiyat)||Number(a.giris),t:a.tf||""}));for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayitlar))s[t]>0&&(n.gunler[e].kayitlar[t].s=s[t])
+t.kartlar)for(const e of Object.keys(t.kartlar))if("sira"!==e)for(const a of t.kartlar[e]||[])a&&a.kod&&a.giris>0&&(n.gunler[i].kayitlar[a.kod]||(n.gunler[i].kayitlar[a.kod]={g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tf||"",h:(a.hedef>0?Number(a.hedef):null),r:1,max:Number(a.fiyat)||Number(a.giris)}));for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayitlar))if(s[t]>0){const kk=n.gunler[e].kayitlar[t];kk.s=s[t];if(!(kk.max>0)||s[t]>kk.max)kk.max=s[t]}
 ;n.ozet=n.ozet||{};const gt=Object.keys(n.gunler).sort().reverse(),gk=gt.slice(0,DETAY_GUN),gs=gt.slice(DETAY_GUN)
 ;for(const e of gs){if(!n.ozet[e]){const o=m(e,n.gunler[e]);if(o)n.ozet[e]=o}}const go={};for(const e of gk)go[e]=n.gunler[e];n.gunler=go
 ;const ot=Object.keys(n.ozet).sort().reverse();if(ot.length>OZET_GUN){const oo={};for(const e of ot.slice(0,OZET_GUN))oo[e]=n.ozet[e];n.ozet=oo}
@@ -37,7 +36,7 @@ const YF_PARTI=30;async function gecmisiDoldur(e,t){if(!e.VERI)return;if(await e
 ;const parti=kalan.slice(0,YF_PARTI)
 ;for(let i=0;i<parti.length;i+=6){const grup=parti.slice(i,i+6),sonuclar=await Promise.all(grup.map(k=>yfKapanislar(k)))
 ;grup.forEach((kod,gi)=>{const kap=sonuclar[gi];if(!kap)return;for(const gun of Object.keys(kap)){if(gun>=bugun)continue
-;n.gunler[gun]=n.gunler[gun]||{kayitlar:{}};if(!n.gunler[gun].kayitlar[kod]){n.gunler[gun].kayitlar[kod]={g:kap[gun],s:simdi[kod]||kap[gun],t:"1G"},eklendi++}}})}
+;n.gunler[gun]=n.gunler[gun]||{kayitlar:{}};if(!n.gunler[gun].kayitlar[kod]){n.gunler[gun].kayitlar[kod]={g:kap[gun],s:simdi[kod]||kap[gun],t:"1G",r:0},eklendi++}}})}
 ;parti.forEach(k=>yapilan.add(k)),await e.VERI.put("gecmisIlerleme",JSON.stringify([...yapilan]))
 ;if(eklendi){n.ozet=n.ozet||{};const gt=Object.keys(n.gunler).sort().reverse(),gk=gt.slice(0,DETAY_GUN),gs=gt.slice(DETAY_GUN)
 ;for(const gg of gs){if(!n.ozet[gg]){const oz=m(gg,n.gunler[gg]);if(oz)n.ozet[gg]=oz}}const go={};for(const gg of gk)go[gg]=n.gunler[gg];n.gunler=go
@@ -405,14 +404,50 @@ const a=t[e]||(t[e]={});for(const t of Object.keys(s[e]))"son"===t?a.son=s[e].so
 const[,e,s,o,c]=r.split(":"),d=o||"pot",f=Number(c||0),b=l&&l.kartlar&&l.kartlar[e],p=b&&b[Number(s)];let y=u(a);return b&&b.length&&(y=K(l,e,d,f,z(l,e,d))),q.waitUntil((async()=>{
 if(p&&y&&y.inline_keyboard){const e=(await X(A,a)).includes(p.kod),PL=BUN?("https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+a)+"&text="+encodeURIComponent("📈 "+p.kod+" "+Number(p.fiyat).toFixed(2)+" ₺"+(null!=p.hedef1?" · hedef "+Number(p.hedef1).toFixed(2):(null!=p.hedef?" · hedef "+Number(p.hedef).toFixed(2):""))+" — Fix Borsa sinyalleri:")):null,ust=[{text:(e?"⭐ Takipten çıkar":"⭐ Takibe al"),callback_data:"fav:"+p.kod}];if(PL)ust.push({text:"📤 Paylaş",url:PL});y={inline_keyboard:[ust].concat(y.inline_keyboard)}}
 await V(A,t,i,n,p?j(p):"Bu hisse artık listede değil. Menüden yeniden bak.",y,!0)})()),new Response("ok")}if("karne7"===r)return q.waitUntil((async()=>{let e;try{e=await async function(e){
-const t=await y(e),GD=t.gunler||{},a=Object.keys(GD).sort().reverse().slice(0,7)
-;if(!a.length)return"📊 <b>SON 7 GÜN KARNESİ</b>\n\nHenüz yeterli geçmiş birikmedi. Kayıt her taramada işleniyor; birkaç gün sonra burada dolu bir tablo olacak.";let n="📊 <b>SON 7 GÜN KARNESİ</b>\n"
-;n+="<i>Her gün o günün sinyallerine 100.000 TL eşit dağıtılsaydı</i>\n\n";let i=0,r=0,s=0;for(const e of a){const a=m(e,t.gunler[e]);if(!a)continue;r++,i+=a.deger,s+=a.n
-;const[l,o,c]=e.split("-"),d=a.ort>=0?"🟢":"🔴";n+="━━━━━━━━━━━━━━━━\n",n+="<b>"+c+"/"+o+"</b>  ·  "+a.n+" sinyal\n",n+=d+" Ortalama: <b>"+(a.ort>=0?"+":"")+a.ort.toFixed(2)+"%</b>\n",
-n+="💰 100.000 ₺ → <b>"+Math.round(a.deger).toLocaleString("tr-TR")+" ₺</b>\n",a.eniyi&&(n+="🔝 "+a.eniyi.kod+" "+(a.eniyi.y>=0?"+":"")+a.eniyi.y.toFixed(1)+"%"),
-a.enkotu&&(n+="   🔻 "+a.enkotu.kod+" "+(a.enkotu.y>=0?"+":"")+a.enkotu.y.toFixed(1)+"%"),n+="\n"}if(r){const e=i/r,t=100*(e/1e5-1);n+="━━━━━━━━━━━━━━━━\n",
-n+="<b>"+r+" günün ortalaması</b>  ·  "+s+" sinyal\n",n+=(t>=0?"🟢":"🔴")+" <b>"+(t>=0?"+":"")+t.toFixed(2)+"%</b>  ·  100.000 ₺ → <b>"+Math.round(e).toLocaleString("tr-TR")+" ₺</b>\n";let bz=1e5;for(const gk of a){const rc=m(gk,GD[gk]);if(rc)bz*=1+rc.ort/100}const gz=100*(bz/1e5-1);n+="━━━━━━━━━━━━━━━━\n🔗 <b>"+r+" günün zincirleme (bileşik) getirisi</b>\n"+(gz>=0?"🟢":"🔴")+" <b>"+(gz>=0?"+":"")+gz.toFixed(2)+"%</b>  ·  100.000 ₺ → <b>"+Math.round(bz).toLocaleString("tr-TR")+" ₺</b>\n"}
-return n+="━━━━━━━━━━━━━━━━\n<i>Fiyatlar son taramaya göredir. Geçmiş performans geleceği garanti etmez.</i>\n<i>⚠️ Zincirleme (bileşik) getiri, her günün kazancının bir öncekinin üzerine tam olarak yeniden yatırıldığı varsayımına dayanır; komisyon, kayma (slipaj) ve likidite sınırlarını hesaba katmaz — gerçekte elde edilebilecek bir garanti değil, teorik bir üst sınırdır.</i>\n<i>⚠️ Yatırım tavsiyesi değildir.</i>",n}(A)}catch(t){
+const t=await y(e),GD=t.gunler||{},gunler=Object.keys(GD).sort().reverse().slice(0,7);
+if(!gunler.length)return"📊 <b>KARNE</b>\n\nHenüz yeterli geçmiş birikmedi. Kayıt her taramada işleniyor; birkaç gün sonra burada dolu bir tablo olacak.";
+const bugun=new Date(Date.now()+108e5).toISOString().slice(0,10);
+const gunFark=(g)=>Math.max(0,Math.round((new Date(bugun)-new Date(g))/864e5));
+const yz=v=>(v>=0?"+":"")+v.toFixed(2)+"%";
+let n="📊 <b>SİNYAL KARNESİ</b>\n<i>Sinyalin verildiği günden bugüne kadarki sonuç</i>\n";
+let tN=0,tHedef=0,tKar=0,tZarar=0,tTop=0,tGercek=0;
+for(const gun of gunler){
+const kayit=GD[gun]&&GD[gun].kayitlar||{};
+const kodlar=Object.keys(kayit).filter(k=>{const r=kayit[k];return r&&r.g>0&&r.s>0});
+if(!kodlar.length)continue;
+/* GERÇEK SİNYAL / DOLGU AYRIMI: r=0 kayıtlar geçmiş kapanışlardan
+   üretilmiş dolgu verisidir, gerçek sinyal değildir. Karışmasınlar. */
+const gercek=kodlar.filter(k=>kayit[k].r!==0);
+const kullan=gercek.length?gercek:kodlar;
+const dolguMu=!gercek.length;
+let top=0,eniyi=null,enkotu=null,hedefTutan=0,hedefliSayi=0,karda=0,zararda=0;
+for(const k of kullan){const r=kayit[k],y2=100*(r.s/r.g-1);
+top+=y2; if(y2>=0)karda++;else zararda++;
+if(r.h>0){hedefliSayi++;const zirve=r.max>0?r.max:r.s;if(zirve>=r.h)hedefTutan++}
+if(!eniyi||y2>eniyi.y)eniyi={kod:k,y:y2};
+if(!enkotu||y2<enkotu.y)enkotu={kod:k,y:y2}}
+const adet=kullan.length,ort=top/adet,yas=gunFark(gun);
+tN+=adet; tTop+=top; tKar+=karda; tZarar+=zararda; tHedef+=hedefTutan; tGercek+=hedefliSayi;
+const [yil,ay,gg]=gun.split("-");
+n+="━━━━━━━━━━━━━━━━\n<b>"+gg+"/"+ay+"</b>  ·  "+adet+" sinyal  ·  <i>"+(yas===0?"bugün":yas+" gün önce")+"</i>"+(dolguMu?"  ·  <i>dolgu verisi</i>":"")+"\n";
+n+=(ort>=0?"🟢":"🔴")+" Ortalama: <b>"+yz(ort)+"</b>  <i>(sinyalden bu yana)</i>\n";
+n+="📈 Kârda: <b>"+karda+"</b>  ·  📉 Zararda: <b>"+zararda+"</b>";
+if(hedefliSayi)n+="  ·  ✅ Hedefe ulaşan: <b>"+hedefTutan+"/"+hedefliSayi+"</b>";
+n+="\n";
+n+="💰 O gün 100.000 ₺ eşit dağıtılsaydı → <b>"+Math.round(1e5*(1+ort/100)).toLocaleString("tr-TR")+" ₺</b>\n";
+if(eniyi)n+="🔝 "+eniyi.kod+" "+yz(eniyi.y)+(yas?"  <i>("+yas+" günde)</i>":"");
+if(enkotu)n+="   🔻 "+enkotu.kod+" "+yz(enkotu.y);
+n+="\n"}
+if(tN){const ortT=tTop/tN;
+n+="━━━━━━━━━━━━━━━━\n<b>TOPLAM</b>  ·  "+tN+" sinyal\n";
+n+=(ortT>=0?"🟢":"🔴")+" Ortalama getiri: <b>"+yz(ortT)+"</b>  <i>(sinyalden bugüne)</i>\n";
+n+="📈 Kârda: <b>"+tKar+"</b> (%"+Math.round(100*tKar/tN)+")  ·  📉 Zararda: <b>"+tZarar+"</b>\n";
+if(tGercek)n+="✅ Hedefe ulaşan: <b>"+tHedef+"/"+tGercek+"</b>  (%"+Math.round(100*tHedef/tGercek)+")\n"}
+n+="━━━━━━━━━━━━━━━━\n";
+n+="<i>ℹ️ Rakamlar <b>günlük kâr değildir</b>: her sinyalin verildiği günden bugüne kadarki toplam değişimdir. Eski günlerdeki yüksek yüzdeler birkaç günün birikimidir.</i>\n";
+n+="<i>Aynı hisse birden çok günde sinyal verdiyse her gün ayrı sayılır. Pozisyonlar kapatılmaz; hedefe ulaşan da listede kalmaya devam eder.</i>\n";
+n+="<i>Fiyatlar son taramaya göredir. Geçmiş performans geleceği garanti etmez.</i>\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
+return n}(A)}catch(t){
 e="📊 Karne şu an hazırlanamadı, birazdan tekrar dene."}await V(A,t,i,n,e,u(a),!1)})()),new Response("ok");if("yillik"===r)return q.waitUntil((async()=>{let e;try{e=await async function(e){
 const g=await y(e),oy=Object.keys(g.ozet||{}),gy=Object.keys(g.gunler||{}),tum=[...oy];for(const d of gy)oy.includes(d)||tum.push(d);tum.sort()
 ;if(!tum.length)return"📆 <b>UZUN VADELİ ÖZET</b>\n\nHenüz yeterli geçmiş birikmedi. Kayıt her taramada işleniyor; sistem kendi geçmişini biriktirdikçe burası dolacak."
