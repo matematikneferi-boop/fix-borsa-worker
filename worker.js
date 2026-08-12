@@ -77,13 +77,34 @@ async function alarmKullanicilari(e){if(!e.VERI)return[];const out=[];let cursor
 ;for(;;){const liste=await e.VERI.list({prefix:"alarm:",limit:1e3,cursor});for(const k of liste.keys)out.push(k.name.slice(6))
 ;if(liste.list_complete||!liste.cursor)break;cursor=liste.cursor}if(!out.length)return[]
 ;const ref=await F(e);const durum=await Promise.all(out.map(async uid=>({uid,ok:d(uid)||(ref[String(uid)]||0)>=20||(await suparUyeSuresi(e,uid))>Date.now()})));return durum.filter(x=>x.ok).map(x=>x.uid)}
-const ALARM_MAX_ALICI=45;async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;const yeniListe=yeni&&yeni.kartlar&&yeni.kartlar.tavan||[];if(!yeniListe.length)return
-;const eskiKodlar=new Set((eski&&eski.kartlar&&eski.kartlar.tavan||[]).map(x=>x&&x.kod).filter(Boolean))
-;const yeniGirenler=yeniListe.filter(x=>x&&x.kod&&!eskiKodlar.has(x.kod));if(!yeniGirenler.length)return
-;const kullanicilar=await alarmKullanicilari(e);if(!kullanicilar.length)return
-;const baslik=yeniGirenler.length>1?"🚨 <b>"+yeniGirenler.length+" YENİ GÜÇLÜ SİNYAL</b>\n\n":"🚨 <b>GÜÇLÜ SİNYALE GİRDİ</b>\n\n"
-;const metin=baslik+yeniGirenler.map(hisse=>j(hisse)).join("\n")
-;for(const uid of kullanicilar.slice(0,ALARM_MAX_ALICI))await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,text:metin,parse_mode:"HTML",disable_web_page_preview:!0})}
+const ALARM_MAX_ALICI=45;
+/* ================== 🚨 ALARM — GÜNLÜK HAFIZA ==================
+   ESKİ MANTIK YALNIZCA BİR ÖNCEKİ TARAMAYA BAKIYORDU. Aralık 5 dakikayken
+   iş görüyordu; SÜREKLİ MODDA (10 sn) iki tarama arasında liste neredeyse
+   hiç değişmediği için "yeni giren" çıkmıyor ve alarm susuyordu. Ayrıca bir
+   hisse listeden çıkıp geri girince aynı alarm tekrar tekrar gidiyordu.
+   YENİ MANTIK: o gün alarm verilmiş kodlar KV'de tutulur; bir hisse güçlü
+   sinyale girdiğinde günde BİR KEZ haber verilir — tarama sıklığı ne olursa
+   olsun sonuç aynı. Liste her gün (TR 09:00) sıfırlanır. Hedefini çoktan
+   aşmış hisseler "yeni sinyal" diye gönderilmez; yanıltıcıydı. */
+async function alarmGecmisi(e){if(!e.VERI)return{gun:"",kodlar:[]};
+const t=await e.VERI.get("alarmGun"),g=t?JSON.parse(t):{gun:"",kodlar:[]},bugun=onayDonemi();
+return g.gun!==bugun?{gun:bugun,kodlar:[]}:g}
+async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;
+const yeniListe=yeni&&yeni.kartlar&&yeni.kartlar.tavan||[];
+if(!yeniListe.length)return;
+const gecmis=await alarmGecmisi(e),bilinen=new Set(gecmis.kodlar||[]);
+const uygun=yeniListe.filter(x=>x&&x.kod&&!(null!=x.potansiyel&&Number(x.potansiyel)<=0));
+const yeniGirenler=uygun.filter(x=>!bilinen.has(x.kod));
+if(!yeniGirenler.length)return;
+for(const x of yeniGirenler)bilinen.add(x.kod);
+await e.VERI.put("alarmGun",JSON.stringify({gun:onayDonemi(),kodlar:[...bilinen].slice(-300)}));
+const kullanicilar=await alarmKullanicilari(e);
+if(!kullanicilar.length)return;
+const baslik=yeniGirenler.length>1?"🚨 <b>"+yeniGirenler.length+" YENİ GÜÇLÜ SİNYAL</b>\n\n":"🚨 <b>GÜÇLÜ SİNYALE GİRDİ</b>\n\n";
+const metin=baslik+yeniGirenler.slice(0,6).map(hisse=>j(hisse)).join("\n")+
+(yeniGirenler.length>6?"\n<i>…ve "+(yeniGirenler.length-6)+" hisse daha. Menüden 🎯 Güçlü sinyaller listesine bak.</i>":"");
+for(const uid of kullanicilar.slice(0,ALARM_MAX_ALICI))await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,text:metin,parse_mode:"HTML",disable_web_page_preview:!0})}
 async function g(e){if(o)return o;if(e.VERI){
 const t=await e.VERI.get("listeler");if(t)return o=JSON.parse(t),o}const t=await caches.default.match(new Request(l));return t?(o=await t.json().catch(()=>null),o):null}const h={kisitMin:7,
 kisitMax:18};let w=null,O=0;async function S(e,t){if(!t&&w&&Date.now()-O<6e4)return w;let a={...h};if(e.VERI){const t=await e.VERI.get("ayar");t&&(a={...a,...JSON.parse(t)})}return w=a,O=Date.now(),a}
@@ -360,7 +381,24 @@ const getiri=100*(bakiye/1e5-1);let n="📆 <b>UZUN VADELİ ÖZET</b>\n<i>"+(ilk
 ;return void await V(A,t,i,n,metin,{inline_keyboard:[[{text:"📤 Sistemi paylaş",callback_data:"davet"}],[{text:"◀️ Menü",callback_data:"menu"}]]},!0)}
 if(A.VERI){if("alarm:on"===r)await A.VERI.put("alarm:"+a,"1");else if("alarm:off"===r)await A.VERI.delete("alarm:"+a)}
 const acik=!!(A.VERI&&await A.VERI.get("alarm:"+a))
-;const metin="🔔 <b>ANLIK UYARI AYARLARI</b> 👑\n\n"+(acik?"✅ Şu an <b>açık</b>.\n\nBir hisse 🎯 <b>Güçlü sinyaller</b> listesine girdiği an sana özelden mesaj gönderilir.":"🔕 Şu an <b>kapalı</b>.\n\nAçarsan, bir hisse 🎯 <b>Güçlü sinyaller</b> listesine girdiği an sana özelden mesaj gönderilir.")+"\n\n<i>İstediğin zaman değiştirebilirsin.</i>"
+;/* BUGÜN SİNYAL VERENLER: alarm hafızasındaki kodlar, güncel fiyat ve
+   sinyalden bu yana getirisiyle birlikte. Kullanıcı "bugün ne çıktı"
+   sorusunu tek ekranda görsün diye. */
+const gec=await alarmGecmisi(A),bugKod=(gec.kodlar||[]);
+const listeAn=await g(A);
+let bugBlok="";
+if(bugKod.length){bugBlok="\n\n━━━━━━━━━━━━━━━━\n📋 <b>BUGÜN SİNYAL VERENLER</b> ("+bugKod.length+")\n";
+const satirlar=bugKod.slice().reverse().slice(0,25).map(kod=>{const k=Z(listeAn,kod);
+if(!k)return "▫️ <b>"+kod+"</b>";
+const kr=I(k);
+return (null===kr?"▫️":kr>=0?"🟢":"🔴")+" <b>"+kod+"</b>  "+Number(k.fiyat).toFixed(2)+" ₺"+
+(null===kr?"":"  ·  <b>"+(kr>=0?"+":"")+kr.toFixed(2)+"%</b>")+
+(null!=k.potansiyel?"  ·  hedefe "+(Number(k.potansiyel)<=0?"🏆":"+"+Number(k.potansiyel).toFixed(1)+"%"):"")});
+bugBlok+=satirlar.join("\n");
+if(bugKod.length>25)bugBlok+="\n<i>…ve "+(bugKod.length-25)+" hisse daha</i>";
+bugBlok+="\n<i>En yeni üstte. Liste her gün 09:00'da sıfırlanır.</i>"}
+else bugBlok="\n\n━━━━━━━━━━━━━━━━\n📋 <b>BUGÜN SİNYAL VERENLER</b>\n<i>Bugün henüz güçlü sinyal veren hisse olmadı.</i>";
+const metin="🔔 <b>ANLIK UYARI AYARLARI</b> 👑\n\n"+(acik?"✅ Şu an <b>açık</b>.\n\nBir hisse 🎯 <b>Güçlü sinyaller</b> listesine girdiği an sana özelden mesaj gönderilir.":"🔕 Şu an <b>kapalı</b>.\n\nAçarsan, bir hisse 🎯 <b>Güçlü sinyaller</b> listesine girdiği an sana özelden mesaj gönderilir.")+"\n\n<i>Aynı hisse günde bir kez bildirilir; her taramada tekrar gelmez.</i>"+bugBlok
 ;await V(A,t,i,n,metin,{inline_keyboard:[[{text:acik?"🔕 Kapat":"🔔 Aç",callback_data:acik?"alarm:off":"alarm:on"}],[{text:"◀️ Menü",callback_data:"menu"}]]},!0)})()),new Response("ok")
 ;if("fav"===r||r.startsWith("fav:"))return q.waitUntil((async()=>{let e=await X(A,a)
 ;if(r.startsWith("fav:")){const t=r.slice(4);e=e.includes(t)?e.filter(e=>e!==t):[t,...e],await async function(e,t,a){return e.VERI&&await e.VERI.put("fav:"+t,JSON.stringify(a.slice(0,30))),a}(A,a,e)}
