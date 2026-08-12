@@ -83,6 +83,17 @@ async function alarmKullanicilari(e){if(!e.VERI)return[];const out=[];let cursor
 ;for(;;){const liste=await e.VERI.list({prefix:"alarm:",limit:1e3,cursor});for(const k of liste.keys)out.push(k.name.slice(6))
 ;if(liste.list_complete||!liste.cursor)break;cursor=liste.cursor}if(!out.length)return[]
 ;const ref=await F(e);const durum=await Promise.all(out.map(async uid=>({uid,ok:d(uid)||(ref[String(uid)]||0)>=20||(await suparUyeSuresi(e,uid))>Date.now()})));return durum.filter(x=>x.ok).map(x=>x.uid)}
+
+/* Üye kaydı + DAVET SAYACI. Onay ekranı eklendiğinde bu fonksiyon
+   atlanıyordu; yeni üye kaydediliyor ama davet edenin sayacı artmıyordu.
+   Artık her iki yoldan da bu tek fonksiyon çağrılıyor. */
+const uyeKaydet=async function(e,t,a){if(!e.VERI)return!1;const n="u:"+t.id
+;if(await e.VERI.get(n))return!1;const i={id:t.id,ad:((t.first_name||"")+" "+(t.last_name||"")).trim(),kullanici:t.username||"",katilim:(new Date).toISOString(),ref:a||null,basis:0}
+;await e.VERI.put(n,JSON.stringify(i));const r=await L(e);if(r.toplam=(r.toplam||0)+1,r.gun=r.gun||{},r.gun[W()]=(r.gun[W()]||0)+1,await e.VERI.put("istatistik",JSON.stringify(r)),
+a&&String(a)!==String(t.id)){const t=await F(e);t[a]=(t[a]||0)+1,await e.VERI.put("referanslar",JSON.stringify(t))
+;const sy=t[a],kalan=20-(sy%20===0?20:sy%20),ac=sy%20===0
+;e.BOT_TOKEN&&await fetch("https://api.telegram.org/bot"+e.BOT_TOKEN+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:a,text:(ac?"🎉 Az önce davet ettiğin biri katıldı! Toplam davet sayın: "+sy+" — süper üyeliğin 1 ay açıldı/uzadı 👑":"🎉 Az önce davet ettiğin biri katıldı! Toplam davet sayın: "+sy+". Süper üyeliğe "+kalan+" davet kaldı.")})}).catch(()=>{})
+;ac&&await suparUyeSuresiUzat(e,a)}return!0};
 const ALARM_MAX_ALICI=45;
 /* ================== 🚨 ALARM — GÜNLÜK HAFIZA ==================
    ESKİ MANTIK YALNIZCA BİR ÖNCEKİ TARAMAYA BAKIYORDU. Aralık 5 dakikayken
@@ -100,7 +111,13 @@ async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;
 const yeniListe=yeni&&yeni.kartlar&&yeni.kartlar.tavan||[];
 if(!yeniListe.length)return;
 const gecmis=await alarmGecmisi(e),bilinen=new Set(gecmis.kodlar||[]);
-const uygun=yeniListe.filter(x=>x&&x.kod&&!(null!=x.potansiyel&&Number(x.potansiyel)<=0));
+/* ALARM SADECE GERÇEKTEN GÜÇLÜ OLANLARA:
+   ⚪ İZLEMEDE (hiçbir kademesi kırılmamış) ve hedefini çoktan aşmış
+   hisseler bildirim göndermez. Listede dururlar; ama 11 hisselik bir
+   yığın yerine 3-4 gerçek sinyal gelmesi mesajın değerini korur. */
+const uygun=yeniListe.filter(x=>x&&x.kod
+&&!(null!=x.potansiyel&&Number(x.potansiyel)<=0)
+&&!/İZLEMEDE/.test(String(x.guc||"")));
 const yeniGirenler=uygun.filter(x=>!bilinen.has(x.kod));
 if(!yeniGirenler.length)return;
 for(const x of yeniGirenler)bilinen.add(x.kod);
@@ -358,14 +375,8 @@ text:"🔎 <code>"+hid+"</code>\n\nSüper üye: <b>"+(supar?"EVET":"hayır")+"</
 "Süreli üyelik: <b>"+(sure>Date.now()?new Date(sure).toLocaleDateString("tr-TR")+" tarihine kadar":"yok")+"</b>\n"+
 "Toplam daveti: <b>"+ref+"</b>"});
 })()),new Response("ok")}
-if(i&&!await onayVarMi(A,t.from.id)){if(s)q.waitUntil(async function(e,tt,aa){if(!e.VERI)return;const n="u:"+tt.id;if(await e.VERI.get(n))return;await e.VERI.put(n,JSON.stringify({id:tt.id,ad:((tt.first_name||"")+" "+(tt.last_name||"")).trim(),kullanici:tt.username||"",katilim:(new Date).toISOString(),ref:aa||null,basis:0}))}(A,t.from,s).catch(()=>{}));
-return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:ONAY_METIN,parse_mode:"HTML",reply_markup:ONAY_KLAVYE})),new Response("ok")}if(i&&q.waitUntil(async function(e,t,a){if(!e.VERI)return!1;const n="u:"+t.id
-;if(await e.VERI.get(n))return!1;const i={id:t.id,ad:((t.first_name||"")+" "+(t.last_name||"")).trim(),kullanici:t.username||"",katilim:(new Date).toISOString(),ref:a||null,basis:0}
-;await e.VERI.put(n,JSON.stringify(i));const r=await L(e);if(r.toplam=(r.toplam||0)+1,r.gun=r.gun||{},r.gun[W()]=(r.gun[W()]||0)+1,await e.VERI.put("istatistik",JSON.stringify(r)),
-a&&String(a)!==String(t.id)){const t=await F(e);t[a]=(t[a]||0)+1,await e.VERI.put("referanslar",JSON.stringify(t))
-;const sy=t[a],kalan=20-(sy%20===0?20:sy%20),ac=sy%20===0
-;e.BOT_TOKEN&&await fetch("https://api.telegram.org/bot"+e.BOT_TOKEN+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:a,text:(ac?"🎉 Az önce davet ettiğin biri katıldı! Toplam davet sayın: "+sy+" — süper üyeliğin 1 ay açıldı/uzadı 👑":"🎉 Az önce davet ettiğin biri katıldı! Toplam davet sayın: "+sy+". Süper üyeliğe "+kalan+" davet kaldı.")})}).catch(()=>{})
-;ac&&await suparUyeSuresiUzat(e,a)}return!0}(A,t.from,s)),
+if(i&&!await onayVarMi(A,t.from.id)){q.waitUntil(uyeKaydet(A,t.from,s).catch(()=>{}));
+return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:ONAY_METIN,parse_mode:"HTML",reply_markup:ONAY_KLAVYE})),new Response("ok")}if(i&&q.waitUntil(uyeKaydet(A,t.from,s)),
 i&&(n.startsWith("/panel")||n.startsWith("/yonetici")))return d(t.from.id)?(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_web_page_preview:!0,
 text:"🛠 <b>Yönetici paneli</b>\n\nAşağıdaki düğmeye dokun — panel tarayıcıda açılır.\n\nAdres:\n<code>"+r()+"</code>",reply_markup:{inline_keyboard:[[{text:"🛠 Paneli aç",url:r()}],[{text:"◀️ Menü",
 callback_data:"menu"}]]}})),new Response("ok")):(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"Bu komut yöneticiye özeldir.",reply_markup:u(t.from.id)})),new Response("ok"))
