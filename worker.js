@@ -46,7 +46,13 @@ const YF_PARTI=30;async function gecmisiDoldur(e,t){if(!e.VERI)return;if(await e
 ;if(yapilan.size>=kodlar.size)await e.VERI.put("gecmisDolduruldu",(new Date).toISOString())}
 async function suparUyeSuresi(e,uid){if(!e.VERI)return 0;const t=await e.VERI.get("vipsure:"+uid);return t?Number(t):0}
 async function suparUyeSuresiUzat(e,uid){if(!e.VERI)return;const simdi=Date.now(),mevcut=await suparUyeSuresi(e,uid),baslangic=Math.max(simdi,mevcut);await e.VERI.put("vipsure:"+uid,String(baslangic+2592e6))}
-async function suparUyeMi(e,uid){if(d(uid))return!0;if((await suparUyeSuresi(e,uid))>Date.now())return!0;const toplam=(await F(e))[String(uid)]||0;return toplam>=20}
+async function suparUyeMi(e,uid){if(d(uid))return!0;
+/* ELLE VERİLEN ÜYELİK: paneldeki "vip" listesi (Sınırsız yap) artık süper
+   üyelik de sayılıyor. Eskiden yalnızca bekleme süresini kaldırıyordu;
+   yönetici ID eklese bile aday listesi ve anlık uyarı kapalı kalıyordu. */
+if((await E(e)).includes(String(uid)))return!0;
+if((await suparUyeSuresi(e,uid))>Date.now())return!0;
+const toplam=(await F(e))[String(uid)]||0;return toplam>=20}
 /* ================== ✅ GÜNLÜK RİSK ONAYI ==================
    Kullanıcı sistemi kullanmadan önce uyarıyı okuyup onaylamak zorunda.
    Onay HER GÜN saat 09:00'dan (TR) sonra yeniden istenir. Dönem hesabı:
@@ -319,6 +325,39 @@ n:p.kartlar[e].length})):[],depo:!!A.VERI}),{headers:{"content-type":"applicatio
 ;return new Response(e+"\nliste var · "+Object.keys(t).filter(e=>"guncelleme"!==e).join(", ")+"\nkartlar: "+a+"\ngüncelleme: "+t.guncelleme)}if("/tg"===$.pathname&&"POST"===p.method){
 const e=await p.json().catch(()=>null);if(!e)return new Response("ok");await botAd(A).catch(()=>{});if(e.message){const t=e.message,a=(t.text||"").trim(),n=a.toLowerCase(),i="private"===t.chat.type;let s=null
 ;const l=a.match(/^\/start\s+r(\d+)/i);if(l&&(s=l[1]),await B(A,t.from.id))return new Response("ok");
+/* ================== 👑 YÖNETİCİ KOMUTLARI ==================
+   Panele girmeden, sohbetten süper üyelik verme/alma:
+     /super 123456789        → 1 ay ver
+     /super 123456789 6      → 6 ay ver
+     /superkapat 123456789   → üyeliği bitir
+     /kim 123456789          → o kişinin durumunu göster
+   Yalnızca yöneticiler kullanabilir. */
+if(i&&d(t.from.id)&&/^\/(super|superkapat|kim)\b/i.test(a)){
+const par=a.trim().split(/\s+/),komut=par[0].toLowerCase().replace("/",""),hid=String(par[1]||"").replace(/\D/g,"");
+if(!hid)return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",
+text:"Kullanım:\n<code>/super 123456789</code> — 1 ay ver\n<code>/super 123456789 6</code> — 6 ay ver\n<code>/superkapat 123456789</code> — bitir\n<code>/kim 123456789</code> — durum sor"})),new Response("ok");
+return q.waitUntil((async()=>{
+if("superkapat"===komut){if(A.VERI)await A.VERI.delete("vipsure:"+hid);
+let vl=[...await E(A,!0)];if(vl.includes(hid)){vl=vl.filter(x=>x!==hid);if(A.VERI)await A.VERI.put("vip",JSON.stringify(vl));T=vl;x=Date.now()}
+await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",text:"🔻 <code>"+hid+"</code> süper üyeliği <b>kapatıldı</b>."});return}
+if("super"===komut){const ay=Math.max(1,Math.min(60,parseInt(par[2]||"1",10)||1));
+const simdi=Date.now(),mevcut=await suparUyeSuresi(A,hid),bas=Math.max(simdi,mevcut),yeniBitis=bas+ay*2592e6;
+if(A.VERI)await A.VERI.put("vipsure:"+hid,String(yeniBitis));
+const bit=new Date(yeniBitis).toLocaleDateString("tr-TR");
+await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",
+text:"👑 <code>"+hid+"</code> için süper üyelik <b>"+ay+" ay</b> eklendi.\nBitiş: <b>"+bit+"</b>"});
+try{await b(A.BOT_TOKEN,"sendMessage",{chat_id:hid,parse_mode:"HTML",
+text:"👑 <b>Süper üyeliğin açıldı!</b>\n\n🪜 Güçlü sinyal adayları\n🔔 Anlık uyarı\n⏳ Bekleme yok\n\nBitiş: <b>"+bit+"</b>",reply_markup:u(hid)})}catch(e){}
+return}
+/* /kim */
+const sure=await suparUyeSuresi(A,hid),vipte=(await E(A,!0)).includes(hid),ref=(await F(A))[hid]||0;
+const supar=await suparUyeMi(A,hid);
+await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",
+text:"🔎 <code>"+hid+"</code>\n\nSüper üye: <b>"+(supar?"EVET":"hayır")+"</b>\n"+
+"Elle sınırsız listede: <b>"+(vipte?"evet":"hayır")+"</b>\n"+
+"Süreli üyelik: <b>"+(sure>Date.now()?new Date(sure).toLocaleDateString("tr-TR")+" tarihine kadar":"yok")+"</b>\n"+
+"Toplam daveti: <b>"+ref+"</b>"});
+})()),new Response("ok")}
 if(i&&!await onayVarMi(A,t.from.id)){if(s)q.waitUntil(async function(e,tt,aa){if(!e.VERI)return;const n="u:"+tt.id;if(await e.VERI.get(n))return;await e.VERI.put(n,JSON.stringify({id:tt.id,ad:((tt.first_name||"")+" "+(tt.last_name||"")).trim(),kullanici:tt.username||"",katilim:(new Date).toISOString(),ref:aa||null,basis:0}))}(A,t.from,s).catch(()=>{}));
 return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:ONAY_METIN,parse_mode:"HTML",reply_markup:ONAY_KLAVYE})),new Response("ok")}if(i&&q.waitUntil(async function(e,t,a){if(!e.VERI)return!1;const n="u:"+t.id
 ;if(await e.VERI.get(n))return!1;const i={id:t.id,ad:((t.first_name||"")+" "+(t.last_name||"")).trim(),kullanici:t.username||"",katilim:(new Date).toISOString(),ref:a||null,basis:0}
