@@ -286,6 +286,10 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit>span{display:inline-block;padding-left:100%;animation:kay 34s linear infinite;will-change:transform}
 .serit b{color:var(--yazi)} .serit .ay{color:#3a4553;margin:0 12px}
 .serit .ay2{color:var(--soluk);font-size:10.5px}
+.simSatir{margin-bottom:8px}
+.simSatir label{display:block;font-size:11.5px;color:var(--soluk);margin-bottom:4px}
+.simSatir input{width:100%;box-sizing:border-box;background:var(--kart2);border:1px solid var(--ciz);
+  border-radius:8px;padding:9px 10px;color:var(--yazi);font-size:14px;font-family:inherit}
 .gunlukListe{margin-top:8px;max-height:260px;overflow-y:auto;border-top:1px solid var(--ciz)}
 .gunSat{padding:8px 0;border-bottom:1px solid var(--ciz);font-size:12px}
 .gunSat:last-child{border-bottom:0}
@@ -451,11 +455,15 @@ function seritCiz(){
   for(var i=hepsi.length-1;i>0;i--){
     var j=Math.floor(Math.random()*(i+1)),t=hepsi[i];hepsi[i]=hepsi[j];hepsi[j]=t;
   }
-  var par=hepsi.slice(0,30).map(function(x){
+  var gosterilen=hepsi.slice(0,20);
+  var par=gosterilen.map(function(x){
     return (x.y>=0?"🟢":"🔴")+" <b>"+E(x.kod)+"</b> "+Y(x.y)+' <span class="ay2">'+x.tf+"</span>";
   });
   var ic=par.join('<span class="ay">◆</span>');
-  el("serit").innerHTML="<span>"+ic+'<span class="ay">◆</span>'+ic+'<span class="ay">◆</span></span>';
+  /* hız: içerik ne kadar uzunsa animasyon o kadar sürsün, aksi halde çok
+     sinyal olduğunda şerit okunamayacak kadar hızlı akıyordu. */
+  var sure=Math.max(45,Math.round(gosterilen.length*4.2));
+  el("serit").innerHTML='<span style="animation-duration:'+sure+'s">'+ic+'<span class="ay">◆</span>'+ic+'<span class="ay">◆</span></span>';
 }
 function sirCiz(akt){
   var o=[["pot","🎯 Hedefe kalan"],["kar","💰 Kâr/Zarar"],["yeni","🕐 En yeni"]];
@@ -672,7 +680,6 @@ function perfCiz(){
 
       (g.eniyi?'<div class="sat"><span class="et">🔝 En iyi</span><b class="ye">'+E(g.eniyi.kod)+" "+Y(g.eniyi.y)+"</b></div>":"")+
       (g.enkotu?'<div class="sat"><span class="et">🔻 En kötü</span><b class="kr">'+E(g.enkotu.kod)+" "+Y(g.enkotu.y)+"</b></div>":"")+
-      '<div class="sat" style="margin-top:10px"><span class="et">💰 10.000 ₺ bugün ne olurdu</span><b class="'+(g.on10k>=10000?"ye":"kr")+'">'+g.on10k.toLocaleString("tr-TR")+" ₺</b></div>"+
       (g.hedefN?'<div class="sat"><span class="et">🎯 Hedefe değen</span><b class="ye">'+g.hedefTut+"/"+g.hedefN+" (%"+Math.round(100*g.hedefTut/g.hedefN)+")</b></div>":"")+
       (g.direncN?'<div class="sat"><span class="et">🧱 Dirençten dönen</span><b class="kr">'+g.direncDon+"/"+g.direncN+" (%"+Math.round(100*g.direncDon/g.direncN)+")</b></div>":"")+
       grafikHtml(P.seri)+gunlukListHtml(P.seri)+"</div>";
@@ -692,7 +699,6 @@ function perfCiz(){
 
       (i.eniyi?'<div class="sat"><span class="et">🔝 En iyi</span><b class="ye">'+E(i.eniyi.kod)+" "+Y(i.eniyi.y)+"</b></div>":"")+
       (i.enkotu?'<div class="sat"><span class="et">🔻 En kötü</span><b class="kr">'+E(i.enkotu.kod)+" "+Y(i.enkotu.y)+"</b></div>":"")+
-      '<div class="sat" style="margin-top:9px"><span class="et">💰 10.000 ₺ bugün</span><b class="'+(i.on10k>=10000?"ye":"kr")+'">'+i.on10k.toLocaleString("tr-TR")+" ₺</b></div>"+
       (i.hedefN?'<div class="sat"><span class="et">🎯 Hedefe değen</span><b class="ye">'+i.hedefTut+"/"+i.hedefN+" (%"+Math.round(100*i.hedefTut/i.hedefN)+")</b></div>":"")+
       (i.direncN?'<div class="sat"><span class="et">🧱 Dirençten dönen</span><b class="kr">'+i.direncDon+"/"+i.direncN+" (%"+Math.round(100*i.direncDon/i.direncN)+")</b></div>":"")+
       "</div>";
@@ -702,11 +708,11 @@ function perfCiz(){
       '<div class="sat"><span class="et">Kayıtlı sinyal</span><b>'+P.uzunGenel.n+"</b></div>"+
       '<div class="sat"><span class="et">Ortalama getiri</span><b class="'+(P.uzunGenel.ort>=0?"ye":"kr")+'">'+
       Y(P.uzunGenel.ort)+"</b></div>"+
-      '<div class="sat"><span class="et">💰 10.000 ₺ bugün</span><b class="'+(P.uzunGenel.on10k>=10000?"ye":"kr")+'">'+P.uzunGenel.on10k.toLocaleString("tr-TR")+" ₺</b></div>"+
       '<div class="sat"><span class="et">Kayıtlı gün</span><b>'+P.uzunGenel.gun+"</b></div>"+
       '<div class="bilgi">Dilim kırılımı ayrıntılı geçmişin tutulduğu son '+P.detaySinir+
       " gün için verilir; bu özet daha eski günleri de kapsar.</div></div>";
   }
+  h+=simKutusuHtml();
   h+='<div class="uyari">Ölçüm, sinyalin verildiği günün fiyatı ile bugünkü fiyat arasındaki farktır. '+
     "Komisyon, kayma ve temettü hesaba katılmaz. Geçmiş performans gelecek için garanti vermez.<br>"+
     "⚠️ Yatırım tavsiyesi değildir.</div>";
@@ -716,6 +722,65 @@ function pdBagla(){
   [].forEach.call(document.querySelectorAll("[data-pd]"),function(b){
     b.onclick=function(){tit();perfDonem=b.dataset.pd;perfCiz();window.scrollTo(0,0)};
   });
+  simBagla();
+}
+var simSonuc=null;
+function simVarsayilanTarih(){
+  var d=new Date(Date.now()+108e5);d.setUTCDate(d.getUTCDate()-30);
+  return d.toISOString().slice(0,10);
+}
+function simKutusuHtml(){
+  var t=(el("simTarih")&&el("simTarih").value)||simVarsayilanTarih();
+  var k=(el("simKod")&&el("simKod").value)||"";
+  var h='<div class="kutu"><h3>🧮 10.000 ₺ ile simülasyon</h3>'+
+    '<div class="alt" style="margin-bottom:8px">Seçtiğin tarihte 10.000 ₺ ile başlayıp, o günden bugüne kadar '+
+    "çıkan HER sinyalde işlem yapılsaydı bakiye nasıl değişirdi? Her sinyal günü, o günün ortalama getirisi "+
+    "önceki bakiyeye uygulanır (zincirleme/bileşik) — yani ertesi gün yeni bakiyeyle devam edilmiş gibi.</div>"+
+    '<div class="simSatir"><label>Başlangıç tarihi</label><input type="date" id="simTarih" value="'+E(t)+'"></div>'+
+    '<div class="simSatir"><label>Hisse kodu (boş = tüm sinyaller)</label><input type="text" id="simKod" placeholder="örn. THYAO" value="'+E(k)+'" style="text-transform:uppercase"></div>'+
+    '<button class="dg ik" id="simDg" style="margin-top:6px">Simüle et</button>'+
+    '<div id="simSonucAlan" style="margin-top:10px">'+simSonucHtml()+"</div></div>";
+  return h;
+}
+function simSonucHtml(){
+  if(!simSonuc)return"";
+  if(!simSonuc.ok)return '<div class="bos">'+(simSonuc.hata||"Hesaplanamadı.")+"</div>";
+  var s=simSonuc;
+  if(!s.gunler.length)return '<div class="bos">Bu tarih aralığında'+(s.kod?" "+E(s.kod)+" için":"")+" ölçülecek sinyal yok.</div>";
+  var h='<div class="ikili"><div><div class="buyukN '+(s.bakiye>=10000?"ye":"kr")+'">'+s.bakiye.toLocaleString("tr-TR")+
+    ' ₺</div><div class="altN">güncel bakiye</div></div>'+
+    '<div><div class="buyukN '+(s.getiri>=0?"ye":"kr")+'">'+(s.getiri>=0?"+":"")+s.getiri.toFixed(1)+
+    '%</div><div class="altN">toplam getiri</div></div></div>'+
+    '<div class="sat" style="margin-top:9px"><span class="et">Başlangıç</span><b>'+E(s.tarih)+" · 10.000 ₺</b></div>"+
+    (s.sinirlandi?'<div class="sat"><span class="et">⚠️ Not</span><b>'+E(s.kod)+" için ayrıntılı geçmiş yalnız "+
+      E(s.gercekTarih)+" tarihinden beri tutuluyor, simülasyon oradan başlatıldı.</b></div>":"")+
+    '<div class="sat"><span class="et">İşlem yapılan gün</span><b>'+s.gunler.length+"</b></div>"+
+    '<div class="sat"><span class="et">Toplam sinyal</span><b>'+s.toplamSinyal+"</b></div>"+
+    '<div class="gunlukListe" style="margin-top:8px">'+s.gunler.slice().reverse().map(function(x){
+      var sinH=(x.sin||[]).map(function(sn){
+        return '<span class="sinP '+(sn.y>=0?"ye":"kr")+'">'+E(sn.k)+" "+(sn.y>=0?"+":"")+sn.y.toFixed(1)+"%</span>";
+      }).join("");
+      return '<div class="gunSat"><b>'+x.gun+'</b> <span class="et">('+x.n+" sinyal, ort "+
+        (x.ort>=0?"+":"")+x.ort.toFixed(2)+'%)</span> → <b class="num">'+x.bakiye.toLocaleString("tr-TR")+" ₺</b>"+
+        (sinH?'<div class="sinSar">'+sinH+"</div>":"")+"</div>";
+    }).join("")+"</div>";
+  return h;
+}
+function simBagla(){
+  var dg=el("simDg");if(!dg)return;
+  dg.onclick=function(){
+    tit();
+    var tarih=el("simTarih").value||simVarsayilanTarih();
+    var kod=(el("simKod").value||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10);
+    dg.disabled=true;dg.textContent="⏳ hesaplanıyor…";
+    post("/api/simulasyon",{tarih:tarih,kod:kod||undefined}).then(function(v){
+      simSonuc=v;dg.disabled=false;dg.textContent="Simüle et";
+      el("simSonucAlan").innerHTML=simSonucHtml();
+    }).catch(function(){
+      dg.disabled=false;dg.textContent="Simüle et";
+      el("simSonucAlan").innerHTML='<div class="bos">Bağlantı hatası, tekrar dene.</div>';
+    });
+  };
 }
 function grafikHtml(seri){
   if(!seri||seri.length<2)return"";
@@ -1125,6 +1190,52 @@ dilimler:TFL.map(t=>({tf:t,ist:kapat(kutu[t])})),genel:kapat(genel),uzunGenel:uz
 seri:seri.slice(-30)}};
 return JS({ok:!0,donem:{h1:olc(7),a1:olc(30),a3:olc(90),y1:olc(365)},
 guncelleme:G2.guncelleme||null})}
+if("/api/simulasyon"===$.pathname){
+/* ================== 🧮 10.000 ₺ ZİNCİRLEME SİMÜLASYON ==================
+   "Bugün ne olurdu" gibi tek seferlik ortalama getiri çarpımı YANLIŞTIR —
+   burada gerçek mantık uygulanır: seçilen tarihten başlanır, sinyal çıkan
+   her gün o günün ortalama getirisi o ANKİ bakiyeye uygulanır, ertesi gün
+   yeni bakiyeyle devam edilir (bileşik/zincirleme). kod verilirse yalnız
+   o hissenin sinyalleri sayılır. Ayrıntılı günlük kayıt yalnız son
+   DETAY_GUN (90) gün için tutulur; kod belirtilmişse bu pencereyi aşan
+   tarihler günün başına (en eski ayrıntılı güne) çekilir ve kullanıcıya
+   bildirilir. kod verilmemişse 90 günü aşan kısım özet (ozet) ile
+   tamamlanır — orada yalnız günlük ortalama vardır, hisse bazlı ayrım yok. */
+const G2=await y(A),GD=G2.gunler||{},OZ=G2.ozet||{};
+const bg=new Date(Date.now()+108e5).toISOString().slice(0,10);
+const DUZELT=t=>({"15D":"15DK","1S":"1SA","4S":"4SA","1G":"1G","15DK":"15DK","1SA":"1SA","4SA":"4SA"})[t]||t;
+let tarih=String(gov.tarih||"").slice(0,10);
+if(!/^\d{4}-\d{2}-\d{2}$/.test(tarih))tarih=bg;
+if(tarih>bg)tarih=bg;
+const kod=gov.kod?KOD(gov.kod):null;
+const gdGunler=Object.keys(GD).sort();
+const gdBaslangic=gdGunler[0]||bg;
+let sinirlandi=false,gercekTarih=tarih;
+if(kod&&tarih<gdBaslangic){gercekTarih=gdBaslangic;sinirlandi=true}
+let bakiye=1e4,gunlukKayit=[],toplamSinyal=0;
+if(!kod){
+const ozetGunler=Object.keys(OZ).filter(g=>g>=tarih&&g<gdBaslangic).sort();
+for(const gun of ozetGunler){
+const o=OZ[gun];if(!o||!o.n)continue;
+bakiye*=1+o.ort/100;toplamSinyal+=o.n;
+gunlukKayit.push({gun:gun,ort:Math.round(o.ort*100)/100,n:o.n,bakiye:Math.round(bakiye),sin:[]})}}
+const detayBaslangic=kod?gercekTarih:tarih;
+for(const gun of gdGunler){
+if(gun<detayBaslangic)continue;
+const kay=GD[gun].kayitlar||{};let gt=0,gn=0,gsin=[];
+for(const key of Object.keys(kay)){const rec=kay[key];
+if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
+const kd=rec.k||String(key).split("@")[0];
+if(kod&&kd!==kod)continue;
+const tf=DUZELT(rec.t||String(key).split("@")[1]||"");
+const y2=100*(rec.s/rec.g-1);
+gt+=y2;gn++;gsin.push({k:kd,tf:tf,y:Math.round(y2*100)/100})}
+if(gn){const ort=gt/gn;bakiye*=1+ort/100;toplamSinyal+=gn;
+gsin.sort((a2,b2)=>b2.y-a2.y);
+gunlukKayit.push({gun:gun,ort:Math.round(ort*100)/100,n:gn,bakiye:Math.round(bakiye),sin:gsin.slice(0,10)})}}
+return JS({ok:!0,kod:kod||null,tarih:tarih,gercekTarih:gercekTarih,sinirlandi:sinirlandi,
+bakiye:Math.round(bakiye),getiri:Math.round((bakiye/1e4-1)*1e4)/100,
+toplamSinyal:toplamSinyal,gunler:gunlukKayit})}
 if("/api/medya"===$.pathname){
 /* Fotoğraf/video bir kez Telegram'a yüklenir, dönen file_id saklanır;
    duyuru o file_id ile gönderilir — her kişi için yeniden yüklenmez. */
