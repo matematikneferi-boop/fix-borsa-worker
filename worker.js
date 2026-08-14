@@ -28,7 +28,7 @@ if(!(a&&a.kod&&a.giris>0))continue;
 /* ANAHTAR ARTIK kod@dilim: aynı hisse iki dilimde birden sinyal verirse
    ikisi de ayrı ayrı kaydedilir — dilim bazlı performans bunu gerektirir. */
 const KK=a.kod+"@"+(a.tfKod||a.tf||"");
-if(!n.gunler[i].kayitlar[KK])n.gunler[i].kayitlar[KK]={k:a.kod,g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tfKod||a.tf||"",l:e,h:(a.hedef>0?Number(a.hedef):null),r:1,max:Number(a.fiyat)||Number(a.giris)}}}
+if(!n.gunler[i].kayitlar[KK])n.gunler[i].kayitlar[KK]={k:a.kod,g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tfKod||a.tf||"",l:e,h:(a.hedef>0?Number(a.hedef):null),h1:(a.hedef1>0?Number(a.hedef1):null),r:1,max:Number(a.fiyat)||Number(a.giris)}}}
 for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayitlar)){const kk=n.gunler[e].kayitlar[t],kd=kk.k||String(t).split("@")[0];if(s[kd]>0){kk.s=s[kd];if(!(kk.max>0)||s[kd]>kk.max)kk.max=s[kd]}}
 ;n.ozet=n.ozet||{};const gt=Object.keys(n.gunler).sort().reverse(),gk=gt.slice(0,DETAY_GUN),gs=gt.slice(DETAY_GUN)
 ;for(const e of gs){if(!n.ozet[e]){const o=m(e,n.gunler[e]);if(o)n.ozet[e]=o}}const go={};for(const e of gk)go[e]=n.gunler[e];n.gunler=go
@@ -285,6 +285,14 @@ textarea.gir{min-height:88px;resize:vertical}
           mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent)}
 .serit>span{display:inline-block;padding-left:100%;animation:kay 34s linear infinite;will-change:transform}
 .serit b{color:var(--yazi)} .serit .ay{color:#3a4553;margin:0 12px}
+.serit .ay2{color:var(--soluk);font-size:10.5px}
+.gunlukListe{margin-top:8px;max-height:260px;overflow-y:auto;border-top:1px solid var(--ciz)}
+.gunSat{padding:8px 0;border-bottom:1px solid var(--ciz);font-size:12px}
+.gunSat:last-child{border-bottom:0}
+.sinSar{margin-top:5px;display:flex;flex-wrap:wrap;gap:5px}
+.sinP{background:var(--kart2);border-radius:7px;padding:3px 7px;font-size:11px;font-weight:700}
+.sinP.ye{color:var(--yes)} .sinP.kr{color:var(--kir)}
+.sinP i{font-style:normal;color:var(--soluk);font-weight:400;margin-left:2px}
 @keyframes kay{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
 @media (prefers-reduced-motion:reduce){.serit>span{animation:none;padding-left:12px}}
 .gez{display:flex;gap:8px;align-items:center;padding:9px 0 2px}
@@ -429,29 +437,23 @@ function ciz(){
 /* ---------- KAYAN YAZI ----------
    İçerik veriden üretilir: hangi dilimde kaç sinyal var, günün en iyileri,
    davet durumu ve sabit uyarı. Kesintisiz akması için içerik iki kez basılır. */
+/* Kayan yazı artık YALNIZ son sinyalleri, rastgele karışık sırada gösterir —
+   dilim sayacı / üyelik / sabit uyarı metinleri kaldırıldı. */
 function seritCiz(){
-  var par=[];
-  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(k){
-    var n=(D.kartlar&&D.kartlar[k]&&D.kartlar[k].length)||0;
-    par.push(TF[k].ik+" <b>"+TF[k].ad+"</b> "+(n?n+" sinyal":"sinyal yok"));
-  });
   var hepsi=[];
   ["tavan","potansiyel","fibo","uzunvade"].forEach(function(k){
     (D.kartlar&&D.kartlar[k]||[]).forEach(function(x){
       var kr=kar(x);if(kr!=null)hepsi.push({kod:x.kod,y:kr,tf:TF[k].kisa});
     });
   });
-  hepsi.sort(function(a,b){return b.y-a.y});
-  if(hepsi.length){
-    par.push("🔝 <b>"+hepsi[0].kod+"</b> "+Y(hepsi[0].y)+" ("+hepsi[0].tf+")");
-    if(hepsi.length>2)par.push("📈 <b>"+hepsi[1].kod+"</b> "+Y(hepsi[1].y));
-    var son=hepsi[hepsi.length-1];
-    if(son.y<0)par.push("📉 <b>"+son.kod+"</b> "+Y(son.y));
+  if(!hepsi.length){el("serit").innerHTML="";return}
+  /* Fisher-Yates karıştır — her açılışta farklı bir sıra/seçim görünsün */
+  for(var i=hepsi.length-1;i>0;i--){
+    var j=Math.floor(Math.random()*(i+1)),t=hepsi[i];hepsi[i]=hepsi[j];hepsi[j]=t;
   }
-  if(!D.super)par.push("👑 <b>Süper Üyelik</b> için "+D.kalan+" davet kaldı — adaylar açılır");
-  else par.push("👑 <b>Süper üyesin</b> — aday listeleri açık");
-  par.push("🧱 <b>Direnç</b> kırılınca 🎯 <b>hedef</b> hedeflenir");
-  par.push("⚠️ <b>Yatırım tavsiyesi değildir</b>");
+  var par=hepsi.slice(0,30).map(function(x){
+    return (x.y>=0?"🟢":"🔴")+" <b>"+E(x.kod)+"</b> "+Y(x.y)+' <span class="ay2">'+x.tf+"</span>";
+  });
   var ic=par.join('<span class="ay">◆</span>');
   el("serit").innerHTML="<span>"+ic+'<span class="ay">◆</span>'+ic+'<span class="ay">◆</span></span>';
 }
@@ -670,7 +672,10 @@ function perfCiz(){
 
       (g.eniyi?'<div class="sat"><span class="et">🔝 En iyi</span><b class="ye">'+E(g.eniyi.kod)+" "+Y(g.eniyi.y)+"</b></div>":"")+
       (g.enkotu?'<div class="sat"><span class="et">🔻 En kötü</span><b class="kr">'+E(g.enkotu.kod)+" "+Y(g.enkotu.y)+"</b></div>":"")+
-      grafikHtml(P.seri)+"</div>";
+      '<div class="sat" style="margin-top:10px"><span class="et">💰 10.000 ₺ bugün ne olurdu</span><b class="'+(g.on10k>=10000?"ye":"kr")+'">'+g.on10k.toLocaleString("tr-TR")+" ₺</b></div>"+
+      (g.hedefN?'<div class="sat"><span class="et">🎯 Hedefe değen</span><b class="ye">'+g.hedefTut+"/"+g.hedefN+" (%"+Math.round(100*g.hedefTut/g.hedefN)+")</b></div>":"")+
+      (g.direncN?'<div class="sat"><span class="et">🧱 Dirençten dönen</span><b class="kr">'+g.direncDon+"/"+g.direncN+" (%"+Math.round(100*g.direncDon/g.direncN)+")</b></div>":"")+
+      grafikHtml(P.seri)+gunlukListHtml(P.seri)+"</div>";
   }
   (P.dilimler||[]).forEach(function(x){
     var i=x.ist;
@@ -687,6 +692,9 @@ function perfCiz(){
 
       (i.eniyi?'<div class="sat"><span class="et">🔝 En iyi</span><b class="ye">'+E(i.eniyi.kod)+" "+Y(i.eniyi.y)+"</b></div>":"")+
       (i.enkotu?'<div class="sat"><span class="et">🔻 En kötü</span><b class="kr">'+E(i.enkotu.kod)+" "+Y(i.enkotu.y)+"</b></div>":"")+
+      '<div class="sat" style="margin-top:9px"><span class="et">💰 10.000 ₺ bugün</span><b class="'+(i.on10k>=10000?"ye":"kr")+'">'+i.on10k.toLocaleString("tr-TR")+" ₺</b></div>"+
+      (i.hedefN?'<div class="sat"><span class="et">🎯 Hedefe değen</span><b class="ye">'+i.hedefTut+"/"+i.hedefN+" (%"+Math.round(100*i.hedefTut/i.hedefN)+")</b></div>":"")+
+      (i.direncN?'<div class="sat"><span class="et">🧱 Dirençten dönen</span><b class="kr">'+i.direncDon+"/"+i.direncN+" (%"+Math.round(100*i.direncDon/i.direncN)+")</b></div>":"")+
       "</div>";
   });
   if(P.uzunGenel){
@@ -694,6 +702,7 @@ function perfCiz(){
       '<div class="sat"><span class="et">Kayıtlı sinyal</span><b>'+P.uzunGenel.n+"</b></div>"+
       '<div class="sat"><span class="et">Ortalama getiri</span><b class="'+(P.uzunGenel.ort>=0?"ye":"kr")+'">'+
       Y(P.uzunGenel.ort)+"</b></div>"+
+      '<div class="sat"><span class="et">💰 10.000 ₺ bugün</span><b class="'+(P.uzunGenel.on10k>=10000?"ye":"kr")+'">'+P.uzunGenel.on10k.toLocaleString("tr-TR")+" ₺</b></div>"+
       '<div class="sat"><span class="et">Kayıtlı gün</span><b>'+P.uzunGenel.gun+"</b></div>"+
       '<div class="bilgi">Dilim kırılımı ayrıntılı geçmişin tutulduğu son '+P.detaySinir+
       " gün için verilir; bu özet daha eski günleri de kapsar.</div></div>";
@@ -715,6 +724,19 @@ function grafikHtml(seri){
     seri.map(function(x){
       var h2=Math.max(3,Math.round(60*Math.abs(x.ort)/mx));
       return '<i style="height:'+h2+"px;background:"+(x.ort>=0?"var(--yes)":"var(--kir)")+'"></i>';
+    }).join("")+"</div>";
+}
+function gunlukListHtml(seri){
+  if(!seri||!seri.length)return"";
+  var gunler=seri.slice().reverse();
+  return '<div class="bilgi" style="margin-top:12px">📅 Günlük sinyal detayı — hangi sinyal ne kazandırdı</div>'+
+    '<div class="gunlukListe">'+gunler.map(function(x){
+      var sat=(x.sin||[]).map(function(s){
+        return '<span class="sinP '+(s.y>=0?"ye":"kr")+'">'+E(s.k)+" "+(s.y>=0?"+":"")+s.y.toFixed(1)+"% <i>"+E(s.tf)+"</i></span>";
+      }).join("");
+      var fazla=x.n>(x.sin||[]).length?'<span class="et"> · +'+(x.n-x.sin.length)+" diğer</span>":"";
+      return '<div class="gunSat"><b>'+x.gun+'</b> <span class="et">('+x.n+" sinyal, ort "+
+        (x.ort>=0?"+":"")+x.ort.toFixed(2)+"%)</span>"+fazla+'<div class="sinSar">'+sat+"</div></div>";
     }).join("")+"</div>";
 }
 function davetCiz(){
@@ -1061,31 +1083,42 @@ const bg=new Date(Date.now()+108e5).toISOString().slice(0,10);
 const fark=gg=>Math.round((new Date(bg)-new Date(gg))/864e5);
 const TFL=["15DK","1SA","4SA","1G"],
 DUZELT=t=>({"15D":"15DK","1S":"1SA","4S":"4SA","1G":"1G","15DK":"15DK","1SA":"1SA","4SA":"4SA"})[t]||t;
-const bos=()=>({n:0,kaz:0,top:0,zirve:0,eniyi:null,enkotu:null});
+const bos=()=>({n:0,kaz:0,top:0,zirve:0,eniyi:null,enkotu:null,hedefN:0,hedefTut:0,direncN:0,direncDon:0});
 const kapat=o=>o.n?{n:o.n,isabet:100*o.kaz/o.n,ort:o.top/o.n,zirve:o.zirve/o.n,
-eniyi:o.eniyi,enkotu:o.enkotu}:null;
+eniyi:o.eniyi,enkotu:o.enkotu,on10k:Math.round(10000*(1+(o.top/o.n)/100)),
+hedefN:o.hedefN,hedefTut:o.hedefTut,direncN:o.direncN,direncDon:o.direncDon}:null;
 const olc=gunSay=>{
 const kutu={},genel=bos();TFL.forEach(t=>kutu[t]=bos());
 const gunler=new Set();let seri=[];
 const detaySinir=Math.min(gunSay,90);
 for(const gun of Object.keys(GD)){
 const f=fark(gun);if(f<0||f>detaySinir)continue;
-const kay=GD[gun].kayitlar||{};let gt=0,gn=0;
+const kay=GD[gun].kayitlar||{};let gt=0,gn=0,gsin=[];
 for(const key of Object.keys(kay)){const rec=kay[key];
 if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
 const tf=DUZELT(rec.t||String(key).split("@")[1]||""),kd=rec.k||String(key).split("@")[0];
 const y2=100*(rec.s/rec.g-1),zr=rec.max>0?100*(rec.max/rec.g-1):y2;
+/* hedefe değdi mi: sinyalden sonraki zirve, o sinyalin hedef fiyatına ulaştı mı.
+   dirençten döndü mü: zirve, kayıtlı direnç (hedef1) seviyesinin altında kaldı —
+   yani fiyat o seviyeyi kıramadan geri çekildi. Bu alanlar yalnız o bilgi
+   kaydedilmişse (h/h1>0) sayılır; eski kayıtlarda yoksa ölçüme girmez. */
+const hedefDegdi=(rec.h>0)?(rec.max>=rec.h):null;
+const direncDondu=(rec.h1>0)?(rec.max<rec.h1):null;
 const ek=o=>{o.n++;o.top+=y2;o.zirve+=zr;if(y2>=0)o.kaz++;
 if(!o.eniyi||y2>o.eniyi.y)o.eniyi={kod:kd,y:y2};
-if(!o.enkotu||y2<o.enkotu.y)o.enkotu={kod:kd,y:y2}};
-if(kutu[tf])ek(kutu[tf]);ek(genel);gt+=y2;gn++}
-if(gn){gunler.add(gun);seri.push({gun:gun,ort:gt/gn,n:gn})}}
+if(!o.enkotu||y2<o.enkotu.y)o.enkotu={kod:kd,y:y2};
+if(hedefDegdi!==null){o.hedefN++;if(hedefDegdi)o.hedefTut++}
+if(direncDondu!==null){o.direncN++;if(direncDondu)o.direncDon++}};
+if(kutu[tf])ek(kutu[tf]);ek(genel);gt+=y2;gn++;
+gsin.push({k:kd,tf:tf,y:Math.round(100*y2)/100})}
+if(gn){gunler.add(gun);gsin.sort((a2,b2)=>b2.y-a2.y);
+seri.push({gun:gun,ort:gt/gn,n:gn,sin:gsin.slice(0,20)})}}
 /* 90 günü aşan pencerelerde ayrıntı yok; günlük özetten toplanır */
 let uzunGenel=null;
 if(gunSay>90){let n2=0,top2=0,g2=0;
 for(const gun of Object.keys(OZ)){const f=fark(gun);if(f<0||f>gunSay)continue;
 const o=OZ[gun];if(!o||!o.n)continue;n2+=o.n;top2+=o.ort*o.n;g2++}
-if(n2)uzunGenel={n:n2,ort:top2/n2,gun:g2}}
+if(n2)uzunGenel={n:n2,ort:top2/n2,gun:g2,on10k:Math.round(10000*(1+(top2/n2)/100))}}
 seri.sort((a2,b2)=>a2.gun<b2.gun?-1:1);
 return{gunSay:gunSay,detaySinir:detaySinir,gunSayisi:gunler.size,
 dilimler:TFL.map(t=>({tf:t,ist:kapat(kutu[t])})),genel:kapat(genel),uzunGenel:uzunGenel,
