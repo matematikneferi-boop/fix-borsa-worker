@@ -1,4 +1,4 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.0";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="11.1";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo","uzunvade","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
@@ -158,7 +158,7 @@ const s=t.kartlar[a],l=Math.max(1,Math.ceil(r.length/8));let o=e+"\n";if(t.gunce
 o+="<i>Düğmede: solda hedefe kalan · sağda "+("aday"===a?"tetiğe kalan 🔓":"sinyalden bu yana")+"</i>\n\n";const c=8*i;return r.slice(c,c+8).forEach((e,t)=>{o+=function(e,t){const a=e=>Number(e).toFixed(2);let n="━━━━━━━━━━━━━━━━\n"
 ;n+="<b>"+t+". "+(e.rozet||"▫️")+" "+e.kod+"</b>"+(e.tf?"  ·  <i>"+e.tf+"</i>":"")+(e.etiket?"  ·  "+e.etiket:"")+"\n",
 void 0!==e.giris&&null!==e.giris?n+="💵 Sinyal <b>"+a(e.giris)+"</b> → Şimdi <b>"+a(e.fiyat)+"</b>\n":n+="💵 Şimdi <b>"+a(e.fiyat)+"</b>\n";const i=I(e)
-;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🎯 1. hedef (günlük TP1) <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+=(null!=e.hedef1?"🏁 Son hedef <b>":"🎯 Hedef <b>")+a(e.hedef)+"</b>",
+;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🧱 Direnç <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+="🎯 Hedef <b>"+a(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  🏆 <b>TUTTU</b>":"  ·  hedefe <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),n+="\n");const r=e.sinyalZaman||e.zaman
 ;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}const MINIAPP=`<!doctype html><html lang="tr"><head>
 <meta charset="utf-8">
@@ -279,11 +279,31 @@ textarea.gir{min-height:88px;resize:vertical}
 .onizle{width:100%;border-radius:10px;margin-top:9px;border:1px solid var(--ciz);display:block}
 .etiketDosya{display:block;background:var(--kart2);border:1px dashed #3a4553;border-radius:10px;
   padding:14px;text-align:center;font-size:13.5px;font-weight:700;margin-top:9px;color:var(--soluk)}
+.serit{overflow:hidden;white-space:nowrap;background:var(--kart);border-top:1px solid var(--ciz);
+  border-bottom:1px solid var(--ciz);margin:0 -12px 0;padding:7px 0;font-size:12.5px;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent);
+          mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent)}
+.serit>span{display:inline-block;padding-left:100%;animation:kay 34s linear infinite;will-change:transform}
+.serit b{color:var(--yazi)} .serit .ay{color:#3a4553;margin:0 12px}
+@keyframes kay{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+@media (prefers-reduced-motion:reduce){.serit>span{animation:none;padding-left:12px}}
+.gez{display:flex;gap:8px;align-items:center;padding:9px 0 2px}
+.gez button{flex:0 0 auto;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
+  border-radius:9px;padding:8px 15px;font-size:13px;font-weight:700}
+.gez button:disabled{opacity:.32}
+.gez .nerede{flex:1;text-align:center;font-size:12px;color:var(--soluk);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style></head><body>
 
 <div class="ust">
   <div class="baslik"><h1>📊 Fix Borsa Sinyal</h1><div class="saat" id="saat"></div></div>
   <div class="sekmeler" id="sekmeler"></div>
+  <div class="serit" id="serit"></div>
+  <div class="gez">
+    <button id="gezGeri">◀ Geri</button>
+    <div class="nerede" id="nerede"></div>
+    <button id="gezIleri">İleri ▶</button>
+  </div>
 </div>
 <div class="govde" id="govde"><div class="yukleniyor">yükleniyor…</div></div>
 <div class="katman" id="katman"></div>
@@ -294,6 +314,47 @@ try{TG.ready();TG.expand();if(TG.setHeaderColor)TG.setHeaderColor("#0e1116");
     if(TG.setBackgroundColor)TG.setBackgroundColor("#0e1116")}catch(e){}
 function tit(){try{TG.HapticFeedback.impactOccurred("light")}catch(e){}}
 var D=null, sekme="tavan", sira="pot", adayTf="adayKisa";
+/* ---------- GERİ / İLERİ ----------
+   Uygulama tek sayfa olduğu için tarayıcı geçmişi yok; her ekran değişimi
+   kendi yığınımıza yazılır. Telegram'ın kendi geri düğmesi de buna bağlanır:
+   detay açıkken önce detayı kapatır, sonra ekranlar arasında geri gider. */
+var yol=[], yolIx=-1, yolKilit=false;
+function durumAl(){return{sekme:sekme,sira:sira,adayTf:adayTf,perfDonem:perfDonem}}
+function durumYaz(d){sekme=d.sekme;sira=d.sira;adayTf=d.adayTf;perfDonem=d.perfDonem}
+function yolYaz(){
+  if(yolKilit)return;
+  var y=durumAl();
+  if(yolIx>=0&&JSON.stringify(yol[yolIx])===JSON.stringify(y))return;
+  yol=yol.slice(0,yolIx+1);yol.push(y);
+  if(yol.length>40){yol.shift()}
+  yolIx=yol.length-1;gezCiz();
+}
+function yolGit(adim){
+  var ye=yolIx+adim;if(ye<0||ye>=yol.length)return;
+  yolIx=ye;yolKilit=true;durumYaz(yol[yolIx]);ciz();yolKilit=false;
+  gezCiz();window.scrollTo(0,0);
+}
+function ekranAdi(){
+  if(sekme==="perf")return"📈 Performans";
+  if(sekme==="davet")return"📤 Davet";
+  if(sekme==="panel")return"🛠 Panel";
+  if(sekme==="fav")return"⭐ Takip listem";
+  if(sekme==="aday")return(TF[adayTf]?TF[adayTf].ad:"Adaylar");
+  return TF[sekme]?TF[sekme].ik+" "+TF[sekme].ad:"";
+}
+function gezCiz(){
+  var g=el("gezGeri"),i=el("gezIleri");
+  if(!g||!i)return;
+  g.disabled=yolIx<=0;i.disabled=yolIx>=yol.length-1;
+  el("nerede").textContent=ekranAdi();
+  tgGeriDugme();
+}
+function tgGeriDugme(){
+  try{
+    var acik=el("katman").classList.contains("ac");
+    if(acik||yolIx>0)TG.BackButton.show();else TG.BackButton.hide();
+  }catch(e){}
+}
 var TF={tavan:{ad:"15 DAKİKA",kisa:"15DK",r:"15DK",ik:"⚡",renk:"var(--t15)"},
         potansiyel:{ad:"1 SAAT",kisa:"1SA",r:"1SA",ik:"📊",renk:"var(--t1s)"},
         fibo:{ad:"4 SAAT",kisa:"4SA",r:"4SA",ik:"📐",renk:"var(--t4s)"},
@@ -350,10 +411,13 @@ function sekCiz(){
   el("sekmeler").innerHTML=s.join("");
   [].forEach.call(el("sekmeler").children,function(b){
     b.onclick=function(){tit();sekme=b.dataset.s;sira="pot";ciz();window.scrollTo(0,0)};
+    b.oncontextmenu=function(e2){e2.preventDefault()};
   });
 }
 function ciz(){
+  yolYaz();
   el("saat").textContent=(D.yon&&D.guncelleme)?("🔐 son tarama "+D.guncelleme):"";
+  seritCiz();
   sekCiz();
   if(sekme==="perf")return perfCiz();
   if(sekme==="davet")return davetCiz();
@@ -361,6 +425,35 @@ function ciz(){
   if(sekme==="fav")return favCiz();
   if(sekme==="aday")return adayCiz();
   listeCiz(sekme);
+}
+/* ---------- KAYAN YAZI ----------
+   İçerik veriden üretilir: hangi dilimde kaç sinyal var, günün en iyileri,
+   davet durumu ve sabit uyarı. Kesintisiz akması için içerik iki kez basılır. */
+function seritCiz(){
+  var par=[];
+  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(k){
+    var n=(D.kartlar&&D.kartlar[k]&&D.kartlar[k].length)||0;
+    par.push(TF[k].ik+" <b>"+TF[k].ad+"</b> "+(n?n+" sinyal":"sinyal yok"));
+  });
+  var hepsi=[];
+  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(k){
+    (D.kartlar&&D.kartlar[k]||[]).forEach(function(x){
+      var kr=kar(x);if(kr!=null)hepsi.push({kod:x.kod,y:kr,tf:TF[k].kisa});
+    });
+  });
+  hepsi.sort(function(a,b){return b.y-a.y});
+  if(hepsi.length){
+    par.push("🔝 <b>"+hepsi[0].kod+"</b> "+Y(hepsi[0].y)+" ("+hepsi[0].tf+")");
+    if(hepsi.length>2)par.push("📈 <b>"+hepsi[1].kod+"</b> "+Y(hepsi[1].y));
+    var son=hepsi[hepsi.length-1];
+    if(son.y<0)par.push("📉 <b>"+son.kod+"</b> "+Y(son.y));
+  }
+  if(!D.super)par.push("👑 <b>Süper Üyelik</b> için "+D.kalan+" davet kaldı — adaylar açılır");
+  else par.push("👑 <b>Süper üyesin</b> — aday listeleri açık");
+  par.push("🧱 <b>Direnç</b> kırılınca 🎯 <b>hedef</b> hedeflenir");
+  par.push("⚠️ <b>Yatırım tavsiyesi değildir</b>");
+  var ic=par.join('<span class="ay">◆</span>');
+  el("serit").innerHTML="<span>"+ic+'<span class="ay">◆</span>'+ic+'<span class="ay">◆</span></span>';
 }
 function sirCiz(akt){
   var o=[["pot","🎯 Hedefe kalan"],["kar","💰 Kâr/Zarar"],["yeni","🕐 En yeni"]];
@@ -468,8 +561,8 @@ function detay(kod,ad){
   var K=el("katman");
   K.innerHTML='<div class="kapat"><b>'+E(kod)+'</b><button id="dkapat">✕ Kapat</button></div>'+
     '<div class="yukleniyor">yükleniyor…</div>';
-  K.classList.add("ac");
-  el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML=""};
+  K.classList.add("ac");tgGeriDugme();
+  el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme()};
   post("/api/hisse",{kod:kod}).then(function(v){
     var k=(v&&v.kart)||null, ayna=(v&&v.ayna)||"", fav=!!(v&&v.fav);
     var t=TF[ad]||{kisa:(k&&k.tf)||"",ad:""};
@@ -488,12 +581,11 @@ function detay(kod,ad){
         (k.tetikYuzde!=null?" ("+Number(k.tetikYuzde).toFixed(2)+"% kaldı)":"")+"</b></div>";
       h+="</div>";
       h+='<div class="kutu"><h3>🎯 Hedefler</h3>';
-      if(k.hedef1!=null)h+='<div class="sat"><span class="et">1. hedef</span><b>'+N(k.hedef1)+
+      if(k.hedef1!=null)h+='<div class="sat"><span class="et">🧱 Direnç</span><b>'+N(k.hedef1)+
         (k.hedef1Yuzde!=null?"  (+"+Number(k.hedef1Yuzde).toFixed(1)+"%)":"")+"</b></div>";
-      if(k.direncler&&k.direncler.length)h+='<div class="sat"><span class="et">'+
-        (k.hedef1!=null?"Ara hedefler":"Dirençler")+"</span><b>"+
+      else if(k.direncler&&k.direncler.length)h+='<div class="sat"><span class="et">🧱 Direnç</span><b>'+
         k.direncler.filter(function(x){return x!=null}).map(function(x){return N(x)}).join(" · ")+"</b></div>";
-      if(k.hedef!=null)h+='<div class="sat"><span class="et">Son hedef</span><b>'+N(k.hedef)+"</b></div>";
+      if(k.hedef!=null)h+='<div class="sat"><span class="et">🎯 Hedef</span><b>'+N(k.hedef)+"</b></div>";
       if(k.potansiyel!=null)h+='<div class="sat"><span class="et">Hedefe kalan</span><b class="'+
         (Number(k.potansiyel)<=0?"sa":"ye")+'">'+(Number(k.potansiyel)<=0?"🏆 hedef tuttu":
         "+"+Number(k.potansiyel).toFixed(1)+"%")+"</b></div>";
@@ -508,20 +600,18 @@ function detay(kod,ad){
     if(gG.length){
       var kaz=gG.filter(function(x){return x.yuzde>=0}).length;
       var ort=gG.reduce(function(a,x){return a+x.yuzde},0)/gG.length;
-      var tut=gG.filter(function(x){return x.tuttu}).length;
-      var hed=gG.filter(function(x){return x.hedef}).length;
       h+='<div class="kutu"><h3>📜 Bu hissenin geçmiş sinyalleri</h3>'+
         '<div class="ikili"><div><div class="buyukN '+(kaz>=gG.length-kaz?"ye":"kr")+'">'+
         Math.round(100*kaz/gG.length)+'%</div><div class="altN">isabet ('+gG.length+' sinyal)</div></div>'+
         '<div><div class="buyukN '+(ort>=0?"ye":"kr")+'">'+Y(ort)+'</div><div class="altN">ortalama getiri</div></div></div>'+
-        (hed?'<div class="sat" style="margin-top:9px"><span class="et">Hedefe değen</span><b>'+tut+" / "+hed+"</b></div>":"")+
+
         '<table class="gtab"><tr><th>Gün</th><th>Dilim</th><th>Sinyal</th><th style="text-align:right">Sonuç</th></tr>'+
         gG.slice(0,12).map(function(x){
           return "<tr><td>"+E(x.gun.slice(8)+"."+x.gun.slice(5,7))+'</td><td><span class="et">'+E(x.tf||"—")+
             "</span></td><td>"+N(x.giris)+'</td><td style="text-align:right"><b class="'+(x.yuzde>=0?"ye":"kr")+'">'+
-            Y(x.yuzde)+"</b>"+(x.tuttu?" 🏆":"")+"</td></tr>";
+            Y(x.yuzde)+"</b></td></tr>";
         }).join("")+"</table>"+
-        '<div class="bilgi">Sonuç, sinyalin verildiği günün fiyatından bugüne kadarki değişimdir. 🏆 = hedefe değdi.</div></div>';
+        '<div class="bilgi">Sonuç, sinyalin verildiği günün fiyatından bugüne kadarki değişimdir.</div></div>';
     }
     if(ayna)h+='<div class="ayna">'+ayna.replace(/\\n/g,"<br>")+"</div>";
     if(!k&&!ayna)h+='<div class="bos">Bu kod son taramada bulunamadı.<br>Yazımı kontrol et ya da yeni tarama sonrası dene.</div>';
@@ -529,7 +619,7 @@ function detay(kod,ad){
     h+='<button class="dg" id="paylasDg">📤 Paylaş</button>';
     h+='<div class="uyari">⚠️ Yatırım tavsiyesi değildir.</div>';
     K.innerHTML=h;
-    el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";if(sekme==="fav")basla()};
+    el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav")basla()};
     el("favDg").onclick=function(){
       tit();var b=el("favDg");b.disabled=true;
       post("/api/fav",{kod:kod}).then(function(r){
@@ -577,8 +667,7 @@ function perfCiz(){
       '</div><div class="altN">ortalama getiri</div></div></div>'+
       '<div class="sat" style="margin-top:10px"><span class="et">Ölçülen sinyal</span><b>'+g.n+"</b></div>"+
       '<div class="sat"><span class="et">Sinyalden sonraki zirve (ort.)</span><b class="ye">'+Y(g.zirve)+"</b></div>"+
-      (g.hedefOran!=null?'<div class="sat"><span class="et">Hedefe değen</span><b>'+g.hedefOran.toFixed(0)+
-        "% <span class=\\"et\\">("+g.hedefli+" hedefli sinyalde)</span></b></div>":"")+
+
       (g.eniyi?'<div class="sat"><span class="et">🔝 En iyi</span><b class="ye">'+E(g.eniyi.kod)+" "+Y(g.eniyi.y)+"</b></div>":"")+
       (g.enkotu?'<div class="sat"><span class="et">🔻 En kötü</span><b class="kr">'+E(g.enkotu.kod)+" "+Y(g.enkotu.y)+"</b></div>":"")+
       grafikHtml(P.seri)+"</div>";
@@ -595,7 +684,7 @@ function perfCiz(){
       '<div class="cubuk"><i style="width:'+Math.max(2,Math.min(100,i.isabet)).toFixed(0)+
       '%;background:'+DRENK[x.tf]+'"></i></div>'+
       '<div class="sat" style="margin-top:9px"><span class="et">Zirve (ort.)</span><b class="ye">'+Y(i.zirve)+"</b></div>"+
-      (i.hedefOran!=null?'<div class="sat"><span class="et">Hedefe değen</span><b>'+i.hedefOran.toFixed(0)+"%</b></div>":"")+
+
       (i.eniyi?'<div class="sat"><span class="et">🔝 En iyi</span><b class="ye">'+E(i.eniyi.kod)+" "+Y(i.eniyi.y)+"</b></div>":"")+
       (i.enkotu?'<div class="sat"><span class="et">🔻 En kötü</span><b class="kr">'+E(i.enkotu.kod)+" "+Y(i.enkotu.y)+"</b></div>":"")+
       "</div>";
@@ -743,6 +832,16 @@ function panelCiz(){
     el("pTam").onclick=function(){tit();try{TG.openLink(v.panelUrl)}catch(e){location.href=v.panelUrl}};
   });
 }
+el("gezGeri").onclick=function(){tit();yolGit(-1)};
+el("gezIleri").onclick=function(){tit();yolGit(1)};
+try{
+  TG.BackButton.onClick(function(){
+    var K=el("katman");
+    if(K.classList.contains("ac")){K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav")basla();return}
+    if(yolIx>0){yolGit(-1);return}
+    TG.close();
+  });
+}catch(e){}
 basla();
 </script></body></html>
 `;
@@ -758,7 +857,7 @@ const t=e=>Number(e).toFixed(2),kar=I(e),tuttu=void 0!==e.potansiyel&&null!==e.p
 let a="┏━━━━━━━━━━━━━━━━━━┓\n┃  <b>"+e.kod+"</b>  ·  <b>"+t(e.fiyat)+" ₺</b>\n┗━━━━━━━━━━━━━━━━━━┛\n";
 if(tuttu)a+="🏆 <b>HEDEF TUTTU!</b>\n\n";else if(e.guc)a+=e.guc+"\n";
 if(e.zaman&&(a+="⏱ Sinyal: "+e.zaman+(e.tf?"  ·  "+e.tf:"")+"\n"),void 0!==e.giris&&null!==e.giris){a+="🚪 Sinyal fiyatı: <b>"+t(e.giris)+"</b>\n";null!==kar&&(a+=(kar>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(kar>=0?"+":"")+kar.toFixed(2)+"%</b>\n")}
-return null!=e.tetik&&(a+="🔓 Tetik seviyesi: <b>"+t(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(2)+"% kaldı":"")+"\n<i>Bu seviye kırılırsa o dilimin sinyali başlar — giriş fiyatı değildir.</i>\n"),null!=e.hedef1&&(a+="🎯 1. hedef (günlük TP1): <b>"+t(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  +"+Number(e.hedef1Yuzde).toFixed(1)+"%":"")+"\n"),e.direncler&&e.direncler.length&&(a+=(null!=e.hedef1?"🧱 Hedefler: ":"🧱 Dirençler: ")+e.direncler.filter(x=>null!=x).map(e=>t(e)).join(" · ")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(a+=(null!=e.hedef1?"🏁 Son hedef: <b>":"🎯 Hedef: <b>")+t(e.hedef)+"</b>",
+return null!=e.tetik&&(a+="🔓 Tetik seviyesi: <b>"+t(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(2)+"% kaldı":"")+"\n<i>Bu seviye kırılırsa o dilimin sinyali başlar — giriş fiyatı değildir.</i>\n"),null!=e.hedef1&&(a+="🎯 Direnç: <b>"+t(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  +"+Number(e.hedef1Yuzde).toFixed(1)+"%":"")+"\n"),e.direncler&&e.direncler.length&&(a+=(null!=e.hedef1?"🧱 Direnç: ":"🧱 Direnç: ")+e.direncler.filter(x=>null!=x).map(e=>t(e)).join(" · ")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(a+="🎯 Hedef: <b>"+t(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(a+=tuttu?"  ·  🏆 fiyat hedefin "+Math.abs(e.potansiyel).toFixed(1)+"% üstünde":"  ·  "+(e.rozet||"➡️")+" <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),a+="\n"),
 e.sinyalZaman&&(a+="🕐 Sinyal zamanı: <b>"+e.sinyalZaman+"</b>\n"),a+="━━━━━━━━━━━━━━━━\n<i>⚠️ Yatırım tavsiyesi değildir.</i>",a}let H={},C=0;async function L(e){if(!e.VERI)return{toplam:0,basis:{},
 gun:{}};const t=await e.VERI.get("istatistik");return t?JSON.parse(t):{toplam:0,basis:{},gun:{}}}async function F(e){if(!e.VERI)return{};const t=await e.VERI.get("referanslar")
@@ -800,14 +899,14 @@ if(null!=yukHed)m+="<i>O durumda yukarı hedef: "+f(yukHed)+"</i>\n"}
 else{m+="🟡 <b>ARA BÖLGE — henüz kırılım yok</b>\n<i>Hangi seviye kırılırsa ne olacağı aşağıda.</i>\n";
 m+="\n🟩🟩🟩🟩🟩🟩🟩🟩\n▲ <b>YUKARI SENARYO</b>\n";
 if(null!=z.ust){m+="🚪 <b>GİRİŞ: "+f(z.ust)+"</b> üstünde kapanış  ("+yz(100*(z.ust/fiyat-1))+" uzakta)\n";
-if(z.yuk&&z.yuk.length){if(z.yuk.length>1)m+="🧱 Dirençler: "+z.yuk.slice(0,z.yuk.length-1).map(x=>f(x.v)).join(" · ")+"\n";
+if(z.yuk&&z.yuk.length){if(z.yuk.length>1)m+="🧱 Direnç: "+z.yuk.slice(0,z.yuk.length-1).map(x=>f(x.v)).join(" · ")+"\n";
 m+="🎯 <b>HEDEF: "+f(yukHed)+"</b>  ·  girişten <b>"+yz(100*(yukHed/z.ust-1))+"</b>"+(z.yukTf?"  <i>("+z.yukTf+")</i>":"")+"\n"}
 else m+="<i>yukarı bacak oluşmamış</i>\n";
 if(null!=z.alt)m+="⛔ Kırılmazsa / "+f(z.alt)+" altına inerse bu senaryo iptal\n"}
 else m+="<i>üst seviye belirlenemedi</i>\n";
 m+="\n🟥🟥🟥🟥🟥🟥🟥🟥\n▼ <b>AŞAĞI SENARYO</b>\n";
 if(null!=z.alt){m+="🚪 <b>GİRİŞ: "+f(z.alt)+"</b> altında kapanış  ("+yz(100*(z.alt/fiyat-1))+" uzakta)\n";
-if(z.asg&&z.asg.length){if(z.asg.length>1)m+="🧱 Destekler: "+z.asg.slice(0,z.asg.length-1).map(x=>f(x.v)).join(" · ")+"\n";
+if(z.asg&&z.asg.length){if(z.asg.length>1)m+="🧱 Destek: "+z.asg.slice(0,z.asg.length-1).map(x=>f(x.v)).join(" · ")+"\n";
 m+="🎯 <b>HEDEF: "+f(asgHed)+"</b>  ·  girişten <b>"+yz(100*(asgHed/z.alt-1))+"</b>"+(z.asgTf?"  <i>("+z.asgTf+")</i>":"")+"\n"}
 else m+="<i>aşağı bacak oluşmamış</i>\n";
 if(null!=z.ust)m+="⛔ "+f(z.ust)+" üstüne çıkarsa bu senaryo iptal\n"}
@@ -937,7 +1036,6 @@ if((rec.k||String(key).split("@")[0])!==kod)continue;
 if(!(rec.g>0&&rec.s>0))continue;
 GC.push({gun:gun,tf:rec.t||"",dolgu:rec.r===0,giris:rec.g,son:rec.s,
 yuzde:100*(rec.s/rec.g-1),zirve:rec.max>0?100*(rec.max/rec.g-1):null,
-hedef:rec.h||null,tuttu:!!(rec.h>0&&(rec.max>0?rec.max:rec.s)>=rec.h),
 yas:Math.max(0,Math.round((new Date(bg)-new Date(gun))/864e5))})}
 if(GC.length>=24)break}}catch(e){}
 return JS({ok:!0,kart:kart||null,ayna:z?AYNA(kod,z):"",fav:fav,gecmis:GC})}
@@ -963,9 +1061,9 @@ const bg=new Date(Date.now()+108e5).toISOString().slice(0,10);
 const fark=gg=>Math.round((new Date(bg)-new Date(gg))/864e5);
 const TFL=["15DK","1SA","4SA","1G"],
 DUZELT=t=>({"15D":"15DK","1S":"1SA","4S":"4SA","1G":"1G","15DK":"15DK","1SA":"1SA","4SA":"4SA"})[t]||t;
-const bos=()=>({n:0,kaz:0,top:0,zirve:0,hedefli:0,tutan:0,eniyi:null,enkotu:null});
+const bos=()=>({n:0,kaz:0,top:0,zirve:0,eniyi:null,enkotu:null});
 const kapat=o=>o.n?{n:o.n,isabet:100*o.kaz/o.n,ort:o.top/o.n,zirve:o.zirve/o.n,
-hedefOran:o.hedefli?100*o.tutan/o.hedefli:null,hedefli:o.hedefli,eniyi:o.eniyi,enkotu:o.enkotu}:null;
+eniyi:o.eniyi,enkotu:o.enkotu}:null;
 const olc=gunSay=>{
 const kutu={},genel=bos();TFL.forEach(t=>kutu[t]=bos());
 const gunler=new Set();let seri=[];
@@ -978,7 +1076,6 @@ if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
 const tf=DUZELT(rec.t||String(key).split("@")[1]||""),kd=rec.k||String(key).split("@")[0];
 const y2=100*(rec.s/rec.g-1),zr=rec.max>0?100*(rec.max/rec.g-1):y2;
 const ek=o=>{o.n++;o.top+=y2;o.zirve+=zr;if(y2>=0)o.kaz++;
-if(rec.h>0){o.hedefli++;if((rec.max>0?rec.max:rec.s)>=rec.h)o.tutan++}
 if(!o.eniyi||y2>o.eniyi.y)o.eniyi={kod:kd,y:y2};
 if(!o.enkotu||y2<o.enkotu.y)o.enkotu={kod:kd,y:y2}};
 if(kutu[tf])ek(kutu[tf]);ek(genel);gt+=y2;gn++}
@@ -1146,7 +1243,7 @@ const dolguMu=!gercek.length;
 let top=0,eniyi=null,enkotu=null,hedefTutan=0,hedefliSayi=0,karda=0,zararda=0;
 for(const k of kullan){const r=kayit[k],y2=100*(r.s/r.g-1);
 top+=y2; if(y2>=0)karda++;else zararda++;
-if(r.h>0){hedefliSayi++;const zirve=r.max>0?r.max:r.s;if(zirve>=r.h)hedefTutan++}
+
 if(!eniyi||y2>eniyi.y)eniyi={kod:r.k||KODU(k),y:y2};
 if(!enkotu||y2<enkotu.y)enkotu={kod:r.k||KODU(k),y:y2}}
 const adet=kullan.length,ort=top/adet,yas=gunFark(gun);
@@ -1155,7 +1252,7 @@ const [yil,ay,gg]=gun.split("-");
 n+="━━━━━━━━━━━━━━━━\n<b>"+gg+"/"+ay+"</b>  ·  "+adet+" sinyal  ·  <i>"+(yas===0?"bugün":yas+" gün önce")+"</i>"+(dolguMu?"  ·  <i>dolgu verisi</i>":"")+"\n";
 n+=(ort>=0?"🟢":"🔴")+" Ortalama: <b>"+yz(ort)+"</b>  <i>(sinyalden bu yana)</i>\n";
 n+="📈 Kârda: <b>"+karda+"</b>  ·  📉 Zararda: <b>"+zararda+"</b>";
-if(hedefliSayi)n+="  ·  ✅ Hedefe ulaşan: <b>"+hedefTutan+"/"+hedefliSayi+"</b>";
+
 n+="\n";
 n+="💰 O gün 100.000 ₺ eşit dağıtılsaydı → <b>"+Math.round(1e5*(1+ort/100)).toLocaleString("tr-TR")+" ₺</b>\n";
 if(eniyi)n+="🔝 "+eniyi.kod+" "+yz(eniyi.y)+(yas?"  <i>("+yas+" günde)</i>":"");
@@ -1165,7 +1262,7 @@ if(tN){const ortT=tTop/tN;
 n+="━━━━━━━━━━━━━━━━\n<b>TOPLAM</b>  ·  "+tN+" sinyal\n";
 n+=(ortT>=0?"🟢":"🔴")+" Ortalama getiri: <b>"+yz(ortT)+"</b>  <i>(sinyalden bugüne)</i>\n";
 n+="📈 Kârda: <b>"+tKar+"</b> (%"+Math.round(100*tKar/tN)+")  ·  📉 Zararda: <b>"+tZarar+"</b>\n";
-if(tGercek)n+="✅ Hedefe ulaşan: <b>"+tHedef+"/"+tGercek+"</b>  (%"+Math.round(100*tHedef/tGercek)+")\n"}
+}
 n+="━━━━━━━━━━━━━━━━\n";
 n+="<i>ℹ️ Rakamlar <b>günlük kâr değildir</b>: her sinyalin verildiği günden bugüne kadarki toplam değişimdir. Eski günlerdeki yüksek yüzdeler birkaç günün birikimidir.</i>\n";
 n+="<i>Aynı hisse birden çok günde sinyal verdiyse her gün ayrı sayılır. Pozisyonlar kapatılmaz; hedefe ulaşan da listede kalmaya devam eder.</i>\n";
@@ -1234,5 +1331,5 @@ text:'👋 <a href="tg://user?id='+a+'">Listeyi görmek</a> için önce botu ba�
 disable_web_page_preview:!0});break}}})()),new Response("ok")}return new Response("ok")}{const e=!!A.VERI,a=await g(A);let n=null,i=!1,r=null,s="";if(A.BOT_TOKEN){try{
 const e=await b(A.BOT_TOKEN,"getMe",{});e&&e.ok&&(i=!0,n=e.result.username)}catch(e){}if(i)try{const e=await b(A.BOT_TOKEN,"getWebhookInfo",{});e&&e.result&&(r=e.result.url||"",
 e.result.last_error_message&&(s=e.result.last_error_message))}catch(e){}}
-const l=A.PUSH_KEY||t,o=a&&a.kartlar?Object.keys(a.kartlar).filter(e=>"sira"!==e).map(e=>e+": "+a.kartlar[e].length).join(" · "):"",c=(e,t,a)=>'<div class="s '+(e?"ok":"yok")+'"><div class="i">'+(e?"✅":"⚠️")+"</div><div><b>"+t+'</b><div class="a">'+a+"</div></div></div>",d='<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fix Borsa Sinyal · Durum</title><style>body{margin:0;background:#0d1117;color:#e6edf3;font:15px/1.55 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 14px}.s{display:flex;gap:10px;background:#161b22;border:1px solid #272e37;border-radius:12px;padding:12px;margin-bottom:9px}.s.yok{border-color:#6b2b2b;background:#22171a}.i{font-size:18px;line-height:1.3}.a{color:#8b949e;font-size:13px;margin-top:3px}a.d{display:block;background:#388bfd;color:#fff;text-decoration:none;text-align:center;border-radius:11px;padding:13px;font-weight:700;margin-top:10px}a.d.ikinci{background:#21262d;border:1px solid #272e37;color:#e6edf3}code{background:#1c2330;padding:2px 6px;border-radius:5px;font-size:13px;word-break:break-all}ol{padding-left:20px;margin:8px 0 0}li{margin-bottom:7px}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px;font-size:14px}</style></head><body><h1>Fix Borsa Sinyal · Durum</h1><div class="a" style="margin:-8px 0 12px">yazılım sürümü <b>11.0</b></div>'+c(i,"Bot anahtarı",A.BOT_TOKEN?i?"geçerli · @"+(n||"?"):"TANIMLI AMA GEÇERSİZ — Telegram bu anahtarı tanımıyor. Başına/sonuna tırnak veya boşluk karışmış olabilir.":"BOT_TOKEN tanımlı değil — Settings → Variables kısmından ekle")+c(!!r,"Telegram bağlantısı",r?"bağlı"+(s?" · son hata: "+s:""):"bağlı değil — aşağıdaki Bağla düğmesine bas")+c(e,"Hafıza (üye kayıtları)",e?"bağlı":"BAĞLI DEĞİL — üyeler, davetler ve panel çalışmaz")+c(!!a,"Hisse listeleri",a?"yüklü · "+(o||"")+" · "+new Date(a.guncelleme).toLocaleString("tr-TR"):"henüz yüklenmedi — telefondaki uygulamada Worker adresi <code>"+$.origin+"</code> ve şifre <code>"+l+"</code> yazılı olmalı, sonra <b>TARA VE BULUTA YÜKLE</b>")+'<a class="d" href="/panel?key='+encodeURIComponent(l)+'">🛠 Yönetici panelini aç</a><div class="a" style="margin-top:8px">Panel bir <b>web sayfası</b>, Telegram\'da değil. Telegram\'da botun menüsünde de <b>🛠 Yönetici paneli</b> düğmesi var (sadece sen görürsün) ya da bota <code>/panel</code> yazabilirsin — ikisi de bu sayfayı açar. Bu adresi telefonun ana ekranına kısayol olarak eklemen en pratiği.</div>'+(r&&i?"":'<a class="d ikinci" href="/setup">🔗 Telegram\'a bağla</a>')+'<div style="margin-top:16px" class="a">Telefondaki uygulamaya yazacakların:<br>Worker adresi: <code>'+$.origin+"</code><br>Şifre: <code>"+l+"</code></div>"+(e?"":'<div class="kur"><b>⚠️ Hafıza bağlı değil — nasıl bağlanır</b><div class="a" style="margin:6px 0">Bot listeleri gösterir ama kimin üye olduğunu, kimin kimi davet ettiğini hatırlayamaz. Panel de boş kalır. Bir kez yapılır, 2 dakika sürer:</div><ol><li>Cloudflare panelinde soldaki menüden <b>Storage &amp; Databases</b> → <b>KV</b>.</li><li><b>Create a namespace</b> / <b>Oluştur</b>. Adına <code>fixborsa</code> yaz, kaydet.</li><li>Soldan <b>Compute (Workers)</b> → bu worker\'ı aç → <b>Settings</b> → <b>Bindings</b>.</li><li><b>Add binding</b> → <b>KV namespace</b> seç.</li><li><b>Variable name</b> kutusuna tam olarak <code>VERI</code> yaz (büyük harf, Türkçe İ değil düz I).</li><li><b>KV namespace</b> kutusundan az önce oluşturduğun <code>fixborsa</code>\'ı seç ve <b>Deploy</b>.</li><li>Bu sayfayı yenile — burası ✅ olacak.</li></ol></div>')+"</body></html>"
+const l=A.PUSH_KEY||t,o=a&&a.kartlar?Object.keys(a.kartlar).filter(e=>"sira"!==e).map(e=>e+": "+a.kartlar[e].length).join(" · "):"",c=(e,t,a)=>'<div class="s '+(e?"ok":"yok")+'"><div class="i">'+(e?"✅":"⚠️")+"</div><div><b>"+t+'</b><div class="a">'+a+"</div></div></div>",d='<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fix Borsa Sinyal · Durum</title><style>body{margin:0;background:#0d1117;color:#e6edf3;font:15px/1.55 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 14px}.s{display:flex;gap:10px;background:#161b22;border:1px solid #272e37;border-radius:12px;padding:12px;margin-bottom:9px}.s.yok{border-color:#6b2b2b;background:#22171a}.i{font-size:18px;line-height:1.3}.a{color:#8b949e;font-size:13px;margin-top:3px}a.d{display:block;background:#388bfd;color:#fff;text-decoration:none;text-align:center;border-radius:11px;padding:13px;font-weight:700;margin-top:10px}a.d.ikinci{background:#21262d;border:1px solid #272e37;color:#e6edf3}code{background:#1c2330;padding:2px 6px;border-radius:5px;font-size:13px;word-break:break-all}ol{padding-left:20px;margin:8px 0 0}li{margin-bottom:7px}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px;font-size:14px}</style></head><body><h1>Fix Borsa Sinyal · Durum</h1><div class="a" style="margin:-8px 0 12px">yazılım sürümü <b>11.1</b></div>'+c(i,"Bot anahtarı",A.BOT_TOKEN?i?"geçerli · @"+(n||"?"):"TANIMLI AMA GEÇERSİZ — Telegram bu anahtarı tanımıyor. Başına/sonuna tırnak veya boşluk karışmış olabilir.":"BOT_TOKEN tanımlı değil — Settings → Variables kısmından ekle")+c(!!r,"Telegram bağlantısı",r?"bağlı"+(s?" · son hata: "+s:""):"bağlı değil — aşağıdaki Bağla düğmesine bas")+c(e,"Hafıza (üye kayıtları)",e?"bağlı":"BAĞLI DEĞİL — üyeler, davetler ve panel çalışmaz")+c(!!a,"Hisse listeleri",a?"yüklü · "+(o||"")+" · "+new Date(a.guncelleme).toLocaleString("tr-TR"):"henüz yüklenmedi — telefondaki uygulamada Worker adresi <code>"+$.origin+"</code> ve şifre <code>"+l+"</code> yazılı olmalı, sonra <b>TARA VE BULUTA YÜKLE</b>")+'<a class="d" href="/panel?key='+encodeURIComponent(l)+'">🛠 Yönetici panelini aç</a><div class="a" style="margin-top:8px">Panel bir <b>web sayfası</b>, Telegram\'da değil. Telegram\'da botun menüsünde de <b>🛠 Yönetici paneli</b> düğmesi var (sadece sen görürsün) ya da bota <code>/panel</code> yazabilirsin — ikisi de bu sayfayı açar. Bu adresi telefonun ana ekranına kısayol olarak eklemen en pratiği.</div>'+(r&&i?"":'<a class="d ikinci" href="/setup">🔗 Telegram\'a bağla</a>')+'<div style="margin-top:16px" class="a">Telefondaki uygulamaya yazacakların:<br>Worker adresi: <code>'+$.origin+"</code><br>Şifre: <code>"+l+"</code></div>"+(e?"":'<div class="kur"><b>⚠️ Hafıza bağlı değil — nasıl bağlanır</b><div class="a" style="margin:6px 0">Bot listeleri gösterir ama kimin üye olduğunu, kimin kimi davet ettiğini hatırlayamaz. Panel de boş kalır. Bir kez yapılır, 2 dakika sürer:</div><ol><li>Cloudflare panelinde soldaki menüden <b>Storage &amp; Databases</b> → <b>KV</b>.</li><li><b>Create a namespace</b> / <b>Oluştur</b>. Adına <code>fixborsa</code> yaz, kaydet.</li><li>Soldan <b>Compute (Workers)</b> → bu worker\'ı aç → <b>Settings</b> → <b>Bindings</b>.</li><li><b>Add binding</b> → <b>KV namespace</b> seç.</li><li><b>Variable name</b> kutusuna tam olarak <code>VERI</code> yaz (büyük harf, Türkçe İ değil düz I).</li><li><b>KV namespace</b> kutusundan az önce oluşturduğun <code>fixborsa</code>\'ı seç ve <b>Deploy</b>.</li><li>Bu sayfayı yenile — burası ✅ olacak.</li></ol></div>')+"</body></html>"
 ;return new Response(d,{headers:{"content-type":"text/html; charset=utf-8"}})}}};
