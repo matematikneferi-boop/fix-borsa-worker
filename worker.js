@@ -1,16 +1,18 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="10.0";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="10.1";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo","uzunvade","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Yumatu 1 botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
 ;const r=await b(e.BOT_TOKEN,"getMe",{}),u=r&&r.result&&r.result.username;return u?(BUN=u,e.VERI&&await e.VERI.put("botuser",u).catch(()=>{}),u):null}
 function u(e){
-const t=[[{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
+const t=[];
+if(n)t.push([{text:"📱 UYGULAMAYI AÇ · tüm listeler",web_app:{url:n+"/app"}}]);
+t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
 [{text:"⚡ 15 DAKİKA · kısa trade",callback_data:"tavan"}],[{text:"🟨 15 dakika adayları (Süper Üyelik)",callback_data:"adayKisa"}],
 [{text:"📊 1 SAAT · orta trade",callback_data:"potansiyel"}],[{text:"🟨 1 saat adayları (Süper Üyelik)",callback_data:"adayOrta"}],
 [{text:"📐 4 SAAT · orta vade",callback_data:"fibo"}],[{text:"🟨 4 saat adayları (Süper Üyelik)",callback_data:"adayOrtaVade"}],
 [{text:"🗓 1 GÜN · uzun vade",callback_data:"uzunvade"}],[{text:"🟨 1 gün adayları (Süper Üyelik)",callback_data:"adayUzun"}],
-[{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]]
-;return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
+[{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]);
+return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
 const f="👋 <b>Yumatu 1</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n⚡ <b>Kısa Trade</b> · 15DK — en net kurulumlar\n📊 <b>Orta Trade</b> · 1SA — hedefi en uzak olanlar\n📐 <b>Orta Vade</b> · 4SA — bugün taze kıranlar\n🗓 <b>Uzun Vade</b> · 1G — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — kısa trade sinyaline giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
 ;async function b(e,t,a){return fetch(`https://api.telegram.org/bot${e}/${t}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(a)}).then(e=>e.json()).catch(()=>null)}
@@ -147,7 +149,430 @@ o+="<i>Düğmede: solda hedefe kalan · sağda "+("aday"===a?"tetiğe kalan 🔓
 void 0!==e.giris&&null!==e.giris?n+="💵 Sinyal <b>"+a(e.giris)+"</b> → Şimdi <b>"+a(e.fiyat)+"</b>\n":n+="💵 Şimdi <b>"+a(e.fiyat)+"</b>\n";const i=I(e)
 ;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🎯 1. hedef (günlük TP1) <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+=(null!=e.hedef1?"🏁 Son hedef <b>":"🎯 Hedef <b>")+a(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  🏆 <b>TUTTU</b>":"  ·  hedefe <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),n+="\n");const r=e.sinyalZaman||e.zaman
-;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}const BILGI_METIN="ℹ️ <b>YUMATU 1 NEDİR?</b>\n\nBIST hisseleri için otomatik teknik tarama yapan bir <b>yapay zekâ</b> sistemidir. Sonuçlar <b>120.657 barlık</b> geçmiş veri üzerinde çalışan tarama motorundan çıkar. Gün içinde düzenli aralıklarla taranır, sonuçlar burada listelenir.\n\n<b>İçermez:</b> insan görüşü, şirket analizi, haber ya da bilanço değerlendirmesi. Yalnızca fiyat ve hacim matematiğidir.\n\n<b>4 liste — her biri YALNIZ kendi zaman diliminden:</b>\n⚡ <b>15 DAKİKA</b> — yalnız 15 dakikalık sinyaller\n📊 <b>1 SAAT</b> — yalnız 1 saatlik sinyaller\n📐 <b>4 SAAT</b> — yalnız 4 saatlik sinyaller\n🗓 <b>1 GÜN</b> — yalnız günlük sinyaller\n\nBir liste başka bir dilimin sinyalini <b>asla</b> göstermez; başlıkta yazan dilim ile kartın içindeki dilim her zaman aynıdır.\n\n🔎 <b>Hisse sorgulama</b>\nSohbete hisse kodunu yaz (örn. <code>THYAO</code>). O hissenin <b>iki yönünü birden</b> gönderirim: yukarı için direnç ve yükseliş hedefi, aşağı için destek ve düşüş hedefi. Hisse listelerde olmasa bile cevap alırsın.\n\n<b>Diğer düğmeler:</b>\n🏅 <b>İlk 3\'ü</b> — son taramanın en iyi 3 sonucu\n⭐ <b>Takip listem</b> — seçtiğin hisseleri anlık kâr/zararıyla takip et; eklemek/çıkarmak için hep aynı ⭐ düğmesine dokun\n🟨 <b>Adaylar</b> 👑 — her dilim için <i>henüz kırmadı ama makul mesafede.</i> Tetik seviyesini ve kırarsa gideceği hedefi gösterir; yani sinyal oluşmadan ÖNCE görürsün <b>(Süper Üyelik)</b>\n👑 <b>Anlık uyarı (Süper Üyelik)</b> — bir hisse 15 DAKİKA listesine girdiği an sana özel mesaj gelir\n\n<b>Süper Üyelikte neler açılıyor?</b>\n🟨 Aday listeleri (her dilim için)\n👑 Anlık uyarı mesajları\n⏳ Bekleme yok — listeler ve hisse sorguları anında\n\n<b>Süper Üyelik nasıl kazanılır?</b>\n📤 Sistemi paylaş düğmesiyle arkadaşlarını davet et. Davet sayacın hiç sıfırlanmaz, tüm zamanların toplamı olarak birikir. <b>Her 20 davette</b> süper üyeliğin <b>1 ay</b> açılır ya da (zaten süper üyeysen) mevcut süren üzerine <b>1 ay daha eklenir</b> — yani davet etmeye devam ettikçe süper üyeliğin otomatik uzar.\n\n<b>Neden bazen bekleme çıkıyor?</b>\nSistem çok sayıda kullanıcıya aynı anda hizmet verir; bu yüzden bazı işlemlerde kısa bir bekleme uygulanır. Bu, herkesin hizmeti düzgün alabilmesi içindir.\n\n<b>🔴 RİSK UYARISI</b>\n• Buradaki hiçbir çıktı <b>yatırım tavsiyesi değildir</b>.\n• Teknik tarama <b>geleceği bilmez</b>; hedefler tutmayabilir.\n• Geçmiş performans gelecek için <b>garanti vermez</b>.\n• Borsada <b>anaparanın tamamını kaybedebilirsin</b>.\n• Bu sonuçlara dayanarak işlem yapmak <b>tehlikelidir</b>. Sorumluluk tamamen sana aittir.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";function FAVKB(e){const t=[];for(let a=0;a<e.length;a+=2)t.push(e.slice(a,a+2).map(a=>({text:"❌ "+a,callback_data:"fav:"+a})));return t.push([{text:"◀️ Menü",callback_data:"menu"}]),{inline_keyboard:t}}
+;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}const MINIAPP=`<!doctype html><html lang="tr"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Yumatu 1</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:#0e1116; --kart:#161b22; --kart2:#1c2330; --ciz:#262d38;
+  --yazi:#e6edf3; --soluk:#8b949e; --mavi:#388bfd;
+  --yes:#3fb950; --kir:#f85149; --sar:#d29922; --mor:#a371f7;
+  --t15:#f85149; --t1s:#3fb950; --t4s:#58a6ff; --t1g:#a371f7; --tad:#d29922;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--yazi);
+  font:15px/1.45 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding-bottom:calc(18px + env(safe-area-inset-bottom))}
+.ust{position:sticky;top:0;z-index:20;background:var(--bg);
+  padding:10px 12px 0;border-bottom:1px solid var(--ciz)}
+.baslik{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.baslik h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
+.saat{font-size:11.5px;color:var(--soluk);font-variant-numeric:tabular-nums}
+.sekmeler{display:flex;gap:6px;overflow-x:auto;padding-bottom:9px;scrollbar-width:none}
+.sekmeler::-webkit-scrollbar{display:none}
+.sek{flex:0 0 auto;background:var(--kart);border:1px solid var(--ciz);color:var(--soluk);
+  border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;white-space:nowrap}
+.sek.on{color:#fff;border-color:transparent}
+.sek.on[data-r="15DK"]{background:var(--t15)}
+.sek.on[data-r="1SA"]{background:var(--t1s);color:#08150c}
+.sek.on[data-r="4SA"]{background:var(--t4s);color:#07182b}
+.sek.on[data-r="1G"]{background:var(--t1g)}
+.sek.on[data-r="aday"]{background:var(--tad);color:#1d1503}
+.sek.on[data-r="nötr"]{background:var(--mavi)}
+.govde{padding:10px 12px}
+.sirala{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none}
+.sirala::-webkit-scrollbar{display:none}
+.sir{flex:0 0 auto;background:transparent;border:1px solid var(--ciz);color:var(--soluk);
+  border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600}
+.sir.on{background:var(--kart2);color:var(--yazi);border-color:#3a4553}
+.satir{display:flex;align-items:center;gap:10px;background:var(--kart);
+  border:1px solid var(--ciz);border-left:3px solid var(--ciz);
+  border-radius:12px;padding:11px 12px;margin-bottom:8px}
+.satir:active{background:var(--kart2)}
+.satir .sol{flex:1;min-width:0}
+.kod{font-weight:800;font-size:15.5px;letter-spacing:.3px}
+.altbilgi{font-size:11.5px;color:var(--soluk);margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sag{text-align:right;flex:0 0 auto}
+.fiyat{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+.yuzde{font-size:12px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+.ye{color:var(--yes)} .kr{color:var(--kir)} .sa{color:var(--sar)} .so{color:var(--soluk)}
+.rz{font-size:13px;margin-right:2px}
+.bos{text-align:center;color:var(--soluk);padding:38px 18px;font-size:13.5px;line-height:1.7}
+.yukleniyor{text-align:center;color:var(--soluk);padding:40px;font-size:13px}
+.kutu{background:var(--kart);border:1px solid var(--ciz);border-radius:12px;
+  padding:13px;margin-bottom:10px}
+.kutu h3{margin:0 0 9px;font-size:13.5px;font-weight:800}
+.sat{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:13.5px;
+  border-bottom:1px solid rgba(255,255,255,.045)}
+.sat:last-child{border-bottom:0}
+.sat b{font-variant-numeric:tabular-nums}
+.et{color:var(--soluk);font-size:12.5px}
+.dg{display:block;width:100%;background:var(--mavi);color:#fff;border:0;border-radius:10px;
+  padding:13px;font-size:14.5px;font-weight:700;margin-top:9px}
+.dg.ik{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi)}
+.dg.kirmizi{background:var(--kir)}
+.gir{width:100%;background:var(--bg);border:1px solid var(--ciz);color:var(--yazi);
+  border-radius:9px;padding:11px;font-size:14px;margin-top:7px;font-family:inherit}
+textarea.gir{min-height:88px;resize:vertical}
+.katman{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;
+  padding:14px 12px calc(30px + env(safe-area-inset-bottom));display:none}
+.katman.ac{display:block}
+.kapat{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;
+  background:var(--bg);padding:2px 0 12px;margin-bottom:2px}
+.kapat button{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);
+  border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700}
+.dbas{display:flex;align-items:baseline;gap:9px;margin-bottom:3px}
+.dbas .k{font-size:22px;font-weight:800;letter-spacing:.4px}
+.dbas .f{font-size:19px;font-weight:800;margin-left:auto;font-variant-numeric:tabular-nums}
+.rozetler{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0 12px}
+.rozet{background:var(--kart2);border:1px solid var(--ciz);border-radius:7px;
+  padding:4px 9px;font-size:11.5px;font-weight:700;color:var(--soluk)}
+.ayna{background:var(--kart);border:1px solid var(--ciz);border-radius:12px;padding:13px;
+  font-size:13px;line-height:1.72;margin-bottom:10px;overflow-wrap:anywhere}
+.ayna b{color:var(--yazi)} .ayna i{color:var(--soluk);font-style:italic}
+.uyari{font-size:11.5px;color:var(--soluk);text-align:center;padding:14px 6px 4px;line-height:1.6}
+.kilit{text-align:center;padding:32px 18px}
+.kilit .buyuk{font-size:34px;margin-bottom:10px}
+.kilit h2{font-size:16px;margin:0 0 8px}
+.kilit p{color:var(--soluk);font-size:13px;line-height:1.65;margin:0 0 6px}
+.sayac{display:flex;gap:8px;margin-bottom:10px}
+.sayac div{flex:1;background:var(--kart);border:1px solid var(--ciz);border-radius:11px;
+  padding:11px 8px;text-align:center}
+.sayac .n{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+.sayac .a{font-size:10.5px;color:var(--soluk);margin-top:2px}
+.bilgi{font-size:12.5px;color:var(--soluk);line-height:1.65;margin:9px 2px 4px}
+.link{background:var(--bg);border:1px solid var(--ciz);border-radius:9px;padding:11px;
+  font-size:12.5px;word-break:break-all;font-family:ui-monospace,monospace;color:var(--mavi)}
+.durum{font-size:12.5px;color:var(--soluk);margin-top:8px;min-height:17px}
+</style></head><body>
+
+<div class="ust">
+  <div class="baslik"><h1>📊 Yumatu 1</h1><div class="saat" id="saat"></div></div>
+  <div class="sekmeler" id="sekmeler"></div>
+</div>
+<div class="govde" id="govde"><div class="yukleniyor">yükleniyor…</div></div>
+<div class="katman" id="katman"></div>
+
+<script>
+var TG=window.Telegram&&window.Telegram.WebApp;
+try{TG.ready();TG.expand();if(TG.setHeaderColor)TG.setHeaderColor("#0e1116");
+    if(TG.setBackgroundColor)TG.setBackgroundColor("#0e1116")}catch(e){}
+function tit(){try{TG.HapticFeedback.impactOccurred("light")}catch(e){}}
+var D=null, sekme="tavan", sira="pot", adayTf="adayKisa";
+var TF={tavan:{ad:"15 DAKİKA",kisa:"15DK",r:"15DK",ik:"⚡",renk:"var(--t15)"},
+        potansiyel:{ad:"1 SAAT",kisa:"1SA",r:"1SA",ik:"📊",renk:"var(--t1s)"},
+        fibo:{ad:"4 SAAT",kisa:"4SA",r:"4SA",ik:"📐",renk:"var(--t4s)"},
+        uzunvade:{ad:"1 GÜN",kisa:"1G",r:"1G",ik:"🗓",renk:"var(--t1g)"},
+        adayKisa:{ad:"15 DAKİKA adayları",kisa:"15DK",r:"aday",ik:"🟨",renk:"var(--tad)"},
+        adayOrta:{ad:"1 SAAT adayları",kisa:"1SA",r:"aday",ik:"🟨",renk:"var(--tad)"},
+        adayOrtaVade:{ad:"4 SAAT adayları",kisa:"4SA",r:"aday",ik:"🟨",renk:"var(--tad)"},
+        adayUzun:{ad:"1 GÜN adayları",kisa:"1G",r:"aday",ik:"🟨",renk:"var(--tad)"}};
+function E(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function N(v,b){return(v==null||isNaN(v))?"—":Number(v).toFixed(b==null?2:b)}
+function Y(v){if(v==null||isNaN(v))return"";return(v>=0?"+":"")+Number(v).toFixed(2)+"%"}
+function el(id){return document.getElementById(id)}
+function post(yol,gov){
+  gov=gov||{}; gov.initData=(TG&&TG.initData)||"";
+  return fetch(yol,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(gov)}).then(function(r){return r.json()});
+}
+function kar(k){
+  if(k.kar!=null)return Number(k.kar);
+  if(k.giris>0&&k.fiyat>0)return(k.fiyat/k.giris-1)*100;
+  return null;
+}
+function basla(){
+  post("/api/veri").then(function(v){
+    if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Doğrulanamadı.<br>Uygulamayı Telegram üzerinden aç.</div>';return}
+    D=v; ciz();
+  }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
+}
+function sekCiz(){
+  var s=[];
+  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(k){
+    var t=TF[k],n=(D.kartlar&&D.kartlar[k]&&D.kartlar[k].length)||0;
+    s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
+      t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
+  });
+  s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar</button>');
+  s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
+  s.push('<button class="sek'+(sekme==="davet"?" on":"")+'" data-r="nötr" data-s="davet">📤 Davet</button>');
+  if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
+  el("sekmeler").innerHTML=s.join("");
+  [].forEach.call(el("sekmeler").children,function(b){
+    b.onclick=function(){tit();sekme=b.dataset.s;sira="pot";ciz();window.scrollTo(0,0)};
+  });
+}
+function ciz(){
+  el("saat").textContent=D.guncelleme?("son tarama "+D.guncelleme):"";
+  sekCiz();
+  if(sekme==="davet")return davetCiz();
+  if(sekme==="panel")return panelCiz();
+  if(sekme==="fav")return favCiz();
+  if(sekme==="aday")return adayCiz();
+  listeCiz(sekme);
+}
+function sirCiz(akt){
+  var o=[["pot","🎯 Hedefe kalan"],["kar","💰 Kâr/Zarar"],["yeni","🕐 En yeni"]];
+  return '<div class="sirala">'+o.map(function(x){
+    return '<button class="sir'+(akt===x[0]?" on":"")+'" data-sr="'+x[0]+'">'+x[1]+"</button>";
+  }).join("")+"</div>";
+}
+function sirBagla(){
+  [].forEach.call(document.querySelectorAll("[data-sr]"),function(b){
+    b.onclick=function(){tit();sira=b.dataset.sr;ciz()};
+  });
+}
+function dizil(ad){
+  var l=(D.kartlar&&D.kartlar[ad])||[];
+  var ix=(D.kartlar&&D.kartlar.sira&&D.kartlar.sira[ad]&&D.kartlar.sira[ad][sira])||null;
+  if(ix&&ix.length===l.length)return ix.map(function(i){return l[i]});
+  var c=l.slice();
+  if(sira==="kar")c.sort(function(a,b){return(kar(b)==null?-9999:kar(b))-(kar(a)==null?-9999:kar(a))});
+  else if(sira==="yeni")c.sort(function(a,b){return(b.sinyalTs||0)-(a.sinyalTs||0)});
+  return c;
+}
+function satirHtml(k,ad){
+  var t=TF[ad]||{kisa:k.tf||"",renk:"var(--ciz)"};
+  var kr=kar(k), pot=(k.potansiyel==null?null:Number(k.potansiyel));
+  var sag=(pot==null)?"":(pot<=0?'<span class="sa">🏆 TUTTU</span>':'<span class="so">hedefe <b>+'+pot.toFixed(1)+"%</b></span>");
+  var alt=[];
+  alt.push(t.kisa);
+  if(k.tetik!=null)alt.push("🔓 tetik "+N(k.tetik)+(k.tetikYuzde!=null?" · %"+Number(k.tetikYuzde).toFixed(1)+" kaldı":""));
+  else if(k.giris!=null)alt.push("sinyal "+N(k.giris));
+  if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
+  return '<div class="satir" data-kod="'+E(k.kod)+'" data-l="'+ad+'" style="border-left-color:'+t.renk+'">'+
+    '<div class="sol"><div class="kod">'+(k.rozet?'<span class="rz">'+k.rozet+"</span>":"")+E(k.kod)+"</div>"+
+    '<div class="altbilgi">'+E(alt.join(" · "))+"</div></div>"+
+    '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
+    '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?sag:Y(kr))+"</div></div></div>";
+}
+function satirBagla(){
+  [].forEach.call(document.querySelectorAll("[data-kod]"),function(b){
+    b.onclick=function(){tit();detay(b.dataset.kod,b.dataset.l)};
+  });
+}
+function listeCiz(ad){
+  var l=dizil(ad), t=TF[ad];
+  if(!l.length){
+    el("govde").innerHTML='<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>Şu an bu dilimde sinyal yok.<br>'+
+      'Zayıf sinyalle liste doldurulmuyor — üç şartı birden sağlayan hisse çıkmadığında liste boş kalır.</div>';
+    return;
+  }
+  el("govde").innerHTML=sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
+    '<div class="uyari">⚠️ Yatırım tavsiyesi değildir. Teknik tarama geleceği bilmez.</div>';
+  sirBagla();satirBagla();
+}
+function adayCiz(){
+  if(!D.super){
+    el("govde").innerHTML='<div class="kilit"><div class="buyuk">👑</div>'+
+      "<h2>Süper Üyelik gerekli</h2>"+
+      "<p>Aday listeleri, sinyal <b>oluşmadan önce</b> hangi hisselerin kırılıma hazır olduğunu gösterir: "+
+      "tetik seviyesi ve kırarsa gideceği hedef.</p>"+
+      "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
+      '<button class="dg" id="davetGit">📤 Sistemi paylaş</button></div>';
+    el("davetGit").onclick=function(){tit();sekme="davet";ciz()};
+    return;
+  }
+  var alt=["adayKisa","adayOrta","adayOrtaVade","adayUzun"];
+  var h='<div class="sirala">'+alt.map(function(a){
+    var n=(D.kartlar&&D.kartlar[a]&&D.kartlar[a].length)||0;
+    return '<button class="sir'+(adayTf===a?" on":"")+'" data-at="'+a+'">'+TF[a].kisa+(n?" ("+n+")":"")+"</button>";
+  }).join("")+"</div>";
+  var l=dizil(adayTf);
+  h+=l.length?l.map(function(k){return satirHtml(k,adayTf)}).join("")
+    :'<div class="bos">Bu dilimde şu an aday yok.<br>Aday: o dilimin direncine yaklaşmış ama henüz kırmamış hisse.</div>';
+  h+='<div class="uyari">🔓 Tetik kırılırsa o dilimin sinyali başlar. Tetik giriş fiyatı değildir.</div>';
+  el("govde").innerHTML=h;
+  [].forEach.call(document.querySelectorAll("[data-at]"),function(b){
+    b.onclick=function(){tit();adayTf=b.dataset.at;ciz()};
+  });
+  satirBagla();
+}
+function favCiz(){
+  var f=D.fav||[], bul=[];
+  f.forEach(function(kod){
+    var k=null,ad=null;
+    Object.keys(D.kartlar||{}).forEach(function(a){
+      if(a==="sira"||k)return;
+      var x=(D.kartlar[a]||[]).filter(function(y){return y.kod===kod})[0];
+      if(x){k=x;ad=a}
+    });
+    if(k)bul.push({k:k,ad:ad}); else bul.push({k:{kod:kod,fiyat:null},ad:"tavan",yok:true});
+  });
+  if(!bul.length){
+    el("govde").innerHTML='<div class="bos"><b>⭐ Takip listem</b><br><br>Listen boş.<br>'+
+      "Bir hissenin detayını aç, <b>⭐ Takibe al</b>'a dokun — burada toplanır.</div>";
+    return;
+  }
+  el("govde").innerHTML=bul.map(function(x){
+    return x.yok?'<div class="satir" data-kod="'+E(x.k.kod)+'" data-l="tavan">'+
+      '<div class="sol"><div class="kod">'+E(x.k.kod)+"</div>"+
+      '<div class="altbilgi">şu an hiçbir listede değil</div></div>'+
+      '<div class="sag"><div class="yuzde so">detay ▸</div></div></div>'
+      :satirHtml(x.k,x.ad);
+  }).join("")+'<div class="uyari">Takipten çıkarmak için hisseyi aç, ⭐ düğmesine tekrar dokun.</div>';
+  satirBagla();
+}
+function detay(kod,ad){
+  var K=el("katman");
+  K.innerHTML='<div class="kapat"><b>'+E(kod)+'</b><button id="dkapat">✕ Kapat</button></div>'+
+    '<div class="yukleniyor">yükleniyor…</div>';
+  K.classList.add("ac");
+  el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML=""};
+  post("/api/hisse",{kod:kod}).then(function(v){
+    var k=(v&&v.kart)||null, ayna=(v&&v.ayna)||"", fav=!!(v&&v.fav);
+    var t=TF[ad]||{kisa:(k&&k.tf)||"",ad:""};
+    var h='<div class="kapat"><b>'+E(kod)+'</b><button id="dkapat">✕ Kapat</button></div>';
+    if(k){
+      var kr=kar(k);
+      h+='<div class="dbas"><div class="k">'+E(k.kod)+'</div><div class="f">'+N(k.fiyat)+" ₺</div></div>";
+      h+='<div class="rozetler"><span class="rozet">'+E(t.kisa)+"</span>"+
+         (k.etiket?'<span class="rozet">'+E(k.etiket)+"</span>":"")+
+         (k.sinyalZaman||k.zaman?'<span class="rozet">🕐 '+E(k.sinyalZaman||k.zaman)+"</span>":"")+"</div>";
+      h+='<div class="kutu"><h3>📈 Sinyal</h3>';
+      if(k.giris!=null)h+='<div class="sat"><span class="et">Sinyal fiyatı</span><b>'+N(k.giris)+" ₺</b></div>";
+      h+='<div class="sat"><span class="et">Şimdi</span><b>'+N(k.fiyat)+" ₺</b></div>";
+      if(kr!=null)h+='<div class="sat"><span class="et">Sinyalden bu yana</span><b class="'+(kr>=0?"ye":"kr")+'">'+Y(kr)+"</b></div>";
+      if(k.tetik!=null)h+='<div class="sat"><span class="et">🔓 Tetik seviyesi</span><b>'+N(k.tetik)+
+        (k.tetikYuzde!=null?" ("+Number(k.tetikYuzde).toFixed(2)+"% kaldı)":"")+"</b></div>";
+      h+="</div>";
+      h+='<div class="kutu"><h3>🎯 Hedefler</h3>';
+      if(k.hedef1!=null)h+='<div class="sat"><span class="et">1. hedef</span><b>'+N(k.hedef1)+
+        (k.hedef1Yuzde!=null?"  (+"+Number(k.hedef1Yuzde).toFixed(1)+"%)":"")+"</b></div>";
+      if(k.direncler&&k.direncler.length)h+='<div class="sat"><span class="et">'+
+        (k.hedef1!=null?"Ara hedefler":"Dirençler")+"</span><b>"+
+        k.direncler.filter(function(x){return x!=null}).map(function(x){return N(x)}).join(" · ")+"</b></div>";
+      if(k.hedef!=null)h+='<div class="sat"><span class="et">Son hedef</span><b>'+N(k.hedef)+"</b></div>";
+      if(k.potansiyel!=null)h+='<div class="sat"><span class="et">Hedefe kalan</span><b class="'+
+        (Number(k.potansiyel)<=0?"sa":"ye")+'">'+(Number(k.potansiyel)<=0?"🏆 hedef tuttu":
+        "+"+Number(k.potansiyel).toFixed(1)+"%")+"</b></div>";
+      h+="</div>";
+      if(k.guc)h+='<div class="ayna">'+k.guc+"</div>";
+    }else{
+      h+='<div class="dbas"><div class="k">'+E(kod)+"</div></div>"+
+         '<div class="bilgi">Bu hisse şu an hiçbir listede değil — aşağıda güncel iki yönlü durumu var.</div>';
+    }
+    if(ayna)h+='<div class="ayna">'+ayna.replace(/\\n/g,"<br>")+"</div>";
+    if(!k&&!ayna)h+='<div class="bos">Bu kod son taramada bulunamadı.<br>Yazımı kontrol et ya da yeni tarama sonrası dene.</div>';
+    h+='<button class="dg ik" id="favDg">'+(fav?"⭐ Takipten çıkar":"⭐ Takibe al")+"</button>";
+    h+='<button class="dg" id="paylasDg">📤 Paylaş</button>';
+    h+='<div class="uyari">⚠️ Yatırım tavsiyesi değildir.</div>';
+    K.innerHTML=h;
+    el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";if(sekme==="fav")basla()};
+    el("favDg").onclick=function(){
+      tit();var b=el("favDg");b.disabled=true;
+      post("/api/fav",{kod:kod}).then(function(r){
+        b.disabled=false;
+        if(r&&r.ok){D.fav=r.fav;b.textContent=r.ekli?"⭐ Takipten çıkar":"⭐ Takibe al"}
+      });
+    };
+    el("paylasDg").onclick=function(){
+      tit();
+      var m="📈 "+kod+(k?" "+N(k.fiyat)+" ₺":"")+(k&&k.hedef!=null?" · hedef "+N(k.hedef):"")+" — Yumatu 1";
+      var u="https://t.me/share/url?url="+encodeURIComponent(D.link)+"&text="+encodeURIComponent(m);
+      try{TG.openTelegramLink(u)}catch(e){location.href=u}
+    };
+  });
+}
+function davetCiz(){
+  var h='<div class="sayac"><div><div class="n">'+D.ref+'</div><div class="a">toplam davet</div></div>'+
+    '<div><div class="n">'+(D.super?"👑":D.kalan)+'</div><div class="a">'+(D.super?"süper üye":"kalan kişi")+"</div></div></div>";
+  h+='<div class="kutu"><h3>📤 Sistemi paylaş</h3>'+
+    '<div class="bilgi">Her <b>20 davette</b> süper üyeliğin <b>1 ay</b> açılır; zaten süper üyeysen mevcut sürenin üstüne <b>1 ay eklenir</b>. Sayaç asla sıfırlanmaz.</div>'+
+    '<div class="link">'+E(D.link)+"</div>"+
+    '<button class="dg" id="paylas">📤 Telegram\\'da paylaş</button>'+
+    '<button class="dg ik" id="kopyala">📋 Bağlantıyı kopyala</button>'+
+    '<div class="durum" id="dvDurum"></div></div>';
+  h+='<div class="kutu"><h3>👑 Süper Üyelikte ne açılır?</h3>'+
+    '<div class="sat"><span class="et">🟨 Aday listeleri</span><b>her dilim</b></div>'+
+    '<div class="sat"><span class="et">🔔 Anlık uyarı</span><b>açık</b></div>'+
+    '<div class="sat"><span class="et">⏳ Bekleme</span><b>yok</b></div></div>';
+  el("govde").innerHTML=h;
+  el("paylas").onclick=function(){
+    tit();
+    var u="https://t.me/share/url?url="+encodeURIComponent(D.link)+"&text="+encodeURIComponent(D.davetMetin||"");
+    try{TG.openTelegramLink(u)}catch(e){location.href=u}
+  };
+  el("kopyala").onclick=function(){
+    tit();
+    try{navigator.clipboard.writeText(D.link);el("dvDurum").textContent="✅ kopyalandı"}
+    catch(e){el("dvDurum").textContent="kopyalanamadı — bağlantıya basılı tut"}
+  };
+}
+function panelCiz(){
+  el("govde").innerHTML='<div class="yukleniyor">panel yükleniyor…</div>';
+  post("/api/yon",{is:"ozet"}).then(function(v){
+    if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Panel açılamadı.</div>';return}
+    var h='<div class="sayac"><div><div class="n">'+v.uye+'</div><div class="a">üye</div></div>'+
+      '<div><div class="n">'+v.aktif24+'</div><div class="a">24s aktif</div></div>'+
+      '<div><div class="n">'+v.super+'</div><div class="a">süper</div></div></div>';
+    h+='<div class="kutu"><h3>📦 Liste durumu</h3>'+
+      '<div class="sat"><span class="et">Son yükleme</span><b>'+E(v.guncelleme||"—")+"</b></div>"+
+      '<div class="sat"><span class="et">Depo (KV)</span><b>'+(v.depo?"bağlı ✅":"YOK ⚠️")+"</b></div>"+
+      v.ozet.map(function(x){return '<div class="sat"><span class="et">'+E(x.ad)+"</span><b>"+x.n+" hisse</b></div>"}).join("")+
+      "</div>";
+    h+='<div class="kutu"><h3>👑 Süper üyelik</h3>'+
+      '<input class="gir" id="pkId" inputmode="numeric" placeholder="kullanıcı ID (örn. 123456789)">'+
+      '<input class="gir" id="pkAy" inputmode="numeric" placeholder="kaç ay (boş = 1)">'+
+      '<button class="dg" id="pkVer">👑 Süper üyelik ver</button>'+
+      '<button class="dg ik" id="pkSor">🔎 Durumunu sor</button>'+
+      '<button class="dg kirmizi" id="pkKapat">🔻 Üyeliği kapat</button>'+
+      '<div class="durum" id="pkDurum"></div></div>';
+    h+='<div class="kutu"><h3>🚫 Engelleme</h3>'+
+      '<input class="gir" id="peId" inputmode="numeric" placeholder="kullanıcı ID">'+
+      '<button class="dg kirmizi" id="peEkle">🚫 Engelle</button>'+
+      '<button class="dg ik" id="peSil">↩️ Engeli kaldır</button>'+
+      '<div class="durum" id="peDurum">engelli: '+v.engel+" kişi</div></div>";
+    h+='<div class="kutu"><h3>📢 Duyuru</h3>'+
+      '<textarea class="gir" id="pyMetin" placeholder="Mesaj (HTML: <b>kalın</b> yazabilirsin)"></textarea>'+
+      '<button class="dg ik" id="pyTest">🧪 Önce bana gönder</button>'+
+      '<button class="dg kirmizi" id="pyHepsi">📢 HERKESE gönder</button>'+
+      '<div class="durum" id="pyDurum">'+(v.sonYayin?"son duyuru: "+E(v.sonYayin):"")+"</div></div>";
+    h+='<div class="kutu"><h3>🛠 Tam panel</h3>'+
+      '<div class="bilgi">Üye tablosu, CSV dışa aktarma, davet ağacı ve ayarlar tarayıcıda.</div>'+
+      '<button class="dg ik" id="pTam">🌐 Tam paneli aç</button></div>';
+    el("govde").innerHTML=h;
+    function id(x){return(el(x).value||"").replace(/\\D/g,"")}
+    function calis(is,gov,kutu,btn){
+      var b=el(btn);b.disabled=true;el(kutu).textContent="…";
+      gov=gov||{};gov.is=is;
+      post("/api/yon",gov).then(function(r){
+        b.disabled=false;
+        el(kutu).innerHTML=(r&&r.mesaj)?r.mesaj:"işlem tamam";
+      }).catch(function(){b.disabled=false;el(kutu).textContent="hata"});
+    }
+    el("pkVer").onclick=function(){tit();calis("super",{id:id("pkId"),ay:(el("pkAy").value||"1").replace(/\\D/g,"")},"pkDurum","pkVer")};
+    el("pkSor").onclick=function(){tit();calis("kim",{id:id("pkId")},"pkDurum","pkSor")};
+    el("pkKapat").onclick=function(){tit();calis("superkapat",{id:id("pkId")},"pkDurum","pkKapat")};
+    el("peEkle").onclick=function(){tit();calis("engel",{id:id("peId")},"peDurum","peEkle")};
+    el("peSil").onclick=function(){tit();calis("engelkaldir",{id:id("peId")},"peDurum","peSil")};
+    el("pyTest").onclick=function(){tit();calis("yayin",{metin:el("pyMetin").value,hedef:"test"},"pyDurum","pyTest")};
+    function yayinTur(imlec,toplam){
+      post("/api/yon",{is:"yayin",metin:el("pyMetin").value,hedef:"hepsi",imlec:imlec}).then(function(r){
+        if(!r||!r.ok){el("pyDurum").textContent=(r&&r.mesaj)||"hata";el("pyHepsi").disabled=false;return}
+        toplam+=r.gonderilen||0;
+        el("pyDurum").textContent=(r.bitti?"✅ bitti · ":"gönderiliyor… ")+toplam+" kişiye gitti";
+        if(!r.bitti&&r.imlec)setTimeout(function(){yayinTur(r.imlec,toplam)},350);
+        else el("pyHepsi").disabled=false;
+      }).catch(function(){el("pyDurum").textContent="bağlantı hatası";el("pyHepsi").disabled=false});
+    }
+    el("pyHepsi").onclick=function(){
+      tit();
+      var g=function(){el("pyHepsi").disabled=true;el("pyDurum").textContent="başlıyor…";yayinTur("",0)};
+      try{TG.showConfirm("Duyuru TÜM üyelere gönderilsin mi?",function(o){if(o)g()})}
+      catch(e){if(confirm("Tüm üyelere gönderilsin mi?"))g()}
+    };
+    el("pTam").onclick=function(){tit();try{TG.openLink(v.panelUrl)}catch(e){location.href=v.panelUrl}};
+  });
+}
+basla();
+</script></body></html>
+`;
+const BILGI_METIN="ℹ️ <b>YUMATU 1 NEDİR?</b>\n\nBIST hisseleri için otomatik teknik tarama yapan bir <b>yapay zekâ</b> sistemidir. Sonuçlar <b>120.657 barlık</b> geçmiş veri üzerinde çalışan tarama motorundan çıkar. Gün içinde düzenli aralıklarla taranır, sonuçlar burada listelenir.\n\n<b>İçermez:</b> insan görüşü, şirket analizi, haber ya da bilanço değerlendirmesi. Yalnızca fiyat ve hacim matematiğidir.\n\n<b>4 liste — her biri YALNIZ kendi zaman diliminden:</b>\n⚡ <b>15 DAKİKA</b> — yalnız 15 dakikalık sinyaller\n📊 <b>1 SAAT</b> — yalnız 1 saatlik sinyaller\n📐 <b>4 SAAT</b> — yalnız 4 saatlik sinyaller\n🗓 <b>1 GÜN</b> — yalnız günlük sinyaller\n\nBir liste başka bir dilimin sinyalini <b>asla</b> göstermez; başlıkta yazan dilim ile kartın içindeki dilim her zaman aynıdır.\n\n🔎 <b>Hisse sorgulama</b>\nSohbete hisse kodunu yaz (örn. <code>THYAO</code>). O hissenin <b>iki yönünü birden</b> gönderirim: yukarı için direnç ve yükseliş hedefi, aşağı için destek ve düşüş hedefi. Hisse listelerde olmasa bile cevap alırsın.\n\n<b>Diğer düğmeler:</b>\n🏅 <b>İlk 3\'ü</b> — son taramanın en iyi 3 sonucu\n⭐ <b>Takip listem</b> — seçtiğin hisseleri anlık kâr/zararıyla takip et; eklemek/çıkarmak için hep aynı ⭐ düğmesine dokun\n🟨 <b>Adaylar</b> 👑 — her dilim için <i>henüz kırmadı ama makul mesafede.</i> Tetik seviyesini ve kırarsa gideceği hedefi gösterir; yani sinyal oluşmadan ÖNCE görürsün <b>(Süper Üyelik)</b>\n👑 <b>Anlık uyarı (Süper Üyelik)</b> — bir hisse 15 DAKİKA listesine girdiği an sana özel mesaj gelir\n\n<b>Süper Üyelikte neler açılıyor?</b>\n🟨 Aday listeleri (her dilim için)\n👑 Anlık uyarı mesajları\n⏳ Bekleme yok — listeler ve hisse sorguları anında\n\n<b>Süper Üyelik nasıl kazanılır?</b>\n📤 Sistemi paylaş düğmesiyle arkadaşlarını davet et. Davet sayacın hiç sıfırlanmaz, tüm zamanların toplamı olarak birikir. <b>Her 20 davette</b> süper üyeliğin <b>1 ay</b> açılır ya da (zaten süper üyeysen) mevcut süren üzerine <b>1 ay daha eklenir</b> — yani davet etmeye devam ettikçe süper üyeliğin otomatik uzar.\n\n<b>Neden bazen bekleme çıkıyor?</b>\nSistem çok sayıda kullanıcıya aynı anda hizmet verir; bu yüzden bazı işlemlerde kısa bir bekleme uygulanır. Bu, herkesin hizmeti düzgün alabilmesi içindir.\n\n<b>🔴 RİSK UYARISI</b>\n• Buradaki hiçbir çıktı <b>yatırım tavsiyesi değildir</b>.\n• Teknik tarama <b>geleceği bilmez</b>; hedefler tutmayabilir.\n• Geçmiş performans gelecek için <b>garanti vermez</b>.\n• Borsada <b>anaparanın tamamını kaybedebilirsin</b>.\n• Bu sonuçlara dayanarak işlem yapmak <b>tehlikelidir</b>. Sorumluluk tamamen sana aittir.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";function FAVKB(e){const t=[];for(let a=0;a<e.length;a+=2)t.push(e.slice(a,a+2).map(a=>({text:"❌ "+a,callback_data:"fav:"+a})));return t.push([{text:"◀️ Menü",callback_data:"menu"}]),{inline_keyboard:t}}
 function K(e,t,a,n,i){
 const r=e.kartlar[t],s=Math.max(1,Math.ceil(i.length/8)),l=[];l.push(["pot","kar","yeni"].map(e=>({text:(e===a?"✅ ":"")+A[e],callback_data:"l:"+t+":"+e+":0"})));const o=8*n,c=i.slice(o,o+8),d=e=>{
 const t=I(e),a=void 0!==e.potansiyel&&null!==e.potansiyel?Number(e.potansiyel):null,n=null===a?"":a<=0?"🏆 ":"+"+a.toFixed(1)+"% ",i=null!==t?"  "+(t>=0?"+":"")+t.toFixed(1)+"%":(null!=e.tetikYuzde?"  🔓"+Number(e.tetikYuzde).toFixed(1)+"%":"")
@@ -229,6 +654,7 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 ;const t=await b(A.BOT_TOKEN,"getMe",{})
 ;if(!t||!t.ok)return e("⚠️ Bot anahtarı geçersiz","<p>Telegram bu anahtarı tanımıyor"+(t&&t.error_code?" (hata "+t.error_code+")":"")+".</p><p>En sık sebep: değeri yapıştırırken başına/sonuna <b>tırnak</b> veya <b>boşluk</b> karışmış olması. Anahtar şuna benzer görünür: <code>1234567890:AAH...</code> — tırnak yok, boşluk yok.</p><p>BotFather'da <code>/mybots</code> → botun → <i>API Token</i> ile doğrulayıp Settings → Variables kısmına yeniden yapıştır ve <b>Deploy</b> et.</p>")
 ;const a=await b(A.BOT_TOKEN,"setWebhook",{url:`${$.origin}/tg`,allowed_updates:["message","callback_query"]})
+;await b(A.BOT_TOKEN,"setChatMenuButton",{menu_button:{type:"web_app",text:"📊 Listeler",web_app:{url:$.origin+"/app"}}}).catch(()=>{})
 ;return a&&a.ok?e("✅ Bağlantı kuruldu","<p>Bot: <b>@"+(t.result.username||"?")+"</b></p><p>Artık Telegram'da bota <b>/start</b> yazabilirsin.</p>"):e("⚠️ Bağlanamadı","<p>"+(a&&a.description||"bilinmeyen hata")+"</p>")
 }const ee={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, GET, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"86400"}
 ;if("OPTIONS"===p.method)return new Response(null,{status:204,headers:ee});if("/push"===$.pathname){const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({
@@ -277,6 +703,92 @@ n:p.kartlar[e].length})):[],depo:!!A.VERI,agac:l.map(e=>({id:e.id,ad:e.ad,kullan
 ;const e=Uint8Array.from(atob(J),e=>e.charCodeAt(0)),t=new Blob([e]).stream().pipeThrough(new DecompressionStream("gzip"));return G=await new Response(t).text(),G}(),{headers:{
 "content-type":"text/html; charset=utf-8"}})};if("/paylas"===$.pathname){const ref=($.searchParams.get("r")||"").replace(/\D/g,""),uname=await botAd(A).catch(()=>null)||"bot",link="https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+uname+"?start=r"+ref)+"&text="+encodeURIComponent(DAVET_METIN);return new Response('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://telegram.org/js/telegram-web-app.js" async></script></head><body style="margin:0;background:#0d1117;color:#e6edf3;font:15px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div>Yönlendiriliyor…</div><script>(function(){var link='+JSON.stringify(link)+';var done=false;function git(){if(done)return;done=true;var tg=window.Telegram&&window.Telegram.WebApp;try{if(tg&&tg.initData){try{fetch("/paylas/log",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({initData:tg.initData})}).catch(function(){})}catch(e){}}if(tg&&tg.openTelegramLink){try{tg.ready&&tg.ready()}catch(e){}tg.openTelegramLink(link);try{tg.close()}catch(e){}}else{location.href=link}}catch(e){location.href=link}}setTimeout(git,1200);var iv=setInterval(function(){if(window.Telegram&&window.Telegram.WebApp){clearInterval(iv);git()}},50)})()</script></body></html>',{headers:{"content-type":"text/html; charset=utf-8"}})}
 if("/paylas/log"===$.pathname&&"POST"===p.method){const e=await p.json().catch(()=>null),t=e&&e.initData;if(t&&A.BOT_TOKEN){const e=await dogrulaInitData(t,A.BOT_TOKEN).catch(()=>null);e&&await PKArtir(A,String(e))}return new Response(JSON.stringify({ok:!0}),{headers:{"content-type":"application/json; charset=utf-8"}})}
+if("/app"===$.pathname||"/mini"===$.pathname)return new Response(MINIAPP,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","X-Frame-Options":"ALLOWALL"}});
+if($.pathname.startsWith("/api/")){
+const JS=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
+if("POST"!==p.method)return JS({ok:!1,hata:"POST bekleniyor"},405);
+const gov=await p.json().catch(()=>null);
+if(!gov||!gov.initData||!A.BOT_TOKEN)return JS({ok:!1,hata:"initData yok"},401);
+const uid=await dogrulaInitData(gov.initData,A.BOT_TOKEN).catch(()=>null);
+if(!uid)return JS({ok:!1,hata:"dogrulanamadi"},401);
+if(await B(A,uid))return JS({ok:!1,hata:"erisim kapali"},403);
+const YON=d(uid),KOD=v=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10),ID=v=>String(v||"").replace(/\D/g,"");
+if("/api/veri"===$.pathname){
+const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid);
+const un=BUN||await botAd(A).catch(()=>null)||"bot";
+const kart={};
+if(L2&&L2.kartlar)for(const k of Object.keys(L2.kartlar)){
+if("sira"===k){kart.sira=L2.kartlar.sira;continue}
+if(k.indexOf("aday")===0&&!sup)continue;
+kart[k]=L2.kartlar[k]}
+let gun=null;
+if(L2&&L2.guncelleme){const dt=new Date(L2.guncelleme);gun=String((dt.getUTCHours()+3)%24).padStart(2,"0")+":"+String(dt.getUTCMinutes()).padStart(2,"0")}
+q.waitUntil(onayVer(A,uid).catch(()=>{}));
+return JS({ok:!0,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,kartlar:kart,guncelleme:gun,link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN})}
+if("/api/hisse"===$.pathname){
+const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
+const L2=await g(A),kart=Z(L2,kod),z=L2&&L2.sozluk&&L2.sozluk[kod],fav=(await X(A,uid)).includes(kod);
+return JS({ok:!0,kart:kart||null,ayna:z?AYNA(kod,z):"",fav:fav})}
+if("/api/fav"===$.pathname){
+const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
+let f=await X(A,uid);const ekli=!f.includes(kod);f=ekli?[kod,...f]:f.filter(x=>x!==kod);f=f.slice(0,30);
+if(A.VERI)await A.VERI.put("fav:"+uid,JSON.stringify(f));
+return JS({ok:!0,fav:f,ekli:ekli})}
+if("/api/yon"===$.pathname){
+if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+const is=String(gov.is||"");
+if("ozet"===is){
+const st=await L(A),kl=await Y(A),vip=await E(A,!0),eng=await N(A,!0),L2=await g(A);
+const simdi=Math.floor(Date.now()/1e3);
+let sup=vip.length;
+if(A.VERI){try{const li=await A.VERI.list({prefix:"vipsure:",limit:1e3});for(const kk of li.keys){const vv=await A.VERI.get(kk.name);if(vv&&Number(vv)>Date.now())sup++}}catch(e){}}
+let sy=null;if(A.VERI){const e2=await A.VERI.get("sonYayin");if(e2){try{const j2=JSON.parse(e2);sy=new Date(j2.tarih).toLocaleDateString("tr-TR")+" · "+String(j2.metin||"").slice(0,60)}catch(e){}}}
+return JS({ok:!0,uye:st.toplam||0,aktif24:Object.values(kl).filter(x=>x.son&&simdi-x.son<86400).length,
+super:sup,engel:eng.length,depo:!!A.VERI,
+guncelleme:L2&&L2.guncelleme?new Date(L2.guncelleme).toLocaleString("tr-TR"):null,
+ozet:L2&&L2.kartlar?Object.keys(L2.kartlar).filter(x=>"sira"!==x).map(x=>({ad:x,n:L2.kartlar[x].length})):[],
+sonYayin:sy,panelUrl:r()})}
+if("super"===is){
+const hid=ID(gov.id);if(!hid)return JS({ok:!0,mesaj:"⚠️ ID gir."});
+const ay=Math.max(1,Math.min(60,parseInt(gov.ay||"1",10)||1));
+const mevcut=await suparUyeSuresi(A,hid),bas=Math.max(Date.now(),mevcut),bitis=bas+ay*2592e6;
+if(A.VERI)await A.VERI.put("vipsure:"+hid,String(bitis));
+const bit=new Date(bitis).toLocaleDateString("tr-TR");
+q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:hid,parse_mode:"HTML",text:"👑 <b>Süper üyeliğin açıldı!</b>\n\n🟨 Aday listeleri (her dilim için)\n🔔 Anlık uyarı\n⏳ Bekleme yok\n\nBitiş: <b>"+bit+"</b>",reply_markup:u(hid)}).catch(()=>{}));
+return JS({ok:!0,mesaj:"👑 <b>"+hid+"</b> · "+ay+" ay eklendi.<br>Bitiş: <b>"+bit+"</b>"})}
+if("superkapat"===is){
+const hid=ID(gov.id);if(!hid)return JS({ok:!0,mesaj:"⚠️ ID gir."});
+if(A.VERI)await A.VERI.delete("vipsure:"+hid);
+let vl=[...await E(A,!0)];if(vl.includes(hid)){vl=vl.filter(x=>x!==hid);if(A.VERI)await A.VERI.put("vip",JSON.stringify(vl));T=vl;x=Date.now()}
+return JS({ok:!0,mesaj:"🔻 <b>"+hid+"</b> süper üyeliği kapatıldı."})}
+if("kim"===is){
+const hid=ID(gov.id);if(!hid)return JS({ok:!0,mesaj:"⚠️ ID gir."});
+const sure=await suparUyeSuresi(A,hid),vipte=(await E(A,!0)).includes(hid),ref2=(await F(A))[hid]||0,sp=await suparUyeMi(A,hid),eng=(await N(A,!0)).includes(hid);
+return JS({ok:!0,mesaj:"🔎 <b>"+hid+"</b><br>Süper üye: <b>"+(sp?"EVET":"hayır")+"</b><br>Elle sınırsız: <b>"+(vipte?"evet":"hayır")+
+"</b><br>Süreli üyelik: <b>"+(sure>Date.now()?new Date(sure).toLocaleDateString("tr-TR"):"yok")+"</b><br>Toplam davet: <b>"+ref2+"</b><br>Engelli: <b>"+(eng?"EVET":"hayır")+"</b>"})}
+if("engel"===is||"engelkaldir"===is){
+const hid=ID(gov.id);if(!hid)return JS({ok:!0,mesaj:"⚠️ ID gir."});
+let el2=[...await N(A,!0)];
+if("engel"===is){if(!el2.includes(hid))el2.push(hid)}else el2=el2.filter(x=>x!==hid);
+if(A.VERI)await A.VERI.put("engel",JSON.stringify(el2));v=el2;R=Date.now();
+return JS({ok:!0,mesaj:("engel"===is?"🚫 <b>":"↩️ <b>")+hid+"</b> "+("engel"===is?"engellendi":"engeli kaldırıldı")+" · toplam engelli: "+el2.length})}
+if("yayin"===is){
+const metin=String(gov.metin||"").trim();
+if(!metin)return JS({ok:!1,mesaj:"⚠️ Mesaj boş."});
+const hedef=gov.hedef||"test",BOY=40;
+let liste=[],imlec=null,bitti=!0;
+if("test"===hedef)liste=[String(uid)];
+else if(A.VERI){const li=await A.VERI.list({prefix:"u:",limit:BOY,cursor:gov.imlec||void 0});
+liste=li.keys.map(k=>k.name.slice(2));bitti=!!li.list_complete||!li.cursor;imlec=bitti?null:li.cursor}
+const eng=new Set(await N(A,!0));let gonderilen=0,basarisiz=0;
+for(const hid of liste){if(eng.has(String(hid)))continue;
+const rr=await b(A.BOT_TOKEN,"sendMessage",{chat_id:hid,text:metin,parse_mode:"HTML",disable_web_page_preview:!0});
+rr&&rr.ok?gonderilen++:basarisiz++}
+if(A.VERI&&bitti&&"test"!==hedef)q.waitUntil(A.VERI.put("sonYayin",JSON.stringify({tarih:(new Date).toISOString(),metin:metin.slice(0,300),hedef:hedef})));
+return JS({ok:!0,gonderilen:gonderilen,basarisiz:basarisiz,imlec:imlec,bitti:bitti,
+mesaj:"test"===hedef?"🧪 Test gönderildi ("+gonderilen+")":"gönderildi: "+gonderilen})}
+return JS({ok:!1,hata:"bilinmeyen is"},400)}
+return JS({ok:!1,hata:"bilinmeyen yol"},404)}
 if("/durum"===$.pathname){const e=A.VERI?"DEPO BAĞLI ✅":"DEPO YOK ⚠️ (kullanıcılar liste göremeyebilir)",t=await g(A)
 ;if(!t)return new Response(e+"\nliste yok — telefondan yükle");const a=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+t.kartlar[e].length).join(" · "):"kart yok"
 ;return new Response(e+"\nliste var · "+Object.keys(t).filter(e=>"guncelleme"!==e).join(", ")+"\nkartlar: "+a+"\ngüncelleme: "+t.guncelleme)}if("/tg"===$.pathname&&"POST"===p.method){
@@ -452,5 +964,5 @@ text:'👋 <a href="tg://user?id='+a+'">Listeyi görmek</a> için önce botu ba�
 disable_web_page_preview:!0});break}}})()),new Response("ok")}return new Response("ok")}{const e=!!A.VERI,a=await g(A);let n=null,i=!1,r=null,s="";if(A.BOT_TOKEN){try{
 const e=await b(A.BOT_TOKEN,"getMe",{});e&&e.ok&&(i=!0,n=e.result.username)}catch(e){}if(i)try{const e=await b(A.BOT_TOKEN,"getWebhookInfo",{});e&&e.result&&(r=e.result.url||"",
 e.result.last_error_message&&(s=e.result.last_error_message))}catch(e){}}
-const l=A.PUSH_KEY||t,o=a&&a.kartlar?Object.keys(a.kartlar).filter(e=>"sira"!==e).map(e=>e+": "+a.kartlar[e].length).join(" · "):"",c=(e,t,a)=>'<div class="s '+(e?"ok":"yok")+'"><div class="i">'+(e?"✅":"⚠️")+"</div><div><b>"+t+'</b><div class="a">'+a+"</div></div></div>",d='<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yumatu 1 · Durum</title><style>body{margin:0;background:#0d1117;color:#e6edf3;font:15px/1.55 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 14px}.s{display:flex;gap:10px;background:#161b22;border:1px solid #272e37;border-radius:12px;padding:12px;margin-bottom:9px}.s.yok{border-color:#6b2b2b;background:#22171a}.i{font-size:18px;line-height:1.3}.a{color:#8b949e;font-size:13px;margin-top:3px}a.d{display:block;background:#388bfd;color:#fff;text-decoration:none;text-align:center;border-radius:11px;padding:13px;font-weight:700;margin-top:10px}a.d.ikinci{background:#21262d;border:1px solid #272e37;color:#e6edf3}code{background:#1c2330;padding:2px 6px;border-radius:5px;font-size:13px;word-break:break-all}ol{padding-left:20px;margin:8px 0 0}li{margin-bottom:7px}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px;font-size:14px}</style></head><body><h1>Yumatu 1 · Durum</h1><div class="a" style="margin:-8px 0 12px">yazılım sürümü <b>10.0</b></div>'+c(i,"Bot anahtarı",A.BOT_TOKEN?i?"geçerli · @"+(n||"?"):"TANIMLI AMA GEÇERSİZ — Telegram bu anahtarı tanımıyor. Başına/sonuna tırnak veya boşluk karışmış olabilir.":"BOT_TOKEN tanımlı değil — Settings → Variables kısmından ekle")+c(!!r,"Telegram bağlantısı",r?"bağlı"+(s?" · son hata: "+s:""):"bağlı değil — aşağıdaki Bağla düğmesine bas")+c(e,"Hafıza (üye kayıtları)",e?"bağlı":"BAĞLI DEĞİL — üyeler, davetler ve panel çalışmaz")+c(!!a,"Hisse listeleri",a?"yüklü · "+(o||"")+" · "+new Date(a.guncelleme).toLocaleString("tr-TR"):"henüz yüklenmedi — telefondaki uygulamada Worker adresi <code>"+$.origin+"</code> ve şifre <code>"+l+"</code> yazılı olmalı, sonra <b>TARA VE BULUTA YÜKLE</b>")+'<a class="d" href="/panel?key='+encodeURIComponent(l)+'">🛠 Yönetici panelini aç</a><div class="a" style="margin-top:8px">Panel bir <b>web sayfası</b>, Telegram\'da değil. Telegram\'da botun menüsünde de <b>🛠 Yönetici paneli</b> düğmesi var (sadece sen görürsün) ya da bota <code>/panel</code> yazabilirsin — ikisi de bu sayfayı açar. Bu adresi telefonun ana ekranına kısayol olarak eklemen en pratiği.</div>'+(r&&i?"":'<a class="d ikinci" href="/setup">🔗 Telegram\'a bağla</a>')+'<div style="margin-top:16px" class="a">Telefondaki uygulamaya yazacakların:<br>Worker adresi: <code>'+$.origin+"</code><br>Şifre: <code>"+l+"</code></div>"+(e?"":'<div class="kur"><b>⚠️ Hafıza bağlı değil — nasıl bağlanır</b><div class="a" style="margin:6px 0">Bot listeleri gösterir ama kimin üye olduğunu, kimin kimi davet ettiğini hatırlayamaz. Panel de boş kalır. Bir kez yapılır, 2 dakika sürer:</div><ol><li>Cloudflare panelinde soldaki menüden <b>Storage &amp; Databases</b> → <b>KV</b>.</li><li><b>Create a namespace</b> / <b>Oluştur</b>. Adına <code>fixborsa</code> yaz, kaydet.</li><li>Soldan <b>Compute (Workers)</b> → bu worker\'ı aç → <b>Settings</b> → <b>Bindings</b>.</li><li><b>Add binding</b> → <b>KV namespace</b> seç.</li><li><b>Variable name</b> kutusuna tam olarak <code>VERI</code> yaz (büyük harf, Türkçe İ değil düz I).</li><li><b>KV namespace</b> kutusundan az önce oluşturduğun <code>fixborsa</code>\'ı seç ve <b>Deploy</b>.</li><li>Bu sayfayı yenile — burası ✅ olacak.</li></ol></div>')+"</body></html>"
+const l=A.PUSH_KEY||t,o=a&&a.kartlar?Object.keys(a.kartlar).filter(e=>"sira"!==e).map(e=>e+": "+a.kartlar[e].length).join(" · "):"",c=(e,t,a)=>'<div class="s '+(e?"ok":"yok")+'"><div class="i">'+(e?"✅":"⚠️")+"</div><div><b>"+t+'</b><div class="a">'+a+"</div></div></div>",d='<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yumatu 1 · Durum</title><style>body{margin:0;background:#0d1117;color:#e6edf3;font:15px/1.55 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 14px}.s{display:flex;gap:10px;background:#161b22;border:1px solid #272e37;border-radius:12px;padding:12px;margin-bottom:9px}.s.yok{border-color:#6b2b2b;background:#22171a}.i{font-size:18px;line-height:1.3}.a{color:#8b949e;font-size:13px;margin-top:3px}a.d{display:block;background:#388bfd;color:#fff;text-decoration:none;text-align:center;border-radius:11px;padding:13px;font-weight:700;margin-top:10px}a.d.ikinci{background:#21262d;border:1px solid #272e37;color:#e6edf3}code{background:#1c2330;padding:2px 6px;border-radius:5px;font-size:13px;word-break:break-all}ol{padding-left:20px;margin:8px 0 0}li{margin-bottom:7px}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px;font-size:14px}</style></head><body><h1>Yumatu 1 · Durum</h1><div class="a" style="margin:-8px 0 12px">yazılım sürümü <b>10.1</b></div>'+c(i,"Bot anahtarı",A.BOT_TOKEN?i?"geçerli · @"+(n||"?"):"TANIMLI AMA GEÇERSİZ — Telegram bu anahtarı tanımıyor. Başına/sonuna tırnak veya boşluk karışmış olabilir.":"BOT_TOKEN tanımlı değil — Settings → Variables kısmından ekle")+c(!!r,"Telegram bağlantısı",r?"bağlı"+(s?" · son hata: "+s:""):"bağlı değil — aşağıdaki Bağla düğmesine bas")+c(e,"Hafıza (üye kayıtları)",e?"bağlı":"BAĞLI DEĞİL — üyeler, davetler ve panel çalışmaz")+c(!!a,"Hisse listeleri",a?"yüklü · "+(o||"")+" · "+new Date(a.guncelleme).toLocaleString("tr-TR"):"henüz yüklenmedi — telefondaki uygulamada Worker adresi <code>"+$.origin+"</code> ve şifre <code>"+l+"</code> yazılı olmalı, sonra <b>TARA VE BULUTA YÜKLE</b>")+'<a class="d" href="/panel?key='+encodeURIComponent(l)+'">🛠 Yönetici panelini aç</a><div class="a" style="margin-top:8px">Panel bir <b>web sayfası</b>, Telegram\'da değil. Telegram\'da botun menüsünde de <b>🛠 Yönetici paneli</b> düğmesi var (sadece sen görürsün) ya da bota <code>/panel</code> yazabilirsin — ikisi de bu sayfayı açar. Bu adresi telefonun ana ekranına kısayol olarak eklemen en pratiği.</div>'+(r&&i?"":'<a class="d ikinci" href="/setup">🔗 Telegram\'a bağla</a>')+'<div style="margin-top:16px" class="a">Telefondaki uygulamaya yazacakların:<br>Worker adresi: <code>'+$.origin+"</code><br>Şifre: <code>"+l+"</code></div>"+(e?"":'<div class="kur"><b>⚠️ Hafıza bağlı değil — nasıl bağlanır</b><div class="a" style="margin:6px 0">Bot listeleri gösterir ama kimin üye olduğunu, kimin kimi davet ettiğini hatırlayamaz. Panel de boş kalır. Bir kez yapılır, 2 dakika sürer:</div><ol><li>Cloudflare panelinde soldaki menüden <b>Storage &amp; Databases</b> → <b>KV</b>.</li><li><b>Create a namespace</b> / <b>Oluştur</b>. Adına <code>fixborsa</code> yaz, kaydet.</li><li>Soldan <b>Compute (Workers)</b> → bu worker\'ı aç → <b>Settings</b> → <b>Bindings</b>.</li><li><b>Add binding</b> → <b>KV namespace</b> seç.</li><li><b>Variable name</b> kutusuna tam olarak <code>VERI</code> yaz (büyük harf, Türkçe İ değil düz I).</li><li><b>KV namespace</b> kutusundan az önce oluşturduğun <code>fixborsa</code>\'ı seç ve <b>Deploy</b>.</li><li>Bu sayfayı yenile — burası ✅ olacak.</li></ol></div>')+"</body></html>"
 ;return new Response(d,{headers:{"content-type":"text/html; charset=utf-8"}})}}};
