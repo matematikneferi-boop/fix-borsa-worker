@@ -100,9 +100,13 @@ async function formasyonlariGetir(A){
     return j;
   }catch(e){return _fBellek||null}
 }
+/* Grafik gunluk mumlarla ciziliyor. Bu yuzden cizgiler yalnizca 1G
+   formasyonundan alinir — 15 dakikalik bir kamanin cizgisi gunluk grafige
+   yanlis oturur. Diger dilimler Formasyon sekmesinde listelenir. */
 async function formasyonBul(A,kod){
   const j=await formasyonlariGetir(A);
-  return(j&&j.sonuc&&j.sonuc[kod])||null;
+  const p=j&&j.sonuc&&j.sonuc[kod];
+  return(p&&p.gunluk)||null;
 }
 async function yfKapanislar(kod){try{const a=await yfCekTek("query1.finance.yahoo.com",kod);if(a)return a}catch(e){console.error("yfCekTek query1 hata",kod,e&&e.message)}
 try{const b=await yfCekTek("query2.finance.yahoo.com",kod);if(b)return b}catch(e){console.error("yfCekTek query2 hata",kod,e&&e.message)}
@@ -702,26 +706,47 @@ function kamaTara(){
     kamaGoster();
   }).catch(function(){kamaTararken=false;el("govde").innerHTML='<div class="bos">Bağlantı hatası.</div>'});
 }
+var fDilim="hepsi";
+var FDILIM=[["hepsi","Tümü"],["15DK","15DK"],["1SA","1SA"],["4SA","4SA"],
+            ["1G","1G"],["1HAF","Hafta"],["1AY","Ay"]];
 function kamaGoster(){
-  var l=(kamaD&&kamaD.sonuc)||[];
+  var tum=(kamaD&&kamaD.sonuc)||[];
+  var l=fDilim==="hepsi"?tum:tum.filter(function(x){return x.tf===fDilim});
   var h='';
+  if(tum.length){
+    h+='<div class="pz">'+FDILIM.map(function(x){
+      var n=x[0]==="hepsi"?tum.length:tum.filter(function(y){return y.tf===x[0]}).length;
+      if(x[0]!=="hepsi"&&!n)return"";
+      return '<button class="sir'+(fDilim===x[0]?" on":"")+'" data-fd="'+x[0]+'">'+
+        x[1]+' <b>'+n+'</b></button>';
+    }).join("")+"</div>";
+  }
   if(kamaD&&kamaD.eksik)h+='<div class="bos" style="padding:10px 14px;font-size:12.5px">⏳ Formasyon dosyası henüz yayınlanmadı — tarama gecelik çalışır.</div>';
   else if(kamaD&&kamaD.guncelleme)h+='<div class="et" style="padding:8px 14px;font-size:11.5px">🕒 Son tarama: '+E(String(kamaD.guncelleme).slice(0,16).replace("T"," "))+'</div>';
   if(!l.length){
-    h+='<div class="bos"><b>📐 Formasyonlar</b><br><br>Şu an hiçbir hissede yeterli kalitede formasyon (kama, üçgen, bayrak, ikili dip) tespit edilmedi.<br>'+
-      "Formasyonlar sürekli değişir, birazdan tekrar bakın.</div>";
-    el("govde").innerHTML=h; return;
+    h+='<div class="bos"><b>📐 Formasyonlar</b><br><br>'+
+      (tum.length?"Bu zaman diliminde formasyon yok — üstten başka bir dilim seç."
+                 :"Şu an hiçbir hissede yeterli kalitede formasyon (kama, üçgen, bayrak, ikili dip) tespit edilmedi.<br>Formasyonlar sürekli değişir, birazdan tekrar bakın.")+
+      "</div>";
+    el("govde").innerHTML=h; fdBagla(); return;
   }
   h+=l.map(function(x){
     var renk=x.yon==="al"?"#3fb950":(x.yon==="sat"?"#f85149":"#d29922");
     var ikon=x.yon==="al"?"📈":"📉";
     return '<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+E(x.tf)+'" style="border-left-color:'+renk+'">'+
       '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
-      '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E((TF[x.tf]&&TF[x.tf].kisa)||x.tf)+'</div></div>'+
+      '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E(x.tf||"")+'</div></div>'+
       '<div class="sag"><div class="yuzde so">kalite <b>%'+x.kalite+'</b></div></div></div>';
   }).join('');
   el("govde").innerHTML=h;
-  satirBagla();
+  satirBagla(); fdBagla();
+}
+/* Zaman dilimi süzgeci: veri zaten yüklü, filtreleme tamamen tarayıcıda —
+   yeni istek atılmaz. */
+function fdBagla(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-fd]"),function(b){
+    b.onclick=function(){tit();fDilim=b.dataset.fd;kamaGoster()};
+  });
 }
 function favCiz(){
   var f=D.fav||[], bul=[];
@@ -1392,11 +1417,15 @@ const grup=typeof gov.grup==="string"?gov.grup:"";
 const sonuc=[];
 for(const kod of Object.keys(j.sonuc)){
   const p=j.sonuc[kod];if(!p||!p.tip)continue;
-  if(grup&&p.grup!==grup)continue;
-  sonuc.push({kod:kod,tf:kodTf[kod]||"",tip:p.tip,yon:p.yon,kalite:p.kalite||0,grup:p.grup||""});
+  const dl=Array.isArray(p.dilimler)&&p.dilimler.length?p.dilimler
+    :[{tf:p.tf||"1G",tip:p.tip,yon:p.yon,kalite:p.kalite||0}];
+  for(const d of dl){
+    if(grup&&p.grup!==grup)continue;
+    sonuc.push({kod:kod,tf:d.tf||"",tip:d.tip,yon:d.yon,kalite:d.kalite||0,grup:p.grup||""});
+  }
 }
 sonuc.sort((a,b)=>b.kalite-a.kalite);
-return JS({ok:!0,sonuc:sonuc.slice(0,120),eksik:!1,guncelleme:j.guncelleme||null})}
+return JS({ok:!0,sonuc:sonuc.slice(0,300),eksik:!1,guncelleme:j.guncelleme||null})}
 
 if("/api/fav"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
