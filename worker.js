@@ -51,14 +51,14 @@ const YF_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML
 /* MUM (OHLC) VERİSİ: yfCekTek yalnız kapanışı ayıklıyor — mini-app'teki
    TradingView mum grafiği için açılış/yüksek/düşük de gerekiyor. Ayrı
    tutuyoruz ki tarama tarafı (yfKapanislar) hiç etkilenmesin.
-   CANLI SON BAR: cache-busting (_=Date.now()) + cf.cacheTtl:0 ile Yahoo/CDN
+   CANLI SON BAR: cache-busting (_=Date.now()) + cache:"no-store" ile Yahoo/CDN
    önbelleğinden bayat veri gelmesini engelliyoruz. Ayrıca Yahoo'nun mum
    dizisindeki son bar (piyasa kapalıyken dünün kapanışı, açıkken bugünün
    barı) taramadaki "Şimdi" fiyatından (regularMarketPrice) farklıysa —
    aynı gün ise son barı günceller, farklı günse yeni (oluşmakta olan) bar
    ekler. Grafik ile "Şimdi" fiyatı hep aynı kaynağı göstersin diye. */
 async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=6mo&interval=1d&_="+Date.now()
-;let res;try{res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store",cf:{cacheTtl:0,cacheEverything:!1}})}catch(e){return{hata:"fetch istisnası: "+(e&&e.message||e)}}
+;let res;try{res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store"})}catch(e){return{hata:"fetch istisnası: "+(e&&e.message||e)}}
 ;if(!res.ok)return{hata:"HTTP "+res.status+" ("+host+")"};const j=await res.json().catch(()=>null)
 ;if(!j)return{hata:"JSON parse edilemedi ("+host+")"}
 ;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp)return{hata:"Yahoo hatası: "+JSON.stringify((j.chart&&j.chart.error)||j).slice(0,200)}
