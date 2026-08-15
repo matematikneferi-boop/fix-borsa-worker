@@ -645,6 +645,7 @@ function sekCiz(){
       t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
   });
   s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar</button>');
+  s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Kama</button>');
   s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
   s.push('<button class="sek'+(sekme==="davet"?" on":"")+'" data-r="nötr" data-s="davet">📤 Davet</button>');
@@ -661,6 +662,7 @@ function ciz(){
   seritCiz();
   sekCiz();
   if(sekme==="perf")return perfCiz();
+  if(sekme==="kama")return kamaCiz();
   if(sekme==="davet")return davetCiz();
   if(sekme==="panel")return panelCiz();
   if(sekme==="fav")return favCiz();
@@ -799,6 +801,49 @@ function adayCiz(){
   [].forEach.call(document.querySelectorAll("[data-at]"),function(b){
     b.onclick=function(){tit();adayTf=b.dataset.at;ciz()};
   });
+  satirBagla();
+}
+/* KAMA (WEDGE) LİSTESİ: tüm zaman dilimlerindeki hisseleri tek tek açıp
+   bakmak yorucu olduğu için — sunucu tüm listedeki kodları tarar (KV
+   önbellekten), sadece kama formasyonu tespit edilenleri, kalite skoruna
+   göre sıralı döndürür. İlk taramada önbellek boşsa "taranıyor" gösterip
+   birkaç saniye sonra kendini yeniler. */
+var kamaD=null, kamaTararken=false;
+function kamaCiz(){
+  if(kamaD){kamaGoster();return}
+  el("govde").innerHTML='<div class="yukleniyor">kama taranıyor… (ilk seferde biraz sürebilir)</div>';
+  kamaTara();
+}
+function kamaTara(){
+  if(kamaTararken)return; kamaTararken=true;
+  post("/api/kamalar",{}).then(function(v){
+    kamaTararken=false;
+    if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Kama taraması okunamadı.</div>';return}
+    kamaD=v;
+    if(v.eksik&&sekme==="kama"){
+      setTimeout(function(){if(sekme==="kama"){kamaD=null;kamaCiz()}},3500);
+    }
+    kamaGoster();
+  }).catch(function(){kamaTararken=false;el("govde").innerHTML='<div class="bos">Bağlantı hatası.</div>'});
+}
+function kamaGoster(){
+  var l=(kamaD&&kamaD.sonuc)||[];
+  var h='';
+  if(kamaD&&kamaD.eksik)h+='<div class="bos" style="padding:10px 14px;font-size:12.5px">⏳ Bazı hisseler henüz taranmadı, arka planda devam ediyor — birazdan kendiliğinden güncellenecek.</div>';
+  if(!l.length){
+    h+='<div class="bos"><b>📐 Kama Formasyonları</b><br><br>Şu an hiçbir hissede (tüm zaman dilimleri) kaliteli bir kama (wedge) formasyonu tespit edilmedi.<br>'+
+      "Formasyonlar sürekli değişir, birazdan tekrar bakın.</div>";
+    el("govde").innerHTML=h; return;
+  }
+  h+=l.map(function(x){
+    var renk=x.yon==="al"?"#3fb950":(x.yon==="sat"?"#f85149":"#d29922");
+    var ikon=x.yon==="al"?"📈":"📉";
+    return '<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+E(x.tf)+'" style="border-left-color:'+renk+'">'+
+      '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
+      '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E((TF[x.tf]&&TF[x.tf].kisa)||x.tf)+'</div></div>'+
+      '<div class="sag"><div class="yuzde so">kalite <b>%'+x.kalite+'</b></div></div></div>';
+  }).join('');
+  el("govde").innerHTML=h;
   satirBagla();
 }
 function favCiz(){
@@ -1468,7 +1513,7 @@ if(kodlar.length&&A.VERI){
         const r=await yfMumlar(kod);const mumlar=r.veri||[];
         const d=mumlar.length?(kamaBul(mumlar)||desenBul(mumlar)):null;
         if(d)sonuc[kod]={tip:d.tip,yon:d.yon};
-        await A.VERI.put("desen:"+kod,JSON.stringify(d?{tip:d.tip,yon:d.yon}:{}),{expirationTtl:d?21600:7200});
+        await A.VERI.put("desen:"+kod,JSON.stringify(d?{tip:d.tip,yon:d.yon,kalite:d.kalite||null}:{}),{expirationTtl:d?21600:7200});
       }catch(e){}
     }));
   }
@@ -1481,6 +1526,46 @@ if(kodlar.length&&A.VERI){
   }
 }
 return JS({ok:!0,sonuc:sonuc})}
+/* KAMA (WEDGE) LİSTESİ — bütün taranan hisse evrenini (tüm zaman dilimleri)
+   dolaşıp, YALNIZ kama formasyonu tespit edilenleri kalite skoruna göre
+   sıralı döndürür. Aynı "desen:"+kod KV önbelleğini /api/formasyonlar ile
+   paylaşır — kullanıcılar listeleri gezdikçe önbellek zaten dolar, bu
+   endpoint sadece "eksik" kalanları tamamlar. Tek istekte en fazla YF_KAMA_TAVAN
+   kadar YENİ Yahoo isteği yapılır (Worker zaman aşımına uğramasın diye);
+   kalan varsa eksik:true döner, ön yüz birkaç saniye sonra kendini tazeler. */
+const YF_KAMA_TAVAN=48;
+if("/api/kamalar"===$.pathname){
+const L2=await g(A);
+const oncelik=["tavan","potansiyel","fibo","uzunvade","adayKisa","adayOrta","adayOrtaVade","adayUzun"];
+const kodTf={};
+if(L2&&L2.kartlar)for(const tf of oncelik){
+  for(const rc of L2.kartlar[tf]||[])if(rc&&rc.kod&&!(rc.kod in kodTf))kodTf[rc.kod]=tf;
+}
+const tumKodlar=Object.keys(kodTf);
+const sonuc=[];let eksikVar=false,islenen=0;
+if(A.VERI){
+  const eksik=[];
+  for(const kod of tumKodlar){
+    const c=await A.VERI.get("desen:"+kod);
+    if(c!==null){const p=JSON.parse(c);if(p&&p.tip&&p.tip.indexOf("Kama")>=0)sonuc.push({kod:kod,tf:kodTf[kod],tip:p.tip,yon:p.yon,kalite:p.kalite||0})}
+    else eksik.push(kod);
+  }
+  for(let i=0;i<eksik.length;i+=6){
+    if(islenen>=YF_KAMA_TAVAN){eksikVar=true;break}
+    const grup=eksik.slice(i,i+6);islenen+=grup.length;
+    await Promise.all(grup.map(async kod=>{
+      try{
+        const r=await yfMumlar(kod);const mumlar=r.veri||[];
+        const d=mumlar.length?kamaBul(mumlar):null;
+        await A.VERI.put("desen:"+kod,JSON.stringify(d?{tip:d.tip,yon:d.yon,kalite:d.kalite}:{}),{expirationTtl:d?21600:7200});
+        if(d)sonuc.push({kod:kod,tf:kodTf[kod],tip:d.tip,yon:d.yon,kalite:d.kalite||0});
+      }catch(e){}
+    }));
+  }
+  if(eksik.length>islenen)eksikVar=true;
+}
+sonuc.sort((a,b)=>b.kalite-a.kalite);
+return JS({ok:!0,sonuc:sonuc.slice(0,80),eksik:eksikVar})}
 if("/api/fav"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 let f=await X(A,uid);const ekli=!f.includes(kod);f=ekli?[kod,...f]:f.filter(x=>x!==kod);f=f.slice(0,30);
