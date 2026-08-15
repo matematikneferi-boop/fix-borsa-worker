@@ -83,10 +83,8 @@ console.error("yfMumlar: her iki host de başarısız",kod,hatalar);return{veri:
    formasyon.json olarak yayinlaniyor. Worker sadece o dosyayi okur: hisse
    basina Yahoo istegi yok, CPU limiti yenmez, liste taramasi milisaniyeler
    surer. Eski JS tespit kodu (zigzagBul, kamaBul, desenBul ve yardimcilari)
-   bu yuzden tamamen silindi.
-   ⚠️ Asagidaki adresteki __KULLANICI__/__DEPO__ kismini kendi GitHub
-   kullanici adin ve depo adinla degistir. */
-const FORMASYON_URL="https://raw.githubusercontent.com/__KULLANICI__/__DEPO__/main/formasyon.json";
+   bu yuzden tamamen silindi. */
+const FORMASYON_URL="https://raw.githubusercontent.com/matematikneferi-boop/fix-borsa-worker/main/formasyon.json";
 let _fBellek=null,_fZaman=0;
 async function formasyonlariGetir(A){
   const simdi=Date.now();
@@ -1391,12 +1389,10 @@ if(L2&&L2.kartlar)for(const tf of oncelik){
 const j=await formasyonlariGetir(A);
 if(!j||!j.sonuc)return JS({ok:!0,sonuc:[],eksik:!0,guncelleme:null});
 const grup=typeof gov.grup==="string"?gov.grup:"";
-const evrenVar=Object.keys(kodTf).length>0;
 const sonuc=[];
 for(const kod of Object.keys(j.sonuc)){
   const p=j.sonuc[kod];if(!p||!p.tip)continue;
   if(grup&&p.grup!==grup)continue;
-  if(evrenVar&&!(kod in kodTf))continue;
   sonuc.push({kod:kod,tf:kodTf[kod]||"",tip:p.tip,yon:p.yon,kalite:p.kalite||0,grup:p.grup||""});
 }
 sonuc.sort((a,b)=>b.kalite-a.kalite);
