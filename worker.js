@@ -77,156 +77,34 @@ async function yfMumlar(kod){const hatalar=[]
 ;try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a.veri&&a.veri.length>=5)return{veri:a.veri,hatalar:hatalar};hatalar.push(a.hata||("sadece "+((a.veri&&a.veri.length)||0)+" bar döndü (query1)"))}catch(e){hatalar.push("query1 istisna: "+(e&&e.message||e))}
 try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b.veri&&b.veri.length>=5)return{veri:b.veri,hatalar:hatalar};hatalar.push(b.hata||("sadece "+((b.veri&&b.veri.length)||0)+" bar döndü (query2)"))}catch(e){hatalar.push("query2 istisna: "+(e&&e.message||e))}
 console.error("yfMumlar: her iki host de başarısız",kod,hatalar);return{veri:[],hatalar:hatalar}}
-/* ================== 📐 FORMASYON TESPİTİ (üçgen/kama/kanal) ==================
-   Not: GitHub'daki hazır JS kütüphaneleri (technicalindicators vb.) yalnız
-   TEK BARLIK mum formasyonlarını (doji, çekiç, yutan...) veriyor — bunlar
-   zaten sinMum() ile ayrı yapılıyor. Çok-barlı "şekil" formasyonları
-   (üçgen, kama, kanal) için JS'te bakımı süren/kırılmadan çalışan hazır bir
-   paket yok (Python tarafındaki PatternPy/TradingPatternScanner JS değil).
-   Bu yüzden aynı mantığı burada kendi pivot sistemimize göre kuruyoruz — ama
-   "her 3 bar'da bir yerel tepe/dip" yerine gerçek bir ZIGZAG kullanıyoruz:
-   fiyat son dönüm noktasından en az %ESİK kadar ters yöne gitmeden yeni pivot
-   onaylanmıyor. Böylece gürültülü küçük iniş-çıkışlar çizgiyi saptırmıyor,
-   doğru gerçekten önemli dönüm noktalarına oturuyor. Ayrıca çizilen doğru,
-   pivot noktalarından görsel olarak "kopuksa" (uyumSapma eşiği aşılırsa)
-   formasyon tamamen reddediliyor — absürt bir çizim yerine hiç çizim yok. */
-function zigzagBul(bar,esikYuzde){
-  const esik=(esikYuzde||2.5)/100,piv=[];
-  if(bar.length<5)return piv;
-  let yon=0,sonI=0,sonH=bar[0].high,sonL=bar[0].low;
-  for(let i=1;i<bar.length;i++){
-    if(yon>=0){
-      if(bar[i].high>=sonH){sonH=bar[i].high;sonI=i}
-      if(bar[i].low<=sonH*(1-esik)){piv.push({i:sonI,y:sonH,tip:"tepe"});yon=-1;sonL=bar[i].low;sonI=i}
-    }
-    if(yon<=0){
-      if(bar[i].low<=sonL){sonL=bar[i].low;sonI=i}
-      if(bar[i].high>=sonL*(1+esik)){piv.push({i:sonI,y:sonL,tip:"dip"});yon=1;sonH=bar[i].high;sonI=i}
-    }
-  }
-  return piv;
-}
-function dogrusalUydur(nokta){
-  const n=nokta.length;if(n<2)return null;
-  let sx=0,sy=0,sxy=0,sxx=0;
-  nokta.forEach(p=>{sx+=p.i;sy+=p.y;sxy+=p.i*p.y;sxx+=p.i*p.i});
-  const payda=n*sxx-sx*sx;if(!payda)return null;
-  const egim=(n*sxy-sx*sy)/payda,sabit=(sy-egim*sx)/n;
-  return{egim:egim,sabit:sabit};
-}
-function uyumSapma(nokta,dogru,ortF){
-  let mak=0;
-  nokta.forEach(p=>{const sapma=Math.abs(p.y-(dogru.egim*p.i+dogru.sabit))/ortF*100;if(sapma>mak)mak=sapma});
-  return mak;
-}
-function atrHesapla(bar,uzunluk){
-  uzunluk=uzunluk||14;const tr=[];
-  for(let i=1;i<bar.length;i++){const h=bar[i].high,l=bar[i].low,pc=bar[i-1].close
-  ;tr.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)))}
-  if(!tr.length)return 0;const son=tr.slice(-uzunluk);return son.reduce((a,b)=>a+b,0)/son.length;
-}
-/* ================== 📐 KAMA (WEDGE) TESPİTİ — 4 NOKTALI ==================
-   Kullanıcının paylaştığı TradingView Pine Script göstergesindeki mantığın
-   (P1-P2-P3-P4 dönüşümlü pivot dizisi + yakınsama oranı + kalite skoru)
-   JS'e uyarlanmış hali. desenBul()'daki genel kanal/üçgen/kama tespitinden
-   FARKLI ve daha katı: sadece kamaya (wedge) odaklanır, klasik teknik analiz
-   tanımına daha sadık kalır —
-     Düşen kama: üst VE alt çizgi ikisi de aşağı eğimli, üst çizgi alttan
-       daha dik düşüyor (yakınsıyorlar) → yükseliş sinyali (yon:"al")
-     Yükselen kama: üst VE alt çizgi ikisi de yukarı eğimli, alt çizgi
-       üstten daha dik yükseliyor (yakınsıyorlar) → düşüş sinyali (yon:"sat")
-   P1,P3 aynı taraf (tepe/dip), P2,P4 diğer taraf — yani ZigZag'daki 4
-   ardışık dönüş noktası kullanılıyor. Kalite skoru (0-100): yakınsama
-   oranı + eğim simetrisi + genişlik + ATR'ye göre yükseklik ağırlıklı
-   ortalaması. Düşük kaliteli / belirsiz kamalar elenir. */
-function kamaBul(bar){
+/* ================== 📐 FORMASYON ==================
+   Tespit artik Worker'da YAPILMIYOR. Kama / ucgen / bayrak-flama / ikili dip
+   taramasi GitHub Actions icinde Python ile kosuyor (formasyon.py) ve sonuc
+   formasyon.json olarak yayinlaniyor. Worker sadece o dosyayi okur: hisse
+   basina Yahoo istegi yok, CPU limiti yenmez, liste taramasi milisaniyeler
+   surer. Eski JS tespit kodu (zigzagBul, kamaBul, desenBul ve yardimcilari)
+   bu yuzden tamamen silindi.
+   ⚠️ Asagidaki adresteki __KULLANICI__/__DEPO__ kismini kendi GitHub
+   kullanici adin ve depo adinla degistir. */
+const FORMASYON_URL="https://raw.githubusercontent.com/__KULLANICI__/__DEPO__/main/formasyon.json";
+let _fBellek=null,_fZaman=0;
+async function formasyonlariGetir(A){
+  const simdi=Date.now();
+  if(_fBellek&&simdi-_fZaman<3e5)return _fBellek;
+  if(A&&A.VERI){const c=await A.VERI.get("formasyonJson");
+    if(c){try{_fBellek=JSON.parse(c);_fZaman=simdi;return _fBellek}catch(e){}}}
   try{
-    const SON=Math.min(bar.length,150),dilim=bar.slice(bar.length-SON);
-    if(dilim.length<25)return null;
-    const piv=zigzagBul(dilim,2.0);
-    if(piv.length<4)return null;
-    const atr=atrHesapla(dilim,14);if(!(atr>0))return null;
-    let enIyi=null,enIyiKalite=0;
-    for(const dusenMi of[!0,!1]){
-      const p13=piv.filter(p=>p.tip===(dusenMi?"tepe":"dip")).slice(-14);
-      const p24=piv.filter(p=>p.tip===(dusenMi?"dip":"tepe")).slice(-14);
-      if(p13.length<2||p24.length<2)continue;
-      for(let i4=p24.length-1;i4>=1;i4--){
-        const p4=p24[i4];
-        for(let i3=p13.length-1;i3>=1;i3--){
-          const p3=p13[i3];if(p3.i>=p4.i||p4.i-p3.i<4)continue;
-          for(let i2=i4-1;i2>=0;i2--){
-            const p2=p24[i2];if(p2.i>=p3.i||p3.i-p2.i<4)continue;
-            if(dusenMi?p2.y<=p4.y:p2.y>=p4.y)continue;
-            for(let i1=i3-1;i1>=0;i1--){
-              const p1=p13[i1];if(p1.i>=p2.i||p2.i-p1.i<4)continue;
-              if(dusenMi?p1.y<=p3.y:p1.y>=p3.y)continue;
-              const genislik=p4.i-p1.i;if(genislik<15||genislik>120)continue;
-              const u1=dusenMi?p1:p2,u2=dusenMi?p3:p4,l1=dusenMi?p2:p1,l2=dusenMi?p4:p3;
-              const uEgim=(u2.y-u1.y)/(u2.i-u1.i),lEgim=(l2.y-l1.y)/(l2.i-l1.i);
-              if(dusenMi){if(!(uEgim<0&&lEgim<0&&uEgim<lEgim))continue}
-              else{if(!(uEgim>0&&lEgim>0&&lEgim>uEgim))continue}
-              const uAt=x=>u1.y+uEgim*(x-u1.i),lAt=x=>l1.y+lEgim*(x-l1.i);
-              const bosBas=dusenMi?p1.y-lAt(p1.i):uAt(p1.i)-p1.y;
-              const bosSon=dusenMi?uAt(p4.i)-p4.y:p4.y-lAt(p4.i);
-              if(!(bosBas>0)||!(bosSon>0)||bosSon>=bosBas)continue;
-              const yakinsama=bosSon/bosBas;if(yakinsama>=.78)continue;
-              const yakinPuan=(1-yakinsama)*100;
-              const egimOran=Math.abs(uEgim)>0?Math.abs(lEgim/uEgim):1;
-              const egimPuan=Math.max(0,100-Math.abs(egimOran-1)*50);
-              const genPuan=genislik>=30&&genislik<=90?100:(genislik<30?genislik/30*100:Math.max(0,100-(genislik-90)/1.5));
-              const maxYukseklik=Math.max(bosBas,bosSon);
-              const yukPuan=Math.min(maxYukseklik/(atr*3),1)*100;
-              const kalite=yakinPuan*.4+egimPuan*.3+genPuan*.2+yukPuan*.1;
-              if(kalite>enIyiKalite&&kalite>=50){
-                enIyiKalite=kalite;
-                const T=i=>dilim[Math.max(0,Math.min(dilim.length-1,i))].time;
-                enIyi={tip:dusenMi?"Düşen Kama":"Yükselen Kama",yon:dusenMi?"al":"sat",kalite:Math.round(kalite),
-                  ust:[{time:T(u1.i),value:u1.y},{time:T(p4.i),value:uAt(p4.i)}],
-                  alt:[{time:T(l1.i),value:l1.y},{time:T(p4.i),value:lAt(p4.i)}]};
-              }
-            }
-          }
-        }
-      }
-    }
-    return enIyi;
-  }catch(e){return null}
+    const r=await fetch(FORMASYON_URL+"?_="+Math.floor(simdi/3e5),{cf:{cacheTtl:300}});
+    if(!r.ok)return _fBellek||null;
+    const j=await r.json();
+    _fBellek=j;_fZaman=simdi;
+    if(A&&A.VERI)await A.VERI.put("formasyonJson",JSON.stringify(j),{expirationTtl:600});
+    return j;
+  }catch(e){return _fBellek||null}
 }
-function desenBul(bar){
-  try{
-    const SON=Math.min(bar.length,90),dilim=bar.slice(bar.length-SON);
-    if(dilim.length<20)return null;
-    const piv=zigzagBul(dilim,2.5),tepe=piv.filter(p=>p.tip==="tepe"),dip=piv.filter(p=>p.tip==="dip");
-    if(tepe.length<2||dip.length<2)return null;
-    if(tepe[tepe.length-1].i-tepe[0].i<8||dip[dip.length-1].i-dip[0].i<8)return null;
-    const ustD=dogrusalUydur(tepe),altD=dogrusalUydur(dip);
-    if(!ustD||!altD)return null;
-    const ortF=dilim.reduce((a,b)=>a+b.close,0)/dilim.length;if(!(ortF>0))return null;
-    /* Çizgi noktaları gerçekten "hugliyorsa" devam et — yoksa formasyon yok. */
-    if(uyumSapma(tepe,ustD,ortF)>2.5||uyumSapma(dip,altD,ortF)>2.5)return null;
-    const ustE=100*ustD.egim/ortF,altE=100*altD.egim/ortF,DUZ=.035;
-    const ilk=0,son=dilim.length-1;
-    const ustIlk=ustD.egim*ilk+ustD.sabit,ustSon=ustD.egim*son+ustD.sabit;
-    const altIlk=altD.egim*ilk+altD.sabit,altSon=altD.egim*son+altD.sabit;
-    if(ustSon<=altSon||ustIlk<=altIlk)return null; /* çizgiler kesişmiş/anlamsız */
-    const bosIlk=ustIlk-altIlk,bosSon=ustSon-altSon;
-    const daralan=bosSon<bosIlk*.82,paralel=Math.abs(bosSon-bosIlk)<bosIlk*.28;
-    let tip=null,yon=null;
-    const ustDuz=Math.abs(ustE)<DUZ,altDuz=Math.abs(altE)<DUZ;
-    if(daralan&&ustDuz&&altE>DUZ){tip="Yükselen Üçgen";yon="al"}
-    else if(daralan&&altDuz&&ustE<-DUZ){tip="Düşen Üçgen";yon="sat"}
-    else if(daralan&&ustE<-DUZ&&altE>DUZ){tip="Simetrik Üçgen";yon="norotr"}
-    else if(daralan&&ustE>DUZ&&altE>DUZ&&altE>ustE){tip="Yükselen Kama";yon="sat"}
-    else if(daralan&&ustE<-DUZ&&altE<-DUZ&&ustE<altE){tip="Düşen Kama";yon="al"}
-    else if(paralel&&ustE>DUZ&&altE>DUZ){tip="Yükselen Kanal";yon="norotr"}
-    else if(paralel&&ustE<-DUZ&&altE<-DUZ){tip="Düşen Kanal";yon="norotr"}
-    if(!tip)return null;
-    const T=i=>dilim[Math.max(0,Math.min(dilim.length-1,i))].time;
-    return{tip:tip,yon:yon,
-      ust:[{time:T(ilk),value:ustIlk},{time:T(son),value:ustSon}],
-      alt:[{time:T(ilk),value:altIlk},{time:T(son),value:altSon}]};
-  }catch(e){return null}
+async function formasyonBul(A,kod){
+  const j=await formasyonlariGetir(A);
+  return(j&&j.sonuc&&j.sonuc[kod])||null;
 }
 async function yfKapanislar(kod){try{const a=await yfCekTek("query1.finance.yahoo.com",kod);if(a)return a}catch(e){console.error("yfCekTek query1 hata",kod,e&&e.message)}
 try{const b=await yfCekTek("query2.finance.yahoo.com",kod);if(b)return b}catch(e){console.error("yfCekTek query2 hata",kod,e&&e.message)}
@@ -645,7 +523,7 @@ function sekCiz(){
       t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
   });
   s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar</button>');
-  s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Kama</button>');
+  s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon</button>');
   s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
   s.push('<button class="sek'+(sekme==="davet"?" on":"")+'" data-r="nötr" data-s="davet">📤 Davet</button>');
@@ -811,14 +689,14 @@ function adayCiz(){
 var kamaD=null, kamaTararken=false;
 function kamaCiz(){
   if(kamaD){kamaGoster();return}
-  el("govde").innerHTML='<div class="yukleniyor">kama taranıyor… (ilk seferde biraz sürebilir)</div>';
+  el("govde").innerHTML='<div class="yukleniyor">formasyonlar yükleniyor…</div>';
   kamaTara();
 }
 function kamaTara(){
   if(kamaTararken)return; kamaTararken=true;
   post("/api/kamalar",{}).then(function(v){
     kamaTararken=false;
-    if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Kama taraması okunamadı.</div>';return}
+    if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Formasyon listesi okunamadı.</div>';return}
     kamaD=v;
     if(v.eksik&&sekme==="kama"){
       setTimeout(function(){if(sekme==="kama"){kamaD=null;kamaCiz()}},3500);
@@ -829,9 +707,10 @@ function kamaTara(){
 function kamaGoster(){
   var l=(kamaD&&kamaD.sonuc)||[];
   var h='';
-  if(kamaD&&kamaD.eksik)h+='<div class="bos" style="padding:10px 14px;font-size:12.5px">⏳ Bazı hisseler henüz taranmadı, arka planda devam ediyor — birazdan kendiliğinden güncellenecek.</div>';
+  if(kamaD&&kamaD.eksik)h+='<div class="bos" style="padding:10px 14px;font-size:12.5px">⏳ Formasyon dosyası henüz yayınlanmadı — tarama gecelik çalışır.</div>';
+  else if(kamaD&&kamaD.guncelleme)h+='<div class="et" style="padding:8px 14px;font-size:11.5px">🕒 Son tarama: '+E(String(kamaD.guncelleme).slice(0,16).replace("T"," "))+'</div>';
   if(!l.length){
-    h+='<div class="bos"><b>📐 Kama Formasyonları</b><br><br>Şu an hiçbir hissede (tüm zaman dilimleri) kaliteli bir kama (wedge) formasyonu tespit edilmedi.<br>'+
+    h+='<div class="bos"><b>📐 Formasyonlar</b><br><br>Şu an hiçbir hissede yeterli kalitede formasyon (kama, üçgen, bayrak, ikili dip) tespit edilmedi.<br>'+
       "Formasyonlar sürekli değişir, birazdan tekrar bakın.</div>";
     el("govde").innerHTML=h; return;
   }
@@ -981,10 +860,14 @@ function grafikCiz(kod,deneme){
       var rz=el("desenRozet"),d=v&&v.desen;
       if(d&&d.ust&&d.alt){
         var renk=d.yon==="al"?"#3fb950":(d.yon==="sat"?"#f85149":"#d29922");
-        var ustS=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:2,crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
-        ustS.setData(d.ust);
-        var altS=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:2,crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
-        altS.setData(d.alt);
+        /* Pine gibi: P1-P3 / P2-P4 arası DÜZ çizgi, sonrası NOKTALI uzatma. */
+        var cizgi=function(nokta,stil){
+          if(!nokta||nokta.length<2)return;
+          var s=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:stil,
+            crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
+          s.setData(nokta);
+        };
+        cizgi(d.ust,0);cizgi(d.alt,0);cizgi(d.ustUz,2);cizgi(d.altUz,2);
         if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk+';border-color:'+renk+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+"</span>";
       }else if(rz)rz.innerHTML="";
       chart.timeScale().fitContent();
@@ -1487,53 +1370,17 @@ if("/api/mumlar"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 const r=await yfMumlar(kod).catch(e=>({veri:[],hatalar:["yfMumlar istisna: "+(e&&e.message||e)]}));
 const mumlar=r.veri||[];
-let desen=null;try{desen=mumlar.length?(kamaBul(mumlar)||desenBul(mumlar)):null}catch(e){desen=null}
+const desen=await formasyonBul(A,kod);
 return JS({ok:!0,mumlar:mumlar,desen:desen,debug:r.hatalar||[]})}
-/* FORMASYON ROZETİ: liste ekranındaki hisselerin yanına, detaya girmeden
-   "bunda bir formasyon var" işareti koymak için. Her hisse için OHLC çekip
-   desenBul çalıştırmak pahalı (Yahoo isteği) — bu yüzden sonucu KV'de birkaç
-   saat önbellekliyoruz. Formasyon bulunmuşsa 6 saat, bulunamamışsa (boş)
-   2 saat önbellekte kalır — negatif sonuç daha kısa süre tutulur ki yeni
-   oluşan bir formasyon çok geç yakalanmasın. Aynı anda en fazla 40 kod
-   işlenir, 6'lı gruplar halinde paralel çekilir (Yahoo'yu boğmamak için). */
+/* FORMASYON ROZETİ + LİSTESİ — ikisi de tek kaynaktan, GitHub Actions'in
+   yayinladigi formasyon.json'dan okunuyor. Yahoo istegi yok, hisse basina KV
+   onbellegi yok, "en fazla 48 hisse" tavani yok. */
 if("/api/formasyonlar"===$.pathname){
-const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[]).map(k=>KOD(k)).filter(Boolean))].slice(0,40);
-const sonuc={};
-if(kodlar.length&&A.VERI){
-  const eksik=[];
-  for(const kod of kodlar){
-    const c=await A.VERI.get("desen:"+kod);
-    if(c!==null){const p=JSON.parse(c);if(p&&p.tip)sonuc[kod]={tip:p.tip,yon:p.yon}}
-    else eksik.push(kod);
-  }
-  for(let i=0;i<eksik.length;i+=6){
-    const grup=eksik.slice(i,i+6);
-    await Promise.all(grup.map(async kod=>{
-      try{
-        const r=await yfMumlar(kod);const mumlar=r.veri||[];
-        const d=mumlar.length?(kamaBul(mumlar)||desenBul(mumlar)):null;
-        if(d)sonuc[kod]={tip:d.tip,yon:d.yon};
-        await A.VERI.put("desen:"+kod,JSON.stringify(d?{tip:d.tip,yon:d.yon,kalite:d.kalite||null}:{}),{expirationTtl:d?21600:7200});
-      }catch(e){}
-    }));
-  }
-}else if(kodlar.length){
-  for(let i=0;i<kodlar.length;i+=6){
-    const grup=kodlar.slice(i,i+6);
-    await Promise.all(grup.map(async kod=>{
-      try{const r=await yfMumlar(kod);const mumlar=r.veri||[];const d=mumlar.length?(kamaBul(mumlar)||desenBul(mumlar)):null;if(d)sonuc[kod]={tip:d.tip,yon:d.yon}}catch(e){}
-    }));
-  }
-}
+const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[]).map(k=>KOD(k)).filter(Boolean))].slice(0,300);
+const j=await formasyonlariGetir(A);const sonuc={};
+if(j&&j.sonuc)for(const kod of kodlar){const p=j.sonuc[kod]
+;if(p&&p.tip)sonuc[kod]={tip:p.tip,yon:p.yon,kalite:p.kalite||0}}
 return JS({ok:!0,sonuc:sonuc})}
-/* KAMA (WEDGE) LİSTESİ — bütün taranan hisse evrenini (tüm zaman dilimleri)
-   dolaşıp, YALNIZ kama formasyonu tespit edilenleri kalite skoruna göre
-   sıralı döndürür. Aynı "desen:"+kod KV önbelleğini /api/formasyonlar ile
-   paylaşır — kullanıcılar listeleri gezdikçe önbellek zaten dolar, bu
-   endpoint sadece "eksik" kalanları tamamlar. Tek istekte en fazla YF_KAMA_TAVAN
-   kadar YENİ Yahoo isteği yapılır (Worker zaman aşımına uğramasın diye);
-   kalan varsa eksik:true döner, ön yüz birkaç saniye sonra kendini tazeler. */
-const YF_KAMA_TAVAN=48;
 if("/api/kamalar"===$.pathname){
 const L2=await g(A);
 const oncelik=["tavan","potansiyel","fibo","uzunvade","adayKisa","adayOrta","adayOrtaVade","adayUzun"];
@@ -1541,31 +1388,20 @@ const kodTf={};
 if(L2&&L2.kartlar)for(const tf of oncelik){
   for(const rc of L2.kartlar[tf]||[])if(rc&&rc.kod&&!(rc.kod in kodTf))kodTf[rc.kod]=tf;
 }
-const tumKodlar=Object.keys(kodTf);
-const sonuc=[];let eksikVar=false,islenen=0;
-if(A.VERI){
-  const eksik=[];
-  for(const kod of tumKodlar){
-    const c=await A.VERI.get("desen:"+kod);
-    if(c!==null){const p=JSON.parse(c);if(p&&p.tip&&p.tip.indexOf("Kama")>=0)sonuc.push({kod:kod,tf:kodTf[kod],tip:p.tip,yon:p.yon,kalite:p.kalite||0})}
-    else eksik.push(kod);
-  }
-  for(let i=0;i<eksik.length;i+=6){
-    if(islenen>=YF_KAMA_TAVAN){eksikVar=true;break}
-    const grup=eksik.slice(i,i+6);islenen+=grup.length;
-    await Promise.all(grup.map(async kod=>{
-      try{
-        const r=await yfMumlar(kod);const mumlar=r.veri||[];
-        const d=mumlar.length?kamaBul(mumlar):null;
-        await A.VERI.put("desen:"+kod,JSON.stringify(d?{tip:d.tip,yon:d.yon,kalite:d.kalite}:{}),{expirationTtl:d?21600:7200});
-        if(d)sonuc.push({kod:kod,tf:kodTf[kod],tip:d.tip,yon:d.yon,kalite:d.kalite||0});
-      }catch(e){}
-    }));
-  }
-  if(eksik.length>islenen)eksikVar=true;
+const j=await formasyonlariGetir(A);
+if(!j||!j.sonuc)return JS({ok:!0,sonuc:[],eksik:!0,guncelleme:null});
+const grup=typeof gov.grup==="string"?gov.grup:"";
+const evrenVar=Object.keys(kodTf).length>0;
+const sonuc=[];
+for(const kod of Object.keys(j.sonuc)){
+  const p=j.sonuc[kod];if(!p||!p.tip)continue;
+  if(grup&&p.grup!==grup)continue;
+  if(evrenVar&&!(kod in kodTf))continue;
+  sonuc.push({kod:kod,tf:kodTf[kod]||"",tip:p.tip,yon:p.yon,kalite:p.kalite||0,grup:p.grup||""});
 }
 sonuc.sort((a,b)=>b.kalite-a.kalite);
-return JS({ok:!0,sonuc:sonuc.slice(0,80),eksik:eksikVar})}
+return JS({ok:!0,sonuc:sonuc.slice(0,120),eksik:!1,guncelleme:j.guncelleme||null})}
+
 if("/api/fav"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 let f=await X(A,uid);const ekli=!f.includes(kod);f=ekli?[kod,...f]:f.filter(x=>x!==kod);f=f.slice(0,30);
