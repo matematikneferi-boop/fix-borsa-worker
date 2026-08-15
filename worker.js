@@ -58,9 +58,11 @@ const YF_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML
    aynı gün ise son barı günceller, farklı günse yeni (oluşmakta olan) bar
    ekler. Grafik ile "Şimdi" fiyatı hep aynı kaynağı göstersin diye. */
 async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=6mo&interval=1d&_="+Date.now()
-;const res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store",cf:{cacheTtl:0,cacheEverything:!1}});if(!res.ok){console.error("yfMumCek HTTP",res.status,host,kod);return null}const j=await res.json().catch(()=>null)
-;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp){console.error("yfMumCek boş sonuç",host,kod,j&&j.chart&&j.chart.error);return null}
-;const q=rz.indicators&&rz.indicators.quote&&rz.indicators.quote[0];if(!q)return null;const out=[]
+;let res;try{res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store",cf:{cacheTtl:0,cacheEverything:!1}})}catch(e){return{hata:"fetch istisnası: "+(e&&e.message||e)}}
+;if(!res.ok)return{hata:"HTTP "+res.status+" ("+host+")"};const j=await res.json().catch(()=>null)
+;if(!j)return{hata:"JSON parse edilemedi ("+host+")"}
+;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp)return{hata:"Yahoo hatası: "+JSON.stringify((j.chart&&j.chart.error)||j).slice(0,200)}
+;const q=rz.indicators&&rz.indicators.quote&&rz.indicators.quote[0];if(!q)return{hata:"quote alanı yok ("+host+")"};const out=[]
 ;rz.timestamp.forEach((ts,idx)=>{const c=q.close&&q.close[idx];if(c==null||!(c>0))return
 ;const o=q.open&&q.open[idx],hi=q.high&&q.high[idx],lo=q.low&&q.low[idx],ac=(o>0)?o:c
 ;out.push({time:ts,open:ac,high:(hi>0)?Math.max(hi,ac,c):Math.max(ac,c),low:(lo>0)?Math.min(lo,ac,c):Math.min(ac,c),close:c})})
@@ -69,10 +71,12 @@ async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+e
 ;const gunSon=Math.floor((son.time+108e5)/864e5),gunCanli=Math.floor((canliZ+108e5)/864e5)
 ;if(gunCanli===gunSon){son.close=canliF;son.high=Math.max(son.high,canliF);son.low=Math.min(son.low,canliF)}
 else if(gunCanli>gunSon)out.push({time:canliZ,open:son.close,high:Math.max(son.close,canliF),low:Math.min(son.close,canliF),close:canliF})}
-;return out}
-async function yfMumlar(kod){try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a&&a.length)return a}catch(e){console.error("yfMumCek query1 hata",kod,e&&e.message)}
-try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b&&b.length)return b}catch(e){console.error("yfMumCek query2 hata",kod,e&&e.message)}
-console.error("yfMumlar: her iki host de başarısız",kod);return[]}
+;if(!out.length)return{hata:"0 bar döndü ("+host+")"}
+;return{veri:out}}
+async function yfMumlar(kod){const hatalar=[]
+;try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a.veri&&a.veri.length)return{veri:a.veri,hatalar:hatalar};hatalar.push(a.hata||"bilinmeyen (query1)")}catch(e){hatalar.push("query1 istisna: "+(e&&e.message||e))}
+try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b.veri&&b.veri.length)return{veri:b.veri,hatalar:hatalar};hatalar.push(b.hata||"bilinmeyen (query2)")}catch(e){hatalar.push("query2 istisna: "+(e&&e.message||e))}
+console.error("yfMumlar: her iki host de başarısız",kod,hatalar);return{veri:[],hatalar:hatalar}}
 /* ================== 📐 FORMASYON TESPİTİ (üçgen/kama/kanal) ==================
    Not: GitHub'daki hazır JS kütüphaneleri (technicalindicators vb.) yalnız
    TEK BARLIK mum formasyonlarını (doji, çekiç, yutan...) veriyor — bunlar
@@ -760,7 +764,9 @@ function grafikCiz(kod,deneme){
     try{
       if(!window.LightweightCharts){kutu.innerHTML='<p class="bilgi">Grafik kütüphanesi yüklenemedi (internet bağlantısını kontrol et).</p>';return}
       var veri=(v&&v.mumlar)||[];
-      if(!v||!v.ok||veri.length<5){kutu.innerHTML='<p class="bilgi">Bu hisse için grafik verisi yetersiz.</p>';return}
+      if(!v||!v.ok||veri.length<5){
+        var dbg=(v&&v.debug&&v.debug.length)?('<br><span style="font-size:11px;opacity:.7">'+v.debug.join('<br>')+'</span>'):'';
+        kutu.innerHTML='<p class="bilgi">Bu hisse için grafik verisi yetersiz.'+dbg+'</p>';return}
       kutu.innerHTML='';
       var chart=LightweightCharts.createChart(kutu,{
         width:kutu.clientWidth||320, height:220,
@@ -1281,9 +1287,10 @@ if(GC.length>=24)break}}catch(e){}
 return JS({ok:!0,kart:kart||null,ayna:z?AYNA(kod,z):"",fav:fav,gecmis:GC})}
 if("/api/mumlar"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
-const mumlar=await yfMumlar(kod).catch(()=>[]);
-const desen=mumlar.length?desenBul(mumlar):null;
-return JS({ok:!0,mumlar:mumlar,desen:desen})}
+const r=await yfMumlar(kod).catch(e=>({veri:[],hatalar:["yfMumlar istisna: "+(e&&e.message||e)]}));
+const mumlar=r.veri||[];
+let desen=null;try{desen=mumlar.length?desenBul(mumlar):null}catch(e){desen=null}
+return JS({ok:!0,mumlar:mumlar,desen:desen,debug:r.hatalar||[]})}
 if("/api/fav"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 let f=await X(A,uid);const ekli=!f.includes(kod);f=ekli?[kod,...f]:f.filter(x=>x!==kod);f=f.slice(0,30);
