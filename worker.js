@@ -119,6 +119,80 @@ function uyumSapma(nokta,dogru,ortF){
   nokta.forEach(p=>{const sapma=Math.abs(p.y-(dogru.egim*p.i+dogru.sabit))/ortF*100;if(sapma>mak)mak=sapma});
   return mak;
 }
+function atrHesapla(bar,uzunluk){
+  uzunluk=uzunluk||14;const tr=[];
+  for(let i=1;i<bar.length;i++){const h=bar[i].high,l=bar[i].low,pc=bar[i-1].close
+  ;tr.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)))}
+  if(!tr.length)return 0;const son=tr.slice(-uzunluk);return son.reduce((a,b)=>a+b,0)/son.length;
+}
+/* ================== 📐 KAMA (WEDGE) TESPİTİ — 4 NOKTALI ==================
+   Kullanıcının paylaştığı TradingView Pine Script göstergesindeki mantığın
+   (P1-P2-P3-P4 dönüşümlü pivot dizisi + yakınsama oranı + kalite skoru)
+   JS'e uyarlanmış hali. desenBul()'daki genel kanal/üçgen/kama tespitinden
+   FARKLI ve daha katı: sadece kamaya (wedge) odaklanır, klasik teknik analiz
+   tanımına daha sadık kalır —
+     Düşen kama: üst VE alt çizgi ikisi de aşağı eğimli, üst çizgi alttan
+       daha dik düşüyor (yakınsıyorlar) → yükseliş sinyali (yon:"al")
+     Yükselen kama: üst VE alt çizgi ikisi de yukarı eğimli, alt çizgi
+       üstten daha dik yükseliyor (yakınsıyorlar) → düşüş sinyali (yon:"sat")
+   P1,P3 aynı taraf (tepe/dip), P2,P4 diğer taraf — yani ZigZag'daki 4
+   ardışık dönüş noktası kullanılıyor. Kalite skoru (0-100): yakınsama
+   oranı + eğim simetrisi + genişlik + ATR'ye göre yükseklik ağırlıklı
+   ortalaması. Düşük kaliteli / belirsiz kamalar elenir. */
+function kamaBul(bar){
+  try{
+    const SON=Math.min(bar.length,150),dilim=bar.slice(bar.length-SON);
+    if(dilim.length<25)return null;
+    const piv=zigzagBul(dilim,2.0);
+    if(piv.length<4)return null;
+    const atr=atrHesapla(dilim,14);if(!(atr>0))return null;
+    let enIyi=null,enIyiKalite=0;
+    for(const dusenMi of[!0,!1]){
+      const p13=piv.filter(p=>p.tip===(dusenMi?"tepe":"dip")).slice(-14);
+      const p24=piv.filter(p=>p.tip===(dusenMi?"dip":"tepe")).slice(-14);
+      if(p13.length<2||p24.length<2)continue;
+      for(let i4=p24.length-1;i4>=1;i4--){
+        const p4=p24[i4];
+        for(let i3=p13.length-1;i3>=1;i3--){
+          const p3=p13[i3];if(p3.i>=p4.i||p4.i-p3.i<4)continue;
+          for(let i2=i4-1;i2>=0;i2--){
+            const p2=p24[i2];if(p2.i>=p3.i||p3.i-p2.i<4)continue;
+            if(dusenMi?p2.y<=p4.y:p2.y>=p4.y)continue;
+            for(let i1=i3-1;i1>=0;i1--){
+              const p1=p13[i1];if(p1.i>=p2.i||p2.i-p1.i<4)continue;
+              if(dusenMi?p1.y<=p3.y:p1.y>=p3.y)continue;
+              const genislik=p4.i-p1.i;if(genislik<15||genislik>120)continue;
+              const u1=dusenMi?p1:p2,u2=dusenMi?p3:p4,l1=dusenMi?p2:p1,l2=dusenMi?p4:p3;
+              const uEgim=(u2.y-u1.y)/(u2.i-u1.i),lEgim=(l2.y-l1.y)/(l2.i-l1.i);
+              if(dusenMi){if(!(uEgim<0&&lEgim<0&&uEgim<lEgim))continue}
+              else{if(!(uEgim>0&&lEgim>0&&lEgim>uEgim))continue}
+              const uAt=x=>u1.y+uEgim*(x-u1.i),lAt=x=>l1.y+lEgim*(x-l1.i);
+              const bosBas=dusenMi?p1.y-lAt(p1.i):uAt(p1.i)-p1.y;
+              const bosSon=dusenMi?uAt(p4.i)-p4.y:p4.y-lAt(p4.i);
+              if(!(bosBas>0)||!(bosSon>0)||bosSon>=bosBas)continue;
+              const yakinsama=bosSon/bosBas;if(yakinsama>=.78)continue;
+              const yakinPuan=(1-yakinsama)*100;
+              const egimOran=Math.abs(uEgim)>0?Math.abs(lEgim/uEgim):1;
+              const egimPuan=Math.max(0,100-Math.abs(egimOran-1)*50);
+              const genPuan=genislik>=30&&genislik<=90?100:(genislik<30?genislik/30*100:Math.max(0,100-(genislik-90)/1.5));
+              const maxYukseklik=Math.max(bosBas,bosSon);
+              const yukPuan=Math.min(maxYukseklik/(atr*3),1)*100;
+              const kalite=yakinPuan*.4+egimPuan*.3+genPuan*.2+yukPuan*.1;
+              if(kalite>enIyiKalite&&kalite>=50){
+                enIyiKalite=kalite;
+                const T=i=>dilim[Math.max(0,Math.min(dilim.length-1,i))].time;
+                enIyi={tip:dusenMi?"Düşen Kama":"Yükselen Kama",yon:dusenMi?"al":"sat",kalite:Math.round(kalite),
+                  ust:[{time:T(u1.i),value:u1.y},{time:T(p4.i),value:uAt(p4.i)}],
+                  alt:[{time:T(l1.i),value:l1.y},{time:T(p4.i),value:lAt(p4.i)}]};
+              }
+            }
+          }
+        }
+      }
+    }
+    return enIyi;
+  }catch(e){return null}
+}
 function desenBul(bar){
   try{
     const SON=Math.min(bar.length,90),dilim=bar.slice(bar.length-SON);
@@ -866,7 +940,7 @@ function grafikCiz(kod,deneme){
         ustS.setData(d.ust);
         var altS=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:2,crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
         altS.setData(d.alt);
-        if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk+';border-color:'+renk+'">📐 '+d.tip+"</span>";
+        if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk+';border-color:'+renk+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+"</span>";
       }else if(rz)rz.innerHTML="";
       chart.timeScale().fitContent();
       var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
@@ -1368,7 +1442,7 @@ if("/api/mumlar"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 const r=await yfMumlar(kod).catch(e=>({veri:[],hatalar:["yfMumlar istisna: "+(e&&e.message||e)]}));
 const mumlar=r.veri||[];
-let desen=null;try{desen=mumlar.length?desenBul(mumlar):null}catch(e){desen=null}
+let desen=null;try{desen=mumlar.length?(kamaBul(mumlar)||desenBul(mumlar)):null}catch(e){desen=null}
 return JS({ok:!0,mumlar:mumlar,desen:desen,debug:r.hatalar||[]})}
 /* FORMASYON ROZETİ: liste ekranındaki hisselerin yanına, detaya girmeden
    "bunda bir formasyon var" işareti koymak için. Her hisse için OHLC çekip
@@ -1392,7 +1466,7 @@ if(kodlar.length&&A.VERI){
     await Promise.all(grup.map(async kod=>{
       try{
         const r=await yfMumlar(kod);const mumlar=r.veri||[];
-        const d=mumlar.length?desenBul(mumlar):null;
+        const d=mumlar.length?(kamaBul(mumlar)||desenBul(mumlar)):null;
         if(d)sonuc[kod]={tip:d.tip,yon:d.yon};
         await A.VERI.put("desen:"+kod,JSON.stringify(d?{tip:d.tip,yon:d.yon}:{}),{expirationTtl:d?21600:7200});
       }catch(e){}
@@ -1402,7 +1476,7 @@ if(kodlar.length&&A.VERI){
   for(let i=0;i<kodlar.length;i+=6){
     const grup=kodlar.slice(i,i+6);
     await Promise.all(grup.map(async kod=>{
-      try{const r=await yfMumlar(kod);const mumlar=r.veri||[];const d=mumlar.length?desenBul(mumlar):null;if(d)sonuc[kod]={tip:d.tip,yon:d.yon}}catch(e){}
+      try{const r=await yfMumlar(kod);const mumlar=r.veri||[];const d=mumlar.length?(kamaBul(mumlar)||desenBul(mumlar)):null;if(d)sonuc[kod]={tip:d.tip,yon:d.yon}}catch(e){}
     }));
   }
 }
