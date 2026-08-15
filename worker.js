@@ -793,14 +793,46 @@ function favCiz(){
       "Bir hissenin detayını aç, <b>⭐ Takibe al</b>'a dokun — burada toplanır.</div>";
     return;
   }
-  el("govde").innerHTML=bul.map(function(x){
-    return x.yok?'<div class="satir" data-kod="'+E(x.k.kod)+'" data-l="tavan">'+
+  var pf=D.portfoy||{};
+  el("govde").innerHTML=portfoyOzetiCiz(pf,bul)+bul.map(function(x){
+    var satir=x.yok?'<div class="satir" data-kod="'+E(x.k.kod)+'" data-l="tavan">'+
       '<div class="sol"><div class="kod">'+E(x.k.kod)+"</div>"+
       '<div class="altbilgi">şu an hiçbir listede değil</div></div>'+
       '<div class="sag"><div class="yuzde so">detay ▸</div></div></div>'
       :satirHtml(x.k,x.ad);
-  }).join("")+'<div class="uyari">Takipten çıkarmak için hisseyi aç, ⭐ düğmesine tekrar dokun.</div>';
+    var poz=pf[x.k.kod];
+    if(poz&&poz.lot>0&&poz.maliyet>0&&x.k.fiyat>0){
+      var kz=(x.k.fiyat/poz.maliyet-1)*100, tutar=(x.k.fiyat-poz.maliyet)*poz.lot;
+      satir+='<div class="uyari" style="margin:-6px 0 10px;padding-left:14px">💼 '+poz.lot+' lot · maliyet '+N(poz.maliyet)+
+        ' ₺ · <b class="'+(kz>=0?"ye":"kr")+'">'+Y(kz)+"</b> ("+(tutar>=0?"+":"")+tutar.toFixed(2)+" ₺)</div>";
+    }
+    return satir;
+  }).join("")+'<div class="uyari">Takipten çıkarmak için hisseyi aç, ⭐ düğmesine tekrar dokun.<br>Portföy K/Z için hisseyi aç, 💼 düğmesine dokun.</div>';
   satirBagla();
+}
+/* PORTFÖY ÖZETİ: yalnız D.fav içinde olup portfoy'da lot+maliyet girilmiş
+   hisseleri toplar. Fiyat kaynağı fav listesindeki 'bul' (o an taramada
+   görünen kart) — hisse hiçbir listede değilse fiyatı yok, o satır özete
+   girmez (yanlış/eksik toplam göstermemek için sessizce atlanır). */
+function portfoyOzetiCiz(pf,bul){
+  var kodlar=Object.keys(pf||{});
+  if(!kodlar.length)return"";
+  var toplamMaliyet=0,toplamDeger=0,adet=0;
+  kodlar.forEach(function(kod){
+    var poz=pf[kod];
+    if(!(poz&&poz.lot>0&&poz.maliyet>0))return;
+    var satir=bul.filter(function(x){return x.k.kod===kod})[0];
+    var fiyat=satir&&satir.k.fiyat>0?satir.k.fiyat:null;
+    if(fiyat==null)return;
+    toplamMaliyet+=poz.lot*poz.maliyet;
+    toplamDeger+=poz.lot*fiyat;
+    adet++;
+  });
+  if(!adet)return"";
+  var kz=toplamMaliyet>0?100*(toplamDeger/toplamMaliyet-1):0, fark=toplamDeger-toplamMaliyet;
+  return '<div class="kutu" style="margin-bottom:12px"><h3>💼 Portföyüm ('+adet+' hisse)</h3>'+
+    '<div class="ikili"><div><div class="buyukN">'+toplamDeger.toFixed(2)+' ₺</div><div class="altN">güncel değer</div></div>'+
+    '<div><div class="buyukN '+(kz>=0?"ye":"kr")+'">'+Y(kz)+'</div><div class="altN">'+(fark>=0?"+":"")+fark.toFixed(2)+' ₺</div></div></div></div>';
 }
 function detay(kod,ad){
   var K=el("katman");
@@ -809,7 +841,7 @@ function detay(kod,ad){
   K.classList.add("ac");tgGeriDugme();
   el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme()};
   post("/api/hisse",{kod:kod}).then(function(v){
-    var k=(v&&v.kart)||null, ayna=(v&&v.ayna)||"", fav=!!(v&&v.fav);
+    var k=(v&&v.kart)||null, ayna=(v&&v.ayna)||"", fav=!!(v&&v.fav), poz=(v&&v.poz)||null;
     var t=TF[ad]||{kisa:(k&&k.tf)||"",ad:""};
     var h='<div class="kapat"><b>'+E(kod)+'</b><button id="dkapat">✕ Kapat</button></div>';
     if(k){
@@ -862,6 +894,8 @@ function detay(kod,ad){
     if(ayna)h+='<div class="ayna">'+ayna.replace(/\\n/g,"<br>")+"</div>";
     if(!k&&!ayna)h+='<div class="bos">Bu kod son taramada bulunamadı.<br>Yazımı kontrol et ya da yeni tarama sonrası dene.</div>';
     h+='<button class="dg ik" id="favDg">'+(fav?"⭐ Takipten çıkar":"⭐ Takibe al")+"</button>";
+    h+='<button class="dg ik" id="portfoyDg">'+(poz?"💼 Alış bilgisini düzenle ("+poz.lot+" lot)":"💼 Portföye ekle")+"</button>";
+    if(poz)h+='<button class="dg ik" id="portfoySil" style="opacity:.7">🗑 Portföyden çıkar</button>';
     h+='<button class="dg" id="paylasDg">📤 Paylaş</button>';
     h+='<div class="uyari">⚠️ Yatırım tavsiyesi değildir.</div>';
     K.innerHTML=h;
@@ -874,6 +908,33 @@ function detay(kod,ad){
         if(r&&r.ok){D.fav=r.fav;b.textContent=r.ekli?"⭐ Takipten çıkar":"⭐ Takibe al"}
       });
     };
+    el("portfoyDg").onclick=function(){
+      tit();
+      var lotStr=prompt("Kaç lot elinde var?",poz?String(poz.lot):"");
+      if(lotStr===null)return;
+      var lot=Number(String(lotStr).replace(",","."));
+      if(!(lot>0)){alert("Geçerli bir lot sayısı gir.");return}
+      var malStr=prompt("Ortalama alış maliyetin (₺)?",poz?String(poz.maliyet):"");
+      if(malStr===null)return;
+      var mal=Number(String(malStr).replace(",","."));
+      if(!(mal>0)){alert("Geçerli bir maliyet gir.");return}
+      var b=el("portfoyDg");b.disabled=true;
+      post("/api/portfoy",{kod:kod,lot:lot,maliyet:mal}).then(function(r){
+        b.disabled=false;
+        if(r&&r.ok){D.portfoy=r.portfoy;poz=D.portfoy[kod];
+          b.textContent="💼 Alış bilgisini düzenle ("+poz.lot+" lot)";
+          if(!el("portfoySil")){var s=document.createElement("button");s.className="dg ik";s.id="portfoySil";
+            s.style.opacity=".7";s.textContent="🗑 Portföyden çıkar";b.parentNode.insertBefore(s,b.nextSibling);
+            s.onclick=portfoySilTikla}}
+      });
+    };
+    function portfoySilTikla(){
+      tit();
+      post("/api/portfoy",{kod:kod,sil:!0}).then(function(r){
+        if(r&&r.ok){D.portfoy=r.portfoy;K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav")basla()}
+      });
+    }
+    if(el("portfoySil"))el("portfoySil").onclick=portfoySilTikla;
     el("paylasDg").onclick=function(){
       tit();
       var m="📈 "+kod+(k?" "+N(k.fiyat)+" ₺":"")+(k&&k.hedef!=null?" · hedef "+N(k.hedef):"")+" — Fix Borsa Sinyal";
@@ -1244,7 +1305,15 @@ async function hmacSHA256(e,t){const a=await crypto.subtle.importKey("raw",e,{na
 let WHS=null;async function whS(e){if(WHS)return WHS;if(!e.BOT_TOKEN)return null;const t=new TextEncoder(),a=await hmacSHA256(t.encode("fixborsa-tg-webhook"),t.encode(e.BOT_TOKEN));return WHS=bytesToHex(a).slice(0,32)}
 async function dogrulaInitData(e,t){const a=new URLSearchParams(e),n=a.get("hash");if(!n)return null;a.delete("hash");const i=[];for(const[e,t]of a.entries())i.push(e+"="+t);i.sort();const r=i.join("\n"),s=new TextEncoder(),l=await hmacSHA256(s.encode("WebAppData"),s.encode(t)),o=await hmacSHA256(l,s.encode(r));if(bytesToHex(o)!==n)return null;const c=a.get("user");if(!c)return null;try{const e=JSON.parse(c);return e&&e.id?String(e.id):null}catch(e){return null}}function W(){return(new Date).toISOString().slice(0,10)}let _={};async function Y(e){if(!e.VERI)return{};const t=await e.VERI.get("kullanim");return t?JSON.parse(t):{}}
 const J=["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"].join("")
-;let G=null;async function X(e,t){if(!e.VERI)return[];const a=await e.VERI.get("fav:"+t);return a?JSON.parse(a):[]}function Z(e,t){if(!e||!e.kartlar)return null;for(const a of Object.keys(e.kartlar)){
+;let G=null;async function X(e,t){if(!e.VERI)return[];const a=await e.VERI.get("fav:"+t);return a?JSON.parse(a):[]}
+/* PORTFÖY: fav (⭐ takip) listesinden bilerek AYRI bir KV anahtarı.
+   fav yalnız "izle", portfoy ise "lot + maliyet" tutar — birini bozmadan
+   diğerini eklemek/kaldırmak için yapısal olarak birbirinden bağımsız. */
+async function XP(e,t){if(!e.VERI)return{};const a=await e.VERI.get("portfoy:"+t);return a?JSON.parse(a):{}}
+async function XPSET(e,t,a){e.VERI&&await e.VERI.put("portfoy:"+t,JSON.stringify(a))}
+async function portfoyKullanicilari(e){if(!e.VERI)return[];const out=[];let cursor=void 0
+;for(;;){const liste=await e.VERI.list({prefix:"portfoy:",limit:1e3,cursor});for(const k of liste.keys)out.push(k.name.slice(8))
+;if(!liste.list_complete&&liste.cursor){cursor=liste.cursor}else break}return out}function Z(e,t){if(!e||!e.kartlar)return null;for(const a of Object.keys(e.kartlar)){
 if("sira"===a)continue;const n=(e.kartlar[a]||[]).find(e=>e&&e.kod===t);if(n)return n}return null}function AYNA_TS(ts){const d=new Date(ts*1000+108e5),ik=n=>String(n).padStart(2,"0");return ik(d.getUTCDate())+"/"+ik(d.getUTCMonth()+1)+" "+ik(d.getUTCHours())+":"+ik(d.getUTCMinutes())}
 function AYNA(kod,z){const f=v=>Number(v).toFixed(2),yz=y=>(y>=0?"+":"")+Number(y).toFixed(1)+"%",fiyat=z.f;
 const yukHed=z.yuk&&z.yuk.length?z.yuk[z.yuk.length-1].v:null;
@@ -1391,7 +1460,7 @@ if(!uid)return JS({ok:!1,hata:"dogrulanamadi"},401);
 if(await B(A,uid))return JS({ok:!1,hata:"erisim kapali"},403);
 const YON=d(uid),KOD=v=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10),ID=v=>String(v||"").replace(/\D/g,"");
 if("/api/veri"===$.pathname){
-const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid);
+const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid),portfoy=await XP(A,uid);
 const un=BUN||await botAd(A).catch(()=>null)||"bot";
 const kart={};
 if(L2&&L2.kartlar)for(const k of Object.keys(L2.kartlar)){
@@ -1402,10 +1471,10 @@ let gun=null;
 /* Son tarama saati YALNIZ yöneticiye gösterilir. */
 if(YON&&L2&&L2.guncelleme){const dt=new Date(L2.guncelleme);gun=String((dt.getUTCHours()+3)%24).padStart(2,"0")+":"+String(dt.getUTCMinutes()).padStart(2,"0")}
 const onayli=await onayVarMi(A,uid);
-return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,kartlar:kart,guncelleme:gun,link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN})}
+return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,portfoy:portfoy,kartlar:kart,guncelleme:gun,link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN})}
 if("/api/hisse"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
-const L2=await g(A),kart=Z(L2,kod),z=L2&&L2.sozluk&&L2.sozluk[kod],fav=(await X(A,uid)).includes(kod);
+const L2=await g(A),kart=Z(L2,kod),z=L2&&L2.sozluk&&L2.sozluk[kod],fav=(await X(A,uid)).includes(kod),poz=(await XP(A,uid))[kod]||null;
 /* GEÇMİŞ SİNYALLER: bu hisse daha önce hangi gün, hangi dilimde sinyal
    verdi ve o günden bugüne ne oldu. Kayıt anahtarı kod@dilim. */
 const GC=[];
@@ -1419,7 +1488,7 @@ GC.push({gun:gun,tf:rec.t||"",dolgu:rec.r===0,giris:rec.g,son:rec.s,
 yuzde:100*(rec.s/rec.g-1),zirve:rec.max>0?100*(rec.max/rec.g-1):null,
 yas:Math.max(0,Math.round((new Date(bg)-new Date(gun))/864e5))})}
 if(GC.length>=24)break}}catch(e){}
-return JS({ok:!0,kart:kart||null,ayna:z?AYNA(kod,z):"",fav:fav,gecmis:GC})}
+return JS({ok:!0,kart:kart||null,ayna:z?AYNA(kod,z):"",fav:fav,poz:poz,gecmis:GC})}
 if("/api/mumlar"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 const r=await yfMumlar(kod).catch(e=>({veri:[],hatalar:["yfMumlar istisna: "+(e&&e.message||e)]}));
@@ -1463,6 +1532,15 @@ const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 let f=await X(A,uid);const ekli=!f.includes(kod);f=ekli?[kod,...f]:f.filter(x=>x!==kod);f=f.slice(0,30);
 if(A.VERI)await A.VERI.put("fav:"+uid,JSON.stringify(f));
 return JS({ok:!0,fav:f,ekli:ekli})}
+if("/api/portfoy"===$.pathname){
+const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
+let pf=await XP(A,uid);
+if(gov.sil){delete pf[kod]}else{
+const lot=Number(gov.lot),mal=Number(gov.maliyet);
+if(!(lot>0)||!(mal>0))return JS({ok:!1,hata:"lot/maliyet gecersiz"},400);
+pf[kod]={lot:lot,maliyet:mal,eklendi:(pf[kod]&&pf[kod].eklendi)||Date.now()}}
+await XPSET(A,uid,pf);
+return JS({ok:!0,portfoy:pf})}
 if("/api/onay"===$.pathname){await onayVer(A,uid);return JS({ok:!0})}
 if("/api/performans"===$.pathname){
 /* ================== 📈 PERFORMANS (geriye dönük ölçüm) ==================
