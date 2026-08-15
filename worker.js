@@ -83,24 +83,28 @@ console.error("yfMumlar: her iki host de başarısız",kod,hatalar);return{veri:
    zaten sinMum() ile ayrı yapılıyor. Çok-barlı "şekil" formasyonları
    (üçgen, kama, kanal) için JS'te bakımı süren/kırılmadan çalışan hazır bir
    paket yok (Python tarafındaki PatternPy/TradingPatternScanner JS değil).
-   Bu yüzden aynı mantığı burada kendi pivot sistemimize göre kuruyoruz:
-   1) pivot tepe/dip bul (solundan-sağından N bar daha yüksek/düşük)
-   2) tepelerden ve diplerden ayrı ayrı en küçük kareler doğrusu geçir
-   3) iki doğrunun eğimine göre üçgen/kama/kanal sınıflandır
-   Yanlış pozitifi azaltmak için: en az 2 pivot şart, pivotlar en az 8 bar
-   arayla yayılmış olmalı, ve "belirsiz" durumda hiçbir şey döndürülmez. */
-function pivotBul(bar,pencere){
-  const w=pencere||3,tepe=[],dip=[];
-  for(let i=w;i<bar.length-w;i++){
-    let ustMi=true,altMi=true;
-    for(let j=1;j<=w;j++){
-      if(bar[i].high<bar[i-j].high||bar[i].high<bar[i+j].high)ustMi=false;
-      if(bar[i].low>bar[i-j].low||bar[i].low>bar[i+j].low)altMi=false;
+   Bu yüzden aynı mantığı burada kendi pivot sistemimize göre kuruyoruz — ama
+   "her 3 bar'da bir yerel tepe/dip" yerine gerçek bir ZIGZAG kullanıyoruz:
+   fiyat son dönüm noktasından en az %ESİK kadar ters yöne gitmeden yeni pivot
+   onaylanmıyor. Böylece gürültülü küçük iniş-çıkışlar çizgiyi saptırmıyor,
+   doğru gerçekten önemli dönüm noktalarına oturuyor. Ayrıca çizilen doğru,
+   pivot noktalarından görsel olarak "kopuksa" (uyumSapma eşiği aşılırsa)
+   formasyon tamamen reddediliyor — absürt bir çizim yerine hiç çizim yok. */
+function zigzagBul(bar,esikYuzde){
+  const esik=(esikYuzde||2.5)/100,piv=[];
+  if(bar.length<5)return piv;
+  let yon=0,sonI=0,sonH=bar[0].high,sonL=bar[0].low;
+  for(let i=1;i<bar.length;i++){
+    if(yon>=0){
+      if(bar[i].high>=sonH){sonH=bar[i].high;sonI=i}
+      if(bar[i].low<=sonH*(1-esik)){piv.push({i:sonI,y:sonH,tip:"tepe"});yon=-1;sonL=bar[i].low;sonI=i}
     }
-    if(ustMi)tepe.push({i:i,y:bar[i].high});
-    if(altMi)dip.push({i:i,y:bar[i].low});
+    if(yon<=0){
+      if(bar[i].low<=sonL){sonL=bar[i].low;sonI=i}
+      if(bar[i].high>=sonL*(1+esik)){piv.push({i:sonI,y:sonL,tip:"dip"});yon=1;sonH=bar[i].high;sonI=i}
+    }
   }
-  return{tepe:tepe,dip:dip};
+  return piv;
 }
 function dogrusalUydur(nokta){
   const n=nokta.length;if(n<2)return null;
@@ -110,16 +114,23 @@ function dogrusalUydur(nokta){
   const egim=(n*sxy-sx*sy)/payda,sabit=(sy-egim*sx)/n;
   return{egim:egim,sabit:sabit};
 }
+function uyumSapma(nokta,dogru,ortF){
+  let mak=0;
+  nokta.forEach(p=>{const sapma=Math.abs(p.y-(dogru.egim*p.i+dogru.sabit))/ortF*100;if(sapma>mak)mak=sapma});
+  return mak;
+}
 function desenBul(bar){
   try{
     const SON=Math.min(bar.length,90),dilim=bar.slice(bar.length-SON);
     if(dilim.length<20)return null;
-    const{tepe,dip}=pivotBul(dilim,3);
+    const piv=zigzagBul(dilim,2.5),tepe=piv.filter(p=>p.tip==="tepe"),dip=piv.filter(p=>p.tip==="dip");
     if(tepe.length<2||dip.length<2)return null;
     if(tepe[tepe.length-1].i-tepe[0].i<8||dip[dip.length-1].i-dip[0].i<8)return null;
     const ustD=dogrusalUydur(tepe),altD=dogrusalUydur(dip);
     if(!ustD||!altD)return null;
     const ortF=dilim.reduce((a,b)=>a+b.close,0)/dilim.length;if(!(ortF>0))return null;
+    /* Çizgi noktaları gerçekten "hugliyorsa" devam et — yoksa formasyon yok. */
+    if(uyumSapma(tepe,ustD,ortF)>2.5||uyumSapma(dip,altD,ortF)>2.5)return null;
     const ustE=100*ustD.egim/ortF,altE=100*altD.egim/ortF,DUZ=.035;
     const ilk=0,son=dilim.length-1;
     const ustIlk=ustD.egim*ilk+ustD.sabit,ustSon=ustD.egim*son+ustD.sabit;
