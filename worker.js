@@ -74,8 +74,8 @@ else if(gunCanli>gunSon)out.push({time:canliZ,open:son.close,high:Math.max(son.c
 ;if(!out.length)return{hata:"0 bar döndü ("+host+")"}
 ;return{veri:out}}
 async function yfMumlar(kod){const hatalar=[]
-;try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a.veri&&a.veri.length)return{veri:a.veri,hatalar:hatalar};hatalar.push(a.hata||"bilinmeyen (query1)")}catch(e){hatalar.push("query1 istisna: "+(e&&e.message||e))}
-try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b.veri&&b.veri.length)return{veri:b.veri,hatalar:hatalar};hatalar.push(b.hata||"bilinmeyen (query2)")}catch(e){hatalar.push("query2 istisna: "+(e&&e.message||e))}
+;try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a.veri&&a.veri.length>=5)return{veri:a.veri,hatalar:hatalar};hatalar.push(a.hata||("sadece "+((a.veri&&a.veri.length)||0)+" bar döndü (query1)"))}catch(e){hatalar.push("query1 istisna: "+(e&&e.message||e))}
+try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b.veri&&b.veri.length>=5)return{veri:b.veri,hatalar:hatalar};hatalar.push(b.hata||("sadece "+((b.veri&&b.veri.length)||0)+" bar döndü (query2)"))}catch(e){hatalar.push("query2 istisna: "+(e&&e.message||e))}
 console.error("yfMumlar: her iki host de başarısız",kod,hatalar);return{veri:[],hatalar:hatalar}}
 /* ================== 📐 FORMASYON TESPİTİ (üçgen/kama/kanal) ==================
    Not: GitHub'daki hazır JS kütüphaneleri (technicalindicators vb.) yalnız
