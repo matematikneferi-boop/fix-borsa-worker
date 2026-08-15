@@ -1645,7 +1645,7 @@ const e=await p.json().catch(()=>null);if(!e)return new Response("ok");await bot
    İstek arka planda gidiyor, yanıtı beklemiyoruz. */
 if(i&&t.chat&&t.chat.id)q.waitUntil(b(A.BOT_TOKEN,"setChatMenuButton",{
   chat_id:t.chat.id,
-  menu_button:{type:"web_app",text:"📱 Uygulamayı aç",web_app:{url:n+"/app"}}
+  menu_button:{type:"web_app",text:"📱 Uygulamayı aç",web_app:{url:$.origin+"/app"}}
 }).catch(()=>{}));
 /* ================== 👑 YÖNETİCİ KOMUTLARI ==================
    Panele girmeden, sohbetten süper üyelik verme/alma:
