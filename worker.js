@@ -125,246 +125,71 @@ function atrHesapla(bar,uzunluk){
   ;tr.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)))}
   if(!tr.length)return 0;const son=tr.slice(-uzunluk);return son.reduce((a,b)=>a+b,0)/son.length;
 }
-/* ================== 📐 KAMA (WEDGE) — PINE SCRIPT BİREBİR PORT ==================
-   Kaynak: "Smart Wedge Pattern [The_lurker]" (Pine v6).
-   ÖNCEKİ SÜRÜMDEKİ FARK (absürt çizimlerin sebebi):
-     • Pivotlar %2'lik ZigZag ile bulunuyordu — Pine ise ta.pivothigh/low
-       kullanıyor ve SOL BAR SAYISI uyarlanır (ATR10/ATR50 + ADX + ATR
-       kararlılığı + yüzdelik + bar aralığı ağırlıklı skoru). Tamamen farklı
-       pivot kümesi = tamamen farklı kama.
-     • Kalite formülü yanlış ağırlıklardaydı (.40/.30/.20/.10) ve "önceki
-       trend" bileşeni hiç yoktu. Pine: .30 yakınsama + .25 eğim + .20
-       genişlik + .15 trend + .10 yükseklik.
-     • Genişlik puanı eşikleri 30/90 idi, Pine 40/100.
-     • Kanal toleransı %2 idi (çizgi mumların içinden geçiyordu); Pine
-       varsayılanı KAPANIŞ bazlı ve tolerans 0.
-     • calc_price logaritmik (math.exp) idi, JS'te düz doğrusaldı.
-     • Çizgi uzatması yoktu; Pine u1→u2 düz, u2→son nokta noktalı çizer.
-     • Aday seçimi "en yüksek kalite" idi; Pine ekranda EN GÜNCEL (henüz
-       iptal olmamış) kamayı gösterir. Artık en yeni P4 önceliklidir.
-   Pine giriş varsayılanları birebir aşağıda; oynamak istersen tek yer. */
-const KAMA_AYAR={
-  pivotMin:5, pivotMax:15, sagOnay:2,
-  minBarArasi:5, minGenislik:20, maxGenislik:200, geriBakis:100,
-  yakinsama:0.75, maxBekleme:50,
-  katiKanal:false, tolerans:0.1,
-  trendKullan:true, trendUzunluk:30, trendGuc:0.5,
-  kaliteKullan:true, minKalite:50,
-  hedefCarpan:0.618, logOlcek:true
-};
-/* ta.rma (Wilder) — ilk `uzunluk` barın ortalamasıyla tohumlanır. */
-function _rma(kaynak,uzunluk){
-  const n=kaynak.length,cikti=new Array(n).fill(NaN);
-  let toplam=0,adet=0,onceki=NaN;
-  for(let i=0;i<n;i++){
-    const v=isFinite(kaynak[i])?kaynak[i]:0;
-    if(!isFinite(onceki)){toplam+=v;adet++;if(adet>=uzunluk){onceki=toplam/uzunluk;cikti[i]=onceki}}
-    else{onceki=(onceki*(uzunluk-1)+v)/uzunluk;cikti[i]=onceki}
-  }
-  return cikti;
-}
-function _sma(kaynak,uzunluk,i){
-  if(i<uzunluk-1)return NaN;
-  let t=0;for(let k=i-uzunluk+1;k<=i;k++)t+=isFinite(kaynak[k])?kaynak[k]:0;
-  return t/uzunluk;
-}
-function _stdev(kaynak,uzunluk,i){
-  const m=_sma(kaynak,uzunluk,i);if(!isFinite(m))return NaN;
-  let t=0;for(let k=i-uzunluk+1;k<=i;k++){const v=(isFinite(kaynak[k])?kaynak[k]:0)-m;t+=v*v}
-  return Math.sqrt(t/uzunluk);
-}
-/* ta.percentile_nearest_rank */
-function _yuzdelik(kaynak,uzunluk,yuzde,i){
-  const bas=Math.max(0,i-uzunluk+1),a=[];
-  for(let k=bas;k<=i;k++)if(isFinite(kaynak[k]))a.push(kaynak[k]);
-  if(!a.length)return NaN;
-  a.sort((x,y)=>x-y);
-  const r=Math.ceil(yuzde/100*a.length);
-  return a[Math.min(a.length-1,Math.max(0,r-1))];
-}
-/* TR / ATR(10,14,50) / ADX(14) — Pine'daki atr_fast, atr_slow, atr_14, calc_adx */
-function _seriler(bar){
-  const n=bar.length,tr=new Array(n),pdm=new Array(n),mdm=new Array(n),arl=new Array(n);
-  for(let i=0;i<n;i++){
-    const h=bar[i].high,l=bar[i].low;arl[i]=h-l;
-    if(i===0){tr[i]=h-l;pdm[i]=0;mdm[i]=0;continue}
-    const kc=bar[i-1].close;
-    tr[i]=Math.max(h-l,Math.abs(h-kc),Math.abs(l-kc));
-    const u=h-bar[i-1].high,d=bar[i-1].low-l;
-    pdm[i]=(u>d&&u>0)?u:0;mdm[i]=(d>u&&d>0)?d:0;
-  }
-  const trR=_rma(tr,14),pR=_rma(pdm,14),mR=_rma(mdm,14),dx=new Array(n).fill(0);
-  for(let i=0;i<n;i++){
-    if(!(trR[i]>0))continue;
-    const pdi=100*pR[i]/trR[i],mdi=100*mR[i]/trR[i];
-    if(isFinite(pdi)&&isFinite(mdi))dx[i]=Math.abs(pdi-mdi)/Math.max(pdi+mdi,1)*100;
-  }
-  return{arl:arl,atrHizli:_rma(tr,10),atrYavas:_rma(tr,50),atr14:_rma(tr,14),adx:_rma(dx,14)};
-}
-/* calc_adaptive_pivot — sol bar sayısını her barda yeniden hesaplar */
-function _uyarlanirSol(i,S,ay){
-  const oran=(a,b,vars)=>(b>0&&isFinite(a/b))?a/b:vars;
-  const volPuan=Math.min(oran(S.atrHizli[i],S.atrYavas[i],1),2)/2;
-  const trendPuan=Math.min((isFinite(S.adx[i])?S.adx[i]:0)/50,1);
-  const kararliPuan=Math.min(oran(_stdev(S.atrHizli,20,i),_sma(S.atrHizli,20,i),0.5)*2,1);
-  const baglamPuan=Math.min(oran(S.atrHizli[i],_yuzdelik(S.atrHizli,100,50,i),1),2)/2;
-  const aralikPuan=Math.min(oran(S.arl[i],_sma(S.arl,10,i),1),2)/2;
-  const skor=volPuan*.30+trendPuan*.25+kararliPuan*.20+baglamPuan*.15+aralikPuan*.10;
-  return Math.max(ay.pivotMin,Math.min(ay.pivotMax,ay.pivotMin+Math.trunc((ay.pivotMax-ay.pivotMin)*skor)));
-}
-/* ta.pivothigh / ta.pivotlow — sağ onay barı kadar gecikmeli, repaint yok */
-function _pinePivotlar(bar,S,ay){
-  const n=bar.length,sag=ay.sagOnay,piv=[];
-  for(let i=sag;i<n;i++){
-    const sol=_uyarlanirSol(i,S,ay),p=i-sag;
-    if(p-sol<0)continue;
-    let zirve=!0,dip=!0;
-    for(let k=p-sol;k<=p+sag;k++){
-      if(k===p)continue;
-      if(bar[k].high>=bar[p].high)zirve=!1;
-      if(bar[k].low<=bar[p].low)dip=!1;
-      if(!zirve&&!dip)break;
-    }
-    if(zirve)piv.push({i:p,y:bar[p].high,tip:"tepe"});
-    if(dip)piv.push({i:p,y:bar[p].low,tip:"dip"});
-  }
-  piv.sort((a,b)=>a.i-b.i);
-  return piv;
-}
-/* calc_price — i_log_scale açıkken üstel, kapalıyken doğrusal uzatma */
-function _pineFiyat(f1,b1,f2,b2,hedefBar,log){
-  if(b2===b1||!(f1>0)||!(f2>0))return f2;
-  if(log)return f2*Math.exp((Math.log(f2)-Math.log(f1))/(b2-b1)*(hedefBar-b2));
-  return f2+(f2-f1)/(b2-b1)*(hedefBar-b2);
-}
-/* calc_max_height — 5 barda bir örnekleyerek en geniş açıklığı bulur */
-function _pineMaxYukseklik(U,L,basBar,bitBar,log){
-  let mak=0;
-  for(let b=basBar;b<=bitBar;b+=5){
-    const u=_pineFiyat(U.f1,U.b1,U.f2,U.b2,b,log),l=_pineFiyat(L.f1,L.b1,L.f2,L.b2,b,log);
-    const h=Math.abs(u-l);if(h>mak)mak=h;
-  }
-  return mak;
-}
-/* calc_quality — Pine'daki ağırlıklarla birebir (.30/.25/.20/.15/.10) */
-function _pineKalite(yakinsama,egimOran,genislik,trendGuc,maxYukseklik,atr){
-  const yakinPuan=(1-yakinsama)*100;
-  const egimPuan=Math.max(0,100-Math.abs(egimOran-1)*50);
-  const genPuan=(genislik>=40&&genislik<=100)?100:(genislik<40?genislik/40*100:Math.max(0,100-(genislik-100)/2));
-  const trendPuan=Math.min(Math.abs(trendGuc)/2,1)*100;
-  const yukPuan=(atr>0)?Math.min(maxYukseklik/(atr*3),1)*100:0;
-  return yakinPuan*.30+egimPuan*.25+genPuan*.20+trendPuan*.15+yukPuan*.10;
-}
-/* get_trend_data — formasyon başlangıcındaki ATR normalize önceki trend */
-function _pineTrend(bar,S,idx,ay){
-  const b=idx-ay.trendUzunluk;
-  if(b<0)return 0;
-  const a=S.atr14[idx];
-  return(a>0)?(bar[idx].close-bar[b].close)/a:0;
-}
-/* check_channel — varsayılan: sadece KAPANIŞ, tolerans 0.
-   katiKanal açılırsa yüksek/düşük (fitil) de kontrol edilir. */
-function _pineKanal(bar,ustF,altF,bas,bit,ay){
-  const tol=ay.katiKanal?ay.tolerans/100:0;
-  for(let i=bas;i<=bit;i++){
-    const u=ustF(i),l=altF(i);
-    if(!(u>l))return!1;
-    if(ay.katiKanal){if(bar[i].high>u*(1+tol)||bar[i].low<l*(1-tol))return!1}
-    else{const c=bar[i].close;if(c>u*(1+tol)||c<l*(1-tol))return!1}
-  }
-  return!0;
-}
-/* is_extreme — P1 ve P4, formasyon aralığının GERÇEK uç noktaları olmalı.
-   Bu olmadan çizgi rastgele bir pivota tutunup mumların ortasından geçiyordu. */
-function _pineUcNokta(bar,p1,p4,dusen){
-  let enY=-Infinity,enD=Infinity;
-  for(let i=p1.i;i<=p4.i;i++){
-    if(bar[i].high>enY)enY=bar[i].high;
-    if(bar[i].low<enD)enD=bar[i].low;
-  }
-  const e=1e-9;
-  return dusen?(p1.y>=enY-e&&p4.y<=enD+e):(p1.y<=enD+e&&p4.y>=enY-e);
-}
+/* ================== 📐 KAMA (WEDGE) TESPİTİ — 4 NOKTALI ==================
+   Kullanıcının paylaştığı TradingView Pine Script göstergesindeki mantığın
+   (P1-P2-P3-P4 dönüşümlü pivot dizisi + yakınsama oranı + kalite skoru)
+   JS'e uyarlanmış hali. desenBul()'daki genel kanal/üçgen/kama tespitinden
+   FARKLI ve daha katı: sadece kamaya (wedge) odaklanır, klasik teknik analiz
+   tanımına daha sadık kalır —
+     Düşen kama: üst VE alt çizgi ikisi de aşağı eğimli, üst çizgi alttan
+       daha dik düşüyor (yakınsıyorlar) → yükseliş sinyali (yon:"al")
+     Yükselen kama: üst VE alt çizgi ikisi de yukarı eğimli, alt çizgi
+       üstten daha dik yükseliyor (yakınsıyorlar) → düşüş sinyali (yon:"sat")
+   P1,P3 aynı taraf (tepe/dip), P2,P4 diğer taraf — yani ZigZag'daki 4
+   ardışık dönüş noktası kullanılıyor. Kalite skoru (0-100): yakınsama
+   oranı + eğim simetrisi + genişlik + ATR'ye göre yükseklik ağırlıklı
+   ortalaması. Düşük kaliteli / belirsiz kamalar elenir. */
 function kamaBul(bar){
   try{
-    const ay=KAMA_AYAR;
-    if(!bar||bar.length<60)return null;
-    const SON=Math.min(bar.length,ay.geriBakis+ay.trendUzunluk+ay.maxBekleme+20);
-    const dilim=bar.slice(bar.length-SON),n=dilim.length;
-    const S=_seriler(dilim),piv=_pinePivotlar(dilim,S,ay);
+    const SON=Math.min(bar.length,150),dilim=bar.slice(bar.length-SON);
+    if(dilim.length<25)return null;
+    const piv=zigzagBul(dilim,2.0);
     if(piv.length<4)return null;
-    const sonI=n-1,atr=S.atr14[sonI];
-    if(!(atr>0))return null;
-    const enEski=Math.max(0,sonI-ay.geriBakis);
-    const tepeler=piv.filter(p=>p.tip==="tepe"&&p.i>=enEski);
-    const dipler=piv.filter(p=>p.tip==="dip"&&p.i>=enEski);
-    let enIyi=null;
-    for(const dusen of[!0,!1]){
-      const A13=dusen?tepeler:dipler,A24=dusen?dipler:tepeler;
-      if(A13.length<2||A24.length<2)continue;
-      for(let i4=A24.length-1;i4>=1;i4--){
-        const p4=A24[i4];
-        if(p4.i<sonI-ay.maxBekleme)break;
-        for(let i3=A13.length-1;i3>=1;i3--){
-          const p3=A13[i3];
-          if(p3.i>=p4.i||p4.i-p3.i<ay.minBarArasi)continue;
+    const atr=atrHesapla(dilim,14);if(!(atr>0))return null;
+    let enIyi=null,enIyiKalite=0;
+    for(const dusenMi of[!0,!1]){
+      const p13=piv.filter(p=>p.tip===(dusenMi?"tepe":"dip")).slice(-14);
+      const p24=piv.filter(p=>p.tip===(dusenMi?"dip":"tepe")).slice(-14);
+      if(p13.length<2||p24.length<2)continue;
+      for(let i4=p24.length-1;i4>=1;i4--){
+        const p4=p24[i4];
+        for(let i3=p13.length-1;i3>=1;i3--){
+          const p3=p13[i3];if(p3.i>=p4.i||p4.i-p3.i<4)continue;
           for(let i2=i4-1;i2>=0;i2--){
-            const p2=A24[i2];
-            if(p2.i>=p3.i||p3.i-p2.i<ay.minBarArasi)continue;
-            if(dusen?p2.y<=p4.y:p2.y>=p4.y)continue;
+            const p2=p24[i2];if(p2.i>=p3.i||p3.i-p2.i<4)continue;
+            if(dusenMi?p2.y<=p4.y:p2.y>=p4.y)continue;
             for(let i1=i3-1;i1>=0;i1--){
-              const p1=A13[i1];
-              if(p1.i>=p2.i||p2.i-p1.i<ay.minBarArasi)continue;
-              if(dusen?p1.y<=p3.y:p1.y>=p3.y)continue;
-              const genislik=p4.i-p1.i;
-              if(genislik<ay.minGenislik||genislik>ay.maxGenislik)continue;
-              const u1=dusen?p1:p2,u2=dusen?p3:p4,l1=dusen?p2:p1,l2=dusen?p4:p3;
-              const U={f1:u1.y,b1:u1.i,f2:u2.y,b2:u2.i},L={f1:l1.y,b1:l1.i,f2:l2.y,b2:l2.i};
-              const ustF=x=>_pineFiyat(U.f1,U.b1,U.f2,U.b2,x,ay.logOlcek);
-              const altF=x=>_pineFiyat(L.f1,L.b1,L.f2,L.b2,x,ay.logOlcek);
-              /* log ölçekte eğim = birim bar başına logaritmik değişim */
-              const uEgim=ay.logOlcek?(Math.log(U.f2)-Math.log(U.f1))/(U.b2-U.b1):(U.f2-U.f1)/(U.b2-U.b1);
-              const lEgim=ay.logOlcek?(Math.log(L.f2)-Math.log(L.f1))/(L.b2-L.b1):(L.f2-L.f1)/(L.b2-L.b1);
-              if(dusen){if(!(uEgim<0&&lEgim<0&&uEgim<lEgim))continue}
+              const p1=p13[i1];if(p1.i>=p2.i||p2.i-p1.i<4)continue;
+              if(dusenMi?p1.y<=p3.y:p1.y>=p3.y)continue;
+              const genislik=p4.i-p1.i;if(genislik<15||genislik>120)continue;
+              const u1=dusenMi?p1:p2,u2=dusenMi?p3:p4,l1=dusenMi?p2:p1,l2=dusenMi?p4:p3;
+              const uEgim=(u2.y-u1.y)/(u2.i-u1.i),lEgim=(l2.y-l1.y)/(l2.i-l1.i);
+              if(dusenMi){if(!(uEgim<0&&lEgim<0&&uEgim<lEgim))continue}
               else{if(!(uEgim>0&&lEgim>0&&lEgim>uEgim))continue}
-              const bosBas=ustF(p1.i)-altF(p1.i),bosSon=ustF(p4.i)-altF(p4.i);
-              if(!(bosBas>0)||!(bosSon>0))continue;
-              const yakinsama=bosSon/bosBas;
-              if(!(yakinsama<ay.yakinsama))continue;
-              if(!_pineUcNokta(dilim,p1,p4,dusen))continue;
-              if(!_pineKanal(dilim,ustF,altF,p1.i,p4.i,ay))continue;
-              const trendGuc=_pineTrend(dilim,S,p1.i,ay);
-              if(ay.trendKullan){
-                if(dusen){if(!(trendGuc<=-ay.trendGuc))continue}
-                else{if(!(trendGuc>=ay.trendGuc))continue}
+              const uAt=x=>u1.y+uEgim*(x-u1.i),lAt=x=>l1.y+lEgim*(x-l1.i);
+              const bosBas=dusenMi?p1.y-lAt(p1.i):uAt(p1.i)-p1.y;
+              const bosSon=dusenMi?uAt(p4.i)-p4.y:p4.y-lAt(p4.i);
+              if(!(bosBas>0)||!(bosSon>0)||bosSon>=bosBas)continue;
+              const yakinsama=bosSon/bosBas;if(yakinsama>=.78)continue;
+              const yakinPuan=(1-yakinsama)*100;
+              const egimOran=Math.abs(uEgim)>0?Math.abs(lEgim/uEgim):1;
+              const egimPuan=Math.max(0,100-Math.abs(egimOran-1)*50);
+              const genPuan=genislik>=30&&genislik<=90?100:(genislik<30?genislik/30*100:Math.max(0,100-(genislik-90)/1.5));
+              const maxYukseklik=Math.max(bosBas,bosSon);
+              const yukPuan=Math.min(maxYukseklik/(atr*3),1)*100;
+              const kalite=yakinPuan*.4+egimPuan*.3+genPuan*.2+yukPuan*.1;
+              if(kalite>enIyiKalite&&kalite>=50){
+                enIyiKalite=kalite;
+                const T=i=>dilim[Math.max(0,Math.min(dilim.length-1,i))].time;
+                enIyi={tip:dusenMi?"Düşen Kama":"Yükselen Kama",yon:dusenMi?"al":"sat",kalite:Math.round(kalite),
+                  ust:[{time:T(u1.i),value:u1.y},{time:T(p4.i),value:uAt(p4.i)}],
+                  alt:[{time:T(l1.i),value:l1.y},{time:T(p4.i),value:lAt(p4.i)}]};
               }
-              const maxY=_pineMaxYukseklik(U,L,p1.i,p4.i,ay.logOlcek);
-              const egimOran=Math.abs(uEgim)>1e-12?Math.abs(lEgim/uEgim):1;
-              const kalite=_pineKalite(yakinsama,egimOran,genislik,trendGuc,maxY,atr);
-              if(ay.kaliteKullan&&kalite<ay.minKalite)continue;
-              /* Pine ekranda en GÜNCEL kamayı gösterir: önce P4 yeniliği,
-                 eşitse yüksek kalite. */
-              if(enIyi&&!(p4.i>enIyi._p4||(p4.i===enIyi._p4&&kalite>enIyi.kalite)))continue;
-              const bit=Math.min(sonI,p4.i+ay.maxBekleme);
-              const T=i=>dilim[Math.max(0,Math.min(n-1,i))].time;
-              const ustBit=ustF(bit),altBit=altF(bit);
-              const hedef=dusen?ustBit+maxY*ay.hedefCarpan:altBit-maxY*ay.hedefCarpan;
-              enIyi={
-                tip:dusen?"Düşen Kama":"Yükselen Kama",yon:dusen?"al":"sat",
-                kalite:Math.round(kalite),
-                ust:[{time:T(U.b1),value:U.f1},{time:T(U.b2),value:U.f2}],
-                alt:[{time:T(L.b1),value:L.f1},{time:T(L.b2),value:L.f2}],
-                ustUz:U.b2<bit?[{time:T(U.b2),value:U.f2},{time:T(bit),value:ustBit}]:null,
-                altUz:L.b2<bit?[{time:T(L.b2),value:L.f2},{time:T(bit),value:altBit}]:null,
-                hedef:(hedef>0)?Number(hedef.toFixed(4)):null,
-                _p4:p4.i
-              };
             }
           }
         }
       }
     }
-    if(enIyi)delete enIyi._p4;
     return enIyi;
   }catch(e){return null}
 }
@@ -1156,14 +981,10 @@ function grafikCiz(kod,deneme){
       var rz=el("desenRozet"),d=v&&v.desen;
       if(d&&d.ust&&d.alt){
         var renk=d.yon==="al"?"#3fb950":(d.yon==="sat"?"#f85149":"#d29922");
-        /* Pine gibi: P1-P3 / P2-P4 arası DÜZ çizgi, sonrası NOKTALI uzatma. */
-        var cizgi=function(nokta,stil){
-          if(!nokta||nokta.length<2)return;
-          var s=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:stil,
-            crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
-          s.setData(nokta);
-        };
-        cizgi(d.ust,0);cizgi(d.alt,0);cizgi(d.ustUz,2);cizgi(d.altUz,2);
+        var ustS=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:2,crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
+        ustS.setData(d.ust);
+        var altS=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:2,crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
+        altS.setData(d.alt);
         if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk+';border-color:'+renk+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+"</span>";
       }else if(rz)rz.innerHTML="";
       chart.timeScale().fitContent();
