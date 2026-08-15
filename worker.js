@@ -46,6 +46,20 @@ async function yfCekTek(host,kod){const u="https://"+host+"/v8/finance/chart/"+e
 ;const kap=rz.indicators&&rz.indicators.quote&&rz.indicators.quote[0]&&rz.indicators.quote[0].close;if(!kap)return null;const out={}
 ;rz.timestamp.forEach((ts,idx)=>{const c=kap[idx];if(c==null||!(c>0))return;const gun=new Date(1e3*ts+108e5).toISOString().slice(0,10);out[gun]=Number(c)})
 ;return out}
+/* MUM (OHLC) VERİSİ: yfCekTek yalnız kapanışı ayıklıyor — mini-app'teki
+   TradingView mum grafiği için açılış/yüksek/düşük de gerekiyor. Ayrı
+   tutuyoruz ki tarama tarafı (yfKapanislar) hiç etkilenmesin. */
+async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=6mo&interval=1d"
+;const res=await fetch(u,{headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}});if(!res.ok)return null;const j=await res.json().catch(()=>null)
+;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp)return null
+;const q=rz.indicators&&rz.indicators.quote&&rz.indicators.quote[0];if(!q)return null;const out=[]
+;rz.timestamp.forEach((ts,idx)=>{const c=q.close&&q.close[idx];if(c==null||!(c>0))return
+;const o=q.open&&q.open[idx],hi=q.high&&q.high[idx],lo=q.low&&q.low[idx],ac=(o>0)?o:c
+;out.push({time:ts,open:ac,high:(hi>0)?Math.max(hi,ac,c):Math.max(ac,c),low:(lo>0)?Math.min(lo,ac,c):Math.min(ac,c),close:c})})
+;return out}
+async function yfMumlar(kod){try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a&&a.length)return a}catch(e){}
+try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b&&b.length)return b}catch(e){}
+return[]}
 async function yfKapanislar(kod){try{const a=await yfCekTek("query1.finance.yahoo.com",kod);if(a)return a}catch(e){}
 try{const b=await yfCekTek("query2.finance.yahoo.com",kod);if(b)return b}catch(e){}
 return null}
@@ -172,6 +186,7 @@ void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  �
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Fix Borsa Sinyal</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 :root{
   --bg:#0e1116; --kart:#161b22; --kart2:#1c2330; --ciz:#262d38;
@@ -262,6 +277,7 @@ textarea.gir{min-height:88px;resize:vertical}
 .sayac .n{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
 .sayac .a{font-size:10.5px;color:var(--soluk);margin-top:2px}
 .bilgi{font-size:12.5px;color:var(--soluk);line-height:1.65;margin:9px 2px 4px}
+.mumKutu{height:220px;position:relative}
 .link{background:var(--bg);border:1px solid var(--ciz);border-radius:9px;padding:11px;
   font-size:12.5px;word-break:break-all;font-family:ui-monospace,monospace;color:var(--mavi)}
 .durum{font-size:12.5px;color:var(--soluk);margin-top:8px;min-height:17px}
@@ -612,6 +628,7 @@ function detay(kod,ad){
       h+='<div class="dbas"><div class="k">'+E(kod)+"</div></div>"+
          '<div class="bilgi">Bu hisse şu an hiçbir listede değil — aşağıda güncel iki yönlü durumu var.</div>';
     }
+    h+='<div class="kutu"><h3>📊 Grafik</h3><div id="mumKutu" class="mumKutu"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div></div>';
     var G=(v&&v.gecmis)||[];
     var gG=G.filter(function(x){return !x.dolgu});
     if(gG.length){
@@ -636,6 +653,7 @@ function detay(kod,ad){
     h+='<button class="dg" id="paylasDg">📤 Paylaş</button>';
     h+='<div class="uyari">⚠️ Yatırım tavsiyesi değildir.</div>';
     K.innerHTML=h;
+    grafikCiz(kod);
     el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav")basla()};
     el("favDg").onclick=function(){
       tit();var b=el("favDg");b.disabled=true;
@@ -651,6 +669,37 @@ function detay(kod,ad){
       try{TG.openTelegramLink(u)}catch(e){location.href=u}
     };
   });
+}
+/* MUM GRAFİĞİ: detay() paneli içinde ayrı, engellemeyen bir çağrı — detay
+   metni beklemeden kendi hızında gelir. CDN veya veri yoksa sessizce bir
+   uyarı yazar, panelin geri kalanını hiçbir şekilde etkilemez. */
+function grafikCiz(kod){
+  post("/api/mumlar",{kod:kod}).then(function(v){
+    var kutu=el("mumKutu"); if(!kutu)return;
+    try{
+      if(!window.LightweightCharts){kutu.innerHTML='<p class="bilgi">Grafik kütüphanesi yüklenemedi (internet bağlantısını kontrol et).</p>';return}
+      var veri=(v&&v.mumlar)||[];
+      if(!v||!v.ok||veri.length<5){kutu.innerHTML='<p class="bilgi">Bu hisse için grafik verisi yetersiz.</p>';return}
+      kutu.innerHTML='';
+      var chart=LightweightCharts.createChart(kutu,{
+        width:kutu.clientWidth||320, height:220,
+        layout:{background:{color:"transparent"},textColor:"#e6edf3"},
+        grid:{vertLines:{color:"#262d38"},horzLines:{color:"#262d38"}},
+        timeScale:{timeVisible:false,secondsVisible:false},
+        rightPriceScale:{borderVisible:false}
+      });
+      var seri=chart.addSeries(LightweightCharts.CandlestickSeries,{
+        upColor:"#3fb950",downColor:"#f85149",borderVisible:false,
+        wickUpColor:"#3fb950",wickDownColor:"#f85149"
+      });
+      seri.setData(veri.map(function(b){return{time:b.time,open:b.open,high:b.high,low:b.low,close:b.close}}));
+      chart.timeScale().fitContent();
+      var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
+      window.addEventListener("resize",yenidenBoyutla);
+    }catch(e){
+      var k2=el("mumKutu"); if(k2)k2.innerHTML='<p class="bilgi">Grafik çizilemedi.</p>';
+    }
+  }).catch(function(){var k2=el("mumKutu"); if(k2)k2.innerHTML='<p class="bilgi">Grafik verisi alınamadı.</p>'});
 }
 var perfD=null, perfDonem="a1";
 var DONEM=[["h1","Son 1 hafta"],["a1","Son 1 ay"],["a3","Son 3 ay"],["y1","Son 1 yıl"]];
@@ -1140,6 +1189,10 @@ yuzde:100*(rec.s/rec.g-1),zirve:rec.max>0?100*(rec.max/rec.g-1):null,
 yas:Math.max(0,Math.round((new Date(bg)-new Date(gun))/864e5))})}
 if(GC.length>=24)break}}catch(e){}
 return JS({ok:!0,kart:kart||null,ayna:z?AYNA(kod,z):"",fav:fav,gecmis:GC})}
+if("/api/mumlar"===$.pathname){
+const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
+const mumlar=await yfMumlar(kod).catch(()=>[]);
+return JS({ok:!0,mumlar:mumlar})}
 if("/api/fav"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 let f=await X(A,uid);const ekli=!f.includes(kod);f=ekli?[kod,...f]:f.filter(x=>x!==kod);f=f.slice(0,30);
