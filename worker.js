@@ -40,26 +40,39 @@ function m(e,t){const a=Object.keys(t.kayitlar||{});if(!a.length)return null;let
    doldurma tamamen sessiz kalıyordu. Yahoo'nun aynı şemayı döndüren ikinci
    sunucusu query2'yi yedek olarak deniyoruz (tahmini/doğrulanmamış üçüncü
    parti kaynak değil, aynı servisin belgeli ikinci ucu — davranış aynı). */
-async function yfCekTek(host,kod){const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=1y&interval=1d"
-;const res=await fetch(u,{headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}});if(!res.ok)return null;const j=await res.json().catch(()=>null)
-;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp)return null
+const YF_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+;const YF_HEADERS={"User-Agent":YF_UA,"Accept":"application/json, text/plain, */*","Accept-Language":"en-US,en;q=0.9,tr;q=0.8","Referer":"https://finance.yahoo.com/","Origin":"https://finance.yahoo.com"}
+;async function yfCekTek(host,kod){const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=1y&interval=1d"
+;const res=await fetch(u,{headers:YF_HEADERS});if(!res.ok){console.error("yfCekTek HTTP",res.status,host,kod);return null}const j=await res.json().catch(()=>null)
+;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp){console.error("yfCekTek boş sonuç",host,kod,j&&j.chart&&j.chart.error);return null}
 ;const kap=rz.indicators&&rz.indicators.quote&&rz.indicators.quote[0]&&rz.indicators.quote[0].close;if(!kap)return null;const out={}
 ;rz.timestamp.forEach((ts,idx)=>{const c=kap[idx];if(c==null||!(c>0))return;const gun=new Date(1e3*ts+108e5).toISOString().slice(0,10);out[gun]=Number(c)})
 ;return out}
 /* MUM (OHLC) VERİSİ: yfCekTek yalnız kapanışı ayıklıyor — mini-app'teki
    TradingView mum grafiği için açılış/yüksek/düşük de gerekiyor. Ayrı
-   tutuyoruz ki tarama tarafı (yfKapanislar) hiç etkilenmesin. */
-async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=6mo&interval=1d"
-;const res=await fetch(u,{headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}});if(!res.ok)return null;const j=await res.json().catch(()=>null)
-;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp)return null
+   tutuyoruz ki tarama tarafı (yfKapanislar) hiç etkilenmesin.
+   CANLI SON BAR: cache-busting (_=Date.now()) + cf.cacheTtl:0 ile Yahoo/CDN
+   önbelleğinden bayat veri gelmesini engelliyoruz. Ayrıca Yahoo'nun mum
+   dizisindeki son bar (piyasa kapalıyken dünün kapanışı, açıkken bugünün
+   barı) taramadaki "Şimdi" fiyatından (regularMarketPrice) farklıysa —
+   aynı gün ise son barı günceller, farklı günse yeni (oluşmakta olan) bar
+   ekler. Grafik ile "Şimdi" fiyatı hep aynı kaynağı göstersin diye. */
+async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=6mo&interval=1d&_="+Date.now()
+;const res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store",cf:{cacheTtl:0,cacheEverything:!1}});if(!res.ok){console.error("yfMumCek HTTP",res.status,host,kod);return null}const j=await res.json().catch(()=>null)
+;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp){console.error("yfMumCek boş sonuç",host,kod,j&&j.chart&&j.chart.error);return null}
 ;const q=rz.indicators&&rz.indicators.quote&&rz.indicators.quote[0];if(!q)return null;const out=[]
 ;rz.timestamp.forEach((ts,idx)=>{const c=q.close&&q.close[idx];if(c==null||!(c>0))return
 ;const o=q.open&&q.open[idx],hi=q.high&&q.high[idx],lo=q.low&&q.low[idx],ac=(o>0)?o:c
 ;out.push({time:ts,open:ac,high:(hi>0)?Math.max(hi,ac,c):Math.max(ac,c),low:(lo>0)?Math.min(lo,ac,c):Math.min(ac,c),close:c})})
+;const canliF=rz.meta&&Number(rz.meta.regularMarketPrice),canliZ=rz.meta&&Number(rz.meta.regularMarketTime)
+;if(canliF>0&&canliZ>0&&out.length){const son=out[out.length-1]
+;const gunSon=Math.floor((son.time+108e5)/864e5),gunCanli=Math.floor((canliZ+108e5)/864e5)
+;if(gunCanli===gunSon){son.close=canliF;son.high=Math.max(son.high,canliF);son.low=Math.min(son.low,canliF)}
+else if(gunCanli>gunSon)out.push({time:canliZ,open:son.close,high:Math.max(son.close,canliF),low:Math.min(son.close,canliF),close:canliF})}
 ;return out}
-async function yfMumlar(kod){try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a&&a.length)return a}catch(e){}
-try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b&&b.length)return b}catch(e){}
-return[]}
+async function yfMumlar(kod){try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a&&a.length)return a}catch(e){console.error("yfMumCek query1 hata",kod,e&&e.message)}
+try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b&&b.length)return b}catch(e){console.error("yfMumCek query2 hata",kod,e&&e.message)}
+console.error("yfMumlar: her iki host de başarısız",kod);return[]}
 /* ================== 📐 FORMASYON TESPİTİ (üçgen/kama/kanal) ==================
    Not: GitHub'daki hazır JS kütüphaneleri (technicalindicators vb.) yalnız
    TEK BARLIK mum formasyonlarını (doji, çekiç, yutan...) veriyor — bunlar
@@ -126,9 +139,9 @@ function desenBul(bar){
       alt:[{time:T(ilk),value:altIlk},{time:T(son),value:altSon}]};
   }catch(e){return null}
 }
-async function yfKapanislar(kod){try{const a=await yfCekTek("query1.finance.yahoo.com",kod);if(a)return a}catch(e){}
-try{const b=await yfCekTek("query2.finance.yahoo.com",kod);if(b)return b}catch(e){}
-return null}
+async function yfKapanislar(kod){try{const a=await yfCekTek("query1.finance.yahoo.com",kod);if(a)return a}catch(e){console.error("yfCekTek query1 hata",kod,e&&e.message)}
+try{const b=await yfCekTek("query2.finance.yahoo.com",kod);if(b)return b}catch(e){console.error("yfCekTek query2 hata",kod,e&&e.message)}
+console.error("yfKapanislar: her iki host de başarısız",kod);return null}
 const YF_PARTI=30;async function gecmisiDoldur(e,t){if(!e.VERI)return;if(await e.VERI.get("gecmisDolduruldu"))return
 ;const kodlar=new Set();if(t&&t.kartlar)for(const k of Object.keys(t.kartlar))if("sira"!==k)for(const rc of t.kartlar[k]||[])rc&&rc.kod&&kodlar.add(rc.kod)
 ;if(!kodlar.size)return
@@ -252,7 +265,7 @@ void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  �
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Fix Borsa Sinyal</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js';document.head.appendChild(s)"></script>
 <style>
 :root{
   --bg:#0e1116; --kart:#161b22; --kart2:#1c2330; --ciz:#262d38;
@@ -739,7 +752,9 @@ function detay(kod,ad){
 /* MUM GRAFİĞİ: detay() paneli içinde ayrı, engellemeyen bir çağrı — detay
    metni beklemeden kendi hızında gelir. CDN veya veri yoksa sessizce bir
    uyarı yazar, panelin geri kalanını hiçbir şekilde etkilemez. */
-function grafikCiz(kod){
+function grafikCiz(kod,deneme){
+  deneme=deneme||0;
+  if(!window.LightweightCharts&&deneme<20){setTimeout(function(){grafikCiz(kod,deneme+1)},150);return}
   post("/api/mumlar",{kod:kod}).then(function(v){
     var kutu=el("mumKutu"); if(!kutu)return;
     try{
