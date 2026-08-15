@@ -108,6 +108,35 @@ async function formasyonBul(A,kod){
   const p=j&&j.sonuc&&j.sonuc[kod];
   return(p&&p.gunluk)||null;
 }
+/* TEK TUŞ: "TARA VE BULUTA YÜKLE" /push'a ulaştığı anda GitHub'daki formasyon
+   taramasını da başlatır. Böylece tarayıcıdan tek düğmeye basmak yetiyor.
+   KISITLAMA: sürekli modda /push 10 saniyede bir gelebilir; her seferinde
+   tarama başlatmak hem GitHub'ı hem Yahoo'yu boğar. Bu yüzden en fazla
+   FORMASYON_ARALIK'ta bir tetikleniyor — arada gelen istekler sessizce
+   yok sayılır. Zamanlanmış (cron) taramalar bundan bağımsız devam eder.
+   Kurulum: Cloudflare'de GH_TOKEN adında bir Secret tanımlanmalı. */
+const FORMASYON_ARALIK=18e5; /* 30 dakika */
+let _fTetik=0;
+async function formasyonTetikle(A){
+  if(!A||!A.GH_TOKEN)return"token yok";
+  const simdi=Date.now();
+  if(simdi-_fTetik<FORMASYON_ARALIK)return"beklemede";
+  if(A.VERI){
+    const onceki=Number(await A.VERI.get("formasyonTetik")||0);
+    if(simdi-onceki<FORMASYON_ARALIK)return"beklemede";
+    await A.VERI.put("formasyonTetik",String(simdi));
+  }
+  _fTetik=simdi;
+  try{
+    const r=await fetch("https://api.github.com/repos/matematikneferi-boop/fix-borsa-worker/dispatches",{
+      method:"POST",
+      headers:{"Authorization":"Bearer "+A.GH_TOKEN,"Accept":"application/vnd.github+json",
+               "User-Agent":"fix-borsa-worker","Content-Type":"application/json"},
+      body:JSON.stringify({event_type:"tarama-bitti"})
+    });
+    return r.ok?"başlatıldı":("github "+r.status);
+  }catch(e){return"hata"}
+}
 async function yfKapanislar(kod){try{const a=await yfCekTek("query1.finance.yahoo.com",kod);if(a)return a}catch(e){console.error("yfCekTek query1 hata",kod,e&&e.message)}
 try{const b=await yfCekTek("query2.finance.yahoo.com",kod);if(b)return b}catch(e){console.error("yfCekTek query2 hata",kod,e&&e.message)}
 console.error("yfKapanislar: her iki host de başarısız",kod);return null}
@@ -1277,7 +1306,7 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 ;const t=await b(A.BOT_TOKEN,"getMe",{})
 ;if(!t||!t.ok)return e("⚠️ Bot anahtarı geçersiz","<p>Telegram bu anahtarı tanımıyor"+(t&&t.error_code?" (hata "+t.error_code+")":"")+".</p><p>En sık sebep: değeri yapıştırırken başına/sonuna <b>tırnak</b> veya <b>boşluk</b> karışmış olması. Anahtar şuna benzer görünür: <code>1234567890:AAH...</code> — tırnak yok, boşluk yok.</p><p>BotFather'da <code>/mybots</code> → botun → <i>API Token</i> ile doğrulayıp Settings → Variables kısmına yeniden yapıştır ve <b>Deploy</b> et.</p>")
 ;const a=await b(A.BOT_TOKEN,"setWebhook",{url:`${$.origin}/tg`,allowed_updates:["message","callback_query"],secret_token:await whS(A)})
-;await b(A.BOT_TOKEN,"setChatMenuButton",{menu_button:{type:"web_app",text:"📊 Listeler",web_app:{url:$.origin+"/app"}}}).catch(()=>{})
+;await b(A.BOT_TOKEN,"setChatMenuButton",{menu_button:{type:"web_app",text:"📱 Uygulamayı aç",web_app:{url:$.origin+"/app"}}}).catch(()=>{})
 ;return a&&a.ok?e("✅ Bağlantı kuruldu","<p>Bot: <b>@"+(t.result.username||"?")+"</b></p><p>Artık Telegram'da bota <b>/start</b> yazabilirsin.</p>"):e("⚠️ Bağlanamadı","<p>"+(a&&a.description||"bilinmeyen hata")+"</p>")
 }const ee={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, GET, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"86400"}
 ;if("OPTIONS"===p.method)return new Response(null,{status:204,headers:ee});if("/push"===$.pathname){const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({
@@ -1293,8 +1322,10 @@ const SIMDI=Date.now();
 if(e.VERI&&(SIMDI-KVSON>12e4)){KVSON=SIMDI;await e.VERI.put("listeler",JSON.stringify(t))}
 await caches.default.put(new Request(l),new Response(JSON.stringify(t),{headers:{"Cache-Control":"max-age=86400",
 "content-type":"application/json"}}))}(A,t),q.waitUntil(k(A,t).catch(()=>{})),q.waitUntil(gecmisiDoldur(A,t).catch(()=>{})),q.waitUntil(alarmGonder(A,eskiListe,t).catch(()=>{}))
+/* Formasyon taramasini da tetikle — arka planda, yanit beklemeden. */
+;const frmDurum=await formasyonTetikle(A).catch(()=>"hata")
 ;const n=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+(t.kartlar[e]||[]).length).join(" · "):""
-;return e({ok:!0,surum:a,depo:!!A.VERI,sayim:n,guncelleme:t.guncelleme})}if($.pathname.startsWith("/panel")){if(!s(A,$))return new Response("yetkisiz",{status:401})
+;return e({ok:!0,surum:a,depo:!!A.VERI,sayim:n,guncelleme:t.guncelleme,formasyon:frmDurum})}if($.pathname.startsWith("/panel")){if(!s(A,$))return new Response("yetkisiz",{status:401})
 ;const t="POST"===p.method?await p.json().catch(()=>({})):{},a=async e=>{const t=[];if(!A.VERI)return t;let a=null;for(;t.length<e;){const n=await A.VERI.list({prefix:"u:",limit:1e3,cursor:a||void 0})
 ;for(const a of n.keys){const n=await A.VERI.get(a.name);if(n&&t.push(JSON.parse(n)),t.length>=e)break}if(n.list_complete||!n.cursor)break;a=n.cursor}return t};if("/panel/vip"===$.pathname){
 let e=[...await E(A,!0)];if(t.ekle){const a=String(t.ekle).replace(/\D/g,"");a&&!e.includes(a)&&e.push(a)}return t.sil&&(e=e.filter(e=>e!==String(t.sil))),await async function(e,t){
@@ -1601,12 +1632,21 @@ return JS({ok:!0,gonderilen:gonderilen,basarisiz:basarisiz,imlec:imlec,bitti:bit
 mesaj:"test"===hedef?"🧪 Test gönderildi ("+gonderilen+")":"gönderildi: "+gonderilen})}
 return JS({ok:!1,hata:"bilinmeyen is"},400)}
 return JS({ok:!1,hata:"bilinmeyen yol"},404)}
-if("/durum"===$.pathname){const e=A.VERI?"DEPO BAĞLI ✅":"DEPO YOK ⚠️ (kullanıcılar liste göremeyebilir)",t=await g(A)
+if("/durum"===$.pathname){const e=(A.VERI?"DEPO BAĞLI ✅":"DEPO YOK ⚠️ (kullanıcılar liste göremeyebilir)")+"\nformasyon tetikleyici: "+(A.GH_TOKEN?"HAZIR ✅":"GH_TOKEN TANIMLI DEĞİL ⚠️"),t=await g(A)
 ;if(!t)return new Response(e+"\nliste yok — telefondan yükle");const a=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+t.kartlar[e].length).join(" · "):"kart yok"
 ;return new Response(e+"\nliste var · "+Object.keys(t).filter(e=>"guncelleme"!==e).join(", ")+"\nkartlar: "+a+"\ngüncelleme: "+t.guncelleme)}if("/tg"===$.pathname&&"POST"===p.method){
 const _whs=await whS(A);if(_whs&&p.headers.get("X-Telegram-Bot-Api-Secret-Token")!==_whs)return new Response("forbidden",{status:403});
 const e=await p.json().catch(()=>null);if(!e)return new Response("ok");await botAd(A).catch(()=>{});if(e.message){const t=e.message,a=(t.text||"").trim(),n=a.toLowerCase(),i="private"===t.chat.type;let s=null
 ;const l=a.match(/^\/start\s+r(\d+)/i);if(l&&(s=l[1]),await B(A,t.from.id))return new Response("ok");
+/* SOL ALT DÜĞMESİ: Telegram'ın sohbet menüsünü bu kullanıcı için doğrudan
+   uygulamaya çevirir. /setup'ta bir kez ayarlanan genel varsayılan, botu
+   daha önce açmış kullanıcılara işlemiyordu — bu yüzden onlarda düğme
+   görünmüyordu. Artık her kullanıcı için tek tek ayarlanıyor.
+   İstek arka planda gidiyor, yanıtı beklemiyoruz. */
+if(i&&t.chat&&t.chat.id)q.waitUntil(b(A.BOT_TOKEN,"setChatMenuButton",{
+  chat_id:t.chat.id,
+  menu_button:{type:"web_app",text:"📱 Uygulamayı aç",web_app:{url:n+"/app"}}
+}).catch(()=>{}));
 /* ================== 👑 YÖNETİCİ KOMUTLARI ==================
    Panele girmeden, sohbetten süper üyelik verme/alma:
      /super 123456789        → 1 ay ver
