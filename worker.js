@@ -139,6 +139,29 @@ function atrHesapla(bar,uzunluk){
    ardışık dönüş noktası kullanılıyor. Kalite skoru (0-100): yakınsama
    oranı + eğim simetrisi + genişlik + ATR'ye göre yükseklik ağırlıklı
    ortalaması. Düşük kaliteli / belirsiz kamalar elenir. */
+/* KANAL DOĞRULAMA — orijinal Pine Script'teki is_extreme_fast + check_channel
+   karşılığı. Eksikti; "çizgi mumların içinden geçiyor" absürtlüğünün
+   sebebi buydu. İki kontrol:
+   1) digerPivotAsiyorMu: P1-P4 aralığındaki BAŞKA hiçbir zirve/dip pivotu,
+      sınır olarak seçtiğimiz referans noktasını aşmamalı — yoksa "gerçek"
+      zirve/dip başka bir yerdeymiş demektir, seçtiğimiz nokta yanlış.
+   2) kanalIcindeMi: P1-P4 arasındaki TÜM mumların kapanışı, çizilen iki
+      çizginin arasında kalmalı (küçük bir tolerans payıyla) — yoksa çizgi
+      mumların gövdesini kesip geçiyor demektir. */
+function digerPivotAsiyorMu(piv,tip,basI,bitI,sinir,ustMu){
+  for(const p of piv){
+    if(p.tip!==tip||p.i<=basI||p.i>=bitI)continue;
+    if(ustMu?p.y>sinir:p.y<sinir)return true;
+  }
+  return false;
+}
+function kanalIcindeMi(dilim,uAt,lAt,basI,bitI,tolerans){
+  for(let i=basI;i<=bitI;i++){
+    const c=dilim[i].close;
+    if(c>uAt(i)*(1+tolerans)||c<lAt(i)*(1-tolerans))return false;
+  }
+  return true;
+}
 function kamaBul(bar){
   try{
     const SON=Math.min(bar.length,150),dilim=bar.slice(bar.length-SON);
@@ -171,6 +194,13 @@ function kamaBul(bar){
               const bosSon=dusenMi?uAt(p4.i)-p4.y:p4.y-lAt(p4.i);
               if(!(bosBas>0)||!(bosSon>0)||bosSon>=bosBas)continue;
               const yakinsama=bosSon/bosBas;if(yakinsama>=.78)continue;
+              /* asıl seçilen P1/P4 gerçek zirve/dip mi — aradaki başka bir
+                 pivot daha aşırı mı diye kontrol et */
+              const ustRef=dusenMi?p1.y:p4.y, altRef=dusenMi?p4.y:p1.y;
+              if(digerPivotAsiyorMu(piv,"tepe",p1.i,p4.i,ustRef,!0))continue;
+              if(digerPivotAsiyorMu(piv,"dip",p1.i,p4.i,altRef,!1))continue;
+              /* çizgi aradaki mumların gövdesini kesiyor mu */
+              if(!kanalIcindeMi(dilim,uAt,lAt,p1.i,p4.i,.02))continue;
               const yakinPuan=(1-yakinsama)*100;
               const egimOran=Math.abs(uEgim)>0?Math.abs(lEgim/uEgim):1;
               const egimPuan=Math.max(0,100-Math.abs(egimOran-1)*50);
