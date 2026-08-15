@@ -60,6 +60,72 @@ async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+e
 async function yfMumlar(kod){try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a&&a.length)return a}catch(e){}
 try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b&&b.length)return b}catch(e){}
 return[]}
+/* ================== 📐 FORMASYON TESPİTİ (üçgen/kama/kanal) ==================
+   Not: GitHub'daki hazır JS kütüphaneleri (technicalindicators vb.) yalnız
+   TEK BARLIK mum formasyonlarını (doji, çekiç, yutan...) veriyor — bunlar
+   zaten sinMum() ile ayrı yapılıyor. Çok-barlı "şekil" formasyonları
+   (üçgen, kama, kanal) için JS'te bakımı süren/kırılmadan çalışan hazır bir
+   paket yok (Python tarafındaki PatternPy/TradingPatternScanner JS değil).
+   Bu yüzden aynı mantığı burada kendi pivot sistemimize göre kuruyoruz:
+   1) pivot tepe/dip bul (solundan-sağından N bar daha yüksek/düşük)
+   2) tepelerden ve diplerden ayrı ayrı en küçük kareler doğrusu geçir
+   3) iki doğrunun eğimine göre üçgen/kama/kanal sınıflandır
+   Yanlış pozitifi azaltmak için: en az 2 pivot şart, pivotlar en az 8 bar
+   arayla yayılmış olmalı, ve "belirsiz" durumda hiçbir şey döndürülmez. */
+function pivotBul(bar,pencere){
+  const w=pencere||3,tepe=[],dip=[];
+  for(let i=w;i<bar.length-w;i++){
+    let ustMi=true,altMi=true;
+    for(let j=1;j<=w;j++){
+      if(bar[i].high<bar[i-j].high||bar[i].high<bar[i+j].high)ustMi=false;
+      if(bar[i].low>bar[i-j].low||bar[i].low>bar[i+j].low)altMi=false;
+    }
+    if(ustMi)tepe.push({i:i,y:bar[i].high});
+    if(altMi)dip.push({i:i,y:bar[i].low});
+  }
+  return{tepe:tepe,dip:dip};
+}
+function dogrusalUydur(nokta){
+  const n=nokta.length;if(n<2)return null;
+  let sx=0,sy=0,sxy=0,sxx=0;
+  nokta.forEach(p=>{sx+=p.i;sy+=p.y;sxy+=p.i*p.y;sxx+=p.i*p.i});
+  const payda=n*sxx-sx*sx;if(!payda)return null;
+  const egim=(n*sxy-sx*sy)/payda,sabit=(sy-egim*sx)/n;
+  return{egim:egim,sabit:sabit};
+}
+function desenBul(bar){
+  try{
+    const SON=Math.min(bar.length,90),dilim=bar.slice(bar.length-SON);
+    if(dilim.length<20)return null;
+    const{tepe,dip}=pivotBul(dilim,3);
+    if(tepe.length<2||dip.length<2)return null;
+    if(tepe[tepe.length-1].i-tepe[0].i<8||dip[dip.length-1].i-dip[0].i<8)return null;
+    const ustD=dogrusalUydur(tepe),altD=dogrusalUydur(dip);
+    if(!ustD||!altD)return null;
+    const ortF=dilim.reduce((a,b)=>a+b.close,0)/dilim.length;if(!(ortF>0))return null;
+    const ustE=100*ustD.egim/ortF,altE=100*altD.egim/ortF,DUZ=.035;
+    const ilk=0,son=dilim.length-1;
+    const ustIlk=ustD.egim*ilk+ustD.sabit,ustSon=ustD.egim*son+ustD.sabit;
+    const altIlk=altD.egim*ilk+altD.sabit,altSon=altD.egim*son+altD.sabit;
+    if(ustSon<=altSon||ustIlk<=altIlk)return null; /* çizgiler kesişmiş/anlamsız */
+    const bosIlk=ustIlk-altIlk,bosSon=ustSon-altSon;
+    const daralan=bosSon<bosIlk*.82,paralel=Math.abs(bosSon-bosIlk)<bosIlk*.28;
+    let tip=null,yon=null;
+    const ustDuz=Math.abs(ustE)<DUZ,altDuz=Math.abs(altE)<DUZ;
+    if(daralan&&ustDuz&&altE>DUZ){tip="Yükselen Üçgen";yon="al"}
+    else if(daralan&&altDuz&&ustE<-DUZ){tip="Düşen Üçgen";yon="sat"}
+    else if(daralan&&ustE<-DUZ&&altE>DUZ){tip="Simetrik Üçgen";yon="norotr"}
+    else if(daralan&&ustE>DUZ&&altE>DUZ&&altE>ustE){tip="Yükselen Kama";yon="sat"}
+    else if(daralan&&ustE<-DUZ&&altE<-DUZ&&ustE<altE){tip="Düşen Kama";yon="al"}
+    else if(paralel&&ustE>DUZ&&altE>DUZ){tip="Yükselen Kanal";yon="norotr"}
+    else if(paralel&&ustE<-DUZ&&altE<-DUZ){tip="Düşen Kanal";yon="norotr"}
+    if(!tip)return null;
+    const T=i=>dilim[Math.max(0,Math.min(dilim.length-1,i))].time;
+    return{tip:tip,yon:yon,
+      ust:[{time:T(ilk),value:ustIlk},{time:T(son),value:ustSon}],
+      alt:[{time:T(ilk),value:altIlk},{time:T(son),value:altSon}]};
+  }catch(e){return null}
+}
 async function yfKapanislar(kod){try{const a=await yfCekTek("query1.finance.yahoo.com",kod);if(a)return a}catch(e){}
 try{const b=await yfCekTek("query2.finance.yahoo.com",kod);if(b)return b}catch(e){}
 return null}
@@ -628,7 +694,7 @@ function detay(kod,ad){
       h+='<div class="dbas"><div class="k">'+E(kod)+"</div></div>"+
          '<div class="bilgi">Bu hisse şu an hiçbir listede değil — aşağıda güncel iki yönlü durumu var.</div>';
     }
-    h+='<div class="kutu"><h3>📊 Grafik</h3><div id="mumKutu" class="mumKutu"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div></div>';
+    h+='<div class="kutu"><h3>📊 Grafik<span id="desenRozet"></span></h3><div id="mumKutu" class="mumKutu"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div></div>';
     var G=(v&&v.gecmis)||[];
     var gG=G.filter(function(x){return !x.dolgu});
     if(gG.length){
@@ -693,6 +759,15 @@ function grafikCiz(kod){
         wickUpColor:"#3fb950",wickDownColor:"#f85149"
       });
       seri.setData(veri.map(function(b){return{time:b.time,open:b.open,high:b.high,low:b.low,close:b.close}}));
+      var rz=el("desenRozet"),d=v&&v.desen;
+      if(d&&d.ust&&d.alt){
+        var renk=d.yon==="al"?"#3fb950":(d.yon==="sat"?"#f85149":"#d29922");
+        var ustS=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:2,crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
+        ustS.setData(d.ust);
+        var altS=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:2,crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
+        altS.setData(d.alt);
+        if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk+';border-color:'+renk+'">📐 '+d.tip+"</span>";
+      }else if(rz)rz.innerHTML="";
       chart.timeScale().fitContent();
       var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
       window.addEventListener("resize",yenidenBoyutla);
@@ -1192,7 +1267,8 @@ return JS({ok:!0,kart:kart||null,ayna:z?AYNA(kod,z):"",fav:fav,gecmis:GC})}
 if("/api/mumlar"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 const mumlar=await yfMumlar(kod).catch(()=>[]);
-return JS({ok:!0,mumlar:mumlar})}
+const desen=mumlar.length?desenBul(mumlar):null;
+return JS({ok:!0,mumlar:mumlar,desen:desen})}
 if("/api/fav"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 let f=await X(A,uid);const ekli=!f.includes(kod);f=ekli?[kod,...f]:f.filter(x=>x!==kod);f=f.slice(0,30);
