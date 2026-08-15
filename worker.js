@@ -422,7 +422,38 @@ textarea.gir{min-height:88px;resize:vertical}
 .gez button:disabled{opacity:.32}
 .gez .nerede{flex:1;text-align:center;font-size:12px;color:var(--soluk);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#splash{position:fixed;inset:0;z-index:999;background:radial-gradient(120% 120% at 50% 20%,#161f2e 0%,var(--bg) 62%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  transition:opacity .5s ease,visibility .5s ease}
+#splash.gizli{opacity:0;visibility:hidden;pointer-events:none}
+#splash svg{width:96px;height:96px;filter:drop-shadow(0 6px 24px rgba(63,185,80,.25))}
+#splash .sad{font-size:19px;font-weight:800;letter-spacing:.3px;color:var(--yazi);opacity:0;animation:sfade .6s ease .25s forwards}
+#splash .salt{font-size:12.5px;color:var(--soluk);opacity:0;animation:sfade .6s ease .45s forwards}
+#splash .spin{width:26px;height:26px;border-radius:50%;border:2.5px solid var(--ciz);
+  border-top-color:var(--yes);animation:sspin .8s linear infinite;opacity:0;animation:sspin .8s linear infinite,sfade .6s ease .6s forwards}
+@keyframes sfade{to{opacity:1}}
+@keyframes sspin{to{transform:rotate(360deg)}}
+#splash .mum{animation:mumbelir .9s ease backwards}
+#splash .mum1{animation-delay:.05s}#splash .mum2{animation-delay:.15s}
+#splash .mum3{animation-delay:.25s}#splash .mum4{animation-delay:.35s}
+@keyframes mumbelir{from{transform:scaleY(0);opacity:0}to{transform:scaleY(1);opacity:1}}
 </style></head><body>
+
+<div id="splash">
+  <svg viewBox="0 0 100 100" fill="none">
+    <rect x="14" y="52" width="10" height="30" rx="2.5" class="mum mum1" fill="#f85149" transform-origin="19 82"/>
+    <rect x="30" y="34" width="10" height="48" rx="2.5" class="mum mum2" fill="#3fb950" transform-origin="35 82"/>
+    <rect x="46" y="44" width="10" height="38" rx="2.5" class="mum mum3" fill="#f85149" transform-origin="51 82"/>
+    <rect x="62" y="18" width="10" height="64" rx="2.5" class="mum mum4" fill="#3fb950" transform-origin="67 82"/>
+    <path d="M14 57 L35 39 L51 49 L67 23" stroke="#58a6ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="67" cy="23" r="5.5" fill="#58a6ff"/>
+    <path d="M67 23 L79 11" stroke="#58a6ff" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M72 11 L80 10 L79 18" stroke="#58a6ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </svg>
+  <div class="sad">📊 Fix Borsa Sinyal</div>
+  <div class="salt">BIST için teknik tarama &amp; sinyal sistemi</div>
+  <div class="spin"></div>
+</div>
 
 <div class="ust">
   <div class="baslik"><h1>📊 Fix Borsa Sinyal</h1><div class="saat" id="saat"></div></div>
@@ -438,6 +469,11 @@ textarea.gir{min-height:88px;resize:vertical}
 <div class="katman" id="katman"></div>
 
 <script>
+function splashKapat(){
+  var s=el("splash"); if(!s)return;
+  s.classList.add("gizli");
+  setTimeout(function(){s&&s.parentNode&&s.parentNode.removeChild(s)},600);
+}
 var TG=window.Telegram&&window.Telegram.WebApp;
 try{TG.ready();TG.expand();if(TG.setHeaderColor)TG.setHeaderColor("#0e1116");
     if(TG.setBackgroundColor)TG.setBackgroundColor("#0e1116")}catch(e){}
@@ -508,11 +544,13 @@ function kar(k){
 }
 function basla(){
   post("/api/veri").then(function(v){
+    splashKapat();
     if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Doğrulanamadı.<br>Uygulamayı Telegram üzerinden aç.</div>';return}
     D=v;
     if(!D.onay)return onayCiz();
     ciz();
-  }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
+  }).catch(function(){splashKapat();el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
+  setTimeout(splashKapat,4000); /* güvenlik: yavaş bağlantıda sonsuza dek takılı kalmasın */
 }
 function onayCiz(){
   el("sekmeler").innerHTML="";
@@ -621,6 +659,36 @@ function satirBagla(){
   [].forEach.call(document.querySelectorAll("[data-kod]"),function(b){
     b.onclick=function(){tit();detay(b.dataset.kod,b.dataset.l)};
   });
+  formasyonRozetUygula();
+}
+/* FORMASYON ROZETİ: DOM'daki satırların kodlarını toplayıp tek istekte
+   sorar, dönen sonuca göre kod adının başına küçük bir ikon ekler. Liste
+   zaten çizildikten SONRA (async) geldiği için sayfa akışını yavaşlatmaz;
+   rozet birkaç yüz ms gecikmeli "belirir". */
+var formasyonOnbellek={};
+function formasyonRozetUygula(){
+  var elemanlar=[].slice.call(document.querySelectorAll("[data-kod]"));
+  if(!elemanlar.length)return;
+  var kodlar=[];
+  elemanlar.forEach(function(b){var k=b.dataset.kod;if(k&&kodlar.indexOf(k)===-1)kodlar.push(k)});
+  var bilinmeyen=kodlar.filter(function(k){return !(k in formasyonOnbellek)});
+  function uygula(){
+    elemanlar.forEach(function(b){
+      var k=b.dataset.kod, d=formasyonOnbellek[k];
+      var kutu=b.querySelector(".kod"); if(!kutu||!d||kutu.querySelector(".frz"))return;
+      var ikon=d.yon==="al"?"📈":(d.yon==="sat"?"📉":"📐");
+      var span=document.createElement("span");
+      span.className="frz"; span.title=d.tip; span.textContent=ikon;
+      span.style.marginRight="4px";
+      kutu.insertBefore(span,kutu.firstChild);
+    });
+  }
+  if(!bilinmeyen.length){uygula();return}
+  post("/api/formasyonlar",{kodlar:bilinmeyen}).then(function(v){
+    var s=(v&&v.sonuc)||{};
+    bilinmeyen.forEach(function(k){formasyonOnbellek[k]=s[k]||null});
+    uygula();
+  }).catch(function(){});
 }
 function listeCiz(ad){
   var l=dizil(ad), t=TF[ad];
@@ -1302,6 +1370,43 @@ const r=await yfMumlar(kod).catch(e=>({veri:[],hatalar:["yfMumlar istisna: "+(e&
 const mumlar=r.veri||[];
 let desen=null;try{desen=mumlar.length?desenBul(mumlar):null}catch(e){desen=null}
 return JS({ok:!0,mumlar:mumlar,desen:desen,debug:r.hatalar||[]})}
+/* FORMASYON ROZETİ: liste ekranındaki hisselerin yanına, detaya girmeden
+   "bunda bir formasyon var" işareti koymak için. Her hisse için OHLC çekip
+   desenBul çalıştırmak pahalı (Yahoo isteği) — bu yüzden sonucu KV'de birkaç
+   saat önbellekliyoruz. Formasyon bulunmuşsa 6 saat, bulunamamışsa (boş)
+   2 saat önbellekte kalır — negatif sonuç daha kısa süre tutulur ki yeni
+   oluşan bir formasyon çok geç yakalanmasın. Aynı anda en fazla 40 kod
+   işlenir, 6'lı gruplar halinde paralel çekilir (Yahoo'yu boğmamak için). */
+if("/api/formasyonlar"===$.pathname){
+const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[]).map(k=>KOD(k)).filter(Boolean))].slice(0,40);
+const sonuc={};
+if(kodlar.length&&A.VERI){
+  const eksik=[];
+  for(const kod of kodlar){
+    const c=await A.VERI.get("desen:"+kod);
+    if(c!==null){const p=JSON.parse(c);if(p&&p.tip)sonuc[kod]={tip:p.tip,yon:p.yon}}
+    else eksik.push(kod);
+  }
+  for(let i=0;i<eksik.length;i+=6){
+    const grup=eksik.slice(i,i+6);
+    await Promise.all(grup.map(async kod=>{
+      try{
+        const r=await yfMumlar(kod);const mumlar=r.veri||[];
+        const d=mumlar.length?desenBul(mumlar):null;
+        if(d)sonuc[kod]={tip:d.tip,yon:d.yon};
+        await A.VERI.put("desen:"+kod,JSON.stringify(d?{tip:d.tip,yon:d.yon}:{}),{expirationTtl:d?21600:7200});
+      }catch(e){}
+    }));
+  }
+}else if(kodlar.length){
+  for(let i=0;i<kodlar.length;i+=6){
+    const grup=kodlar.slice(i,i+6);
+    await Promise.all(grup.map(async kod=>{
+      try{const r=await yfMumlar(kod);const mumlar=r.veri||[];const d=mumlar.length?desenBul(mumlar):null;if(d)sonuc[kod]={tip:d.tip,yon:d.yon}}catch(e){}
+    }));
+  }
+}
+return JS({ok:!0,sonuc:sonuc})}
 if("/api/fav"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 let f=await X(A,uid);const ekli=!f.includes(kod);f=ekli?[kod,...f]:f.filter(x=>x!==kod);f=f.slice(0,30);
