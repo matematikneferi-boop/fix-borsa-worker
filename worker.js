@@ -41,7 +41,7 @@ function m(e,t){const a=Object.keys(t.kayitlar||{});if(!a.length)return null;let
    sunucusu query2'yi yedek olarak deniyoruz (tahmini/doğrulanmamış üçüncü
    parti kaynak değil, aynı servisin belgeli ikinci ucu — davranış aynı). */
 const YF_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-;const YF_HEADERS={"User-Agent":YF_UA,"Accept":"application/json, text/plain, */*","Accept-Language":"en-US,en;q=0.9,tr;q=0.8","Referer":"https://finance.yahoo.com/","Origin":"https://finance.yahoo.com"}
+;const YF_HEADERS={"User-Agent":YF_UA,"Accept":"application/json, text/plain, */*"}
 ;async function yfCekTek(host,kod){const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=1y&interval=1d"
 ;const res=await fetch(u,{headers:YF_HEADERS});if(!res.ok){console.error("yfCekTek HTTP",res.status,host,kod);return null}const j=await res.json().catch(()=>null)
 ;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp){console.error("yfCekTek boş sonuç",host,kod,j&&j.chart&&j.chart.error);return null}
