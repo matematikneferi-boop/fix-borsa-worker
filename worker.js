@@ -1,4 +1,4 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.1";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="11.2";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo","uzunvade","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
@@ -328,12 +328,58 @@ if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<3e5)return j.liste}catch(err)
 const liste=await kapBildirimleriGetir(3);
 if(e.VERI&&liste.length)await e.VERI.put("kapCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,200)}));
 return liste}
+/* ============ 💰 GERÇEK ÖDEME TARİHLİ TEMETTÜ TAKVİMİ (v2) ============
+   Yukarıdaki temettuTakvimiGetir() sadece "kâr payı dağıtım KARARI açıklandı"
+   bildirimini verir — ödeme tarihi KAP'ın temel API'sinde yapılandırılmış
+   alan olarak yok. Bunun yerine ahlatciyatirim.com.tr'nin (lisanslı aracı
+   kurum) temettü takvimi sayfası kullanılıyor: bu sayfa KAP bildirimlerini
+   zaten ayrıştırıp "Hak Kazanma" ve "Ödeme Tarihi"ni ayrı sütun olarak,
+   sunucu tarafında render edilmiş düz HTML tablo halinde veriyor — JS
+   çalıştırmaya/headless tarayıcıya gerek yok, normal fetch yeterli. */
+const AHLATCI_TEMETTU_URL="https://www.ahlatciyatirim.com.tr/temettu";
+const AY_TR={"Oca":1,"Şub":2,"Mar":3,"Nis":4,"May":5,"Haz":6,"Tem":7,"Ağu":8,"Eyl":9,"Eki":10,"Kas":11,"Ara":12};
+function stripEtiket(h){return String(h||"").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g," ").trim()}
+function trTarihToISO(s){const m=String(s||"").trim().match(/(\d{1,2})\s+([A-Za-zÇŞĞÜÖİçşğüöı]{3})\w*\s+(\d{4})/);
+if(!m)return null;const ay=AY_TR[m[2]];if(!ay)return null;return m[3]+"-"+String(ay).padStart(2,"0")+"-"+m[1].padStart(2,"0")}
+async function temettuSayfasiCek(sayfa){
+const url=sayfa<=1?AHLATCI_TEMETTU_URL:AHLATCI_TEMETTU_URL+"?sayfa="+sayfa;
+const r=await fetch(url,{headers:YF_HEADERS});if(!r.ok)return[];
+const html=await r.text();
+const basI=html.indexOf("Yaklaşan Temettü Ödemeleri"),bitI=html.indexOf("Teklif Aşamasındaki Temettüler");
+const parca=basI>=0?html.slice(basI,bitI>basI?bitI:html.length):html;
+const satirlar=parca.match(/<tr[\s\S]*?<\/tr>/g)||[];
+const cikti=[];
+for(const satir of satirlar){
+const linkm=satir.match(/hisse=([A-Z0-9]{2,6})/);if(!linkm)continue;
+const hucreler=(satir.match(/<td[\s\S]*?<\/td>/g)||[]).map(stripEtiket);
+if(hucreler.length<8)continue;
+const durum=hucreler[7];if(!/Yaklaşan/i.test(durum))continue;
+const hakKazanma=hucreler[1],odemeTarihi=hucreler[2];
+cikti.push({kod:linkm[1],hakKazanma:hakKazanma,hakKazanmaISO:trTarihToISO(hakKazanma),
+odemeTarihi:odemeTarihi,odemeTarihiISO:trTarihToISO(odemeTarihi),
+brut:hucreler[3],net:hucreler[4],verimBrut:hucreler[5],verimNet:hucreler[6]})}
+return cikti}
+async function temettuTakvimiGercekGetir(sayfaSayisi){
+const tumu=[];
+for(let s=1;s<=(sayfaSayisi||3);s++){
+let sayfaVerisi;try{sayfaVerisi=await temettuSayfasiCek(s)}catch(e){break}
+if(!sayfaVerisi.length)break;
+tumu.push(...sayfaVerisi)}
+tumu.sort((a,b)=>(a.odemeTarihiISO||"9999")<(b.odemeTarihiISO||"9999")?-1:1);
+return tumu}
 async function temettuListesiCache(e){
-const c=e.VERI&&await e.VERI.get("temettuCache");
+const c=e.VERI&&await e.VERI.get("temettuCacheV2");
 if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<18e5)return j.liste}catch(err){}}
-const liste=await temettuTakvimiGetir(45);
-if(e.VERI&&liste.length)await e.VERI.put("temettuCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,150)}));
-return liste}
+let liste=[];
+try{liste=await temettuTakvimiGercekGetir(3)}catch(err){}
+if(liste.length){if(e.VERI)await e.VERI.put("temettuCacheV2",JSON.stringify({ts:Date.now(),liste:liste.slice(0,150)}));return liste}
+/* ahlatciyatirim erişilemezse (site değişti/düştü) eski KAP-duyuru
+   listesine düş — en azından "yeni karar açıklandı" bilgisi kaybolmasın. */
+const eskiC=e.VERI&&await e.VERI.get("temettuCache");
+if(eskiC){try{const j=JSON.parse(eskiC);if(Date.now()-j.ts<18e5)return j.liste}catch(err){}}
+const eski=await temettuTakvimiGetir(45);
+if(e.VERI&&eski.length)await e.VERI.put("temettuCache",JSON.stringify({ts:Date.now(),liste:eski.slice(0,150)}));
+return eski}
 async function g(e){if(o)return o;if(e.VERI){
 const t=await e.VERI.get("listeler");if(t)return o=JSON.parse(t),o}const t=await caches.default.match(new Request(l));return t?(o=await t.json().catch(()=>null),o):null}const h={kisitMin:7,
 kisitMax:18};let w=null,O=0;async function S(e,t){if(!t&&w&&Date.now()-O<6e4)return w;let a={...h};if(e.VERI){const t=await e.VERI.get("ayar");t&&(a={...a,...JSON.parse(t)})}return w=a,O=Date.now(),a}
@@ -945,15 +991,27 @@ function kapCiz(){
     });
   });
 }
-/* 💰 Temettü sekmesi: bilancoveri.com'dan (KAP kaynaklı) çekilen yaklaşan
-   kar payı bildirimleri. Kesin tutar/tarih için kullanıcıyı KAP'a yönlendirir
-   — bu bot rakam/tavsiye üretmez, sadece "bak bu haber var" der. */
+/* 💰 Temettü sekmesi: ahlatciyatirim.com.tr'nin (lisanslı aracı kurum,
+   KAP kaynaklı) temettü takvimi sayfasından çekilen GERÇEK ödeme tarihli
+   yaklaşan kar payı takvimi. Site geçici erişilemezse eski KAP-duyuru
+   listesine (sadece "karar açıklandı" haberi, ödeme tarihi yok) düşülür —
+   bu durumda gercekTarih=false döner ve satır görünümü buna göre değişir. */
 function temettuCiz(){
   el("govde").innerHTML='<div class="yukleniyor">yükleniyor…</div>';
   post("/api/temettu",{}).then(function(v){
-    var liste=(v&&v.liste)||[];
+    var liste=(v&&v.liste)||[],gercek=!!(v&&v.gercekTarih);
     if(!liste.length){
       el("govde").innerHTML='<div class="bos"><b>💰 Temettü Takvimi</b><br><br>Şu an gösterilecek kayıt yok.<br>Birazdan tekrar dene.</div>';
+      return;
+    }
+    if(gercek){
+      el("govde").innerHTML=liste.map(function(x){
+        return '<div class="satir">'+
+          '<div class="sol"><div class="kod">'+E(x.kod)+
+          (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
+          '<div class="altbilgi">Hak kazanma '+E(x.hakKazanma||"—")+' · Pay başı net '+E(x.net||"—")+'</div></div>'+
+          '<div class="sag"><div class="yuzde so">💵 '+E(x.odemeTarihi||"—")+'</div></div></div>';
+      }).join("")+'<div class="uyari">Kaynak: ahlatciyatirim.com.tr (KAP bildirimlerine dayanır) · net tutarlar %15 stopaj esas alınarak hesaplanmıştır. Yatırım tavsiyesi değildir.</div>';
       return;
     }
     el("govde").innerHTML=liste.map(function(x){
@@ -1756,8 +1814,10 @@ return JS({ok:!0,liste:sonuc})}
 if("/api/temettu"===$.pathname){
 const liste=await temettuListesiCache(A);
 const fav=await X(A,uid),pf3=await XP(A,uid),izlenen2=new Set([...fav,...Object.keys(pf3)]);
-const sonuc=liste.map(x=>Object.assign({},x,{takipte:izlenen2.has(x.kod)})).sort((a,b)=>a.tarih<b.tarih?1:-1).slice(0,80);
-return JS({ok:!0,liste:sonuc})}
+const gercekTarih=liste.length&&void 0!==liste[0].odemeTarihi;
+const siraliListe=gercekTarih?liste.slice():liste.slice().sort((a,b)=>a.tarih<b.tarih?1:-1);
+const sonuc=siraliListe.map(x=>Object.assign({},x,{takipte:izlenen2.has(x.kod)})).slice(0,80);
+return JS({ok:!0,liste:sonuc,gercekTarih:gercekTarih})}
 if("/api/onay"===$.pathname){await onayVer(A,uid);return JS({ok:!0})}
 if("/api/performans"===$.pathname){
 /* ================== 📈 PERFORMANS (geriye dönük ölçüm) ==================
@@ -2112,5 +2172,5 @@ text:'👋 <a href="tg://user?id='+a+'">Listeyi görmek</a> için önce botu ba�
 disable_web_page_preview:!0});break}}})()),new Response("ok")}return new Response("ok")}{const e=!!A.VERI,a=await g(A);let n=null,i=!1,r=null,s="";if(A.BOT_TOKEN){try{
 const e=await b(A.BOT_TOKEN,"getMe",{});e&&e.ok&&(i=!0,n=e.result.username)}catch(e){}if(i)try{const e=await b(A.BOT_TOKEN,"getWebhookInfo",{});e&&e.result&&(r=e.result.url||"",
 e.result.last_error_message&&(s=e.result.last_error_message))}catch(e){}}
-const l=A.PUSH_KEY||t,o=a&&a.kartlar?Object.keys(a.kartlar).filter(e=>"sira"!==e).map(e=>e+": "+a.kartlar[e].length).join(" · "):"",c=(e,t,a)=>'<div class="s '+(e?"ok":"yok")+'"><div class="i">'+(e?"✅":"⚠️")+"</div><div><b>"+t+'</b><div class="a">'+a+"</div></div></div>",d='<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fix Borsa Sinyal · Durum</title><style>body{margin:0;background:#0d1117;color:#e6edf3;font:15px/1.55 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 14px}.s{display:flex;gap:10px;background:#161b22;border:1px solid #272e37;border-radius:12px;padding:12px;margin-bottom:9px}.s.yok{border-color:#6b2b2b;background:#22171a}.i{font-size:18px;line-height:1.3}.a{color:#8b949e;font-size:13px;margin-top:3px}a.d{display:block;background:#388bfd;color:#fff;text-decoration:none;text-align:center;border-radius:11px;padding:13px;font-weight:700;margin-top:10px}a.d.ikinci{background:#21262d;border:1px solid #272e37;color:#e6edf3}code{background:#1c2330;padding:2px 6px;border-radius:5px;font-size:13px;word-break:break-all}ol{padding-left:20px;margin:8px 0 0}li{margin-bottom:7px}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px;font-size:14px}</style></head><body><h1>Fix Borsa Sinyal · Durum</h1><div class="a" style="margin:-8px 0 12px">yazılım sürümü <b>11.1</b></div>'+c(i,"Bot anahtarı",A.BOT_TOKEN?i?"geçerli · @"+(n||"?"):"TANIMLI AMA GEÇERSİZ — Telegram bu anahtarı tanımıyor. Başına/sonuna tırnak veya boşluk karışmış olabilir.":"BOT_TOKEN tanımlı değil — Settings → Variables kısmından ekle")+c(!!r,"Telegram bağlantısı",r?"bağlı"+(s?" · son hata: "+s:""):"bağlı değil — aşağıdaki Bağla düğmesine bas")+c(e,"Hafıza (üye kayıtları)",e?"bağlı":"BAĞLI DEĞİL — üyeler, davetler ve panel çalışmaz")+c(!!a,"Hisse listeleri",a?"yüklü · "+(o||"")+" · "+new Date(a.guncelleme).toLocaleString("tr-TR"):"henüz yüklenmedi — telefondaki uygulamada Worker adresi <code>"+$.origin+"</code> ve şifre <code>"+l+"</code> yazılı olmalı, sonra <b>TARA VE BULUTA YÜKLE</b>")+'<a class="d" href="/panel?key='+encodeURIComponent(l)+'">🛠 Yönetici panelini aç</a><div class="a" style="margin-top:8px">Panel bir <b>web sayfası</b>, Telegram\'da değil. Telegram\'da botun menüsünde de <b>🛠 Yönetici paneli</b> düğmesi var (sadece sen görürsün) ya da bota <code>/panel</code> yazabilirsin — ikisi de bu sayfayı açar. Bu adresi telefonun ana ekranına kısayol olarak eklemen en pratiği.</div>'+(r&&i&&!s?"":'<a class="d ikinci" href="/setup">🔗 Telegram\'a bağla</a>')+'<div style="margin-top:16px" class="a">Telefondaki uygulamaya yazacakların:<br>Worker adresi: <code>'+$.origin+"</code><br>Şifre: <code>"+l+"</code></div>"+(e?"":'<div class="kur"><b>⚠️ Hafıza bağlı değil — nasıl bağlanır</b><div class="a" style="margin:6px 0">Bot listeleri gösterir ama kimin üye olduğunu, kimin kimi davet ettiğini hatırlayamaz. Panel de boş kalır. Bir kez yapılır, 2 dakika sürer:</div><ol><li>Cloudflare panelinde soldaki menüden <b>Storage &amp; Databases</b> → <b>KV</b>.</li><li><b>Create a namespace</b> / <b>Oluştur</b>. Adına <code>fixborsa</code> yaz, kaydet.</li><li>Soldan <b>Compute (Workers)</b> → bu worker\'ı aç → <b>Settings</b> → <b>Bindings</b>.</li><li><b>Add binding</b> → <b>KV namespace</b> seç.</li><li><b>Variable name</b> kutusuna tam olarak <code>VERI</code> yaz (büyük harf, Türkçe İ değil düz I).</li><li><b>KV namespace</b> kutusundan az önce oluşturduğun <code>fixborsa</code>\'ı seç ve <b>Deploy</b>.</li><li>Bu sayfayı yenile — burası ✅ olacak.</li></ol></div>')+"</body></html>"
+const l=A.PUSH_KEY||t,o=a&&a.kartlar?Object.keys(a.kartlar).filter(e=>"sira"!==e).map(e=>e+": "+a.kartlar[e].length).join(" · "):"",c=(e,t,a)=>'<div class="s '+(e?"ok":"yok")+'"><div class="i">'+(e?"✅":"⚠️")+"</div><div><b>"+t+'</b><div class="a">'+a+"</div></div></div>",d='<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fix Borsa Sinyal · Durum</title><style>body{margin:0;background:#0d1117;color:#e6edf3;font:15px/1.55 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 14px}.s{display:flex;gap:10px;background:#161b22;border:1px solid #272e37;border-radius:12px;padding:12px;margin-bottom:9px}.s.yok{border-color:#6b2b2b;background:#22171a}.i{font-size:18px;line-height:1.3}.a{color:#8b949e;font-size:13px;margin-top:3px}a.d{display:block;background:#388bfd;color:#fff;text-decoration:none;text-align:center;border-radius:11px;padding:13px;font-weight:700;margin-top:10px}a.d.ikinci{background:#21262d;border:1px solid #272e37;color:#e6edf3}code{background:#1c2330;padding:2px 6px;border-radius:5px;font-size:13px;word-break:break-all}ol{padding-left:20px;margin:8px 0 0}li{margin-bottom:7px}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px;font-size:14px}</style></head><body><h1>Fix Borsa Sinyal · Durum</h1><div class="a" style="margin:-8px 0 12px">yazılım sürümü <b>'+a+'</b></div>'+c(i,"Bot anahtarı",A.BOT_TOKEN?i?"geçerli · @"+(n||"?"):"TANIMLI AMA GEÇERSİZ — Telegram bu anahtarı tanımıyor. Başına/sonuna tırnak veya boşluk karışmış olabilir.":"BOT_TOKEN tanımlı değil — Settings → Variables kısmından ekle")+c(!!r,"Telegram bağlantısı",r?"bağlı"+(s?" · son hata: "+s:""):"bağlı değil — aşağıdaki Bağla düğmesine bas")+c(e,"Hafıza (üye kayıtları)",e?"bağlı":"BAĞLI DEĞİL — üyeler, davetler ve panel çalışmaz")+c(!!a,"Hisse listeleri",a?"yüklü · "+(o||"")+" · "+new Date(a.guncelleme).toLocaleString("tr-TR"):"henüz yüklenmedi — telefondaki uygulamada Worker adresi <code>"+$.origin+"</code> ve şifre <code>"+l+"</code> yazılı olmalı, sonra <b>TARA VE BULUTA YÜKLE</b>")+'<a class="d" href="/panel?key='+encodeURIComponent(l)+'">🛠 Yönetici panelini aç</a><div class="a" style="margin-top:8px">Panel bir <b>web sayfası</b>, Telegram\'da değil. Telegram\'da botun menüsünde de <b>🛠 Yönetici paneli</b> düğmesi var (sadece sen görürsün) ya da bota <code>/panel</code> yazabilirsin — ikisi de bu sayfayı açar. Bu adresi telefonun ana ekranına kısayol olarak eklemen en pratiği.</div>'+(r&&i&&!s?"":'<a class="d ikinci" href="/setup">🔗 Telegram\'a bağla</a>')+'<div style="margin-top:16px" class="a">Telefondaki uygulamaya yazacakların:<br>Worker adresi: <code>'+$.origin+"</code><br>Şifre: <code>"+l+"</code></div>"+(e?"":'<div class="kur"><b>⚠️ Hafıza bağlı değil — nasıl bağlanır</b><div class="a" style="margin:6px 0">Bot listeleri gösterir ama kimin üye olduğunu, kimin kimi davet ettiğini hatırlayamaz. Panel de boş kalır. Bir kez yapılır, 2 dakika sürer:</div><ol><li>Cloudflare panelinde soldaki menüden <b>Storage &amp; Databases</b> → <b>KV</b>.</li><li><b>Create a namespace</b> / <b>Oluştur</b>. Adına <code>fixborsa</code> yaz, kaydet.</li><li>Soldan <b>Compute (Workers)</b> → bu worker\'ı aç → <b>Settings</b> → <b>Bindings</b>.</li><li><b>Add binding</b> → <b>KV namespace</b> seç.</li><li><b>Variable name</b> kutusuna tam olarak <code>VERI</code> yaz (büyük harf, Türkçe İ değil düz I).</li><li><b>KV namespace</b> kutusundan az önce oluşturduğun <code>fixborsa</code>\'ı seç ve <b>Deploy</b>.</li><li>Bu sayfayı yenile — burası ✅ olacak.</li></ol></div>')+"</body></html>"
 ;return new Response(d,{headers:{"content-type":"text/html; charset=utf-8"}})}}};
