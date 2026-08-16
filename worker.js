@@ -1,4 +1,4 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.3";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="11.4";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo","uzunvade","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
@@ -364,9 +364,27 @@ if(!r.ok)return null;
 return kapOdemeTarihiCikar(await r.text())
 }catch(err){return null}}
 async function gecikmeli(ms){return new Promise(res=>setTimeout(res,ms))}
+/* Türkçe karakter/case farklarına (â/a, büyük-küçük harf) karşı dayanıklı
+   karşılaştırma — KAP'ın subject metni bazen "Kâr" bazen "Kar" olarak
+   dönebiliyor, ham metin karşılaştırması kırılgan. */
+function trSad(s){return String(s||"").toUpperCase().replace(/İ/g,"I").replace(/Â/g,"A").replace(/Ş/g,"S").replace(/Ğ/g,"G").replace(/Ü/g,"U").replace(/Ö/g,"O").replace(/Ç/g,"C")}
 async function temettuTakvimiGercekGetir(tani){
-const adaylar=await temettuTakvimiGetir(50);
-tani.push(adaylar.length+" aday KAP bildirimi (son 50 gün, subject filtre)");
+const ham=await kapBildirimleriGetir(50);
+tani.push(ham.length+" ham KAP bildirimi (son 50 gün, filtresiz)");
+if(!ham.length){
+/* kapBildirimleriGetir hatayı yutuyor (try/catch), gerçek sebebi görmek için
+   aynı isteği burada tekrar atıp HTTP durumunu/hatayı doğrudan yakalıyoruz. */
+try{
+const simdi=new Date(Date.now()+108e5),bas=new Date(simdi.getTime()-50*864e5),fmt=d=>d.toISOString().slice(0,10);
+const r=await fetch(KAP_API,{method:"POST",headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},body:JSON.stringify({fromDate:fmt(bas),toDate:fmt(simdi),mkkMemberOidList:[],subjectList:[]})});
+tani.push("ham liste boş — doğrudan test: HTTP "+r.status);
+if(r.ok){const t=await r.text();tani.push("gövde "+t.length+" byte, ilk 200 karakter: "+t.slice(0,200))}
+}catch(err){tani.push("ham liste boş — doğrudan test istisnası: "+String(err&&err.message||err))}
+}
+if(ham.length)tani.push("örnek subject alanları: "+ham.slice(0,5).map(d=>JSON.stringify(d.subject)).join(" | "));
+const adaylar=ham.filter(d=>d.subject&&trSad(d.subject).indexOf("KAR PAYI DAGITIM")>=0&&d.relatedStocks)
+.map(d=>({kod:String(d.relatedStocks).split(",")[0].trim().toUpperCase(),tarih:(d.publishDate||"").slice(0,10),disclosureIndex:d.disclosureIndex,konu:d.subject}));
+tani.push(adaylar.length+" aday KAP bildirimi (subject filtre, Türkçe-toleranslı)");
 /* aynı hisse için birden fazla bildirim varsa (teklif → kesinleşen gibi)
    en yeni disclosureIndex'i (en güncel bildirim) esas al */
 const sonBildirim={};
