@@ -288,32 +288,25 @@ if(!aliciSet.size)continue;
 const metin="📰 <b>KAP BİLDİRİMİ</b>\n\n🏷 <b>"+kodlar.join(", ")+"</b>\n📋 "+(d.subject||"Bildirim")+"\n🕐 "+(d.publishDate||"")+"\n\n🔗 https://www.kap.org.tr/tr/Bildirim/"+d.disclosureIndex+"\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
 let i=0;for(const uid of aliciSet){if(i++>=40)break;await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,parse_mode:"HTML",disable_web_page_preview:!0,text:metin}).catch(()=>{})}}}
 /* ============ 💰 TEMETTÜ TAKVİMİ ============
-   bilancoveri.com KAP verilerini derleyip halka açık, anahtarsız bir JSON API
-   sunuyor (bilancoveri.com/api) ama BUNLAR arasında "temettü takvimi" için
-   ayrı bir JSON ucu YOK — yalnız HTML sayfası var (/takvim/temettu/).
-   Bu yüzden bu tek özellik HTML'den regex ile ayıklıyor. KIRILGAN: site
-   tasarımını değiştirirse regex hiçbir şey bulamaz ve fonksiyon sessizce
-   boş döner — botun geri kalanını etkilemez. */
-const TEMETTU_URL="https://bilancoveri.com/takvim/temettu/";
-const TEMETTU_POLL_MS=108e5;
-async function temettuTakvimiGetir(){
-try{
-const r=await fetch(TEMETTU_URL,{headers:{"User-Agent":YF_UA}});
-if(!r.ok)return[];
-const html=await r.text();
-const out=[],rx=/(\d{4}-\d{2}-\d{2})[\s\S]{0,60}?\/sirketler\/([a-z0-9]+)\/[\s\S]{0,400}?kap\.org\.tr\/tr\/Bildirim\/(\d+)/g;
-let m,gorulen=new Set();
-while((m=rx.exec(html))&&out.length<400){
-const anahtar=m[2]+":"+m[3];if(gorulen.has(anahtar))continue;gorulen.add(anahtar);
-out.push({tarih:m[1],kod:m[2].toUpperCase(),disclosureIndex:m[3]})}
-return out
-}catch(err){return[]}}
+   bilancoveri.com'un temettü sayfası için JSON API'si yok, sadece HTML var.
+   Daha sağlam bir yol: aynı doğrulanmış KAP uç noktasını "Kar Payı Dağıtım
+   İşlemlerine İlişkin Bildirim" konu filtresiyle kullanmak — bilinen, gerçek
+   bir KAP disclosure subject'i. NOT: Bu, "kâr payı dağıtım KARARI açıklandı"
+   bildirimlerini gösterir; KAP'ın temel API'si ödeme tarihini yapılandırılmış
+   alan olarak vermiyor (o bilgi bildirimin PDF/tablo ekinde) — o yüzden
+   "kesin ödeme tarihi" değil "yeni temettü kararı" habercisi olarak çalışır. */
+const TEMETTU_KONU="Kar Payı Dağıtım";
+const TEMETTU_POLL_MS=18e5;
+async function temettuTakvimiGetir(gunSayisi){
+const liste=await kapBildirimleriGetir(gunSayisi||30);
+return liste.filter(d=>d.subject&&d.subject.indexOf(TEMETTU_KONU)>=0&&d.relatedStocks)
+.map(d=>({kod:String(d.relatedStocks).split(",")[0].trim().toUpperCase(),tarih:(d.publishDate||"").slice(0,10),disclosureIndex:d.disclosureIndex,konu:d.subject}))}
 async function temettuKontrolVeGonder(e){
 if(!e.VERI||!e.BOT_TOKEN)return;
 const simdi=Date.now(),sonKontrol=await e.VERI.get("temettuSonKontrol");
 if(sonKontrol&&simdi-Number(sonKontrol)<TEMETTU_POLL_MS)return;
 await e.VERI.put("temettuSonKontrol",String(simdi));
-const liste=await temettuTakvimiGetir();if(!liste.length)return;
+const liste=await temettuTakvimiGetir(3);if(!liste.length)return;
 const bilinenStr=await e.VERI.get("temettuBilinen"),bilinen=new Set(bilinenStr?JSON.parse(bilinenStr):[]),ilkCalisma=!bilinenStr;
 const yeni=liste.filter(x=>!bilinen.has(x.kod+":"+x.disclosureIndex));
 liste.forEach(x=>bilinen.add(x.kod+":"+x.disclosureIndex));
@@ -324,21 +317,21 @@ for(const x of yeni.slice(0,20)){
 const aliciSet=new Set();
 for(const uid of Object.keys(izleyiciler))if(izleyiciler[uid].has(x.kod))aliciSet.add(uid);
 if(!aliciSet.size)continue;
-const metin="💰 <b>TEMETTÜ HABERİ</b>\n\n🏷 <b>"+x.kod+"</b>\n📅 "+x.tarih+"\n\n🔗 https://www.kap.org.tr/tr/Bildirim/"+x.disclosureIndex+"\n\n<i>⚠️ Yatırım tavsiyesi değildir. Kesin tarih/tutar için KAP bildirimini kontrol edin.</i>";
+const metin="💰 <b>TEMETTÜ HABERİ</b>\n\n🏷 <b>"+x.kod+"</b>\n📅 "+x.tarih+"\n📋 "+x.konu+"\n\n🔗 https://www.kap.org.tr/tr/Bildirim/"+x.disclosureIndex+"\n\n<i>⚠️ Yatırım tavsiyesi değildir. Kesin ödeme tarihi/tutarı için KAP bildirimindeki tabloyu kontrol edin.</i>";
 let i=0;for(const uid of aliciSet){if(i++>=40)break;await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,parse_mode:"HTML",disable_web_page_preview:!0,text:metin}).catch(()=>{})}}}
 /* Mini App'in 📰 KAP / 💰 Temettü sekmeleri için kısa süreli KV önbellek —
    push ile gelen arka plan kontrolünden BAĞIMSIZ: kullanıcı sekmeyi her
-   açtığında KAP/bilancoveri'yi yeniden çekmesin diye. */
+   açtığında KAP'ı yeniden çekmesin diye. */
 async function kapListesiCache(e){
 const c=e.VERI&&await e.VERI.get("kapCache");
 if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<3e5)return j.liste}catch(err){}}
 const liste=await kapBildirimleriGetir(3);
-if(e.VERI&&liste.length)await e.VERI.put("kapCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,80)}));
+if(e.VERI&&liste.length)await e.VERI.put("kapCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,200)}));
 return liste}
 async function temettuListesiCache(e){
 const c=e.VERI&&await e.VERI.get("temettuCache");
 if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<18e5)return j.liste}catch(err){}}
-const liste=await temettuTakvimiGetir();
+const liste=await temettuTakvimiGetir(45);
 if(e.VERI&&liste.length)await e.VERI.put("temettuCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,150)}));
 return liste}
 async function g(e){if(o)return o;if(e.VERI){
@@ -967,9 +960,9 @@ function temettuCiz(){
       return '<div class="satir" style="cursor:pointer">'+
         '<div class="sol"><div class="kod">'+E(x.kod)+
         (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
-        '<div class="altbilgi">KAP kar payı bildirimi</div></div>'+
+        '<div class="altbilgi">'+E(x.konu||"KAP kâr payı bildirimi")+'</div></div>'+
         '<div class="sag"><div class="yuzde so">'+E(x.tarih||"")+'</div></div></div>';
-    }).join("")+'<div class="uyari">Kaynak: bilancoveri.com (KAP) · kesin tutar/tarih için bildirimi kontrol et. Yatırım tavsiyesi değildir.</div>';
+    }).join("")+'<div class="uyari">Kaynak: kap.org.tr · "Kar Payı Dağıtım" konulu bildirimler, kararın açıklandığı tarihle listelenir (kesin ödeme tarihi için bildirimin ekindeki tabloya bak). Yatırım tavsiyesi değildir.</div>';
     [].forEach.call(document.querySelectorAll("#govde .satir"),function(row,i){
       row.onclick=function(){
         tit();
@@ -1757,7 +1750,8 @@ const fav=await X(A,uid),pf2=await XP(A,uid),izlenen=new Set([...fav,...Object.k
 const sonuc=liste.map(d=>{
 const kodlar=String(d.relatedStocks||"").split(",").map(x=>x.trim()).filter(Boolean);
 return{kodlar:kodlar,konu:d.subject||"",tarih:d.publishDate||"",disclosureIndex:d.disclosureIndex,takipte:kodlar.some(k=>izlenen.has(k))}
-}).sort((a,b)=>(b.disclosureIndex||0)-(a.disclosureIndex||0)).slice(0,60);
+}).filter(d=>d.kodlar.length>0)
+.sort((a,b)=>(b.disclosureIndex||0)-(a.disclosureIndex||0)).slice(0,60);
 return JS({ok:!0,liste:sonuc})}
 if("/api/temettu"===$.pathname){
 const liste=await temettuListesiCache(A);
