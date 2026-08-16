@@ -1,4 +1,4 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.4";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="11.5";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo","uzunvade","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
@@ -368,19 +368,30 @@ async function gecikmeli(ms){return new Promise(res=>setTimeout(res,ms))}
    karşılaştırma — KAP'ın subject metni bazen "Kâr" bazen "Kar" olarak
    dönebiliyor, ham metin karşılaştırması kırılgan. */
 function trSad(s){return String(s||"").toUpperCase().replace(/İ/g,"I").replace(/Â/g,"A").replace(/Ş/g,"S").replace(/Ğ/g,"G").replace(/Ü/g,"U").replace(/Ö/g,"O").replace(/Ç/g,"C")}
-async function temettuTakvimiGercekGetir(tani){
-const ham=await kapBildirimleriGetir(50);
-tani.push(ham.length+" ham KAP bildirimi (son 50 gün, filtresiz)");
-if(!ham.length){
-/* kapBildirimleriGetir hatayı yutuyor (try/catch), gerçek sebebi görmek için
-   aynı isteği burada tekrar atıp HTTP durumunu/hatayı doğrudan yakalıyoruz. */
+/* KAP'ın byCriteria API'si 2000 kayıtta kesiliyor (resmi limit) — 50 günlük
+   TEK istek, hiç ilgisi olmayan binlerce bildirimle (finansal rapor, KGK
+   uyum formu vb.) bu tavana çarpıp temettü bildirimlerine hiç sıra
+   bırakmıyor. Çözüm: 50 günü 6'şar günlük küçük pencerelere bölüp ayrı ayrı
+   istemek — her pencere tavana çarpma riski taşımıyor. */
+async function kapBildirimleriPencereli(toplamGun,pencereGun,tani){
+const tumu=[];
+const simdiTR=new Date(Date.now()+108e5);
+let ucIleri=simdiTR,kalan=toplamGun,pencereSayisi=0;
+while(kalan>0){
+const bu=Math.min(pencereGun,kalan);
+const bas=new Date(ucIleri.getTime()-bu*864e5);
+const fmt=d=>d.toISOString().slice(0,10);
 try{
-const simdi=new Date(Date.now()+108e5),bas=new Date(simdi.getTime()-50*864e5),fmt=d=>d.toISOString().slice(0,10);
-const r=await fetch(KAP_API,{method:"POST",headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},body:JSON.stringify({fromDate:fmt(bas),toDate:fmt(simdi),mkkMemberOidList:[],subjectList:[]})});
-tani.push("ham liste boş — doğrudan test: HTTP "+r.status);
-if(r.ok){const t=await r.text();tani.push("gövde "+t.length+" byte, ilk 200 karakter: "+t.slice(0,200))}
-}catch(err){tani.push("ham liste boş — doğrudan test istisnası: "+String(err&&err.message||err))}
-}
+const r=await fetch(KAP_API,{method:"POST",headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},body:JSON.stringify({fromDate:fmt(bas),toDate:fmt(ucIleri),mkkMemberOidList:[],subjectList:[]})});
+if(r.ok){const j=await r.json().catch(()=>null);if(Array.isArray(j)){tumu.push(...j);if(j.length>=2000)tani.push("uyarı: pencere "+fmt(bas)+".."+fmt(ucIleri)+" 2000 tavanına çarptı, dar")}}
+else tani.push("pencere "+fmt(bas)+".."+fmt(ucIleri)+": HTTP "+r.status)
+}catch(err){tani.push("pencere istisnası: "+String(err&&err.message||err))}
+ucIleri=bas;kalan-=bu;pencereSayisi++;
+if(pencereSayisi%3===0)await gecikmeli(250)}
+return tumu}
+async function temettuTakvimiGercekGetir(tani){
+const ham=await kapBildirimleriPencereli(50,6,tani);
+tani.push(ham.length+" ham KAP bildirimi (son 50 gün, 6'şar günlük pencerelerle, filtresiz)");
 if(ham.length)tani.push("örnek subject alanları: "+ham.slice(0,5).map(d=>JSON.stringify(d.subject)).join(" | "));
 const adaylar=ham.filter(d=>d.subject&&trSad(d.subject).indexOf("KAR PAYI DAGITIM")>=0&&d.relatedStocks)
 .map(d=>({kod:String(d.relatedStocks).split(",")[0].trim().toUpperCase(),tarih:(d.publishDate||"").slice(0,10),disclosureIndex:d.disclosureIndex,konu:d.subject}));
@@ -663,6 +674,7 @@ function ekranAdi(){
   if(sekme==="davet")return"📤 Davet";
   if(sekme==="panel")return"🛠 Panel";
   if(sekme==="fav")return"⭐ Takip listem";
+  if(sekme==="portfoy")return"💼 Portföyüm";
   if(sekme==="preset")return"🎛 Hazır filtreler";
   if(sekme==="kap")return"📰 KAP Bildirimleri";
   if(sekme==="temettu")return"💰 Temettü Takvimi";
@@ -736,6 +748,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon</button>');
   s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
+  s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="kap"?" on":"")+'" data-r="nötr" data-s="kap">📰 KAP</button>');
   s.push('<button class="sek'+(sekme==="temettu"?" on":"")+'" data-r="nötr" data-s="temettu">💰 Temettü</button>');
@@ -757,6 +770,7 @@ function ciz(){
   if(sekme==="davet")return davetCiz();
   if(sekme==="panel")return panelCiz();
   if(sekme==="fav")return favCiz();
+  if(sekme==="portfoy")return portfoyCiz();
   if(sekme==="preset")return presetCiz();
   if(sekme==="kap")return kapCiz();
   if(sekme==="temettu")return temettuCiz();
@@ -1076,6 +1090,83 @@ function temettuCiz(){
     });
   });
 }
+function portfoyBul(kod){
+var k=null,ad=null;
+Object.keys(D.kartlar||{}).forEach(function(a){
+if(a==="sira"||k)return;
+var x=(D.kartlar[a]||[]).filter(function(y){return y.kod===kod})[0];
+if(x){k=x;ad=a}});
+return k?{k:k,ad:ad}:null;
+}
+/* 💼 Portföy sekmesi: tüm pozisyonlar (D.fav'da olsun olmasın), toplam
+   değer/K-Z özeti, satır tıklayınca detay+düzenle paneli açılır, üstte
+   doğrudan "Yeni Pozisyon Ekle" ile kod yazmadan Takip listesine girmeye
+   gerek kalmadan pozisyon eklenebilir. */
+function portfoyCiz(){
+  var pf=D.portfoy||{}, kodlar=Object.keys(pf);
+  var h='';
+  if(!kodlar.length){
+    h='<div class="bos"><b>💼 Portföyüm</b><br><br>Henüz pozisyon eklemedin.</div>';
+    h+='<button class="dg ik" id="portfoyYeniDg" style="margin-top:10px">➕ Yeni Pozisyon Ekle</button>';
+    el("govde").innerHTML=h;
+    portfoyYeniBagla();
+    return;
+  }
+  var toplamMaliyet=0,toplamDeger=0,adet=0,satirlar=[];
+  kodlar.forEach(function(kod){
+    var poz=pf[kod];
+    if(!(poz&&poz.lot>0&&poz.maliyet>0))return;
+    var bul=portfoyBul(kod);
+    var fiyat=bul&&bul.k.fiyat>0?bul.k.fiyat:null;
+    var satirMaliyet=poz.lot*poz.maliyet;
+    var satirDeger=fiyat!=null?poz.lot*fiyat:null;
+    if(satirDeger!=null){toplamMaliyet+=satirMaliyet;toplamDeger+=satirDeger;adet++}
+    var kz=fiyat!=null?(fiyat/poz.maliyet-1)*100:null, tutar=fiyat!=null?(fiyat-poz.maliyet)*poz.lot:null;
+    satirlar.push({kod:kod,poz:poz,fiyat:fiyat,kz:kz,tutar:tutar,satirDeger:satirDeger||0,ad:bul?bul.ad:"tavan"});
+  });
+  var kzToplam=toplamMaliyet>0?100*(toplamDeger/toplamMaliyet-1):0, farkToplam=toplamDeger-toplamMaliyet;
+  h+='<div class="kutu" style="margin-bottom:12px"><h3>💼 Portföyüm ('+adet+' hisse)</h3>'+
+    '<div class="ikili"><div><div class="buyukN">'+toplamDeger.toFixed(2)+' ₺</div><div class="altN">güncel değer</div></div>'+
+    '<div><div class="buyukN '+(kzToplam>=0?"ye":"kr")+'">'+Y(kzToplam)+'</div><div class="altN">'+(farkToplam>=0?"+":"")+farkToplam.toFixed(2)+' ₺</div></div></div>'+
+    '<div class="altN" style="margin-top:6px">toplam maliyet '+toplamMaliyet.toFixed(2)+' ₺</div></div>';
+  satirlar.sort(function(a,b){return b.satirDeger-a.satirDeger});
+  h+=satirlar.map(function(s){
+    return '<div class="satir" style="cursor:pointer" data-kod="'+E(s.kod)+'">'+
+      '<div class="sol"><div class="kod">'+E(s.kod)+'</div>'+
+      '<div class="altbilgi">'+s.poz.lot+' lot · maliyet '+N(s.poz.maliyet)+' ₺'+(s.fiyat!=null?' · şimdi '+N(s.fiyat)+' ₺':' · fiyat yok')+'</div></div>'+
+      '<div class="sag">'+(s.kz!=null?'<div class="yuzde '+(s.kz>=0?"ye":"kr")+'">'+Y(s.kz)+'</div><div class="altN">'+(s.tutar>=0?"+":"")+s.tutar.toFixed(2)+' ₺</div>':'<div class="altN">fiyat yok</div>')+'</div></div>';
+  }).join("");
+  h+='<button class="dg ik" id="portfoyYeniDg" style="margin-top:10px">➕ Yeni Pozisyon Ekle</button>';
+  h+='<div class="uyari">Satıra dokun: detay/düzenle/sil. Yatırım tavsiyesi değildir.</div>';
+  el("govde").innerHTML=h;
+  [].forEach.call(document.querySelectorAll("#govde .satir"),function(row){
+    row.onclick=function(){var kod=row.getAttribute("data-kod");tit();detay(kod,(portfoyBul(kod)||{}).ad||"tavan")};
+  });
+  portfoyYeniBagla();
+}
+function portfoyYeniBagla(){
+  el("portfoyYeniDg").onclick=function(){
+    tit();
+    var kod=prompt("Hisse kodu (örn: THYAO)?","");
+    if(!kod)return;
+    kod=kod.trim().toUpperCase();
+    if(!kod)return;
+    var lotStr=prompt(kod+" — kaç lot elinde var?","");
+    if(lotStr===null)return;
+    var lot=Number(String(lotStr).replace(",","."));
+    if(!(lot>0)){alert("Geçerli bir lot sayısı gir.");return}
+    var malStr=prompt(kod+" — ortalama alış maliyetin (₺)?","");
+    if(malStr===null)return;
+    var mal=Number(String(malStr).replace(",","."));
+    if(!(mal>0)){alert("Geçerli bir maliyet gir.");return}
+    var b=el("portfoyYeniDg");b.disabled=true;
+    post("/api/portfoy",{kod:kod,lot:lot,maliyet:mal}).then(function(r){
+      b.disabled=false;
+      if(r&&r.ok){D.portfoy=r.portfoy;if(sekme==="portfoy")portfoyCiz()}
+      else alert("Kaydedilemedi, tekrar dene.");
+    });
+  };
+}
 function favCiz(){
   var f=D.fav||[], bul=[];
   f.forEach(function(kod){
@@ -1199,7 +1290,7 @@ function detay(kod,ad){
     h+='<div class="uyari">⚠️ Yatırım tavsiyesi değildir.</div>';
     K.innerHTML=h;
     grafikCiz(kod);
-    el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav")basla()};
+    el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav"||sekme==="portfoy")basla()};
     el("favDg").onclick=function(){
       tit();var b=el("favDg");b.disabled=true;
       post("/api/fav",{kod:kod}).then(function(r){
@@ -1230,7 +1321,7 @@ function detay(kod,ad){
     function portfoySilTikla(){
       tit();
       post("/api/portfoy",{kod:kod,sil:!0}).then(function(r){
-        if(r&&r.ok){D.portfoy=r.portfoy;K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav")basla()}
+        if(r&&r.ok){D.portfoy=r.portfoy;K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav"||sekme==="portfoy")basla()}
       });
     }
     if(el("portfoySil"))el("portfoySil").onclick=portfoySilTikla;
@@ -1577,7 +1668,7 @@ el("gezIleri").onclick=function(){tit();yolGit(1)};
 try{
   TG.BackButton.onClick(function(){
     var K=el("katman");
-    if(K.classList.contains("ac")){K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav")basla();return}
+    if(K.classList.contains("ac")){K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav"||sekme==="portfoy")basla();return}
     if(yolIx>0){yolGit(-1);return}
     TG.close();
   });
