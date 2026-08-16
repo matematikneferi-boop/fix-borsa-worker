@@ -242,6 +242,90 @@ const baslik=yeniGirenler.length>1?"🚨 <b>"+yeniGirenler.length+" YENİ GÜÇL
 const metin=baslik+yeniGirenler.slice(0,6).map(hisse=>j(hisse)).join("\n")+
 (yeniGirenler.length>6?"\n<i>…ve "+(yeniGirenler.length-6)+" hisse daha. Menüden ⚡ Kısa Trade listesine bak.</i>":"");
 for(const uid of kullanicilar.slice(0,ALARM_MAX_ALICI))await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,text:metin,parse_mode:"HTML",disable_web_page_preview:!0})}
+/* ============ 📰 KAP ANLIK BİLDİRİM ============
+   kap.org.tr resmi/belgeli bir dış geliştirici API'si sunmuyor, ama sitenin
+   kendi Next.js uygulamasının kullandığı uç nokta kimlik doğrulama istemiyor
+   ve herkese açık veridir (KAP'ın kendi mevzuat amacı zaten "kamuya açıklama").
+   KIRILGAN: KAP bu uç noktayı habersiz değiştirebilir/kapatabilir — bu yüzden
+   her adım try/catch içinde, hata durumunda sessizce vazgeçer, botun geri
+   kalanını asla etkilemez. */
+const KAP_API="https://www.kap.org.tr/tr/api/disclosure/members/byCriteria";
+const KAP_POLL_MS=175000;
+async function kapBildirimleriGetir(gunSayisi){
+const simdi=new Date(Date.now()+108e5),bas=new Date(simdi.getTime()-gunSayisi*864e5),fmt=d=>d.toISOString().slice(0,10);
+try{
+const r=await fetch(KAP_API,{method:"POST",headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},body:JSON.stringify({fromDate:fmt(bas),toDate:fmt(simdi),mkkMemberOidList:[],subjectList:[]})});
+if(!r.ok)return[];const j=await r.json().catch(()=>null);return Array.isArray(j)?j:[]
+}catch(err){return[]}}
+/* İzlenen kod → uid eşlemesi: ⭐ takip listesi + 💼 portföy birleşimi (union).
+   fav:/portfoy: KV'lerini olduğu gibi okuyor — yeni bir yapı eklenmedi. */
+async function kapIzleyicileriGetir(e){
+if(!e.VERI)return{};const out={};
+for(const pre of["fav:","portfoy:"]){let cursor=void 0;
+for(;;){const liste=await e.VERI.list({prefix:pre,limit:1e3,cursor});
+for(const k of liste.keys){const uid=k.name.slice(pre.length),v=await e.VERI.get(k.name);if(!v)continue;
+try{const veri=JSON.parse(v),kodlar=pre==="fav:"?veri:Object.keys(veri||{});
+if(kodlar&&kodlar.length){out[uid]=out[uid]||new Set();kodlar.forEach(k2=>out[uid].add(String(k2)))}}catch(err){}}
+if(liste.list_complete||!liste.cursor)break;cursor=liste.cursor}}
+return out}
+async function kapKontrolVeGonder(e){
+if(!e.VERI||!e.BOT_TOKEN)return;
+const simdi=Date.now(),sonKontrol=await e.VERI.get("kapSonKontrol");
+if(sonKontrol&&simdi-Number(sonKontrol)<KAP_POLL_MS)return;
+await e.VERI.put("kapSonKontrol",String(simdi));
+const liste=await kapBildirimleriGetir(1);if(!liste.length)return;
+let maxIndex=0;for(const d of liste)if(d.disclosureIndex>maxIndex)maxIndex=d.disclosureIndex;
+const sonIndexStr=await e.VERI.get("kapSonIndex"),sonIndex=sonIndexStr?Number(sonIndexStr):0;
+await e.VERI.put("kapSonIndex",String(maxIndex));
+if(!sonIndex)return;
+const yeni=liste.filter(d=>d.disclosureIndex>sonIndex&&d.relatedStocks);if(!yeni.length)return;
+const izleyiciler=await kapIzleyicileriGetir(e);if(!Object.keys(izleyiciler).length)return;
+for(const d of yeni.slice(0,20)){
+const kodlar=String(d.relatedStocks).split(",").map(x=>x.trim()).filter(Boolean);if(!kodlar.length)continue;
+const aliciSet=new Set();
+for(const uid of Object.keys(izleyiciler))if(kodlar.some(k=>izleyiciler[uid].has(k)))aliciSet.add(uid);
+if(!aliciSet.size)continue;
+const metin="📰 <b>KAP BİLDİRİMİ</b>\n\n🏷 <b>"+kodlar.join(", ")+"</b>\n📋 "+(d.subject||"Bildirim")+"\n🕐 "+(d.publishDate||"")+"\n\n🔗 https://www.kap.org.tr/tr/Bildirim/"+d.disclosureIndex+"\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
+let i=0;for(const uid of aliciSet){if(i++>=40)break;await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,parse_mode:"HTML",disable_web_page_preview:!0,text:metin}).catch(()=>{})}}}
+/* ============ 💰 TEMETTÜ TAKVİMİ ============
+   bilancoveri.com KAP verilerini derleyip halka açık, anahtarsız bir JSON API
+   sunuyor (bilancoveri.com/api) ama BUNLAR arasında "temettü takvimi" için
+   ayrı bir JSON ucu YOK — yalnız HTML sayfası var (/takvim/temettu/).
+   Bu yüzden bu tek özellik HTML'den regex ile ayıklıyor. KIRILGAN: site
+   tasarımını değiştirirse regex hiçbir şey bulamaz ve fonksiyon sessizce
+   boş döner — botun geri kalanını etkilemez. */
+const TEMETTU_URL="https://bilancoveri.com/takvim/temettu/";
+const TEMETTU_POLL_MS=108e5;
+async function temettuTakvimiGetir(){
+try{
+const r=await fetch(TEMETTU_URL,{headers:{"User-Agent":YF_UA}});
+if(!r.ok)return[];
+const html=await r.text();
+const out=[],rx=/(\d{4}-\d{2}-\d{2})[\s\S]{0,60}?\/sirketler\/([a-z0-9]+)\/[\s\S]{0,400}?kap\.org\.tr\/tr\/Bildirim\/(\d+)/g;
+let m,gorulen=new Set();
+while((m=rx.exec(html))&&out.length<400){
+const anahtar=m[2]+":"+m[3];if(gorulen.has(anahtar))continue;gorulen.add(anahtar);
+out.push({tarih:m[1],kod:m[2].toUpperCase(),disclosureIndex:m[3]})}
+return out
+}catch(err){return[]}}
+async function temettuKontrolVeGonder(e){
+if(!e.VERI||!e.BOT_TOKEN)return;
+const simdi=Date.now(),sonKontrol=await e.VERI.get("temettuSonKontrol");
+if(sonKontrol&&simdi-Number(sonKontrol)<TEMETTU_POLL_MS)return;
+await e.VERI.put("temettuSonKontrol",String(simdi));
+const liste=await temettuTakvimiGetir();if(!liste.length)return;
+const bilinenStr=await e.VERI.get("temettuBilinen"),bilinen=new Set(bilinenStr?JSON.parse(bilinenStr):[]),ilkCalisma=!bilinenStr;
+const yeni=liste.filter(x=>!bilinen.has(x.kod+":"+x.disclosureIndex));
+liste.forEach(x=>bilinen.add(x.kod+":"+x.disclosureIndex));
+await e.VERI.put("temettuBilinen",JSON.stringify([...bilinen].slice(-1000)));
+if(ilkCalisma||!yeni.length)return;
+const izleyiciler=await kapIzleyicileriGetir(e);if(!Object.keys(izleyiciler).length)return;
+for(const x of yeni.slice(0,20)){
+const aliciSet=new Set();
+for(const uid of Object.keys(izleyiciler))if(izleyiciler[uid].has(x.kod))aliciSet.add(uid);
+if(!aliciSet.size)continue;
+const metin="💰 <b>TEMETTÜ HABERİ</b>\n\n🏷 <b>"+x.kod+"</b>\n📅 "+x.tarih+"\n\n🔗 https://www.kap.org.tr/tr/Bildirim/"+x.disclosureIndex+"\n\n<i>⚠️ Yatırım tavsiyesi değildir. Kesin tarih/tutar için KAP bildirimini kontrol edin.</i>";
+let i=0;for(const uid of aliciSet){if(i++>=40)break;await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,parse_mode:"HTML",disable_web_page_preview:!0,text:metin}).catch(()=>{})}}}
 async function g(e){if(o)return o;if(e.VERI){
 const t=await e.VERI.get("listeler");if(t)return o=JSON.parse(t),o}const t=await caches.default.match(new Request(l));return t?(o=await t.json().catch(()=>null),o):null}const h={kisitMin:7,
 kisitMax:18};let w=null,O=0;async function S(e,t){if(!t&&w&&Date.now()-O<6e4)return w;let a={...h};if(e.VERI){const t=await e.VERI.get("ayar");t&&(a={...a,...JSON.parse(t)})}return w=a,O=Date.now(),a}
@@ -461,7 +545,7 @@ var TG=window.Telegram&&window.Telegram.WebApp;
 try{TG.ready();TG.expand();if(TG.setHeaderColor)TG.setHeaderColor("#0e1116");
     if(TG.setBackgroundColor)TG.setBackgroundColor("#0e1116")}catch(e){}
 function tit(){try{TG.HapticFeedback.impactOccurred("light")}catch(e){}}
-var D=null, sekme="tavan", sira="pot", adayTf="adayKisa";
+var D=null, sekme="tavan", sira="pot", adayTf="adayKisa", presetSec="kaliteli";
 /* ---------- GERİ / İLERİ ----------
    Uygulama tek sayfa olduğu için tarayıcı geçmişi yok; her ekran değişimi
    kendi yığınımıza yazılır. Telegram'ın kendi geri düğmesi de buna bağlanır:
@@ -487,6 +571,7 @@ function ekranAdi(){
   if(sekme==="davet")return"📤 Davet";
   if(sekme==="panel")return"🛠 Panel";
   if(sekme==="fav")return"⭐ Takip listem";
+  if(sekme==="preset")return"🎛 Hazır filtreler";
   if(sekme==="aday")return(TF[adayTf]?TF[adayTf].ad:"Adaylar");
   return TF[sekme]?TF[sekme].ik+" "+TF[sekme].ad:"";
 }
@@ -557,6 +642,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon</button>');
   s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
+  s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="davet"?" on":"")+'" data-r="nötr" data-s="davet">📤 Davet</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   el("sekmeler").innerHTML=s.join("");
@@ -575,6 +661,7 @@ function ciz(){
   if(sekme==="davet")return davetCiz();
   if(sekme==="panel")return panelCiz();
   if(sekme==="fav")return favCiz();
+  if(sekme==="preset")return presetCiz();
   if(sekme==="aday")return adayCiz();
   listeCiz(sekme);
 }
@@ -777,6 +864,45 @@ function fdBagla(){
     b.onclick=function(){tit();fDilim=b.dataset.fd;kamaGoster()};
   });
 }
+/* HAZIR PRESETLER: dört ana listeyi (tavan/potansiyel/fibo/uzunvade) birleştirip
+   var olan alanlarla (kalite, potansiyel, sinyalTs, kar) hazır filtreler sunar.
+   Yabancı payı / temettü verimi gibi KAP-kaynaklı alanlar şu an taramada YOK,
+   bu yüzden yalnız gerçekten hesaplanabilen filtreler eklendi — yanlış/boş
+   veri göstermemek için. */
+function presetCiz(){
+  var hepsi=[];
+  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(ad){
+    (D.kartlar&&D.kartlar[ad]||[]).forEach(function(x){
+      var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
+    });
+  });
+  var chipler=[
+    ["kaliteli","🔥 En kaliteli 10"],
+    ["tuttu","🏆 Hedef tuttu"],
+    ["yakin","🎯 Hedefe yakın"],
+    ["yeni","🆕 Az önce sinyal verdi"],
+    ["kazandiran","💰 En çok kazandıran"]
+  ];
+  var h='<div class="sirala" style="flex-wrap:wrap">'+chipler.map(function(c){
+    return '<button class="sir'+(presetSec===c[0]?" on":"")+'" data-pr="'+c[0]+'">'+c[1]+"</button>";
+  }).join("")+"</div>";
+  var liste=hepsi.slice();
+  if(presetSec==="kaliteli")liste.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
+  else if(presetSec==="tuttu")liste=liste.filter(function(x){return x.potansiyel!=null&&Number(x.potansiyel)<=0});
+  else if(presetSec==="yakin")liste=liste.filter(function(x){return x.potansiyel!=null&&Number(x.potansiyel)>0}).sort(function(a,b){return Number(a.potansiyel)-Number(b.potansiyel)});
+  else if(presetSec==="yeni")liste.sort(function(a,b){return(b.sinyalTs||0)-(a.sinyalTs||0)});
+  else if(presetSec==="kazandiran")liste=liste.filter(function(x){return kar(x)!=null}).sort(function(a,b){return kar(b)-kar(a)});
+  liste=liste.slice(0,15);
+  el("govde").innerHTML=h+(liste.length?liste.map(function(x){return satirHtml(x,x._ad)}).join(""):
+    '<div class="bos">Bu filtreye uyan hisse yok şu an.<br>Az sonra tekrar dene.</div>');
+  bindPresetChips();
+  satirBagla();
+}
+function bindPresetChips(){
+  [].forEach.call(document.querySelectorAll("[data-pr]"),function(b){
+    b.onclick=function(){tit();presetSec=b.dataset.pr;presetCiz()};
+  });
+}
 function favCiz(){
   var f=D.fav||[], bul=[];
   f.forEach(function(kod){
@@ -937,7 +1063,15 @@ function detay(kod,ad){
     if(el("portfoySil"))el("portfoySil").onclick=portfoySilTikla;
     el("paylasDg").onclick=function(){
       tit();
-      var m="📈 "+kod+(k?" "+N(k.fiyat)+" ₺":"")+(k&&k.hedef!=null?" · hedef "+N(k.hedef):"")+" — Fix Borsa Sinyal";
+      var kr=k?kar(k):null;
+      var satirlar=["📈 "+kod+(k?" · "+N(k.fiyat)+" ₺":"")];
+      if(k&&t.kisa)satirlar.push("⏱ "+t.kisa+" dilimi");
+      if(k&&k.giris!=null)satirlar.push("🚪 Sinyal fiyatı: "+N(k.giris)+" ₺");
+      if(kr!=null)satirlar.push((kr>=0?"📈":"📉")+" Sinyalden bu yana: "+Y(kr));
+      if(k&&k.hedef1!=null)satirlar.push("🧱 Direnç: "+N(k.hedef1));
+      if(k&&k.hedef!=null)satirlar.push("🎯 Hedef: "+N(k.hedef)+(k.potansiyel!=null?(Number(k.potansiyel)<=0?" (🏆 tuttu)":" (+"+Number(k.potansiyel).toFixed(1)+"% kaldı)"):""));
+      if(k&&k.kalite)satirlar.push("⭐ Kalite: %"+k.kalite);
+      var m=satirlar.join("\\n")+"\\n\\n🤖 Fix Borsa Sinyal ile takip ediyorum, sen de katıl 👇";
       var u="https://t.me/share/url?url="+encodeURIComponent(D.link)+"&text="+encodeURIComponent(m);
       try{TG.openTelegramLink(u)}catch(e){location.href=u}
     };
@@ -1390,7 +1524,7 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 const SIMDI=Date.now();
 if(e.VERI&&(SIMDI-KVSON>12e4)){KVSON=SIMDI;await e.VERI.put("listeler",JSON.stringify(t))}
 await caches.default.put(new Request(l),new Response(JSON.stringify(t),{headers:{"Cache-Control":"max-age=86400",
-"content-type":"application/json"}}))}(A,t),q.waitUntil(k(A,t).catch(()=>{})),q.waitUntil(gecmisiDoldur(A,t).catch(()=>{})),q.waitUntil(alarmGonder(A,eskiListe,t).catch(()=>{}))
+"content-type":"application/json"}}))}(A,t),q.waitUntil(k(A,t).catch(()=>{})),q.waitUntil(gecmisiDoldur(A,t).catch(()=>{})),q.waitUntil(alarmGonder(A,eskiListe,t).catch(()=>{})),q.waitUntil(kapKontrolVeGonder(A).catch(()=>{})),q.waitUntil(temettuKontrolVeGonder(A).catch(()=>{}))
 /* Formasyon taramasini da tetikle — arka planda, yanit beklemeden. */
 ;const frmDurum=await formasyonTetikle(A).catch(()=>"hata")
 ;const n=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+(t.kartlar[e]||[]).length).join(" · "):""
