@@ -326,6 +326,21 @@ for(const uid of Object.keys(izleyiciler))if(izleyiciler[uid].has(x.kod))aliciSe
 if(!aliciSet.size)continue;
 const metin="💰 <b>TEMETTÜ HABERİ</b>\n\n🏷 <b>"+x.kod+"</b>\n📅 "+x.tarih+"\n\n🔗 https://www.kap.org.tr/tr/Bildirim/"+x.disclosureIndex+"\n\n<i>⚠️ Yatırım tavsiyesi değildir. Kesin tarih/tutar için KAP bildirimini kontrol edin.</i>";
 let i=0;for(const uid of aliciSet){if(i++>=40)break;await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,parse_mode:"HTML",disable_web_page_preview:!0,text:metin}).catch(()=>{})}}}
+/* Mini App'in 📰 KAP / 💰 Temettü sekmeleri için kısa süreli KV önbellek —
+   push ile gelen arka plan kontrolünden BAĞIMSIZ: kullanıcı sekmeyi her
+   açtığında KAP/bilancoveri'yi yeniden çekmesin diye. */
+async function kapListesiCache(e){
+const c=e.VERI&&await e.VERI.get("kapCache");
+if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<3e5)return j.liste}catch(err){}}
+const liste=await kapBildirimleriGetir(3);
+if(e.VERI&&liste.length)await e.VERI.put("kapCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,80)}));
+return liste}
+async function temettuListesiCache(e){
+const c=e.VERI&&await e.VERI.get("temettuCache");
+if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<18e5)return j.liste}catch(err){}}
+const liste=await temettuTakvimiGetir();
+if(e.VERI&&liste.length)await e.VERI.put("temettuCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,150)}));
+return liste}
 async function g(e){if(o)return o;if(e.VERI){
 const t=await e.VERI.get("listeler");if(t)return o=JSON.parse(t),o}const t=await caches.default.match(new Request(l));return t?(o=await t.json().catch(()=>null),o):null}const h={kisitMin:7,
 kisitMax:18};let w=null,O=0;async function S(e,t){if(!t&&w&&Date.now()-O<6e4)return w;let a={...h};if(e.VERI){const t=await e.VERI.get("ayar");t&&(a={...a,...JSON.parse(t)})}return w=a,O=Date.now(),a}
@@ -572,6 +587,8 @@ function ekranAdi(){
   if(sekme==="panel")return"🛠 Panel";
   if(sekme==="fav")return"⭐ Takip listem";
   if(sekme==="preset")return"🎛 Hazır filtreler";
+  if(sekme==="kap")return"📰 KAP Bildirimleri";
+  if(sekme==="temettu")return"💰 Temettü Takvimi";
   if(sekme==="aday")return(TF[adayTf]?TF[adayTf].ad:"Adaylar");
   return TF[sekme]?TF[sekme].ik+" "+TF[sekme].ad:"";
 }
@@ -643,6 +660,8 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
+  s.push('<button class="sek'+(sekme==="kap"?" on":"")+'" data-r="nötr" data-s="kap">📰 KAP</button>');
+  s.push('<button class="sek'+(sekme==="temettu"?" on":"")+'" data-r="nötr" data-s="temettu">💰 Temettü</button>');
   s.push('<button class="sek'+(sekme==="davet"?" on":"")+'" data-r="nötr" data-s="davet">📤 Davet</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   el("sekmeler").innerHTML=s.join("");
@@ -662,6 +681,8 @@ function ciz(){
   if(sekme==="panel")return panelCiz();
   if(sekme==="fav")return favCiz();
   if(sekme==="preset")return presetCiz();
+  if(sekme==="kap")return kapCiz();
+  if(sekme==="temettu")return temettuCiz();
   if(sekme==="aday")return adayCiz();
   listeCiz(sekme);
 }
@@ -901,6 +922,61 @@ function presetCiz(){
 function bindPresetChips(){
   [].forEach.call(document.querySelectorAll("[data-pr]"),function(b){
     b.onclick=function(){tit();presetSec=b.dataset.pr;presetCiz()};
+  });
+}
+/* 📰 KAP sekmesi: son bildirimleri listeler, satıra dokununca KAP'ın kendi
+   sayfasına götürür (bu bot bildirimi yorumlamaz/tavsiye vermez, sadece
+   gösterir). Arka planda otomatik push'tan (kapKontrolVeGonder) tamamen
+   ayrı bir uç nokta (/api/kap) — sekme her açıldığında taze veri çeker. */
+function kapCiz(){
+  el("govde").innerHTML='<div class="yukleniyor">yükleniyor…</div>';
+  post("/api/kap",{}).then(function(v){
+    var liste=(v&&v.liste)||[];
+    if(!liste.length){
+      el("govde").innerHTML='<div class="bos"><b>📰 KAP Bildirimleri</b><br><br>Şu an gösterilecek bildirim yok.<br>Birazdan tekrar dene.</div>';
+      return;
+    }
+    el("govde").innerHTML=liste.map(function(d){
+      return '<div class="satir" style="cursor:pointer">'+
+        '<div class="sol"><div class="kod">'+E((d.kodlar||[]).join(", ")||"—")+
+        (d.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
+        '<div class="altbilgi">'+E(d.konu||"Bildirim")+'</div></div>'+
+        '<div class="sag"><div class="yuzde so">'+E((d.tarih||"").slice(0,16).replace("T"," "))+'</div></div></div>';
+    }).join("")+'<div class="uyari">Kaynak: kap.org.tr · yalnız bilgilendirme amaçlıdır, yatırım tavsiyesi değildir.</div>';
+    [].forEach.call(document.querySelectorAll("#govde .satir"),function(row,i){
+      row.onclick=function(){
+        tit();
+        var u2="https://www.kap.org.tr/tr/Bildirim/"+liste[i].disclosureIndex;
+        try{TG.openLink(u2)}catch(e){location.href=u2}
+      };
+    });
+  });
+}
+/* 💰 Temettü sekmesi: bilancoveri.com'dan (KAP kaynaklı) çekilen yaklaşan
+   kar payı bildirimleri. Kesin tutar/tarih için kullanıcıyı KAP'a yönlendirir
+   — bu bot rakam/tavsiye üretmez, sadece "bak bu haber var" der. */
+function temettuCiz(){
+  el("govde").innerHTML='<div class="yukleniyor">yükleniyor…</div>';
+  post("/api/temettu",{}).then(function(v){
+    var liste=(v&&v.liste)||[];
+    if(!liste.length){
+      el("govde").innerHTML='<div class="bos"><b>💰 Temettü Takvimi</b><br><br>Şu an gösterilecek kayıt yok.<br>Birazdan tekrar dene.</div>';
+      return;
+    }
+    el("govde").innerHTML=liste.map(function(x){
+      return '<div class="satir" style="cursor:pointer">'+
+        '<div class="sol"><div class="kod">'+E(x.kod)+
+        (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
+        '<div class="altbilgi">KAP kar payı bildirimi</div></div>'+
+        '<div class="sag"><div class="yuzde so">'+E(x.tarih||"")+'</div></div></div>';
+    }).join("")+'<div class="uyari">Kaynak: bilancoveri.com (KAP) · kesin tutar/tarih için bildirimi kontrol et. Yatırım tavsiyesi değildir.</div>';
+    [].forEach.call(document.querySelectorAll("#govde .satir"),function(row,i){
+      row.onclick=function(){
+        tit();
+        var u2="https://www.kap.org.tr/tr/Bildirim/"+liste[i].disclosureIndex;
+        try{TG.openLink(u2)}catch(e){location.href=u2}
+      };
+    });
   });
 }
 function favCiz(){
@@ -1675,6 +1751,19 @@ if(!(lot>0)||!(mal>0))return JS({ok:!1,hata:"lot/maliyet gecersiz"},400);
 pf[kod]={lot:lot,maliyet:mal,eklendi:(pf[kod]&&pf[kod].eklendi)||Date.now()}}
 await XPSET(A,uid,pf);
 return JS({ok:!0,portfoy:pf})}
+if("/api/kap"===$.pathname){
+const liste=await kapListesiCache(A);
+const fav=await X(A,uid),pf2=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf2)]);
+const sonuc=liste.map(d=>{
+const kodlar=String(d.relatedStocks||"").split(",").map(x=>x.trim()).filter(Boolean);
+return{kodlar:kodlar,konu:d.subject||"",tarih:d.publishDate||"",disclosureIndex:d.disclosureIndex,takipte:kodlar.some(k=>izlenen.has(k))}
+}).sort((a,b)=>(b.disclosureIndex||0)-(a.disclosureIndex||0)).slice(0,60);
+return JS({ok:!0,liste:sonuc})}
+if("/api/temettu"===$.pathname){
+const liste=await temettuListesiCache(A);
+const fav=await X(A,uid),pf3=await XP(A,uid),izlenen2=new Set([...fav,...Object.keys(pf3)]);
+const sonuc=liste.map(x=>Object.assign({},x,{takipte:izlenen2.has(x.kod)})).sort((a,b)=>a.tarih<b.tarih?1:-1).slice(0,80);
+return JS({ok:!0,liste:sonuc})}
 if("/api/onay"===$.pathname){await onayVer(A,uid);return JS({ok:!0})}
 if("/api/performans"===$.pathname){
 /* ================== 📈 PERFORMANS (geriye dönük ölçüm) ==================
