@@ -373,28 +373,58 @@ function trSad(s){return String(s||"").toUpperCase().replace(/İ/g,"I").replace(
    uyum formu vb.) bu tavana çarpıp temettü bildirimlerine hiç sıra
    bırakmıyor. Çözüm: 50 günü 6'şar günlük küçük pencerelere bölüp ayrı ayrı
    istemek — her pencere tavana çarpma riski taşımıyor. */
+/* Tek bir [bas,ucIleri) penceresini ister; 2000 tavanına çarparsa (eskiden
+   sadece UYARI verip verinin bir kısmını SESSİZCE KAYBEDİYORDUK — asıl "0 aday"
+   hatasının kaynağı muhtemelen buydu: yoğun günlerde (çeyrek rapor sezonu vb.)
+   6 günlük pencere bile 2000'i aşıyor ve kesilen kısımda kâr payı bildirimleri
+   kalabiliyordu) artık pencereyi ikiye bölüp HER İKİ YARIYI DA ayrı ayrı ister,
+   1 güne inene kadar rekürsif olarak devam eder. Böylece veri kaybı olmaz. */
+async function kapTekPencereGetir(bas,ucIleri,tani,derinlik){
+const fmt=d=>d.toISOString().slice(0,10);
+try{
+const r=await fetch(KAP_API,{method:"POST",headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},body:JSON.stringify({fromDate:fmt(bas),toDate:fmt(ucIleri),mkkMemberOidList:[],subjectList:[]})});
+if(!r.ok){tani.push("pencere "+fmt(bas)+".."+fmt(ucIleri)+": HTTP "+r.status);return[]}
+const j=await r.json().catch(()=>null);
+if(!Array.isArray(j))return[];
+const gunFarki=Math.round((ucIleri-bas)/864e5);
+if(j.length>=2000&&gunFarki>1&&derinlik<6){
+const orta=new Date(bas.getTime()+Math.floor(gunFarki/2)*864e5);
+tani.push("bilgi: pencere "+fmt(bas)+".."+fmt(ucIleri)+" 2000 tavanına çarptı → "+fmt(bas)+".."+fmt(orta)+" ve "+fmt(orta)+".."+fmt(ucIleri)+" olarak ikiye bölünüp yeniden istendi (veri kaybı yok)");
+await gecikmeli(200);
+const sol=await kapTekPencereGetir(bas,orta,tani,derinlik+1);
+const sag=await kapTekPencereGetir(orta,ucIleri,tani,derinlik+1);
+return sol.concat(sag)}
+if(j.length>=2000)tani.push("uyarı: pencere "+fmt(bas)+".."+fmt(ucIleri)+" 2000 tavanına çarptı ve 1 güne inildiği için daha fazla bölünemedi — bu tek günde gerçekten 2000+ bildirim var demektir");
+return j
+}catch(err){tani.push("pencere istisnası: "+String(err&&err.message||err));return[]}}
 async function kapBildirimleriPencereli(toplamGun,pencereGun,tani){
-const tumu=[];
+const tumuMap=new Map();
 const simdiTR=new Date(Date.now()+108e5);
 let ucIleri=simdiTR,kalan=toplamGun,pencereSayisi=0;
 while(kalan>0){
 const bu=Math.min(pencereGun,kalan);
 const bas=new Date(ucIleri.getTime()-bu*864e5);
-const fmt=d=>d.toISOString().slice(0,10);
-try{
-const r=await fetch(KAP_API,{method:"POST",headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},body:JSON.stringify({fromDate:fmt(bas),toDate:fmt(ucIleri),mkkMemberOidList:[],subjectList:[]})});
-if(r.ok){const j=await r.json().catch(()=>null);if(Array.isArray(j)){tumu.push(...j);if(j.length>=2000)tani.push("uyarı: pencere "+fmt(bas)+".."+fmt(ucIleri)+" 2000 tavanına çarptı, dar")}}
-else tani.push("pencere "+fmt(bas)+".."+fmt(ucIleri)+": HTTP "+r.status)
-}catch(err){tani.push("pencere istisnası: "+String(err&&err.message||err))}
+const parca=await kapTekPencereGetir(bas,ucIleri,tani,0);
+/* disclosureIndex'e göre tekilleştir: bölünen pencerelerin sınır günleri
+   veya art arda pencereler aynı kaydı iki kez getirmiş olabilir. */
+for(const d of parca)if(d&&d.disclosureIndex!=null)tumuMap.set(d.disclosureIndex,d);
 ucIleri=bas;kalan-=bu;pencereSayisi++;
 if(pencereSayisi%3===0)await gecikmeli(250)}
-return tumu}
+return[...tumuMap.values()]}
 async function temettuTakvimiGercekGetir(tani){
 const ham=await kapBildirimleriPencereli(50,6,tani);
-tani.push(ham.length+" ham KAP bildirimi (son 50 gün, 6'şar günlük pencerelerle, filtresiz)");
+tani.push(ham.length+" ham KAP bildirimi (son 50 gün, tekilleştirilmiş, filtresiz)");
 if(ham.length)tani.push("örnek subject alanları: "+ham.slice(0,5).map(d=>JSON.stringify(d.subject)).join(" | "));
-const adaylar=ham.filter(d=>d.subject&&trSad(d.subject).indexOf("KAR PAYI DAGITIM")>=0&&d.relatedStocks)
-.map(d=>({kod:String(d.relatedStocks).split(",")[0].trim().toUpperCase(),tarih:(d.publishDate||"").slice(0,10),disclosureIndex:d.disclosureIndex,konu:d.subject}));
+const map1=d=>({kod:String(d.relatedStocks).split(",")[0].trim().toUpperCase(),tarih:(d.publishDate||"").slice(0,10),disclosureIndex:d.disclosureIndex,konu:d.subject});
+let adaylar=ham.filter(d=>d.subject&&trSad(d.subject).indexOf("KAR PAYI DAGITIM")>=0&&d.relatedStocks).map(map1);
+/* Birincil filtre 0 sonuç verirse (KAP subject metnini sessizce değiştirmiş
+   olabilir, ya da 2000-tavanı geçmişte veriyi kırpmış olabilir) daha geniş
+   bir ikinci filtreyle tekrar dene: "KAR PAYI" veya "TEMETTU" geçen HERHANGİ
+   bir subject. Bu, kesin isabeti biraz düşürür ama sıfır sonuç görme riskini
+   ortadan kaldırır; TANI'ya hangi filtrenin kullanıldığı açıkça yazılır. */
+if(!adaylar.length){
+const genis=ham.filter(d=>d.subject&&d.relatedStocks&&/KAR PAYI|TEMETTU/.test(trSad(d.subject))).map(map1);
+if(genis.length){tani.push("not: birincil 'KAR PAYI DAGITIM' filtresi 0 sonuç verdi → geniş 'KAR PAYI / TEMETTU' filtresine düşüldü");adaylar=genis}}
 tani.push(adaylar.length+" aday KAP bildirimi (subject filtre, Türkçe-toleranslı)");
 /* aynı hisse için birden fazla bildirim varsa (teklif → kesinleşen gibi)
    en yeni disclosureIndex'i (en güncel bildirim) esas al */
@@ -648,7 +678,7 @@ var TG=window.Telegram&&window.Telegram.WebApp;
 try{TG.ready();TG.expand();if(TG.setHeaderColor)TG.setHeaderColor("#0e1116");
     if(TG.setBackgroundColor)TG.setBackgroundColor("#0e1116")}catch(e){}
 function tit(){try{TG.HapticFeedback.impactOccurred("light")}catch(e){}}
-var D=null, sekme="tavan", sira="pot", adayTf="adayKisa", presetSec="kaliteli";
+var D=null, sekme="tavan", sira="pot", adayTf="adayKisa", presetSec="kaliteli", portfoySirala="deger";
 /* ---------- GERİ / İLERİ ----------
    Uygulama tek sayfa olduğu için tarayıcı geçmişi yok; her ekran değişimi
    kendi yığınımıza yazılır. Telegram'ın kendi geri düğmesi de buna bağlanır:
@@ -1102,10 +1132,18 @@ return k?{k:k,ad:ad}:null;
    değer/K-Z özeti, satır tıklayınca detay+düzenle paneli açılır, üstte
    doğrudan "Yeni Pozisyon Ekle" ile kod yazmadan Takip listesine girmeye
    gerek kalmadan pozisyon eklenebilir. */
+function portfoySiraUygula(satirlar){
+  var m={
+    deger:function(a,b){return b.satirDeger-a.satirDeger},
+    kz:function(a,b){return (b.kz==null?-1e9:b.kz)-(a.kz==null?-1e9:a.kz)},
+    alfa:function(a,b){return a.kod<b.kod?-1:1}
+  };
+  return satirlar.slice().sort(m[portfoySirala]||m.deger);
+}
 function portfoyCiz(){
-  var pf=D.portfoy||{}, kodlar=Object.keys(pf);
+  var pf=D.portfoy||{}, kodlar=Object.keys(pf), gecmis=D.portfoyGecmis||[];
   var h='';
-  if(!kodlar.length){
+  if(!kodlar.length&&!gecmis.length){
     h='<div class="bos"><b>💼 Portföyüm</b><br><br>Henüz pozisyon eklemedin.</div>';
     h+='<button class="dg ik" id="portfoyYeniDg" style="margin-top:10px">➕ Yeni Pozisyon Ekle</button>';
     el("govde").innerHTML=h;
@@ -1125,24 +1163,156 @@ function portfoyCiz(){
     satirlar.push({kod:kod,poz:poz,fiyat:fiyat,kz:kz,tutar:tutar,satirDeger:satirDeger||0,ad:bul?bul.ad:"tavan"});
   });
   var kzToplam=toplamMaliyet>0?100*(toplamDeger/toplamMaliyet-1):0, farkToplam=toplamDeger-toplamMaliyet;
+  var gercekToplam=gecmis.reduce(function(a,x){return a+(x.kar||0)},0);
+  var enIyi=null,enKotu=null;
+  satirlar.forEach(function(s){if(s.kz==null)return;if(!enIyi||s.kz>enIyi.kz)enIyi=s;if(!enKotu||s.kz<enKotu.kz)enKotu=s});
   h+='<div class="kutu" style="margin-bottom:12px"><h3>💼 Portföyüm ('+adet+' hisse)</h3>'+
     '<div class="ikili"><div><div class="buyukN">'+toplamDeger.toFixed(2)+' ₺</div><div class="altN">güncel değer</div></div>'+
     '<div><div class="buyukN '+(kzToplam>=0?"ye":"kr")+'">'+Y(kzToplam)+'</div><div class="altN">'+(farkToplam>=0?"+":"")+farkToplam.toFixed(2)+' ₺</div></div></div>'+
-    '<div class="altN" style="margin-top:6px">toplam maliyet '+toplamMaliyet.toFixed(2)+' ₺</div></div>';
-  satirlar.sort(function(a,b){return b.satirDeger-a.satirDeger});
+    '<div class="altN" style="margin-top:6px">toplam maliyet '+toplamMaliyet.toFixed(2)+' ₺</div>'+
+    (gecmis.length?'<div class="altN" style="margin-top:4px">gerçekleşen K/Z (kapanan satışlar): <b class="'+(gercekToplam>=0?"ye":"kr")+'">'+(gercekToplam>=0?"+":"")+gercekToplam.toFixed(2)+' ₺</b> ('+gecmis.length+' satış)</div>':'')+
+    (enIyi&&enKotu&&satirlar.length>1?'<div class="altN" style="margin-top:4px">🏆 en iyi <b class="ye">'+E(enIyi.kod)+'</b> '+Y(enIyi.kz)+'  ·  🥶 en kötü <b class="kr">'+E(enKotu.kod)+'</b> '+Y(enKotu.kz)+'</div>':'')+
+    '</div>';
+  if(satirlar.length>1){
+    h+='<div class="sirala" style="margin-bottom:10px">'+
+      ['deger','kz','alfa'].map(function(s){
+        var etiket={deger:'Değer',kz:'K/Z%',alfa:'A-Z'}[s];
+        return '<button class="sir'+(portfoySirala===s?' on':'')+'" data-sirala="'+s+'">'+etiket+'</button>';
+      }).join('')+'</div>';
+  }
+  satirlar=portfoySiraUygula(satirlar);
   h+=satirlar.map(function(s){
-    return '<div class="satir" style="cursor:pointer" data-kod="'+E(s.kod)+'">'+
+    var pay=toplamDeger>0&&s.satirDeger>0?100*s.satirDeger/toplamDeger:0;
+    return '<div class="satir" style="cursor:pointer;flex-direction:column;align-items:stretch" data-kod="'+E(s.kod)+'">'+
+      '<div style="display:flex;align-items:center;gap:10px;width:100%">'+
       '<div class="sol"><div class="kod">'+E(s.kod)+'</div>'+
       '<div class="altbilgi">'+s.poz.lot+' lot · maliyet '+N(s.poz.maliyet)+' ₺'+(s.fiyat!=null?' · şimdi '+N(s.fiyat)+' ₺':' · fiyat yok')+'</div></div>'+
-      '<div class="sag">'+(s.kz!=null?'<div class="yuzde '+(s.kz>=0?"ye":"kr")+'">'+Y(s.kz)+'</div><div class="altN">'+(s.tutar>=0?"+":"")+s.tutar.toFixed(2)+' ₺</div>':'<div class="altN">fiyat yok</div>')+'</div></div>';
+      '<div class="sag">'+(s.kz!=null?'<div class="yuzde '+(s.kz>=0?"ye":"kr")+'">'+Y(s.kz)+'</div><div class="altN">'+(s.tutar>=0?"+":"")+s.tutar.toFixed(2)+' ₺</div>':'<div class="altN">fiyat yok</div>')+'</div></div>'+
+      (pay>0?'<div style="height:4px;border-radius:3px;background:var(--ciz);margin-top:8px;overflow:hidden"><div style="height:100%;width:'+pay.toFixed(1)+'%;background:var(--mavi)"></div></div><div class="altN" style="margin-top:3px">portföyün %'+pay.toFixed(1)+"'i</div>":'')+
+      '</div>';
   }).join("");
   h+='<button class="dg ik" id="portfoyYeniDg" style="margin-top:10px">➕ Yeni Pozisyon Ekle</button>';
-  h+='<div class="uyari">Satıra dokun: detay/düzenle/sil. Yatırım tavsiyesi değildir.</div>';
+  if(satirlar.length>1){
+    h+='<div style="display:flex;gap:8px;margin-top:8px">'+
+      '<button class="dg" id="portfoySektorDg" style="flex:1">🥧 Sektör Dağılımı</button>'+
+      '<button class="dg" id="portfoyPerfDg" style="flex:1">📈 Performans</button></div>';
+  }
+  if(gecmis.length)h+='<button class="dg" id="portfoyGecmisDg" style="margin-top:8px">📜 Gerçekleşen K/Z geçmişi ('+gecmis.length+')</button>';
+  h+='<div id="portfoyTemettuKutu"></div>';
+  h+='<div class="uyari">Satıra dokun: detay/düzenle/sat. Yatırım tavsiyesi değildir.</div>';
   el("govde").innerHTML=h;
   [].forEach.call(document.querySelectorAll("#govde .satir"),function(row){
     row.onclick=function(){var kod=row.getAttribute("data-kod");tit();detay(kod,(portfoyBul(kod)||{}).ad||"tavan")};
   });
+  [].forEach.call(document.querySelectorAll("#govde [data-sirala]"),function(btn){
+    btn.onclick=function(){portfoySirala=btn.getAttribute("data-sirala");portfoyCiz()};
+  });
+  if(el("portfoyGecmisDg"))el("portfoyGecmisDg").onclick=function(){tit();portfoyGecmisCiz()};
+  if(el("portfoySektorDg"))el("portfoySektorDg").onclick=function(){tit();portfoySektorCiz(satirlar,toplamDeger)};
+  if(el("portfoyPerfDg"))el("portfoyPerfDg").onclick=function(){tit();portfoyPerformansCiz()};
+  portfoyTemettuKutusuDoldur(kodlar);
   portfoyYeniBagla();
+}
+/* 💰 Portföydeki hisseler için bekleyen kâr payı bildirimlerini gösterir.
+   Ana ekranı bloklamadan, arkada tek bir /api/temettu isteğiyle doldurulur
+   (temettü takvimiyle aynı kaynak — "takipte" alanı zaten portföyü kapsıyor). */
+function portfoyTemettuKutusuDoldur(kodlar){
+  var kutu=el("portfoyTemettuKutu"); if(!kutu||!kodlar.length)return;
+  var set={}; kodlar.forEach(function(k){set[k]=1});
+  post("/api/temettu",{}).then(function(v){
+    var kutu2=el("portfoyTemettuKutu"); if(!kutu2)return;
+    var liste=((v&&v.liste)||[]).filter(function(x){return set[x.kod]});
+    if(!liste.length)return;
+    kutu2.innerHTML='<div class="kutu" style="margin-top:10px"><h3>💰 Portföyünde bekleyen kâr payı</h3>'+
+      liste.map(function(x){
+        var tarih=x.odemeTarihi?("ödeme "+E(x.odemeTarihi)):("bildirim "+E(x.tarih||""));
+        return '<div class="altN" style="margin-top:4px">• <b>'+E(x.kod)+'</b> — '+tarih+'</div>';
+      }).join('')+'<div class="altN" style="margin-top:6px">Tutar bilgisi KAP listesinde yapısal olarak yer almıyor; detay için bildirime dokun (Temettü Takvimi sekmesi).</div></div>';
+  }).catch(function(){});
+}
+/* 🥧 SEKTÖR DAĞILIMI: statik BIST sektör haritasıyla (bkz. backend SEKTOR_HARITA)
+   pozisyonları grupluyor. Harita eksiksiz değildir; eşleşmeyenler "Diğer". */
+function portfoySektorCiz(satirlar,toplamDeger){
+  var K=el("katman"), sek=D.portfoySektor||{}, grup={};
+  satirlar.forEach(function(s){
+    var ad=sek[s.kod]||"Diğer";
+    if(!grup[ad])grup[ad]={deger:0,kodlar:[]};
+    grup[ad].deger+=s.satirDeger||0; grup[ad].kodlar.push(s.kod);
+  });
+  var siraliSek=Object.keys(grup).sort(function(a,b){return grup[b].deger-grup[a].deger});
+  var h='<div class="kapat"><b>🥧 Sektör Dağılımı</b><button id="sekapat">✕ Kapat</button></div>';
+  h+=siraliSek.map(function(ad){
+    var g=grup[ad], pay=toplamDeger>0?100*g.deger/toplamDeger:0;
+    return '<div class="satir" style="flex-direction:column;align-items:stretch">'+
+      '<div style="display:flex;justify-content:space-between"><div class="kod">'+E(ad)+'</div><div class="altN">%'+pay.toFixed(1)+'</div></div>'+
+      '<div class="altbilgi">'+g.kodlar.map(E).join(", ")+'</div>'+
+      '<div style="height:4px;border-radius:3px;background:var(--ciz);margin-top:6px;overflow:hidden"><div style="height:100%;width:'+pay.toFixed(1)+'%;background:var(--mor)"></div></div>'+
+      '</div>';
+  }).join("")+'<div class="uyari">Sektör eşlemesi en likit BIST kodları için elle derlenmiştir, eksiksiz olmayabilir.</div>';
+  K.innerHTML=h;K.classList.add("ac");tgGeriDugme();
+  el("sekapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav"||sekme==="portfoy")basla()};
+}
+/* 📈 PERFORMANS: günlük anlık görüntülerden (bkz. backend portfoyGunlukSnapshotAl)
+   toplam portföy değerinin zaman içindeki değişimini çizer. Yeni portföylerde
+   birkaç güne kadar veri birikmemiş olabilir — bu normaldir, kademeli dolar. */
+function portfoyPerformansCiz(deneme){
+  deneme=deneme||0;
+  var K=el("katman");
+  var h='<div class="kapat"><b>📈 Portföy Performansı</b><button id="pfkapat">✕ Kapat</button></div>';
+  var gunluk=D.portfoyGunluk||[];
+  if(gunluk.length<2){
+    h+='<div class="bos">Henüz yeterli geçmiş yok.<br>Portföy değeri günde bir kez kaydedilir, birkaç gün sonra burada grafik oluşur.</div>';
+    K.innerHTML=h;K.classList.add("ac");tgGeriDugme();
+    el("pfkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav"||sekme==="portfoy")basla()};
+    return;
+  }
+  h+='<div id="pfGrafikKutu" style="height:220px;margin:10px 0"></div>';
+  var ilk=gunluk[0].deger,son=gunluk[gunluk.length-1].deger,degisim=ilk>0?100*(son/ilk-1):0;
+  h+='<div class="kutu"><div class="ikili"><div><div class="buyukN">'+son.toFixed(2)+' ₺</div><div class="altN">güncel</div></div>'+
+    '<div><div class="buyukN '+(degisim>=0?"ye":"kr")+'">'+Y(degisim)+'</div><div class="altN">'+gunluk[0].gun+' → bugün</div></div></div></div>';
+  h+='<div class="uyari">Değer, o günkü kapanış/anlık fiyatlarla hesaplanır; para yatırma/çekme ayrıştırılmaz.</div>';
+  K.innerHTML=h;K.classList.add("ac");tgGeriDugme();
+  el("pfkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav"||sekme==="portfoy")basla()};
+  if(!window.LightweightCharts&&deneme<20){setTimeout(function(){
+    if(el("pfGrafikKutu"))portfoyPerformansGrafikCiz(gunluk);else portfoyPerformansCiz(deneme+1);
+  },150);return}
+  portfoyPerformansGrafikCiz(gunluk);
+}
+function portfoyPerformansGrafikCiz(gunluk){
+  var kutu=el("pfGrafikKutu"); if(!kutu||!window.LightweightCharts)return;
+  try{
+    var chart=LightweightCharts.createChart(kutu,{
+      width:kutu.clientWidth||320, height:220,
+      layout:{background:{color:"transparent"},textColor:"#e6edf3"},
+      grid:{vertLines:{color:"#262d38"},horzLines:{color:"#262d38"}},
+      timeScale:{timeVisible:false,secondsVisible:false},
+      rightPriceScale:{borderVisible:false}
+    });
+    var seri=chart.addSeries(LightweightCharts.AreaSeries,{
+      lineColor:"#388bfd",topColor:"rgba(56,139,253,0.35)",bottomColor:"rgba(56,139,253,0.02)",lineWidth:2
+    });
+    seri.setData(gunluk.map(function(x){return{time:x.gun,value:x.deger}}));
+    chart.timeScale().fitContent();
+    window.addEventListener("resize",function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}});
+  }catch(e){kutu.innerHTML='<p class="bilgi">Grafik çizilemedi.</p>'}
+}
+/* 📜 GERÇEKLEŞEN K/Z GEÇMİŞİ: kapanan (kısmi/tam satılan) pozisyonların
+   gerçek kâr/zararını listeler. Eski panelde bu bilgi hiç tutulmuyordu —
+   pozisyon silindiğinde geçmişi de siliniyordu. */
+function portfoyGecmisCiz(){
+  var K=el("katman"), gecmis=D.portfoyGecmis||[];
+  var toplam=gecmis.reduce(function(a,x){return a+(x.kar||0)},0);
+  var h='<div class="kapat"><b>📜 Gerçekleşen K/Z Geçmişi</b><button id="gdkapat">✕ Kapat</button></div>';
+  h+='<div class="kutu" style="margin:10px 0"><div class="ikili"><div><div class="buyukN '+(toplam>=0?"ye":"kr")+'">'+(toplam>=0?"+":"")+toplam.toFixed(2)+' ₺</div><div class="altN">toplam gerçekleşen K/Z</div></div>'+
+    '<div><div class="buyukN">'+gecmis.length+'</div><div class="altN">satış işlemi</div></div></div></div>';
+  h+=gecmis.map(function(x){
+    var d=new Date(x.tarih);
+    return '<div class="satir"><div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
+      '<div class="altbilgi">'+x.lot+' lot · '+N(x.alisMaliyet)+' ₺ → '+N(x.satisFiyat)+' ₺ · '+d.toLocaleDateString("tr-TR")+'</div></div>'+
+      '<div class="sag"><div class="yuzde '+(x.kar>=0?"ye":"kr")+'">'+Y(x.karYuzde)+'</div><div class="altN">'+(x.kar>=0?"+":"")+x.kar.toFixed(2)+' ₺</div></div></div>';
+  }).join("")+'<div class="uyari">Yatırım tavsiyesi değildir.</div>';
+  K.innerHTML=h;K.classList.add("ac");tgGeriDugme();
+  el("gdkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav"||sekme==="portfoy")basla()};
 }
 function portfoyYeniBagla(){
   el("portfoyYeniDg").onclick=function(){
@@ -1285,7 +1455,8 @@ function detay(kod,ad){
     if(!k&&!ayna)h+='<div class="bos">Bu kod son taramada bulunamadı.<br>Yazımı kontrol et ya da yeni tarama sonrası dene.</div>';
     h+='<button class="dg ik" id="favDg">'+(fav?"⭐ Takipten çıkar":"⭐ Takibe al")+"</button>";
     h+='<button class="dg ik" id="portfoyDg">'+(poz?"💼 Alış bilgisini düzenle ("+poz.lot+" lot)":"💼 Portföye ekle")+"</button>";
-    if(poz)h+='<button class="dg ik" id="portfoySil" style="opacity:.7">🗑 Portföyden çıkar</button>';
+    if(poz)h+='<button class="dg ik" id="portfoySatDg">📉 Sat / Azalt (kısmi olabilir)</button>';
+    if(poz)h+='<button class="dg ik" id="portfoySil" style="opacity:.7">🗑 Portföyden çıkar (kayıt tutmadan)</button>';
     h+='<button class="dg" id="paylasDg">📤 Paylaş</button>';
     h+='<div class="uyari">⚠️ Yatırım tavsiyesi değildir.</div>';
     K.innerHTML=h;
@@ -1325,6 +1496,28 @@ function detay(kod,ad){
       });
     }
     if(el("portfoySil"))el("portfoySil").onclick=portfoySilTikla;
+    /* 📉 SAT/AZALT: gerçek bir satış işlemidir — "Portföyden çıkar" (kayıtsız
+       silme, örn. yanlış girilen pozisyonu düzeltmek için) düğmesinden farklı
+       olarak burada girilen satış fiyatı, gerçekleşen K/Z geçmişine yazılır. */
+    if(el("portfoySatDg"))el("portfoySatDg").onclick=function(){
+      tit();
+      var lotStr=prompt("Kaç lot satıyorsun? (elindeki "+poz.lot+" lotun tamamı ya da bir kısmı)",String(poz.lot));
+      if(lotStr===null)return;
+      var lot=Number(String(lotStr).replace(",","."));
+      if(!(lot>0)){alert("Geçerli bir lot sayısı gir.");return}
+      var fiyatStr=prompt("Satış fiyatın (₺)?",k&&k.fiyat>0?String(k.fiyat):"");
+      if(fiyatStr===null)return;
+      var fiyat=Number(String(fiyatStr).replace(",","."));
+      if(!(fiyat>0)){alert("Geçerli bir fiyat gir.");return}
+      var b=el("portfoySatDg");b.disabled=true;
+      post("/api/portfoy",{kod:kod,sat:!0,lot:lot,fiyat:fiyat}).then(function(r){
+        b.disabled=false;
+        if(!(r&&r.ok)){alert("Kaydedilemedi, tekrar dene.");return}
+        D.portfoy=r.portfoy;D.portfoyGecmis=r.portfoyGecmis;
+        K.classList.remove("ac");K.innerHTML="";tgGeriDugme();
+        if(sekme==="fav"||sekme==="portfoy")basla()
+      });
+    };
     el("paylasDg").onclick=function(){
       tit();
       var kr=k?kar(k):null;
@@ -1709,6 +1902,74 @@ const J=["H4sIAAAAAAACA708W3LbSJJXKcMxEjEEIVKSZRkUqZFtrUdjue2w7I7odfujCBTJaoIABy
    diğerini eklemek/kaldırmak için yapısal olarak birbirinden bağımsız. */
 async function XP(e,t){if(!e.VERI)return{};const a=await e.VERI.get("portfoy:"+t);return a?JSON.parse(a):{}}
 async function XPSET(e,t,a){e.VERI&&await e.VERI.put("portfoy:"+t,JSON.stringify(a))}
+/* GERÇEKLEŞEN K/Z GEÇMİŞİ: kısmi/tam satışlarda kapanan pozisyonun kâr/zararı
+   burada birikir — düzenleme/silme akışından ayrı, portföyün asıl "gelişmiş"
+   tarafı budur (satış anındaki gerçek kazanç, sadece anlık K/Z değil). */
+async function XPG(e,t){if(!e.VERI)return[];const a=await e.VERI.get("portfoyGecmis:"+t);return a?JSON.parse(a):[]}
+async function XPGEKLE(e,t,a){const liste=await XPG(e,t);liste.unshift(a);const kirp=liste.slice(0,100);e.VERI&&await e.VERI.put("portfoyGecmis:"+t,JSON.stringify(kirp));return kirp}
+/* ============ 🏷 SEKTÖR HARİTASI (statik, en likit ~140 BIST kodu) ============
+   KAP/tarama verisinde sektör alanı yok; canlı bir sektör API'si de yok.
+   Bu yüzden yaygın BIST30/50/100 kodları için elle derlenmiş, en iyi çaba
+   (best-effort) statik bir eşleme kullanıyoruz. Harita eksiksiz DEĞİL —
+   listede olmayan kodlar "Diğer" altında toplanır, bu normaldir.
+   Admin, KV'de "sektorEk" anahtarına {"KOD":"Sektör Adı"} JSON'u yazarak
+   koda dokunmadan ekleme/düzeltme yapabilir (aşağıdaki harita ile birleşir). */
+const SEKTOR_HARITA={
+AKBNK:"Bankacılık",GARAN:"Bankacılık",ISCTR:"Bankacılık",YKBNK:"Bankacılık",HALKB:"Bankacılık",VAKBN:"Bankacılık",SKBNK:"Bankacılık",ICBCT:"Bankacılık",QNBFB:"Bankacılık",TSKB:"Bankacılık",ALBRK:"Bankacılık",
+KCHOL:"Holding",SAHOL:"Holding",DOHOL:"Holding",ALARK:"Holding",TKFEN:"Holding",AGHOL:"Holding",GLYHO:"Holding",POLHO:"Holding",EUHOL:"Holding",
+FROTO:"Otomotiv",TOASO:"Otomotiv",DOAS:"Otomotiv",OTKAR:"Otomotiv",TTRAK:"Otomotiv",ASUZU:"Otomotiv",KARSN:"Otomotiv",
+BIMAS:"Perakende",MGROS:"Perakende",SOKM:"Perakende",BIZIM:"Perakende",
+THYAO:"Havacılık/Ulaştırma",PGSUS:"Havacılık/Ulaştırma",TAVHL:"Havacılık/Ulaştırma",CLEBI:"Havacılık/Ulaştırma",RYSAS:"Havacılık/Ulaştırma",
+TUPRS:"Enerji/Petrokimya",PETKM:"Enerji/Petrokimya",AKSEN:"Enerji/Petrokimya",AKSA:"Enerji/Petrokimya",ENJSA:"Enerji/Petrokimya",ODAS:"Enerji/Petrokimya",ZOREN:"Enerji/Petrokimya",AYDEM:"Enerji/Petrokimya",GWIND:"Enerji/Petrokimya",YEOTK:"Enerji/Petrokimya",AKENR:"Enerji/Petrokimya",AYEN:"Enerji/Petrokimya",
+EREGL:"Demir-Çelik/Metal",KRDMD:"Demir-Çelik/Metal",KRDMA:"Demir-Çelik/Metal",KRDMB:"Demir-Çelik/Metal",ISDMR:"Demir-Çelik/Metal",BRSAN:"Demir-Çelik/Metal",CEMTS:"Demir-Çelik/Metal",BURCE:"Demir-Çelik/Metal",
+ASELS:"Savunma/Elektronik",KONTR:"Savunma/Elektronik",
+SISE:"Cam/Kimya",SASA:"Cam/Kimya",GUBRF:"Cam/Kimya",HEKTS:"Cam/Kimya",BAGFS:"Cam/Kimya",ALKIM:"Cam/Kimya",SODA:"Cam/Kimya",
+TCELL:"Telekom",TTKOM:"Telekom",NETAS:"Telekom",
+EKGYO:"GYO/İnşaat",ENKAI:"GYO/İnşaat",YKGYO:"GYO/İnşaat",ISGYO:"GYO/İnşaat",TRGYO:"GYO/İnşaat",KLGYO:"GYO/İnşaat",VKGYO:"GYO/İnşaat",OZKGY:"GYO/İnşaat",
+AEFES:"Gıda/İçecek",ULKER:"Gıda/İçecek",CCOLA:"Gıda/İçecek",TATGD:"Gıda/İçecek",PINSU:"Gıda/İçecek",BANVT:"Gıda/İçecek",KRSTL:"Gıda/İçecek",PENGD:"Gıda/İçecek",
+KOZAL:"Madencilik",KOZAA:"Madencilik",IPEKE:"Madencilik",
+TURSG:"Sigorta",ANHYT:"Sigorta",ANSGR:"Sigorta",AKGRT:"Sigorta",RAYSG:"Sigorta",
+KORDS:"Tekstil",YUNSA:"Tekstil",SKTAS:"Tekstil",
+ARCLK:"Dayanıklı Tüketim",VESTL:"Dayanıklı Tüketim",
+LOGO:"Teknoloji/Yazılım",KAREL:"Teknoloji/Yazılım",ARENA:"Teknoloji/Yazılım",INDES:"Teknoloji/Yazılım",LINK:"Teknoloji/Yazılım",PAPIL:"Teknoloji/Yazılım",
+DSTKF:"Finansal Kiralama",GARFA:"Finansal Kiralama",ISFIN:"Finansal Kiralama",
+ASTOR:"Enerji/Petrokimya",PETUN:"Gıda/İçecek",MAVI:"Perakende",LKMNH:"Sağlık",SELEC:"Sağlık",
+};
+async function sektorAl(e,kod){
+if(!e._sektorEk){
+try{const s=e.VERI&&await e.VERI.get("sektorEk");e._sektorEk=s?JSON.parse(s):{}}catch(err){e._sektorEk={}}}
+return(e._sektorEk&&e._sektorEk[kod])||SEKTOR_HARITA[kod]||"Diğer"}
+/* ============ 📅 GÜNLÜK PORTFÖY DEĞER ANLIK GÖRÜNTÜSÜ (performans grafiği için) ============
+   Bu worker'da native bir cron yok; mevcut mimariye sadık kalarak, gelen her
+   Telegram webhook isteğinde bir KEZ tetiklenip KV'deki zaman damgasıyla
+   günde ~1 kez çalışacak şekilde kendini kısıtlayan "fırsatçı" bir arka plan
+   işi (kapKontrolVeGonder ile aynı desen). Her kullanıcı için o günkü toplam
+   portföy değerini/maliyetini tek bir noktaya yazar; 180 günlük geçmiş tutulur. */
+const PORTFOY_SNAPSHOT_MS=2e4*3600;
+async function portfoyGunlukSnapshotAl(e){
+if(!e.VERI)return;
+const son=await e.VERI.get("portfoySnapshotSon");
+if(son&&Date.now()-Number(son)<PORTFOY_SNAPSHOT_MS)return;
+await e.VERI.put("portfoySnapshotSon",String(Date.now()));
+const L2=await g(e);if(!L2)return;
+const gun=new Date(Date.now()+108e5).toISOString().slice(0,10);
+const kullanicilar=await portfoyKullanicilari(e);
+for(const uid of kullanicilar.slice(0,500)){
+try{
+const pf=await XP(e,uid),kodlar=Object.keys(pf);
+if(!kodlar.length)continue;
+let deger=0,maliyet=0;
+for(const kod of kodlar){const poz=pf[kod];if(!(poz&&poz.lot>0&&poz.maliyet>0))continue;
+maliyet+=poz.lot*poz.maliyet;const kart=Z(L2,kod);if(kart&&kart.fiyat>0)deger+=poz.lot*kart.fiyat}
+if(!(deger>0))continue;
+const gs=await e.VERI.get("portfoyGunluk:"+uid);
+let gecmis=gs?JSON.parse(gs):[];
+gecmis=gecmis.filter(x=>x.gun!==gun);
+gecmis.push({gun:gun,deger:Math.round(100*deger)/100,maliyet:Math.round(100*maliyet)/100});
+gecmis=gecmis.slice(-180);
+await e.VERI.put("portfoyGunluk:"+uid,JSON.stringify(gecmis))
+}catch(err){}}}
+async function XPGUNLUK(e,t){if(!e.VERI)return[];const a=await e.VERI.get("portfoyGunluk:"+t);return a?JSON.parse(a):[]}
 async function portfoyKullanicilari(e){if(!e.VERI)return[];const out=[];let cursor=void 0
 ;for(;;){const liste=await e.VERI.list({prefix:"portfoy:",limit:1e3,cursor});for(const k of liste.keys)out.push(k.name.slice(8))
 ;if(!liste.list_complete&&liste.cursor){cursor=liste.cursor}else break}return out}function Z(e,t){if(!e||!e.kartlar)return null;for(const a of Object.keys(e.kartlar)){
@@ -1788,7 +2049,7 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 const SIMDI=Date.now();
 if(e.VERI&&(SIMDI-KVSON>12e4)){KVSON=SIMDI;await e.VERI.put("listeler",JSON.stringify(t))}
 await caches.default.put(new Request(l),new Response(JSON.stringify(t),{headers:{"Cache-Control":"max-age=86400",
-"content-type":"application/json"}}))}(A,t),q.waitUntil(k(A,t).catch(()=>{})),q.waitUntil(gecmisiDoldur(A,t).catch(()=>{})),q.waitUntil(alarmGonder(A,eskiListe,t).catch(()=>{})),q.waitUntil(kapKontrolVeGonder(A).catch(()=>{})),q.waitUntil(temettuKontrolVeGonder(A).catch(()=>{}))
+"content-type":"application/json"}}))}(A,t),q.waitUntil(k(A,t).catch(()=>{})),q.waitUntil(gecmisiDoldur(A,t).catch(()=>{})),q.waitUntil(alarmGonder(A,eskiListe,t).catch(()=>{})),q.waitUntil(kapKontrolVeGonder(A).catch(()=>{})),q.waitUntil(temettuKontrolVeGonder(A).catch(()=>{})),q.waitUntil(portfoyGunlukSnapshotAl(A).catch(()=>{}))
 /* Formasyon taramasini da tetikle — arka planda, yanit beklemeden. */
 ;const frmDurum=await formasyonTetikle(A).catch(()=>"hata")
 ;const n=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+(t.kartlar[e]||[]).length).join(" · "):""
@@ -1858,7 +2119,7 @@ if(!uid)return JS({ok:!1,hata:"dogrulanamadi"},401);
 if(await B(A,uid))return JS({ok:!1,hata:"erisim kapali"},403);
 const YON=d(uid),KOD=v=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10),ID=v=>String(v||"").replace(/\D/g,"");
 if("/api/veri"===$.pathname){
-const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid),portfoy=await XP(A,uid);
+const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid),portfoy=await XP(A,uid),portfoyGecmis=await XPG(A,uid),portfoyGunluk=await XPGUNLUK(A,uid);
 const un=BUN||await botAd(A).catch(()=>null)||"bot";
 const kart={};
 if(L2&&L2.kartlar)for(const k of Object.keys(L2.kartlar)){
@@ -1869,7 +2130,8 @@ let gun=null;
 /* Son tarama saati YALNIZ yöneticiye gösterilir. */
 if(YON&&L2&&L2.guncelleme){const dt=new Date(L2.guncelleme);gun=String((dt.getUTCHours()+3)%24).padStart(2,"0")+":"+String(dt.getUTCMinutes()).padStart(2,"0")}
 const onayli=await onayVarMi(A,uid);
-return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,portfoy:portfoy,kartlar:kart,guncelleme:gun,link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN})}
+const portfoySektor={};for(const kod of Object.keys(portfoy))portfoySektor[kod]=await sektorAl(A,kod);
+return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,portfoy:portfoy,portfoyGecmis:portfoyGecmis,portfoyGunluk:portfoyGunluk,portfoySektor:portfoySektor,kartlar:kart,guncelleme:gun,link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN})}
 if("/api/hisse"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 const L2=await g(A),kart=Z(L2,kod),z=L2&&L2.sozluk&&L2.sozluk[kod],fav=(await X(A,uid)).includes(kod),poz=(await XP(A,uid))[kod]||null;
@@ -1932,13 +2194,27 @@ if(A.VERI)await A.VERI.put("fav:"+uid,JSON.stringify(f));
 return JS({ok:!0,fav:f,ekli:ekli})}
 if("/api/portfoy"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
-let pf=await XP(A,uid);
-if(gov.sil){delete pf[kod]}else{
+let pf=await XP(A,uid),gecmis=null;
+if(gov.sat){
+/* KISMİ/TAM SATIŞ: pozisyonu azaltır ve gerçekleşen K/Z'yi ayrı bir geçmiş
+   kaydına düşer — bu, "sadece anlık K/Z" gösteren eski panelden farklı olarak
+   kapanan pozisyonların GERÇEK getirisini kalıcı olarak tutar. */
+const mevcut=pf[kod];
+if(!mevcut||!(mevcut.lot>0))return JS({ok:!1,hata:"pozisyon yok"},400);
+const satLot=Number(gov.lot),satFiyat=Number(gov.fiyat);
+if(!(satLot>0)||!(satFiyat>0))return JS({ok:!1,hata:"lot/fiyat gecersiz"},400);
+const kirpilanLot=Math.min(satLot,mevcut.lot);
+const kar=(satFiyat-mevcut.maliyet)*kirpilanLot,karYuzde=100*(satFiyat/mevcut.maliyet-1);
+gecmis=await XPGEKLE(A,uid,{kod:kod,lot:kirpilanLot,alisMaliyet:mevcut.maliyet,satisFiyat:satFiyat,kar:kar,karYuzde:karYuzde,tarih:Date.now()});
+const kalanLot=mevcut.lot-kirpilanLot;
+if(kalanLot>1e-9)pf[kod]={lot:kalanLot,maliyet:mevcut.maliyet,eklendi:mevcut.eklendi};else delete pf[kod]
+}else if(gov.sil){delete pf[kod]}else{
 const lot=Number(gov.lot),mal=Number(gov.maliyet);
 if(!(lot>0)||!(mal>0))return JS({ok:!1,hata:"lot/maliyet gecersiz"},400);
 pf[kod]={lot:lot,maliyet:mal,eklendi:(pf[kod]&&pf[kod].eklendi)||Date.now()}}
 await XPSET(A,uid,pf);
-return JS({ok:!0,portfoy:pf})}
+if(!gecmis)gecmis=await XPG(A,uid);
+return JS({ok:!0,portfoy:pf,portfoyGecmis:gecmis})}
 if("/api/kap"===$.pathname){
 const liste=await kapListesiCache(A);
 const fav=await X(A,uid),pf2=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf2)]);
