@@ -338,16 +338,24 @@ return liste}
    çalıştırmaya/headless tarayıcıya gerek yok, normal fetch yeterli. */
 const AHLATCI_TEMETTU_URL="https://www.ahlatciyatirim.com.tr/temettu";
 const AY_TR={"Oca":1,"Şub":2,"Mar":3,"Nis":4,"May":5,"Haz":6,"Tem":7,"Ağu":8,"Eyl":9,"Eki":10,"Kas":11,"Ara":12};
+const AHLATCI_HEADERS={"User-Agent":YF_UA,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"tr-TR,tr;q=0.9,en;q=0.8","Referer":"https://www.google.com/"};
 function stripEtiket(h){return String(h||"").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g," ").trim()}
 function trTarihToISO(s){const m=String(s||"").trim().match(/(\d{1,2})\s+([A-Za-zÇŞĞÜÖİçşğüöı]{3})\w*\s+(\d{4})/);
 if(!m)return null;const ay=AY_TR[m[2]];if(!ay)return null;return m[3]+"-"+String(ay).padStart(2,"0")+"-"+m[1].padStart(2,"0")}
-async function temettuSayfasiCek(sayfa){
+/* Başlık metni tam eşleşmezse (site tasarımı ufak değişmişse) tüm sayfayı
+   tara — Durum sütunu zaten sadece "Yaklaşan" satırları filtreliyor, yanlış
+   tabloya (Teklif/Arşiv) düşme riski Durum kontrolüyle zaten engelleniyor. */
+async function temettuSayfasiCek(sayfa,tani){
 const url=sayfa<=1?AHLATCI_TEMETTU_URL:AHLATCI_TEMETTU_URL+"?sayfa="+sayfa;
-const r=await fetch(url,{headers:YF_HEADERS});if(!r.ok)return[];
+let r;try{r=await fetch(url,{headers:AHLATCI_HEADERS,cf:{cacheTtl:0}})}catch(err){tani.push("fetch hatası s"+sayfa+": "+String(err&&err.message||err));return[]}
+if(!r.ok){tani.push("HTTP "+r.status+" s"+sayfa);return[]}
 const html=await r.text();
-const basI=html.indexOf("Yaklaşan Temettü Ödemeleri"),bitI=html.indexOf("Teklif Aşamasındaki Temettüler");
+tani.push("s"+sayfa+" html "+html.length+" byte");
+const basI=html.indexOf("Yaklaşan Temettü");
+const bitI=html.indexOf("Teklif Aşamasındaki");
 const parca=basI>=0?html.slice(basI,bitI>basI?bitI:html.length):html;
 const satirlar=parca.match(/<tr[\s\S]*?<\/tr>/g)||[];
+tani.push("s"+sayfa+" "+satirlar.length+" <tr>, baslikBulundu="+(basI>=0));
 const cikti=[];
 for(const satir of satirlar){
 const linkm=satir.match(/hisse=([A-Z0-9]{2,6})/);if(!linkm)continue;
@@ -358,28 +366,31 @@ const hakKazanma=hucreler[1],odemeTarihi=hucreler[2];
 cikti.push({kod:linkm[1],hakKazanma:hakKazanma,hakKazanmaISO:trTarihToISO(hakKazanma),
 odemeTarihi:odemeTarihi,odemeTarihiISO:trTarihToISO(odemeTarihi),
 brut:hucreler[3],net:hucreler[4],verimBrut:hucreler[5],verimNet:hucreler[6]})}
+tani.push("s"+sayfa+" "+cikti.length+" satır ayıklandı");
 return cikti}
-async function temettuTakvimiGercekGetir(sayfaSayisi){
+async function temettuTakvimiGercekGetir(sayfaSayisi,tani){
 const tumu=[];
 for(let s=1;s<=(sayfaSayisi||3);s++){
-let sayfaVerisi;try{sayfaVerisi=await temettuSayfasiCek(s)}catch(e){break}
+let sayfaVerisi;try{sayfaVerisi=await temettuSayfasiCek(s,tani)}catch(err){tani.push("s"+s+" istisna: "+String(err&&err.message||err));break}
 if(!sayfaVerisi.length)break;
 tumu.push(...sayfaVerisi)}
 tumu.sort((a,b)=>(a.odemeTarihiISO||"9999")<(b.odemeTarihiISO||"9999")?-1:1);
 return tumu}
 async function temettuListesiCache(e){
 const c=e.VERI&&await e.VERI.get("temettuCacheV2");
-if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<18e5)return j.liste}catch(err){}}
+if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<18e5)return{liste:j.liste,tani:["v2 kv cache"]}}catch(err){}}
+const tani=[];
 let liste=[];
-try{liste=await temettuTakvimiGercekGetir(3)}catch(err){}
-if(liste.length){if(e.VERI)await e.VERI.put("temettuCacheV2",JSON.stringify({ts:Date.now(),liste:liste.slice(0,150)}));return liste}
-/* ahlatciyatirim erişilemezse (site değişti/düştü) eski KAP-duyuru
+try{liste=await temettuTakvimiGercekGetir(3,tani)}catch(err){tani.push("genel istisna: "+String(err&&err.message||err))}
+if(liste.length){if(e.VERI)await e.VERI.put("temettuCacheV2",JSON.stringify({ts:Date.now(),liste:liste.slice(0,150)}));return{liste:liste,tani:tani}}
+if(e.VERI)await e.VERI.put("temettuSonHata",JSON.stringify({ts:Date.now(),tani:tani})).catch(()=>{});
+/* ahlatciyatirim erişilemezse (site değişti/düştü/engelledi) eski KAP-duyuru
    listesine düş — en azından "yeni karar açıklandı" bilgisi kaybolmasın. */
 const eskiC=e.VERI&&await e.VERI.get("temettuCache");
-if(eskiC){try{const j=JSON.parse(eskiC);if(Date.now()-j.ts<18e5)return j.liste}catch(err){}}
-const eski=await temettuTakvimiGetir(45);
+if(eskiC){try{const j=JSON.parse(eskiC);if(Date.now()-j.ts<18e5)return{liste:j.liste,tani:tani.concat(["eski kv cache"])}}catch(err){}}
+let eski=[];try{eski=await temettuTakvimiGetir(45)}catch(err){tani.push("eski KAP istisnası: "+String(err&&err.message||err))}
 if(e.VERI&&eski.length)await e.VERI.put("temettuCache",JSON.stringify({ts:Date.now(),liste:eski.slice(0,150)}));
-return eski}
+return{liste:eski,tani:tani}}
 async function g(e){if(o)return o;if(e.VERI){
 const t=await e.VERI.get("listeler");if(t)return o=JSON.parse(t),o}const t=await caches.default.match(new Request(l));return t?(o=await t.json().catch(()=>null),o):null}const h={kisitMin:7,
 kisitMax:18};let w=null,O=0;async function S(e,t){if(!t&&w&&Date.now()-O<6e4)return w;let a={...h};if(e.VERI){const t=await e.VERI.get("ayar");t&&(a={...a,...JSON.parse(t)})}return w=a,O=Date.now(),a}
@@ -1001,7 +1012,8 @@ function temettuCiz(){
   post("/api/temettu",{}).then(function(v){
     var liste=(v&&v.liste)||[],gercek=!!(v&&v.gercekTarih);
     if(!liste.length){
-      el("govde").innerHTML='<div class="bos"><b>💰 Temettü Takvimi</b><br><br>Şu an gösterilecek kayıt yok.<br>Birazdan tekrar dene.</div>';
+      el("govde").innerHTML='<div class="bos"><b>💰 Temettü Takvimi</b><br><br>Şu an gösterilecek kayıt yok.<br>Birazdan tekrar dene.</div>'+
+        (v&&v.tani?'<div class="uyari" style="text-align:left;white-space:pre-wrap">TANI (sadece admin):\n'+E(v.tani.join("\n"))+'</div>':"");
       return;
     }
     if(gercek){
@@ -1812,12 +1824,15 @@ return{kodlar:kodlar,konu:d.subject||"",tarih:d.publishDate||"",disclosureIndex:
 .sort((a,b)=>(b.disclosureIndex||0)-(a.disclosureIndex||0)).slice(0,60);
 return JS({ok:!0,liste:sonuc})}
 if("/api/temettu"===$.pathname){
-const liste=await temettuListesiCache(A);
+const paket=await temettuListesiCache(A);
+const liste=paket.liste||[];
 const fav=await X(A,uid),pf3=await XP(A,uid),izlenen2=new Set([...fav,...Object.keys(pf3)]);
 const gercekTarih=liste.length&&void 0!==liste[0].odemeTarihi;
 const siraliListe=gercekTarih?liste.slice():liste.slice().sort((a,b)=>a.tarih<b.tarih?1:-1);
 const sonuc=siraliListe.map(x=>Object.assign({},x,{takipte:izlenen2.has(x.kod)})).slice(0,80);
-return JS({ok:!0,liste:sonuc,gercekTarih:gercekTarih})}
+const cevap={ok:!0,liste:sonuc,gercekTarih:gercekTarih};
+if(!liste.length&&d(uid))cevap.tani=paket.tani;
+return JS(cevap)}
 if("/api/onay"===$.pathname){await onayVer(A,uid);return JS({ok:!0})}
 if("/api/performans"===$.pathname){
 /* ================== 📈 PERFORMANS (geriye dönük ölçüm) ==================
