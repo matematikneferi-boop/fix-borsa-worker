@@ -1,4 +1,4 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.2";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="11.3";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo","uzunvade","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
@@ -328,64 +328,73 @@ if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<3e5)return j.liste}catch(err)
 const liste=await kapBildirimleriGetir(3);
 if(e.VERI&&liste.length)await e.VERI.put("kapCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,200)}));
 return liste}
-/* ============ 💰 GERÇEK ÖDEME TARİHLİ TEMETTÜ TAKVİMİ (v2) ============
-   Yukarıdaki temettuTakvimiGetir() sadece "kâr payı dağıtım KARARI açıklandı"
-   bildirimini verir — ödeme tarihi KAP'ın temel API'sinde yapılandırılmış
-   alan olarak yok. Bunun yerine ahlatciyatirim.com.tr'nin (lisanslı aracı
-   kurum) temettü takvimi sayfası kullanılıyor: bu sayfa KAP bildirimlerini
-   zaten ayrıştırıp "Hak Kazanma" ve "Ödeme Tarihi"ni ayrı sütun olarak,
-   sunucu tarafında render edilmiş düz HTML tablo halinde veriyor — JS
-   çalıştırmaya/headless tarayıcıya gerek yok, normal fetch yeterli. */
-const AHLATCI_TEMETTU_URL="https://www.ahlatciyatirim.com.tr/temettu";
-const AY_TR={"Oca":1,"Şub":2,"Mar":3,"Nis":4,"May":5,"Haz":6,"Tem":7,"Ağu":8,"Eyl":9,"Eki":10,"Kas":11,"Ara":12};
-const AHLATCI_HEADERS={"User-Agent":YF_UA,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"tr-TR,tr;q=0.9,en;q=0.8","Referer":"https://www.google.com/"};
+/* ============ 💰 GERÇEK ÖDEME TARİHLİ TEMETTÜ TAKVİMİ (v3) ============
+   ahlatciyatirim.com.tr denendi, Cloudflare'dan HTTP 525 (origin TLS
+   handshake hatası) döndü — o siteye Worker'dan erişilemiyor, bu benim
+   kontrolümde değil, terk edildi.
+   Gerçek kaynak: KAP'ın KENDİ bildirim DETAY sayfası. KAP'ın liste API'si
+   (byCriteria) ödeme tarihini vermiyor ama her "Kar Payı Dağıtım" bildiriminin
+   DETAY sayfasında (kap.org.tr/tr/Bildirim/{id}) sunucu tarafında render
+   edilmiş "Kar Payı Ödeme Tarihleri" tablosu var — "Ödeme Tarihi (3)" sütunu
+   gerçek ödeme tarihi. Bu domain zaten kapBildirimleriGetir() ile çalışıyor,
+   yeni bir dış siteye bağımlılık yok. */
+const KAP_DETAY_HEADERS={"User-Agent":YF_UA,"Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","Accept":"text/html,application/xhtml+xml"};
 function stripEtiket(h){return String(h||"").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g," ").trim()}
-function trTarihToISO(s){const m=String(s||"").trim().match(/(\d{1,2})\s+([A-Za-zÇŞĞÜÖİçşğüöı]{3})\w*\s+(\d{4})/);
-if(!m)return null;const ay=AY_TR[m[2]];if(!ay)return null;return m[3]+"-"+String(ay).padStart(2,"0")+"-"+m[1].padStart(2,"0")}
-/* Başlık metni tam eşleşmezse (site tasarımı ufak değişmişse) tüm sayfayı
-   tara — Durum sütunu zaten sadece "Yaklaşan" satırları filtreliyor, yanlış
-   tabloya (Teklif/Arşiv) düşme riski Durum kontrolüyle zaten engelleniyor. */
-async function temettuSayfasiCek(sayfa,tani){
-const url=sayfa<=1?AHLATCI_TEMETTU_URL:AHLATCI_TEMETTU_URL+"?sayfa="+sayfa;
-let r;try{r=await fetch(url,{headers:AHLATCI_HEADERS,cf:{cacheTtl:0}})}catch(err){tani.push("fetch hatası s"+sayfa+": "+String(err&&err.message||err));return[]}
-if(!r.ok){tani.push("HTTP "+r.status+" s"+sayfa);return[]}
-const html=await r.text();
-tani.push("s"+sayfa+" html "+html.length+" byte");
-const basI=html.indexOf("Yaklaşan Temettü");
-const bitI=html.indexOf("Teklif Aşamasındaki");
-const parca=basI>=0?html.slice(basI,bitI>basI?bitI:html.length):html;
-const satirlar=parca.match(/<tr[\s\S]*?<\/tr>/g)||[];
-tani.push("s"+sayfa+" "+satirlar.length+" <tr>, baslikBulundu="+(basI>=0));
-const cikti=[];
-for(const satir of satirlar){
-const linkm=satir.match(/hisse=([A-Z0-9]{2,6})/);if(!linkm)continue;
-const hucreler=(satir.match(/<td[\s\S]*?<\/td>/g)||[]).map(stripEtiket);
-if(hucreler.length<8)continue;
-const durum=hucreler[7];if(!/Yaklaşan/i.test(durum))continue;
-const hakKazanma=hucreler[1],odemeTarihi=hucreler[2];
-cikti.push({kod:linkm[1],hakKazanma:hakKazanma,hakKazanmaISO:trTarihToISO(hakKazanma),
-odemeTarihi:odemeTarihi,odemeTarihiISO:trTarihToISO(odemeTarihi),
-brut:hucreler[3],net:hucreler[4],verimBrut:hucreler[5],verimNet:hucreler[6]})}
-tani.push("s"+sayfa+" "+cikti.length+" satır ayıklandı");
-return cikti}
-async function temettuTakvimiGercekGetir(sayfaSayisi,tani){
-const tumu=[];
-for(let s=1;s<=(sayfaSayisi||3);s++){
-let sayfaVerisi;try{sayfaVerisi=await temettuSayfasiCek(s,tani)}catch(err){tani.push("s"+s+" istisna: "+String(err&&err.message||err));break}
-if(!sayfaVerisi.length)break;
-tumu.push(...sayfaVerisi)}
-tumu.sort((a,b)=>(a.odemeTarihiISO||"9999")<(b.odemeTarihiISO||"9999")?-1:1);
-return tumu}
+function trNoktaTarihToISO(s){const m=String(s||"").trim().match(/(\d{2})\.(\d{2})\.(\d{4})/);
+if(!m)return null;return m[3]+"-"+m[2]+"-"+m[1]}
+/* "Kar Payı Ödeme Tarihleri" tablosunu bul: 5'li hücre grupları
+   [Ödeme yöntemi, Teklif(1), Kesinleşen(2), Ödeme Tarihi(3), Kayıt Tarihi(4)].
+   Taksitli ödemelerde birden fazla satır olabilir — en ileri (son) ödeme
+   tarihini esas alıyoruz. */
+function kapOdemeTarihiCikar(html){
+const i=html.indexOf("Kar Payı Ödeme Tarihleri");
+if(i<0)return null;
+const j=html.indexOf("Nakit Kar Payı Ödeme Zaman Aralığı",i);
+const parca=html.slice(i,j>i?j:i+5000);
+const hucreler=(parca.match(/<td[\s\S]*?<\/td>/g)||[]).map(stripEtiket);
+let en=null;
+for(let k=0;k+4<hucreler.length;k+=5){
+const iso=trNoktaTarihToISO(hucreler[k+3]);
+if(iso&&(!en||iso>en.iso))en={iso:iso,ham:hucreler[k+3],hakKazanmaHam:hucreler[k+2],hakKazanmaISO:trNoktaTarihToISO(hucreler[k+2])}}
+return en}
+async function kapBildirimDetayGetir(disclosureIndex){
+try{
+const r=await fetch("https://www.kap.org.tr/tr/Bildirim/"+disclosureIndex,{headers:KAP_DETAY_HEADERS});
+if(!r.ok)return null;
+return kapOdemeTarihiCikar(await r.text())
+}catch(err){return null}}
+async function gecikmeli(ms){return new Promise(res=>setTimeout(res,ms))}
+async function temettuTakvimiGercekGetir(tani){
+const adaylar=await temettuTakvimiGetir(50);
+tani.push(adaylar.length+" aday KAP bildirimi (son 50 gün, subject filtre)");
+/* aynı hisse için birden fazla bildirim varsa (teklif → kesinleşen gibi)
+   en yeni disclosureIndex'i (en güncel bildirim) esas al */
+const sonBildirim={};
+for(const x of adaylar)if(!sonBildirim[x.kod]||Number(x.disclosureIndex)>Number(sonBildirim[x.kod].disclosureIndex))sonBildirim[x.kod]=x;
+const hedefler=Object.values(sonBildirim).slice(0,30);
+tani.push(hedefler.length+" farklı hisse için detay sayfası çekilecek");
+const bugunISO=new Date().toISOString().slice(0,10);
+const sonuc=[];
+let i=0,basarisiz=0;
+for(const x of hedefler){
+i++;
+const detay=await kapBildirimDetayGetir(x.disclosureIndex);
+if(!detay){basarisiz++;continue}
+if(detay.iso&&detay.iso>=bugunISO)
+sonuc.push({kod:x.kod,odemeTarihi:detay.ham,odemeTarihiISO:detay.iso,hakKazanma:detay.hakKazanmaHam||"",disclosureIndex:x.disclosureIndex,konu:x.konu});
+if(i%4===0)await gecikmeli(300)}
+tani.push(hedefler.length-basarisiz+" detay OK, "+basarisiz+" detay başarısız, "+sonuc.length+" ileri tarihli ödeme");
+sonuc.sort((a,b)=>a.odemeTarihiISO<b.odemeTarihiISO?-1:1);
+return sonuc}
 async function temettuListesiCache(e){
-const c=e.VERI&&await e.VERI.get("temettuCacheV2");
-if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<18e5)return{liste:j.liste,tani:["v2 kv cache"]}}catch(err){}}
+const c=e.VERI&&await e.VERI.get("temettuCacheV3");
+if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<18e5)return{liste:j.liste,tani:["v3 kv cache"]}}catch(err){}}
 const tani=[];
 let liste=[];
-try{liste=await temettuTakvimiGercekGetir(3,tani)}catch(err){tani.push("genel istisna: "+String(err&&err.message||err))}
-if(liste.length){if(e.VERI)await e.VERI.put("temettuCacheV2",JSON.stringify({ts:Date.now(),liste:liste.slice(0,150)}));return{liste:liste,tani:tani}}
+try{liste=await temettuTakvimiGercekGetir(tani)}catch(err){tani.push("genel istisna: "+String(err&&err.message||err))}
+if(liste.length){if(e.VERI)await e.VERI.put("temettuCacheV3",JSON.stringify({ts:Date.now(),liste:liste.slice(0,150)}));return{liste:liste,tani:tani}}
 if(e.VERI)await e.VERI.put("temettuSonHata",JSON.stringify({ts:Date.now(),tani:tani})).catch(()=>{});
-/* ahlatciyatirim erişilemezse (site değişti/düştü/engelledi) eski KAP-duyuru
-   listesine düş — en azından "yeni karar açıklandı" bilgisi kaybolmasın. */
+/* Detay sayfaları erişilemezse (KAP WAF/yoğunluk) eski duyuru listesine düş. */
 const eskiC=e.VERI&&await e.VERI.get("temettuCache");
 if(eskiC){try{const j=JSON.parse(eskiC);if(Date.now()-j.ts<18e5)return{liste:j.liste,tani:tani.concat(["eski kv cache"])}}catch(err){}}
 let eski=[];try{eski=await temettuTakvimiGetir(45)}catch(err){tani.push("eski KAP istisnası: "+String(err&&err.message||err))}
@@ -1002,11 +1011,11 @@ function kapCiz(){
     });
   });
 }
-/* 💰 Temettü sekmesi: ahlatciyatirim.com.tr'nin (lisanslı aracı kurum,
-   KAP kaynaklı) temettü takvimi sayfasından çekilen GERÇEK ödeme tarihli
-   yaklaşan kar payı takvimi. Site geçici erişilemezse eski KAP-duyuru
-   listesine (sadece "karar açıklandı" haberi, ödeme tarihi yok) düşülür —
-   bu durumda gercekTarih=false döner ve satır görünümü buna göre değişir. */
+/* 💰 Temettü sekmesi: KAP'ın kendi bildirim detay sayfasından (Ödeme
+   Tarihi (3) alanı) çekilen GERÇEK ödeme tarihli yaklaşan kar payı takvimi.
+   Detay sayfaları erişilemezse eski KAP-duyuru listesine (sadece "karar
+   açıklandı" haberi, ödeme tarihi yok) düşülür — bu durumda gercekTarih=false
+   döner ve satır görünümü buna göre değişir. */
 function temettuCiz(){
   el("govde").innerHTML='<div class="yukleniyor">yükleniyor…</div>';
   post("/api/temettu",{}).then(function(v){
@@ -1018,12 +1027,19 @@ function temettuCiz(){
     }
     if(gercek){
       el("govde").innerHTML=liste.map(function(x){
-        return '<div class="satir">'+
+        return '<div class="satir" style="cursor:pointer">'+
           '<div class="sol"><div class="kod">'+E(x.kod)+
           (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
-          '<div class="altbilgi">Hak kazanma '+E(x.hakKazanma||"—")+' · Pay başı net '+E(x.net||"—")+'</div></div>'+
+          '<div class="altbilgi">Hak kazanma (kesinleşen) '+E(x.hakKazanma||"—")+'</div></div>'+
           '<div class="sag"><div class="yuzde so">💵 '+E(x.odemeTarihi||"—")+'</div></div></div>';
-      }).join("")+'<div class="uyari">Kaynak: ahlatciyatirim.com.tr (KAP bildirimlerine dayanır) · net tutarlar %15 stopaj esas alınarak hesaplanmıştır. Yatırım tavsiyesi değildir.</div>';
+      }).join("")+'<div class="uyari">Kaynak: kap.org.tr bildirim detay sayfası, "Ödeme Tarihi (3)" alanı. Yatırım tavsiyesi değildir.</div>';
+      [].forEach.call(document.querySelectorAll("#govde .satir"),function(row,i){
+        row.onclick=function(){
+          tit();
+          var u2="https://www.kap.org.tr/tr/Bildirim/"+liste[i].disclosureIndex;
+          try{TG.openLink(u2)}catch(e){location.href=u2}
+        };
+      });
       return;
     }
     el("govde").innerHTML=liste.map(function(x){
