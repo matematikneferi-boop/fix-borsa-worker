@@ -612,6 +612,15 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit>span{display:inline-block;padding-left:100%;animation:kay 34s linear infinite;will-change:transform}
 .serit b{color:var(--yazi)} .serit .ay{color:#3a4553;margin:0 12px}
 .serit .ay2{color:var(--soluk);font-size:10.5px}
+.hotSerit{margin:0 0 9px}
+.hotBaslik{font-size:12px;font-weight:700;color:var(--sar);margin-bottom:6px}
+.hotSira{display:flex;gap:8px}
+.hotKart{flex:1;min-width:0;background:var(--kart);border:1px solid var(--ciz);
+  border-left:3px solid var(--ciz);border-radius:10px;padding:8px 9px;cursor:pointer}
+.hotKart:active{background:var(--kart2)}
+.hotKod{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hotDil{font-size:10.5px;color:var(--soluk);margin:2px 0}
+.hotYuzde{font-size:12.5px;font-weight:700}
 .simSatir{margin-bottom:8px}
 .simSatir label{display:block;font-size:11.5px;color:var(--soluk);margin-bottom:4px}
 .simSatir input{width:100%;box-sizing:border-box;background:var(--kart2);border:1px solid var(--ciz);
@@ -666,6 +675,7 @@ textarea.gir{min-height:88px;resize:vertical}
 
 <div class="ust">
   <div class="baslik"><h1>📊 Fix Borsa Sinyal</h1><div class="saat" id="saat"></div></div>
+  <div class="hotSerit" id="hotSerit"></div>
   <div class="sekmeler" id="sekmeler"></div>
   <div class="serit" id="serit"></div>
   <div class="gez">
@@ -803,6 +813,7 @@ function ciz(){
   yolYaz();
   el("saat").textContent=(D.yon&&D.guncelleme)?("🔐 son tarama "+D.guncelleme):"";
   seritCiz();
+  hotCiz();
   sekCiz();
   if(sekme==="perf")return perfCiz();
   if(sekme==="kama")return kamaCiz();
@@ -842,6 +853,43 @@ function seritCiz(){
      sinyal olduğunda şerit okunamayacak kadar hızlı akıyordu. */
   var sure=Math.max(45,Math.round(gosterilen.length*4.2));
   el("serit").innerHTML='<span style="animation-duration:'+sure+'s">'+ic+'<span class="ay">◆</span>'+ic+'<span class="ay">◆</span></span>';
+}
+/* ---------- 🔥 EN GÜÇLÜ 3 SİNYAL — TÜM SEKMELERİN ÜSTÜNDE SABİT ÖZET ----------
+   Kullanıcı hangi sekmede olursa olsun (15DK/1SA/4SA/1G/Adaylar/Presetler...)
+   her zaman görünen küçük bir şerit: 4 ana listeden (tavan/potansiyel/fibo/
+   uzunvade) kalite puanı en yüksek 3 FARKLI hisseyi gösterir. Aynı kod birden
+   fazla listede varsa en yüksek kaliteli görünümü tutulur, tekrar basılmaz.
+   Dokununca aynı satirBagla() mekanizmasıyla normal detay ekranı açılır —
+   ayrı bir tıklama sistemi kurmaya gerek yok. */
+function hotCiz(){
+  var kutu=el("hotSerit"); if(!kutu)return;
+  var hepsi=[];
+  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(ad){
+    (D.kartlar&&D.kartlar[ad]||[]).forEach(function(x){
+      var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
+    });
+  });
+  var enIyi={};
+  hepsi.forEach(function(x){
+    if(!x.kod)return;
+    var mv=enIyi[x.kod];
+    if(!mv||(x.kalite||0)>(mv.kalite||0))enIyi[x.kod]=x;
+  });
+  var liste=Object.keys(enIyi).map(function(k){return enIyi[k]});
+  liste.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
+  liste=liste.slice(0,3);
+  if(!liste.length){kutu.innerHTML="";return}
+  kutu.innerHTML='<div class="hotBaslik">🔥 Şu an en güçlü 3 sinyal</div><div class="hotSira">'+
+    liste.map(function(x){
+      var t=TF[x._ad]||{kisa:x.tf||"",renk:"var(--ciz)"};
+      var kr=kar(x);
+      return '<div class="hotKart" data-kod="'+E(x.kod)+'" data-l="'+x._ad+'" style="border-left-color:'+t.renk+'">'+
+        '<div class="hotKod">'+E(x.kod)+'</div>'+
+        '<div class="hotDil">'+t.kisa+'</div>'+
+        '<div class="hotYuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+'</div>'+
+      '</div>';
+    }).join("")+"</div>";
+  satirBagla();
 }
 function sirCiz(akt){
   var o=[["pot","🎯 Hedefe kalan"],["kar","💰 Kâr/Zarar"],["yeni","🕐 En yeni"]];
