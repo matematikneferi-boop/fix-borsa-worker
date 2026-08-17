@@ -533,10 +533,11 @@ function absorpsiyonHesapla(mumlar){
     const darlik=aralik/aralikOrt;                     /* 1 = normal, 0.4 = çok dar */
     const yayilim=son.high-son.low;
     const konum=yayilim>0?(son.close-son.low)/yayilim:0.5;  /* 1 = tepede kapandı */
-    /* Absorpsiyon şartı: hacim en az 1.8 kat VE aralık normalin altında */
-    if(hacimKat<1.8||darlik>0.85)return null;
-    const hacimP=Math.min(1,(hacimKat-1.8)/2.2);       /* 1.8x→0, 4x→1 */
-    const darP=Math.min(1,(0.85-darlik)/0.55);         /* 0.85→0, 0.30→1 */
+    /* Absorpsiyon şartı: hacim en az 1.4 kat VE aralık normalin biraz altında
+       (önceki eşik 1.8x / 0.85 çok az hisseyi yakalıyordu — gevşetildi) */
+    if(hacimKat<1.4||darlik>0.95)return null;
+    const hacimP=Math.min(1,(hacimKat-1.4)/2.1);       /* 1.4x→0, 3.5x→1 */
+    const darP=Math.min(1,(0.95-darlik)/0.65);         /* 0.95→0, 0.30→1 */
     const konumP=Math.abs(konum-0.5)*2;                /* uçlara yakınlık */
     const puan=Math.round(100*(0.45*hacimP+0.35*darP+0.20*konumP));
     const yon=konum>=0.6?"talep":(konum<=0.4?"arz":"kararsız");
@@ -1146,7 +1147,8 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .baslik{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .baslik h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
 .saat{font-size:11.5px;color:var(--soluk);font-variant-numeric:tabular-nums}
-.sekmeler{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:9px;scrollbar-width:none}
+.sekmeler{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,auto);gap:6px;
+  overflow-x:auto;overflow-y:hidden;padding-bottom:9px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .sekmeler::-webkit-scrollbar{display:none}
 .sek{flex:0 0 auto;background:var(--kart);border:1px solid var(--ciz);color:var(--soluk);
   border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;white-space:nowrap}
@@ -1282,14 +1284,13 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit b{color:var(--yazi)} .serit .ay{color:#3a4553;margin:0 12px}
 .serit .ay2{color:var(--soluk);font-size:10.5px}
 .hotSerit{margin:0 0 9px}
-.hotBaslik{font-size:11px;font-weight:700;color:var(--sar);margin-bottom:5px}
-.hotBasSat{display:flex;align-items:center;justify-content:space-between;gap:6px}
-.araRow{display:flex;align-items:center;gap:4px;flex:0 0 auto}
-.araGir{width:64px;max-width:26vw;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
-  border-radius:7px;padding:3px 6px;font-size:11px;font-weight:700;text-transform:uppercase}
+.araSat{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.araGir{flex:0 1 150px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
+  border-radius:8px;padding:6px 9px;font-size:13px;font-weight:700;text-transform:uppercase}
 .araGir::placeholder{color:var(--soluk);text-transform:none;font-weight:400}
-.araBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;
-  padding:3px 7px;font-size:12px;line-height:1.4}
+.araBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
+  padding:6px 11px;font-size:14px;line-height:1.4}
+.hotBaslik{font-size:11px;font-weight:700;color:var(--sar);margin-bottom:5px}
 .hotSira{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 .hotKart{flex:0 0 66px;background:var(--kart);border:1px solid var(--ciz);
   border-left:3px solid var(--ciz);border-radius:8px;padding:6px 7px;cursor:pointer}
@@ -1351,9 +1352,10 @@ textarea.gir{min-height:88px;resize:vertical}
 
 <div class="ust">
   <div class="baslik"><h1>📊 Fix Borsa Sinyal</h1><div class="saat" id="saat"></div></div>
+  <div class="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button></div>
+  <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
   <div class="sekmeler" id="sekmeler"></div>
-  <div class="serit" id="serit"></div>
   <div class="gez">
     <button id="gezGeri">◀ Geri</button>
     <div class="nerede" id="nerede"></div>
@@ -1557,10 +1559,10 @@ function seritCiz(){
    ("en güçlülerin güçlüsü") ve (2) her dilimin (1SA/4SA/1G) KENDİ en
    güçlü hissesi -- bir dilim genel top 5'e girmese bile kendi en iyisi burada
    görünür. Dokununca satirBagla() ile aynı detay ekranı açılır. */
-var ARA_HTML='<div class="araRow"><input id="araGir" class="araGir" placeholder="Hisse" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button></div>';
 function araBagla(){
   var g=el("araGir"),b=el("araBtn");
-  if(!g||!b)return;
+  if(!g||!b||g.dataset.bagli)return;
+  g.dataset.bagli="1";
   function git(){
     var kod=(g.value||"").trim().toUpperCase();
     if(!kod)return;
@@ -1577,10 +1579,7 @@ function hotCiz(){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
   });
-  if(!hepsi.length){
-    kutu.innerHTML='<div class="hotBaslik hotBasSat"><span>🔥 En güçlülerin güçlüsü</span>'+ARA_HTML+'</div>';
-    araBagla();return;
-  }
+  if(!hepsi.length){kutu.innerHTML="";return}
 
   var enIyiKod={};
   hepsi.forEach(function(x){
@@ -1611,16 +1610,13 @@ function hotCiz(){
 
   var h='';
   if(genelTop.length)
-    h+='<div class="hotBaslik hotBasSat"><span>🔥 En güçlülerin güçlüsü — 5</span>'+ARA_HTML+'</div><div class="hotSira">'+
+    h+='<div class="hotBaslik">🔥 En güçlülerin güçlüsü — 5</div><div class="hotSira">'+
        genelTop.map(kartHtml).join("")+"</div>";
-  else
-    h+='<div class="hotBaslik hotBasSat"><span>🔥 En güçlülerin güçlüsü</span>'+ARA_HTML+'</div>';
   if(dilimTop.length)
     h+='<div class="hotBaslik" style="margin-top:8px">📌 Her dilimin en güçlüsü</div><div class="hotSira">'+
        dilimTop.map(kartHtml).join("")+"</div>";
   kutu.innerHTML=h;
   satirBagla();
-  araBagla();
 }
 function sirCiz(akt){
   var o=[["pot","🎯 Hedefe kalan"],["kar","💰 Kâr/Zarar"],["yeni","🕐 En yeni"]];
@@ -3042,6 +3038,7 @@ try{
     TG.close();
   });
 }catch(e){}
+araBagla();
 basla();
 </script></body></html>
 `;
