@@ -1,39 +1,39 @@
 """
 Fix Borsa — BIST Formasyon Tarayici  (TEK DOSYA)
 =================================================
-Kama, ucgen, bayrak/flama ve ikili dip-tepe formasyonlarini bulur,
-formasyon.json yazar. Telegram worker'i bu dosyayi okur.
+Kama, üçgen, bayrak/flama ve ikili dip-tepe oluşumlarını bulur,
+formasyon.json yazar. Telegram işçisi bu dosyayı okur.
 
-Hisse listesi havuz.json'dan otomatik okunur; elle bir sey yapman gerekmez.
-"""
+Hisse listesi havuz.json'dan otomatik olarak ayrılır; elle bir sey yapman gereksiz.
+""
 
-import json
-import os
-import sys
-import time
-import urllib.request
+json'u içe aktar
+os'u içe aktar
+içe aktarma sys
+ithalat zamanı
+urllib.request'i içe aktarın
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 
-import numpy as np
+numpy'ı np olarak içe aktarın
 
 # ============================================================================
-#  TARANACAK HISSELER
-#  Liste otomatik olarak KENDI HAVUZUNDAN okunur — elle guncellemen gerekmez.
-#  Tarayicin havuz.json'a yeni bir hisse ekledigi anda burasi da onu tarar.
-#  Havuza ulasilamazsa asagidaki yedek liste devreye girer.
+# TARANACAK HISSELER
+# Liste otomatik olarak KENDI HAVUZUNDAN ayrılır — elle güncellemen gerekmez.
+# Tarayicin havuz.json'a yeni bir his ekledigi anda burası da onu tarar.
+# Havuza ulaşılamazsa asagidaki yedek liste devreye girer.
 # ============================================================================
 
-HAVUZ_URL = os.environ.get(
-    "HAVUZ_URL",
-    "https://raw.githubusercontent.com/matematikneferi-boop/Hisse-havuzu/main/havuz.json",
+HAVUZ_URL = işletim sistemi. çevre . elde etmek (
+    "HAVUZ_URL" ,
+    "https://raw.githubusercontent.com/matematikneferi-boop/Hisse-havuzu/main/havuz.json" ,
 )
 
 YEDEK_HISSELER = """
 THYAO ASELS GARAN AKBNK ISCTR YKBNK VAKBN HALKB SASA KCHOL
-SAHOL EREGL BIMAS SISE TUPRS FROTO TOASO TTKOM TCELL PGSUS
-KOZAL KOZAA IPEKE PETKM ARCLK TAVHL ENKAI HEKTS ODAS ALARK
-EKGYO KRDMD TKFEN SOKM MGROS AEFES CCOLA ULKER VESTL DOHOL
+ŞAHOL EREĞL BİMAŞ ŞİŞE TUPRS FROTO TOASO TTKOM TCELL PGSUS
+KOZAL KOZAA İPEKE PETKM ARCLK TAVHL ENKAI HEKTS ODAŞ ALARK
+EKGYO KRDMD TKFEN SOKM MGROS AEFES CCOLA ÜLKER VESTL DOHOL
 GUBRF AKSEN ZOREN SMRTG BRSAN CIMSA OYAKC KONTR ASTOR EUPWR
 """
 
