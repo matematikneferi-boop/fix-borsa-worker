@@ -614,8 +614,8 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit .ay2{color:var(--soluk);font-size:10.5px}
 .hotSerit{margin:0 0 9px}
 .hotBaslik{font-size:12px;font-weight:700;color:var(--sar);margin-bottom:6px}
-.hotSira{display:flex;gap:8px}
-.hotKart{flex:1;min-width:0;background:var(--kart);border:1px solid var(--ciz);
+.hotSira{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.hotKart{flex:0 0 84px;background:var(--kart);border:1px solid var(--ciz);
   border-left:3px solid var(--ciz);border-radius:10px;padding:8px 9px;cursor:pointer}
 .hotKart:active{background:var(--kart2)}
 .hotKod{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -854,13 +854,11 @@ function seritCiz(){
   var sure=Math.max(45,Math.round(gosterilen.length*4.2));
   el("serit").innerHTML='<span style="animation-duration:'+sure+'s">'+ic+'<span class="ay">◆</span>'+ic+'<span class="ay">◆</span></span>';
 }
-/* ---------- 🔥 EN GÜÇLÜ 3 SİNYAL — TÜM SEKMELERİN ÜSTÜNDE SABİT ÖZET ----------
-   Kullanıcı hangi sekmede olursa olsun (15DK/1SA/4SA/1G/Adaylar/Presetler...)
-   her zaman görünen küçük bir şerit: 4 ana listeden (tavan/potansiyel/fibo/
-   uzunvade) kalite puanı en yüksek 3 FARKLI hisseyi gösterir. Aynı kod birden
-   fazla listede varsa en yüksek kaliteli görünümü tutulur, tekrar basılmaz.
-   Dokununca aynı satirBagla() mekanizmasıyla normal detay ekranı açılır —
-   ayrı bir tıklama sistemi kurmaya gerek yok. */
+/* ---------- 🔥 EN GÜÇLÜ SİNYALLER — TÜM SEKMELERİN ÜSTÜNDE SABİT ÖZET ----------
+   İki satır: (1) tüm dilimler karışık, kalite puanı en yüksek 5 farklı hisse
+   ("en güçlülerin güçlüsü") ve (2) her dilimin (15DK/1SA/4SA/1G) KENDİ en
+   güçlü hissesi -- bir dilim genel top 5'e girmese bile kendi en iyisi burada
+   görünür. Dokununca satirBagla() ile aynı detay ekranı açılır. */
 function hotCiz(){
   var kutu=el("hotSerit"); if(!kutu)return;
   var hepsi=[];
@@ -869,26 +867,43 @@ function hotCiz(){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
   });
-  var enIyi={};
+  if(!hepsi.length){kutu.innerHTML="";return}
+
+  var enIyiKod={};
   hepsi.forEach(function(x){
     if(!x.kod)return;
-    var mv=enIyi[x.kod];
-    if(!mv||(x.kalite||0)>(mv.kalite||0))enIyi[x.kod]=x;
+    var mv=enIyiKod[x.kod];
+    if(!mv||(x.kalite||0)>(mv.kalite||0))enIyiKod[x.kod]=x;
   });
-  var liste=Object.keys(enIyi).map(function(k){return enIyi[k]});
-  liste.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
-  liste=liste.slice(0,3);
-  if(!liste.length){kutu.innerHTML="";return}
-  kutu.innerHTML='<div class="hotBaslik">🔥 Şu an en güçlü 3 sinyal</div><div class="hotSira">'+
-    liste.map(function(x){
-      var t=TF[x._ad]||{kisa:x.tf||"",renk:"var(--ciz)"};
-      var kr=kar(x);
-      return '<div class="hotKart" data-kod="'+E(x.kod)+'" data-l="'+x._ad+'" style="border-left-color:'+t.renk+'">'+
-        '<div class="hotKod">'+E(x.kod)+'</div>'+
-        '<div class="hotDil">'+t.kisa+'</div>'+
-        '<div class="hotYuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+'</div>'+
-      '</div>';
-    }).join("")+"</div>";
+  var genelTop=Object.keys(enIyiKod).map(function(k){return enIyiKod[k]});
+  genelTop.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
+  genelTop=genelTop.slice(0,5);
+
+  var dilimTop=["tavan","potansiyel","fibo","uzunvade"].map(function(ad){
+    var l=(D.kartlar&&D.kartlar[ad]||[]).slice();
+    l.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
+    var en=l[0]; if(!en)return null;
+    var y=Object.assign({},en);y._ad=ad;return y;
+  }).filter(Boolean);
+
+  function kartHtml(x){
+    var t=TF[x._ad]||{kisa:x.tf||"",renk:"var(--ciz)"};
+    var kr=kar(x);
+    return '<div class="hotKart" data-kod="'+E(x.kod)+'" data-l="'+x._ad+'" style="border-left-color:'+t.renk+'">'+
+      '<div class="hotKod">'+E(x.kod)+'</div>'+
+      '<div class="hotDil">'+t.kisa+'</div>'+
+      '<div class="hotYuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+'</div>'+
+    '</div>';
+  }
+
+  var h='';
+  if(genelTop.length)
+    h+='<div class="hotBaslik">🔥 En güçlülerin güçlüsü — 5</div><div class="hotSira">'+
+       genelTop.map(kartHtml).join("")+"</div>";
+  if(dilimTop.length)
+    h+='<div class="hotBaslik" style="margin-top:8px">📌 Her dilimin en güçlüsü</div><div class="hotSira">'+
+       dilimTop.map(kartHtml).join("")+"</div>";
+  kutu.innerHTML=h;
   satirBagla();
 }
 function sirCiz(akt){
