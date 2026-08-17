@@ -283,7 +283,8 @@ const YF_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML
    barı) taramadaki "Şimdi" fiyatından (regularMarketPrice) farklıysa —
    aynı gün ise son barı günceller, farklı günse yeni (oluşmakta olan) bar
    ekler. Grafik ile "Şimdi" fiyatı hep aynı kaynağı göstersin diye. */
-async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range=6mo&interval=1d&_="+Date.now()
+async function yfMumCek(host,kod,interval,range){interval=interval||"1d";range=range||"6mo"
+;const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range="+range+"&interval="+interval+"&_="+Date.now()
 ;let res;try{res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store"})}catch(e){return{hata:"fetch istisnası: "+(e&&e.message||e)}}
 ;if(!res.ok)return{hata:"HTTP "+res.status+" ("+host+")"};const j=await res.json().catch(()=>null)
 ;if(!j)return{hata:"JSON parse edilemedi ("+host+")"}
@@ -292,17 +293,32 @@ async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+e
 ;rz.timestamp.forEach((ts,idx)=>{const c=q.close&&q.close[idx];if(c==null||!(c>0))return
 ;const o=q.open&&q.open[idx],hi=q.high&&q.high[idx],lo=q.low&&q.low[idx],ac=(o>0)?o:c
 ;const hc=q.volume&&q.volume[idx];out.push({time:ts,open:ac,high:(hi>0)?Math.max(hi,ac,c):Math.max(ac,c),low:(lo>0)?Math.min(lo,ac,c):Math.min(ac,c),close:c,hacim:(hc>0)?hc:0})})
-;const canliF=rz.meta&&Number(rz.meta.regularMarketPrice),canliZ=rz.meta&&Number(rz.meta.regularMarketTime)
+;/* CANLI SON BAR yaması yalnızca GÜNLÜK dilimde anlamlı — saatlik dilimde
+   "aynı gün mü" kontrolü barları yanlış birleştirir, o yüzden 1d dışında
+   uygulanmıyor. */
+;if(interval==="1d"){const canliF=rz.meta&&Number(rz.meta.regularMarketPrice),canliZ=rz.meta&&Number(rz.meta.regularMarketTime)
 ;if(canliF>0&&canliZ>0&&out.length){const son=out[out.length-1]
 ;const gunSon=Math.floor((son.time+108e5)/864e5),gunCanli=Math.floor((canliZ+108e5)/864e5)
 ;if(gunCanli===gunSon){son.close=canliF;son.high=Math.max(son.high,canliF);son.low=Math.min(son.low,canliF)}
-else if(gunCanli>gunSon)out.push({time:canliZ,open:son.close,high:Math.max(son.close,canliF),low:Math.min(son.close,canliF),close:canliF})}
+else if(gunCanli>gunSon)out.push({time:canliZ,open:son.close,high:Math.max(son.close,canliF),low:Math.min(son.close,canliF),close:canliF})}}
 ;if(!out.length)return{hata:"0 bar döndü ("+host+")"}
 ;return{veri:out}}
-async function yfMumlar(kod){const hatalar=[]
-;try{const a=await yfMumCek("query1.finance.yahoo.com",kod);if(a.veri&&a.veri.length>=5)return{veri:a.veri,hatalar:hatalar};hatalar.push(a.hata||("sadece "+((a.veri&&a.veri.length)||0)+" bar döndü (query1)"))}catch(e){hatalar.push("query1 istisna: "+(e&&e.message||e))}
-try{const b=await yfMumCek("query2.finance.yahoo.com",kod);if(b.veri&&b.veri.length>=5)return{veri:b.veri,hatalar:hatalar};hatalar.push(b.hata||("sadece "+((b.veri&&b.veri.length)||0)+" bar döndü (query2)"))}catch(e){hatalar.push("query2 istisna: "+(e&&e.message||e))}
+async function yfMumlar(kod,interval,range){const hatalar=[]
+;try{const a=await yfMumCek("query1.finance.yahoo.com",kod,interval,range);if(a.veri&&a.veri.length>=5)return{veri:a.veri,hatalar:hatalar};hatalar.push(a.hata||("sadece "+((a.veri&&a.veri.length)||0)+" bar döndü (query1)"))}catch(e){hatalar.push("query1 istisna: "+(e&&e.message||e))}
+try{const b=await yfMumCek("query2.finance.yahoo.com",kod,interval,range);if(b.veri&&b.veri.length>=5)return{veri:b.veri,hatalar:hatalar};hatalar.push(b.hata||("sadece "+((b.veri&&b.veri.length)||0)+" bar döndü (query2)"))}catch(e){hatalar.push("query2 istisna: "+(e&&e.message||e))}
 console.error("yfMumlar: her iki host de başarısız",kod,hatalar);return{veri:[],hatalar:hatalar}}
+/* Dilim → Yahoo interval/range eşlemesi. Yahoo'da yerel "4 saat" mumu yok;
+   4SA için de 60m çekiyoruz (çizgi uç noktaları gerçek saat damgası
+   taşıdığından grafikte doğru yere oturuyor, sadece mum daha ince taneli
+   görünüyor — yanlış görünmekten iyi). */
+const MUM_ARALIK={
+  "1SA":{interval:"60m",range:"3mo"},
+  "4SA":{interval:"60m",range:"3mo"},
+  "1G":{interval:"1d",range:"6mo"},
+  "1HAF":{interval:"1wk",range:"2y"},
+  "1AY":{interval:"1mo",range:"5y"}
+};
+function mumTfNormal(t){return(t&&MUM_ARALIK[t])?t:"1G"}
 /* ================== 📐 FORMASYON ==================
    Tespit artik Worker'da YAPILMIYOR. Kama / ucgen / bayrak-flama / ikili dip
    taramasi GitHub Actions icinde Python ile kosuyor (formasyon.py) ve sonuc
@@ -326,13 +342,26 @@ async function formasyonlariGetir(A){
     return j;
   }catch(e){return _fBellek||null}
 }
-/* Grafik gunluk mumlarla ciziliyor. Bu yuzden cizgiler yalnizca 1G
-   formasyonundan alinir — 15 dakikalik bir kamanin cizgisi gunluk grafige
-   yanlis oturur. Diger dilimler Formasyon sekmesinde listelenir. */
-async function formasyonBul(A,kod){
+/* Artik grafik istenen dilime gore ciziliyor (bkz. MUM_ARALIK), o yuzden
+   cizgi de o dilime gore secilir:
+   1) tf==="1G" ve p.gunluk varsa → o (gunluk her zaman ayrica tutulur)
+   2) formasyon.json'daki EN İYİ (ust seviye) kayit tam da istenen dilime
+      aitse (p.tf===tf) → onun ust/alt/hedef geometrisi
+   3) o dilimde formasyon var ama sadece dilimler[]'de özet (tip/yon/kalite)
+      olarak duruyorsa → çizgisiz, sadece rozet icin dondur (eksikCizgi:true)
+   4) hicbiri yoksa → null */
+async function formasyonBul(A,kod,tf){
   const j=await formasyonlariGetir(A);
   const p=j&&j.sonuc&&j.sonuc[kod];
-  return(p&&p.gunluk)||null;
+  if(!p)return null;
+  tf=mumTfNormal(tf);
+  if(tf==="1G"&&p.gunluk)return Object.assign({tf:"1G"},p.gunluk);
+  if(p.tf===tf&&p.ust&&p.alt)return{tf:tf,tip:p.tip,yon:p.yon,kalite:p.kalite,ust:p.ust,alt:p.alt,ustUz:p.ustUz,altUz:p.altUz,hedef:p.hedef,grup:p.grup};
+  if(Array.isArray(p.dilimler)){
+    const d=p.dilimler.find(x=>x&&x.tf===tf);
+    if(d)return Object.assign({tf:tf,eksikCizgi:!0},d);
+  }
+  return null;
 }
 /* TEK TUŞ: "TARA VE BULUTA YÜKLE" /push'a ulaştığı anda GitHub'daki formasyon
    taramasını da başlatır. Böylece tarayıcıdan tek düğmeye basmak yetiyor.
@@ -1467,6 +1496,15 @@ var TF={potansiyel:{ad:"1 SAAT",kisa:"1SA",r:"1SA",ik:"📊",renk:"var(--t1s)"},
         adayOrtaVade:{ad:"4 SAAT adayları",kisa:"4SA",r:"aday",ik:"🟨",renk:"var(--tad)"},
         adayUzun:{ad:"1 GÜN adayları",kisa:"1G",r:"aday",ik:"🟨",renk:"var(--tad)"},
         adayHafta:{ad:"1 HAFTA adayları",kisa:"1HAF",r:"aday",ik:"🟨",renk:"var(--tad)"}};
+/* detay()'a gelen "ad" ya bir liste anahtarı (potansiyel/fibo/uzunvade/…)
+   ya da doğrudan bir dilim kodu (1SA/4SA/1G/1HAF — kama listesinden) olabilir.
+   Grafiğin doğru dilimi Yahoo'dan çekebilmesi için ikisini de tek bir
+   kanonik koda (1SA/4SA/1G/1HAF/1AY) indiriyoruz. */
+function tfCoz(ad){
+  if(TF[ad]&&TF[ad].kisa)return TF[ad].kisa;
+  if(/^(1SA|4SA|1G|1HAF|1AY)$/.test(ad))return ad;
+  return"1G";
+}
 function E(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 function N(v,b){return(v==null||isNaN(v))?"—":Number(v).toFixed(b==null?2:b)}
 function Y(v){if(v==null||isNaN(v))return"";return(v>=0?"+":"")+Number(v).toFixed(2)+"%"}
@@ -2314,7 +2352,7 @@ function detay(kod,ad){
     h+='<button class="dg" id="paylasDg">📤 Paylaş</button>';
     h+='<div class="uyari">⚠️ Yatırım tavsiyesi değildir.</div>';
     K.innerHTML=h;
-    grafikCiz(kod);
+    grafikCiz(kod,ad);
     el("dkapat").onclick=function(){tit();K.classList.remove("ac");K.innerHTML="";tgGeriDugme();if(sekme==="fav"||sekme==="portfoy")basla()};
     el("favDg").onclick=function(){
       tit();var b=el("favDg");b.disabled=true;
@@ -2391,10 +2429,11 @@ function detay(kod,ad){
 /* MUM GRAFİĞİ: detay() paneli içinde ayrı, engellemeyen bir çağrı — detay
    metni beklemeden kendi hızında gelir. CDN veya veri yoksa sessizce bir
    uyarı yazar, panelin geri kalanını hiçbir şekilde etkilemez. */
-function grafikCiz(kod,deneme){
+function grafikCiz(kod,ad,deneme){
   deneme=deneme||0;
-  if(!window.LightweightCharts&&deneme<20){setTimeout(function(){grafikCiz(kod,deneme+1)},150);return}
-  post("/api/mumlar",{kod:kod}).then(function(v){
+  var tf=tfCoz(ad);
+  if(!window.LightweightCharts&&deneme<20){setTimeout(function(){grafikCiz(kod,ad,deneme+1)},150);return}
+  post("/api/mumlar",{kod:kod,tf:tf}).then(function(v){
     var kutu=el("mumKutu"); if(!kutu)return;
     try{
       if(!window.LightweightCharts){kutu.innerHTML='<p class="bilgi">Grafik kütüphanesi yüklenemedi (internet bağlantısını kontrol et).</p>';return}
@@ -2403,11 +2442,12 @@ function grafikCiz(kod,deneme){
         var dbg=(v&&v.debug&&v.debug.length)?('<br><span style="font-size:11px;opacity:.7">'+v.debug.join('<br>')+'</span>'):'';
         kutu.innerHTML='<p class="bilgi">Bu hisse için grafik verisi yetersiz.'+dbg+'</p>';return}
       kutu.innerHTML='';
+      var saatlik=(tf==="1SA"||tf==="4SA");
       var chart=LightweightCharts.createChart(kutu,{
         width:kutu.clientWidth||320, height:220,
         layout:{background:{color:"transparent"},textColor:"#e6edf3"},
         grid:{vertLines:{color:"#262d38"},horzLines:{color:"#262d38"}},
-        timeScale:{timeVisible:false,secondsVisible:false},
+        timeScale:{timeVisible:saatlik,secondsVisible:false},
         rightPriceScale:{borderVisible:false}
       });
       var seri=chart.addSeries(LightweightCharts.CandlestickSeries,{
@@ -2427,6 +2467,12 @@ function grafikCiz(kod,deneme){
         };
         cizgi(d.ust,0);cizgi(d.alt,0);cizgi(d.ustUz,2);cizgi(d.altUz,2);
         if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk+';border-color:'+renk+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+"</span>";
+      }else if(d&&d.tip){
+        /* Bu dilimde formasyon var ama çizgi geometrisi tarama tarafında
+           henüz üretilmiyor (yalnız özet) — rozeti göster, çizgi çizme,
+           kullanıcıyı yanıltma. */
+        var renk2=d.yon==="al"?"#3fb950":(d.yon==="sat"?"#f85149":"#d29922");
+        if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk2+';border-color:'+renk2+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+" · çizgi yok</span>";
       }else if(rz)rz.innerHTML="";
       chart.timeScale().fitContent();
       var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
@@ -3524,10 +3570,12 @@ if(GC.length>=24)break}}catch(e){}
 return JS({ok:!0,kart:kart||null,ayna:z?AYNA(kod,z):"",fav:fav,poz:poz,gecmis:GC})}
 if("/api/mumlar"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
-const r=await yfMumlar(kod).catch(e=>({veri:[],hatalar:["yfMumlar istisna: "+(e&&e.message||e)]}));
+const tf=mumTfNormal(gov.tf);
+const ar=MUM_ARALIK[tf];
+const r=await yfMumlar(kod,ar.interval,ar.range).catch(e=>({veri:[],hatalar:["yfMumlar istisna: "+(e&&e.message||e)]}));
 const mumlar=r.veri||[];
-const desen=await formasyonBul(A,kod);
-return JS({ok:!0,mumlar:mumlar,desen:desen,debug:r.hatalar||[]})}
+const desen=await formasyonBul(A,kod,tf);
+return JS({ok:!0,mumlar:mumlar,desen:desen,tf:tf,debug:r.hatalar||[]})}
 /* FORMASYON ROZETİ + LİSTESİ — ikisi de tek kaynaktan, GitHub Actions'in
    yayinladigi formasyon.json'dan okunuyor. Yahoo istegi yok, hisse basina KV
    onbellegi yok, "en fazla 48 hisse" tavani yok. */
