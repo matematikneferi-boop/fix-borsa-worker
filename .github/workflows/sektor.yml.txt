@@ -1,0 +1,44 @@
+name: Sektor Haritasi
+
+# Sektor bilgisi haftada bir degisir degismez; her 8 dakikada bir cekmenin
+# anlami yok. Pazartesi sabahi bir kez calisir, bir de elle tetiklenebilir.
+# Mevcut fibo-tara / formasyon / bekci akislarina HIC dokunmaz; yalnizca
+# sektor.json dosyasini yazar.
+
+on:
+  schedule:
+    - cron: "10 5 * * 1"     # her Pazartesi 05:10 UTC (TR 08:10)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sektor
+  cancel-in-progress: false
+
+jobs:
+  cek:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: borsapy kur
+        run: pip install --quiet borsapy
+
+      - name: Sektor haritasini cek
+        run: python sektor-cek.py
+
+      - name: Yayinla
+        run: |
+          git config user.name sektor-bot
+          git config user.email actions@github.com
+          git add sektor.json || true
+          git diff --staged --quiet || git commit -m "sektor haritasi guncellendi"
+          git pull --rebase --autostash || true
+          git push || echo "degisiklik yok"
