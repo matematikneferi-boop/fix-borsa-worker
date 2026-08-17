@@ -4,6 +4,10 @@ name: Sektor Haritasi
 # anlami yok. Pazartesi sabahi bir kez calisir, bir de elle tetiklenebilir.
 # Mevcut fibo-tara / formasyon / bekci akislarina HIC dokunmaz; yalnizca
 # sektor.json dosyasini yazar.
+#
+# v2: artik her hisse icin ayri Ticker.info cagrisi yapiyor (~450+ istek),
+# eski dropdown-scraping yontemine gore daha yavas ama daha saglam.
+# Bu yuzden timeout 15 dk'dan 40 dk'ya cikarildi.
 
 on:
   schedule:
@@ -20,7 +24,7 @@ concurrency:
 jobs:
   cek:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
