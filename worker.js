@@ -1,4 +1,4 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.6";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="11.7";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null,oTS=0;const c=new Set(["tavan","potansiyel","fibo","uzunvade","haftalik","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun","adayHafta"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
@@ -214,6 +214,16 @@ async function kapiKontrol(A,$,p,yerelSinir){
     /* 1️⃣ maddeyle birleşim: binding tanımlıysa IP başına da sınır uygula */
     if(yerelSinir&&!await sinirGec(A,"SINIR_PANEL",ip))
       return{ok:!1,kod:429,mesaj:"çok fazla istek"};
+    /* B) İmzalı, 30 dakikalık anahtar — bota /panel yazınca üretiliyor.
+       Süresi dolduğunda kendiliğinden geçersiz olur. */
+    try{
+      const tok=$.searchParams&&$.searchParams.get("t");
+      if(tok){
+        if(await panelTokenGecerli(A,tok)){saglikArtir("panelToken");return{ok:!0}}
+        saglikArtir("panelTokenGecersiz");
+        return{ok:!1,kod:401,mesaj:"bağlantının süresi dolmuş — bota /panel yazıp yeni bağlantı al"};
+      }
+    }catch(e){}
     if(s(A,$)){
       /* KV YAZMA KORUMASI: sayaç zaten yoksa delete ÇAĞIRMA.
          delete bir "yazma" işlemidir; /push 10 saniyede bir geldiği için
@@ -282,7 +292,7 @@ async function yfMumCek(host,kod){const u="https://"+host+"/v8/finance/chart/"+e
 ;const q=rz.indicators&&rz.indicators.quote&&rz.indicators.quote[0];if(!q)return{hata:"quote alanı yok ("+host+")"};const out=[]
 ;rz.timestamp.forEach((ts,idx)=>{const c=q.close&&q.close[idx];if(c==null||!(c>0))return
 ;const o=q.open&&q.open[idx],hi=q.high&&q.high[idx],lo=q.low&&q.low[idx],ac=(o>0)?o:c
-;out.push({time:ts,open:ac,high:(hi>0)?Math.max(hi,ac,c):Math.max(ac,c),low:(lo>0)?Math.min(lo,ac,c):Math.min(ac,c),close:c})})
+;const hc=q.volume&&q.volume[idx];out.push({time:ts,open:ac,high:(hi>0)?Math.max(hi,ac,c):Math.max(ac,c),low:(lo>0)?Math.min(lo,ac,c):Math.min(ac,c),close:c,hacim:(hc>0)?hc:0})})
 ;const canliF=rz.meta&&Number(rz.meta.regularMarketPrice),canliZ=rz.meta&&Number(rz.meta.regularMarketTime)
 ;if(canliF>0&&canliZ>0&&out.length){const son=out[out.length-1]
 ;const gunSon=Math.floor((son.time+108e5)/864e5),gunCanli=Math.floor((canliZ+108e5)/864e5)
@@ -477,6 +487,284 @@ const baslik=yeniGirenler.length>1?"🚨 <b>"+yeniGirenler.length+" YENİ GÜÇL
 const metin=baslik+yeniGirenler.slice(0,6).map(hisse=>j(hisse)).join("\n")+
 (yeniGirenler.length>6?"\n<i>…ve "+(yeniGirenler.length-6)+" hisse daha. Menüden ⚡ Kısa Trade listesine bak.</i>":"");
 for(const uid of kullanicilar.slice(0,ALARM_MAX_ALICI))await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,text:metin,parse_mode:"HTML",disable_web_page_preview:!0})}
+/* ══════════════════════════════════════════════════════════════════════════
+   🧩 İKİNCİ PAKET (sürüm 11.7) — beş yeni katman
+     A) Absorpsiyon / order-flow tespiti (günlük barlardan)
+     B) İmzalı, süresi dolan yönetici panel anahtarı + kademeli hız sınırı
+     C) KAP bildirimlerini kategoriye ayırma + önem puanı
+     D) TEFAS fon akışı (ikinci kaynak — çapraz doğrulama)
+     E) KAP'tan kendi kendine büyüyen şirket adı haritası
+   Hepsi eklenti: hiçbiri mevcut bir akışın içine girmiyor, hepsi kendi uç
+   noktasından çağrılıyor, hata durumunda sessizce boş dönüyor.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ---------- A) 🌊 ABSORPSİYON / ORDER-FLOW ----------
+   MANTIK (order-flow kitaplarındaki "absorption" tanımı):
+   Bir barda HACİM patlıyor ama FİYAT neredeyse hiç ilerlemiyorsa, gelen
+   agresif emirleri karşı tarafta birileri sessizce yutuyor demektir.
+   Yüksek hacim + dar aralık = büyük oyuncu pozisyon topluyor/dağıtıyor.
+
+   DÜRÜST SINIR: gerçek order-flow tick ve bid/ask verisi ister; bizde
+   sadece günlük OHLCV var. Bu yüzden bu bir YAKLAŞIKLAMA (proxy).
+   Yanlış pozitif verebilir — tek başına al/sat sinyali değildir, mevcut
+   sinyallerin üstüne "kim topluyor?" katmanıdır. Bunu ekranda da yazıyoruz.
+
+   PUAN = hacim katı × aralık darlığı × kapanış konumu (0-100). */
+function ortancaAl(dizi){
+  if(!dizi.length)return 0;
+  const d=dizi.slice().sort((a,b)=>a-b),m=Math.floor(d.length/2);
+  return d.length%2?d[m]:(d[m-1]+d[m])/2;
+}
+function absorpsiyonHesapla(mumlar){
+  try{
+    if(!mumlar||mumlar.length<25)return null;
+    const son=mumlar[mumlar.length-1];
+    if(!son||!(son.hacim>0)||!(son.close>0))return null;
+    const gecmis=mumlar.slice(-21,-1);                 /* son bar hariç 20 bar */
+    if(gecmis.length<15)return null;
+    const hacimler=gecmis.map(x=>x.hacim||0).filter(x=>x>0);
+    if(hacimler.length<10)return null;
+    const hacimOrt=ortancaAl(hacimler);
+    if(!(hacimOrt>0))return null;
+    const hacimKat=son.hacim/hacimOrt;                 /* 1 = normal, 3 = üç kat */
+    const aralik=(son.high-son.low)/son.close;
+    const araliklar=gecmis.map(x=>(x.high-x.low)/(x.close||1)).filter(x=>x>0);
+    const aralikOrt=ortancaAl(araliklar);
+    if(!(aralikOrt>0))return null;
+    const darlik=aralik/aralikOrt;                     /* 1 = normal, 0.4 = çok dar */
+    const yayilim=son.high-son.low;
+    const konum=yayilim>0?(son.close-son.low)/yayilim:0.5;  /* 1 = tepede kapandı */
+    /* Absorpsiyon şartı: hacim en az 1.8 kat VE aralık normalin altında */
+    if(hacimKat<1.8||darlik>0.85)return null;
+    const hacimP=Math.min(1,(hacimKat-1.8)/2.2);       /* 1.8x→0, 4x→1 */
+    const darP=Math.min(1,(0.85-darlik)/0.55);         /* 0.85→0, 0.30→1 */
+    const konumP=Math.abs(konum-0.5)*2;                /* uçlara yakınlık */
+    const puan=Math.round(100*(0.45*hacimP+0.35*darP+0.20*konumP));
+    const yon=konum>=0.6?"talep":(konum<=0.4?"arz":"kararsız");
+    return{puan:puan,hacimKat:Math.round(hacimKat*10)/10,
+      darlik:Math.round(darlik*100)/100,konum:Math.round(konum*100),
+      yon:yon,fiyat:son.close,zaman:son.time};
+  }catch(e){return null}
+}
+/* Taranacak hisseler: sinyal listelerinde geçenler + kullanıcının takip
+   ettikleri. Cloudflare bir istekte en fazla 50 alt-istek (subrequest)
+   yapmaya izin veriyor; KV okuma/yazmaları da bu bütçeden düşüyor ve
+   yfMumlar gerekirse iki host deniyor. En kötü durumda 16 hisse = 32 istek
+   + ~8 KV işlemi = 40 — sınırın altında güvenli pay kalıyor. */
+const ABS_TAVAN=16,ABS_CACHE_MS=18e5; /* 30 dakika */
+async function absorpsiyonTara(A,ekKodlar){
+  const c=A.VERI&&await A.VERI.get("absorpsiyon");
+  if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<ABS_CACHE_MS)return j}catch(e){}}
+  const L=await g(A),kodSet=new Set();
+  if(L&&L.kartlar)for(const k of Object.keys(L.kartlar)){
+    if("sira"===k||0===k.indexOf("aday"))continue;
+    for(const x of(L.kartlar[k]||[]))if(x&&x.kod)kodSet.add(String(x.kod));
+  }
+  for(const k of(ekKodlar||[]))if(k)kodSet.add(String(k));
+  const kodlar=[...kodSet].slice(0,ABS_TAVAN);
+  const bulunan=[];
+  for(const kod of kodlar){
+    try{
+      const r=await yfMumlar(kod);
+      const a=absorpsiyonHesapla(r&&r.veri);
+      if(a)bulunan.push(Object.assign({kod:kod},a));
+    }catch(e){}
+  }
+  bulunan.sort((x,y)=>y.puan-x.puan);
+  const paket={ts:Date.now(),taranan:kodlar.length,liste:bulunan.slice(0,30)};
+  if(A.VERI)await A.VERI.put("absorpsiyon",JSON.stringify(paket)).catch(()=>{});
+  saglikArtir("absTarama");
+  return paket;
+}
+
+/* ---------- B) 🔐 İMZALI PANEL ANAHTARI ----------
+   ESKİ DURUM: /panel?key=kolayfix — anahtar sabit, süresiz, ekran
+   görüntüsüne düşse ya da tarayıcı geçmişinde kalsa sonsuza kadar geçerli.
+   YENİ: bota /panel yazınca 30 dakika geçerli, imzalı tek kullanımlık bir
+   adres üretiliyor. İmza BOT_TOKEN ile atılıyor (zaten gizli), taklit
+   edilemez. ESKİ ?key= ADRESİ ÇALIŞMAYA DEVAM EDİYOR — kayıtlı yer imlerin
+   bozulmasın diye kaldırmadım. */
+function b64url(buf){
+  let s2="";const u8=new Uint8Array(buf);
+  for(let i=0;i<u8.length;i++)s2+=String.fromCharCode(u8[i]);
+  return btoa(s2).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+async function panelImzala(A,veri){
+  const gizli=String(A.BOT_TOKEN||A.PANEL_KEY||A.PUSH_KEY||"fixborsa");
+  const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(gizli),
+    {name:"HMAC",hash:"SHA-256"},!1,["sign"]);
+  const im=await crypto.subtle.sign("HMAC",k,new TextEncoder().encode(veri));
+  return b64url(im).slice(0,32);
+}
+const PANEL_TOKEN_SN=1800; /* 30 dakika */
+async function panelTokenUret(A,uid){
+  const bitis=Math.floor(Date.now()/1e3)+PANEL_TOKEN_SN,govde=String(uid)+"."+bitis;
+  return govde+"."+await panelImzala(A,govde);
+}
+async function panelTokenGecerli(A,token){
+  try{
+    const p2=String(token||"").split(".");
+    if(3!==p2.length)return!1;
+    const[uid,bitis,imza]=p2;
+    if(!d(uid))return!1;                                   /* sadece yönetici */
+    if(Number(bitis)<Math.floor(Date.now()/1e3))return!1;   /* süresi dolmuş */
+    const beklenen=await panelImzala(A,uid+"."+bitis);
+    return imza===beklenen;
+  }catch(e){return!1}
+}
+
+/* ---------- C) 🧠 KAP BİLDİRİM SINIFLANDIRMA ----------
+   alperaydyn/KAP_Notifications projesindeki fikir: bildirimi sadece iletme,
+   NE OLDUĞUNU anla ve önemliyse öne çıkar. Orada makine öğrenmesi var;
+   burada kural tabanlı sözlük kullanıyorum — sebebi: Worker'da model
+   çalıştıramayız, kurallar şeffaftır (neden bu kategoriye girdiğini
+   görebilirsin) ve KAP konu başlıkları zaten standart kalıplarla yazılır.
+   ÖNEM PUANI: fiyata etki potansiyeline göre elle verilmiş ağırlık. */
+const KAP_KATEGORI=[
+  {kod:"geri",  ad:"Pay Geri Alım",      ik:"🔁", onem:90, rx:/GERI ALIM|GERI ALINAN PAY|PAY GERI/},
+  {kod:"pay",   ad:"Pay Alım / Satım",   ik:"🔀", onem:85, rx:/PAY ALIM|PAY SATIS|PAY SAHIPLIGI|ORTAKLIK YAPISI|SERMAYEDE PAY/},
+  {kod:"birles",ad:"Birleşme / Devralma",ik:"🤝", onem:95, rx:/BIRLESME|DEVRALMA|BOLUNME|SATIN ALINMASI|HISSE DEVRI/},
+  {kod:"serm",  ad:"Sermaye Artırımı",   ik:"📈", onem:80, rx:/SERMAYE ARTIRIM|BEDELLI|BEDELSIZ|TAHSISLI|RUCHAN/},
+  {kod:"temet", ad:"Temettü",            ik:"💰", onem:75, rx:/KAR PAYI|TEMETTU/},
+  {kod:"ihale", ad:"Sözleşme / İhale",   ik:"📝", onem:70, rx:/IHALE|SOZLESME|SIPARIS|ANLASMA|PROTOKOL|IS ALIMI/},
+  {kod:"yatir", ad:"Yatırım / Kapasite", ik:"🏭", onem:65, rx:/YATIRIM|KAPASITE|TESIS|FABRIKA|URETIM ARTIS|LISANS/},
+  {kod:"finans",ad:"Finansal Rapor",     ik:"📊", onem:60, rx:/FINANSAL RAPOR|FAALIYET RAPORU|BILANCO|KAR ZARAR|BAGIMSIZ DENETIM/},
+  {kod:"dava",  ad:"Dava / Ceza",        ik:"⚖️", onem:70, rx:/DAVA|CEZA|SORUSTURMA|ICRA|IFLAS|KONKORDATO|TEDBIR/},
+  {kod:"yonet", ad:"Yönetim Değişikliği",ik:"👤", onem:50, rx:/YONETIM KURULU|GENEL MUDUR|ISTIFA|ATAMA|IMZA YETKI/},
+  {kod:"genel", ad:"Genel Kurul",        ik:"🏛", onem:45, rx:/GENEL KURUL|ESAS SOZLESME|TADIL/},
+  {kod:"diger", ad:"Diğer",              ik:"📄", onem:25, rx:/./}
+];
+function kapSinifla(konu){
+  const t=trSad(konu||"");
+  for(const k of KAP_KATEGORI)if(k.rx.test(t))
+    return{kod:k.kod,ad:k.ad,ik:k.ik,onem:k.onem};
+  const s2=KAP_KATEGORI[KAP_KATEGORI.length-1];
+  return{kod:s2.kod,ad:s2.ad,ik:s2.ik,onem:s2.onem};
+}
+/* Önem puanını bağlamla düzelt: piyasa kapalıyken gelen bildirim daha
+   çok dikkat çeker, aynı hisseye gün içinde çoklu bildirim gelmişse önem artar. */
+function kapOnemDuzelt(temel,d2,fonSayisi){
+  let p=temel;
+  const sa=Number(String(d2.publishDate||"").slice(11,13));
+  if(sa>=18||sa<9)p+=8;                       /* seans dışı bildirim */
+  if(fonSayisi>=2)p+=10;                      /* aynı hisseye çoklu bildirim */
+  if(fonSayisi>=4)p+=8;
+  return Math.max(0,Math.min(100,Math.round(p)));
+}
+
+/* ---------- E) 🏷 ŞİRKET ADI HARİTASI ----------
+   pykap'ta hazır paketlenmiş bir BIST şirket listesi var. Onu kopyalamak
+   yerine haritayı KAP akışından KENDİMİZ büyütüyoruz: her bildirimde
+   hisse kodu ve şirket ünvanı zaten geliyor. Böylece kimsenin verisine
+   bağımlı olmuyoruz ve liste hep güncel kalıyor.
+   KV YAZMA KORUMASI: en fazla 10 dakikada bir ve sadece YENİ kod
+   bulunduğunda yazılır. */
+let SIRKET_SON_YAZIM=0;
+async function kapSirketGuncelle(A,liste){
+  try{
+    if(!A||!A.VERI||!liste||!liste.length)return;
+    if(Date.now()-SIRKET_SON_YAZIM<6e5)return;
+    const ham=await A.VERI.get("kapSirket");
+    let m={};try{m=ham?JSON.parse(ham):{}}catch(e){m={}}
+    let yeni=0;
+    for(const d2 of liste){
+      const unvan=String(d2.companyTitle||d2.companyName||"").trim();
+      if(!unvan||!d2.relatedStocks)continue;
+      for(const kh of String(d2.relatedStocks).split(",")){
+        const kod=kh.trim().toUpperCase();
+        if(kod&&!m[kod]){m[kod]=unvan.slice(0,60);yeni++}
+      }
+    }
+    if(!yeni)return;
+    SIRKET_SON_YAZIM=Date.now();
+    await A.VERI.put("kapSirket",JSON.stringify(m));
+    saglikSet("sirketSayisi",Object.keys(m).length);
+  }catch(e){}
+}
+async function kapSirketOku(A){
+  try{const h=A.VERI&&await A.VERI.get("kapSirket");return h?JSON.parse(h):{}}catch(e){return{}}
+}
+
+/* ---------- D) 💵 TEFAS FON AKIŞI (İKİNCİ KAYNAK) ----------
+   AMAÇ: KAP "kim pay aldı" der ama sadece eşik aşılınca. TEFAS ise hisse
+   fonlarının toplam büyüklüğünü günlük verir — yani paranın borsaya
+   girip girmediğini bağımsız bir kaynaktan görürsün.
+
+   ⚠️ DÜRÜST OLMAM GEREKEN İKİ ŞEY:
+   1) TEFAS fonların HANGİ HİSSEYİ aldığını AÇIKLAMIYOR. Sadece kategori
+      dağılımı ve fon büyüklüğü var. Yani "şu hisseyi fonlar topluyor"
+      diyemez; "hisse fonlarına para giriyor/çıkıyor" diyebilir.
+   2) Bu uç noktayı buradan test edemedim (geliştirme ortamının ağ erişimi
+      kısıtlı). Çalışmazsa sekmede kırmızı uyarı ve ham hata mesajı
+      görünür — sessizce yanlış veri GÖSTERMEZ. */
+const TEFAS_URL="https://www.tefas.gov.tr/api/DB/BindComparisonFundReturns";
+const TEFAS_CACHE_MS=216e5; /* 6 saat */
+function tefasTarih(gunOnce){
+  const d2=new Date(Date.now()+108e5-(gunOnce||0)*864e5);
+  const ik2=n2=>String(n2).padStart(2,"0");
+  return ik2(d2.getUTCDate())+"."+ik2(d2.getUTCMonth()+1)+"."+d2.getUTCFullYear();
+}
+async function tefasCek(){
+  const govde=new URLSearchParams({
+    calismatipi:"2",fontip:"YAT",sfontur:"",kurucukod:"",fongrup:"HSA",
+    bastarih:tefasTarih(7),bittarih:tefasTarih(0),
+    fonturkod:"",fonunvantip:"",strperiod:"1,1,1,1,1,1,1",islemdurum:"1"
+  }).toString();
+  const iptal=new AbortController();
+  const zt=setTimeout(()=>{try{iptal.abort()}catch(e){}},9e3);
+  try{
+    const r=await fetch(TEFAS_URL,{method:"POST",signal:iptal.signal,
+      headers:{"Content-Type":"application/x-www-form-urlencoded; charset=UTF-8",
+        "User-Agent":YF_UA,"Referer":"https://www.tefas.gov.tr/FonKarsilastirma.aspx",
+        "X-Requested-With":"XMLHttpRequest"},body:govde});
+    clearTimeout(zt);
+    if(!r.ok)return{ok:!1,hata:"HTTP "+r.status};
+    const j=await r.json().catch(()=>null);
+    const dizi=j&&(j.data||j.Data);
+    if(!Array.isArray(dizi))return{ok:!1,hata:"beklenmeyen yanıt biçimi"};
+    return{ok:!0,dizi:dizi};
+  }catch(e){clearTimeout(zt);return{ok:!1,hata:String((e&&e.message)||e).slice(0,140)}}
+}
+async function tefasOzet(A,zorla){
+  if(!zorla&&A.VERI){
+    const c=await A.VERI.get("tefas");
+    if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<TEFAS_CACHE_MS)return j}catch(e){}}
+  }
+  const r=await tefasCek();
+  if(!r.ok){saglikArtir("tefasHata");saglikSet("sonTefasHata",r.hata);return{ts:Date.now(),ok:!1,hata:r.hata}}
+  /* Alan adları TEFAS tarafında değişebiliyor — birden çok isim deniyoruz. */
+  const say=(o,adlar)=>{for(const a2 of adlar){const v=o&&o[a2];if(null!=v&&""!==v&&!isNaN(Number(v)))return Number(v)}return null};
+  let toplamDeger=0,toplamKisi=0,fonSayisi=0,getiriTop=0,getiriSay=0;
+  for(const f of r.dizi){
+    const dg=say(f,["PORTFOYBUYUKLUK","PortfoyBuyukluk","TOPLAMDEGER","FONTOPLAMDEGER"]);
+    const ks=say(f,["KISISAYISI","KisiSayisi","YATIRIMCISAYISI"]);
+    const gt=say(f,["GETIRIORANI","GetiriOrani","GETIRI"]);
+    if(null!=dg)toplamDeger+=dg;
+    if(null!=ks)toplamKisi+=ks;
+    if(null!=gt){getiriTop+=gt;getiriSay++}
+    fonSayisi++;
+  }
+  const paket={ts:Date.now(),ok:!0,fonSayisi:fonSayisi,toplamDeger:toplamDeger,
+    toplamKisi:toplamKisi,ortGetiri:getiriSay?Math.round(100*getiriTop/getiriSay)/100:null};
+  /* Bir önceki ölçümle karşılaştır: asıl bilgi DEĞİŞİM. */
+  if(A.VERI){
+    try{
+      const eskiHam=await A.VERI.get("tefasOnceki");
+      if(eskiHam){const e2=JSON.parse(eskiHam);
+        if(e2.toplamDeger>0)paket.degerDegisim=Math.round(1e4*(paket.toplamDeger/e2.toplamDeger-1))/100;
+        if(e2.toplamKisi>0)paket.kisiDegisim=Math.round(1e4*(paket.toplamKisi/e2.toplamKisi-1))/100;
+        paket.oncekiTs=e2.ts;
+      }
+      /* Günde bir kez referans noktasını güncelle (KV yazma dostu). */
+      if(!eskiHam||Date.now()-JSON.parse(eskiHam).ts>828e5)
+        await A.VERI.put("tefasOnceki",JSON.stringify({ts:Date.now(),toplamDeger:paket.toplamDeger,toplamKisi:paket.toplamKisi}));
+      await A.VERI.put("tefas",JSON.stringify(paket));
+    }catch(e){}
+  }
+  saglikArtir("tefasCagri");
+  return paket;
+}
+
 /* ============ 📰 KAP ANLIK BİLDİRİM ============
    kap.org.tr resmi/belgeli bir dış geliştirici API'si sunmuyor, ama sitenin
    kendi Next.js uygulamasının kullandığı uç nokta kimlik doğrulama istemiyor
@@ -605,6 +893,7 @@ if(!sonIndex)return;
 const yeni=liste.filter(d=>d.disclosureIndex>sonIndex&&d.relatedStocks);if(!yeni.length)return;
 /* 6️⃣ Fon/pay işlemi sayacı — izleyici olsun olmasın her zaman işler. */
 await kapFonIzle(e,yeni).catch(()=>{});
+await kapSirketGuncelle(e,liste).catch(()=>{});
 const izleyiciler=await kapIzleyicileriGetir(e);if(!Object.keys(izleyiciler).length)return;
 for(const d of yeni.slice(0,20)){
 const kodlar=String(d.relatedStocks).split(",").map(x=>x.trim()).filter(Boolean);if(!kodlar.length)continue;
@@ -653,6 +942,8 @@ const c=e.VERI&&await e.VERI.get("kapCache");
 if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<3e5)return j.liste}catch(err){}}
 const liste=await kapBildirimleriGetir(3);
 if(e.VERI&&liste.length)await e.VERI.put("kapCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,200)}));
+/* E) Sirket adi haritasini bu akistan besle (en fazla 10 dk'da bir yazar). */
+await kapSirketGuncelle(e,liste).catch(()=>{});
 return liste}
 /* ============ 💰 GERÇEK ÖDEME TARİHLİ TEMETTÜ TAKVİMİ (v3) ============
    ahlatciyatirim.com.tr denendi, Cloudflare'dan HTTP 525 (origin TLS
@@ -1092,6 +1383,8 @@ function yolGit(adim){
 function ekranAdi(){
   if(sekme==="hata")return"🩺 Hatalar";
   if(sekme==="sag")return"🛡 Sistem";
+  if(sekme==="abs")return"🌊 Absorpsiyon";
+  if(sekme==="rad")return"🧠 KAP Radar";
   if(sekme==="rot")return"🔄 Sektör Rotasyonu";
   if(sekme==="perf")return"📈 Performans";
   if(sekme==="davet")return"📤 Davet";
@@ -1183,6 +1476,8 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
   s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
+  s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
+  s.push('<button class="sek'+(sekme==="rad"?" on":"")+'" data-r="nötr" data-s="rad">🧠 KAP Radar</button>');
   s.push('<button class="sek'+(sekme==="kap"?" on":"")+'" data-r="nötr" data-s="kap">📰 KAP</button>');
   s.push('<button class="sek'+(sekme==="temettu"?" on":"")+'" data-r="nötr" data-s="temettu">💰 Temettü</button>');
   s.push('<button class="sek'+(sekme==="davet"?" on":"")+'" data-r="nötr" data-s="davet">📤 Davet</button>');
@@ -1203,6 +1498,8 @@ function ciz(){
   sekCiz();
   if(sekme==="hata")return hataCiz();
   if(sekme==="sag")return saglikCiz();
+  if(sekme==="abs")return absCiz();
+  if(sekme==="rad")return radCiz();
   if(sekme==="rot")return rotCiz();
   if(sekme==="perf")return perfCiz();
   if(sekme==="kama")return kamaCiz();
@@ -2099,6 +2396,130 @@ function hataGoster(v){
   var d3=el("htSil");if(d3)d3.onclick=function(){tit();d3.disabled=true;
     post("/api/hatalar",{temizle:1}).then(hataGoster)};
 }
+/* ================== 🌊 ABSORPSİYON SEKMESİ ==================
+   "Hacim patladı ama fiyat kıpırdamadı" barlarını gösterir. Bu, birinin
+   gelen emirleri sessizce yuttuğu anlamına gelir — genelde büyük oyuncu
+   ya topluyor (talep) ya dağıtıyor (arz).
+   Sekmenin en üstünde ne olduğu ve sınırları yazıyor; tek başına al/sat
+   sinyali DEĞİL, mevcut sinyalin üstüne bir katman. */
+var absD=null;
+function absCiz(){
+  if(absD){absGoster(absD);return}
+  el("govde").innerHTML='<div class="yukleniyor">hacim/fiyat dengesi ölçülüyor… (ilk açılış 10-20 sn sürebilir)</div>';
+  post("/api/absorpsiyon",{}).then(function(v){absD=v;absGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Ölçüm alınamadı. Birazdan tekrar dene.</div>'});
+}
+function absGoster(v){
+  var l=(v&&v.liste)||[];
+  var h='<div class="sirala"><button class="sir" id="absYenile">🔄 Yeniden ölç</button></div>';
+  h+='<div class="uyari" style="margin-top:0"><b>🌊 Absorpsiyon nedir?</b><br>'+
+     'Bir günde hacim normalin çok üstüne çıkıp fiyat neredeyse hiç oynamadıysa, '+
+     'gelen satışları/alışları birileri yutuyor demektir. <b>Talep</b> = alıcı yutuyor (gün tepede kapandı), '+
+     '<b>Arz</b> = satıcı yutuyor (gün dipte kapandı).<br><br>'+
+     '⚠️ Bu bir <b>yaklaşık ölçüm</b>: gerçek order-flow verisi (her emrin tek tek kaydı) '+
+     'bizde yok, günlük barlardan hesaplanıyor. Yanılabilir. Tek başına al/sat sebebi değildir.</div>';
+  h+='<div class="altbilgi" style="margin:10px 0 6px;opacity:.75">Taranan hisse: '+
+     ((v&&v.taranan)||0)+' · ölçüm yaşı: '+((v&&v.yas)||0)+' dk (30 dakikada bir tazelenir)</div>';
+  if(!l.length){
+    h+='<div class="bos"><b>Şu an absorpsiyon bulunamadı</b><br><br>'+
+       'Taranan hisselerin hiçbirinde "yüksek hacim + dar aralık" birleşimi yok. '+
+       'Bu normaldir; absorpsiyon her gün oluşmaz.</div>';
+  }else{
+    h+=l.map(function(x){
+      var talep=x.yon==="talep";
+      var renk=talep?"var(--yes)":(x.yon==="arz"?"var(--kir)":"var(--sar)");
+      var etiket=talep?"🟢 TALEP · alıcı yutuyor":(x.yon==="arz"?"🔴 ARZ · satıcı yutuyor":"🟡 KARARSIZ");
+      return '<div class="satir" style="border-left-color:'+renk+';align-items:flex-start">'+
+        '<div class="sol"><div class="kod">'+E(x.kod)+
+        (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
+        '<div class="altbilgi" style="white-space:normal">'+etiket+
+        '<br>hacim normalin <b>'+E(String(x.hacimKat))+' katı</b> · '+
+        'gün aralığı normalin <b>%'+Math.round(x.darlik*100)+'</b>\u0131 kadar · '+
+        'kapanış barın <b>%'+E(String(x.konum))+'</b> seviyesinde</div></div>'+
+        '<div class="sag"><div class="yuzde" style="color:'+renk+'">'+E(String(x.puan))+'</div>'+
+        '<div class="altbilgi">puan</div></div></div>';
+    }).join("");
+  }
+  el("govde").innerHTML=h;
+  var y=el("absYenile");if(y)y.onclick=function(){tit();absD=null;
+    el("govde").innerHTML='<div class="yukleniyor">yeniden ölçülüyor…</div>';
+    post("/api/absorpsiyon",{}).then(function(v2){absD=v2;absGoster(v2)})};
+}
+/* ================== 🧠 KAP RADAR SEKMESİ ==================
+   Ham KAP listesi (📰 sekmesi) her şeyi tarih sırasıyla verir. Radar ise
+   her bildirimi KATEGORİYE ayırır ve ÖNEM PUANI verir; en üstte en çok
+   fiyat etkileyebilecek olan durur. Üstte TEFAS fon akışı şeridi var. */
+var radD=null,radFiltre="";
+function radCiz(){
+  if(radD){radGoster(radD);return}
+  el("govde").innerHTML='<div class="yukleniyor">bildirimler sınıflandırılıyor…</div>';
+  post("/api/kapradar",{}).then(function(v){radD=v;radGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Okunamadı.</div>'});
+}
+function radTefasSerit(t){
+  if(!t)return '<div class="uyari" style="margin-top:0">💵 <b>TEFAS fon akışı</b> henüz ölçülmedi. '+
+    'Aşağıdaki düğmeye basınca ilk ölçüm alınır.<br>'+
+    '<button class="sir" id="radTefas" style="margin-top:8px">💵 TEFAS verisini çek</button></div>';
+  if(!t.ok)return '<div class="uyari" style="margin-top:0;border-color:var(--kir)">⛔ <b>TEFAS bağlanamadı</b><br>'+
+    'Hata: '+E(String(t.hata||"?"))+'<br>'+
+    'Bu kaynak devlet sitesinde barındığı için erişim engellenebiliyor. Sistemin geri kalanı bundan etkilenmez.<br>'+
+    '<button class="sir" id="radTefas" style="margin-top:8px">🔄 Tekrar dene</button></div>';
+  var dd=t.degerDegisim,kd=t.kisiDegisim;
+  var ok=function(x){return x==null?"—":((x>0?"▲ +":"▼ ")+x+"%")};
+  var renk=function(x){return x==null?"var(--mavi)":(x>0?"var(--yes)":"var(--kir)")};
+  return '<div class="uyari" style="margin-top:0">💵 <b>TEFAS · hisse fonları</b> ('+((t.fonSayisi)||0)+' fon)<br>'+
+    'Fon büyüklüğü: <b style="color:'+renk(dd)+'">'+ok(dd)+'</b> · '+
+    'Yatırımcı sayısı: <b style="color:'+renk(kd)+'">'+ok(kd)+'</b>'+
+    (t.ortGetiri!=null?' · ort. getiri: <b>'+E(String(t.ortGetiri))+'%</b>':"")+'<br>'+
+    '<span style="opacity:.75">Bu, borsaya para girip girmediğinin bağımsız göstergesidir. '+
+    'TEFAS fonların hangi hisseyi aldığını açıklamaz — sadece toplam akışı verir.</span><br>'+
+    '<button class="sir" id="radTefas" style="margin-top:8px">🔄 Tazele</button></div>';
+}
+function radGoster(v){
+  if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Okunamadı.</div>';return}
+  var l=(v.liste||[]).filter(function(x){return !radFiltre||x.kat===radFiltre});
+  var say=v.sayim||{};
+  var h=radTefasSerit(v.tefas);
+  h+='<div class="sirala"><button class="sir'+(radFiltre?"":" on")+'" data-k="">Tümü</button>'+
+     (v.kategoriler||[]).filter(function(k){return say[k.kod]}).map(function(k){
+       return '<button class="sir'+(radFiltre===k.kod?" on":"")+'" data-k="'+k.kod+'">'+
+              k.ik+" "+E(k.ad)+" ("+say[k.kod]+")</button>";
+     }).join("")+'</div>';
+  h+='<div class="altbilgi" style="margin:2px 0 8px;opacity:.75">Önem puanına göre sıralı · '+
+     'tanınan şirket: '+((v.sirketSayisi)||0)+' · listeye dokununca KAP sayfası açılır</div>';
+  if(!l.length){h+='<div class="bos">Bu kategoride bildirim yok.</div>'}
+  else{
+    h+=l.map(function(x){
+      var renk=x.onem>=85?"var(--kir)":(x.onem>=65?"var(--sar)":"var(--mavi)");
+      return '<div class="satir rsat" data-i="'+(x.disclosureIndex||"")+'" style="cursor:pointer;border-left-color:'+renk+';align-items:flex-start">'+
+        '<div class="sol"><div class="kod">'+x.ik+" "+E((x.kodlar||[]).join(", "))+
+        (x.takipte?' <span class="rozet">⭐</span>':"")+
+        (x.fonSay>=2?' <span class="rozet">🔁 '+x.fonSay+' bildirim</span>':"")+'</div>'+
+        '<div class="altbilgi" style="white-space:normal">'+E(x.katAd)+' · '+E(x.konu||"")+
+        (x.sirket?'<br><span style="opacity:.7">'+E(x.sirket)+'</span>':"")+'</div></div>'+
+        '<div class="sag"><div class="yuzde" style="color:'+renk+'">'+x.onem+'</div>'+
+        '<div class="altbilgi">'+E(String(x.tarih||"").slice(5,16).replace("T"," "))+'</div></div></div>';
+    }).join("");
+  }
+  h+='<div class="uyari">Kaynak: kap.org.tr · kategori ve önem puanı bizim kural tabanlı '+
+     'sınıflandırmamızdır, KAP tarafındaki resmî etiket değildir. Yatırım tavsiyesi değildir.</div>';
+  el("govde").innerHTML=h;
+  [].forEach.call(document.querySelectorAll("#govde .sir[data-k]"),function(bt){
+    bt.onclick=function(){tit();radFiltre=bt.dataset.k;radGoster(radD);window.scrollTo(0,0)};
+  });
+  [].forEach.call(document.querySelectorAll("#govde .rsat"),function(row){
+    row.onclick=function(){
+      var i2=row.dataset.i;if(!i2)return;tit();
+      var url="https://www.kap.org.tr/tr/Bildirim/"+i2;
+      try{TG.openLink(url)}catch(e){window.open(url,"_blank")}
+    };
+  });
+  var tb=el("radTefas");
+  if(tb)tb.onclick=function(){tit();tb.disabled=true;tb.textContent="çekiliyor…";
+    post("/api/tefas",{yenile:1}).then(function(r){
+      if(radD)radD.tefas=(r&&r.tefas)||null;radGoster(radD);
+    }).catch(function(){tb.textContent="hata";tb.disabled=false})};
+}
 /* ================== 🛡 SİSTEM SEKMESİ (yalnız yönetici) ==================
    Altı dayanıklılık maddesinin tamamı burada görünür:
    Telegram 429/engelli sayaçları, çakışma kilidi atlamaları, panel
@@ -2198,6 +2619,21 @@ function saglikGoster(v){
         '<br>son: '+sagSaat(x.son)+'</div></div></div>';
     }).join("");
   }
+  /* --- İkinci paket: panel anahtarı, TEFAS, şirket haritası, absorpsiyon --- */
+  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">🔐 İMZALI PANEL ANAHTARI</div>';
+  h+=sagKart(sy("panelTokenGecersiz")?"uyari":"iyi",
+      "Süreli bağlantıyla giriş: <b>"+sy("panelToken")+"</b> · süresi dolmuş/geçersiz: <b>"+sy("panelTokenGecersiz")+"</b>",
+      "Bota <b>/panel</b> yazdığında 30 dakika geçerli, imzalı bir adres üretiliyor. Eski sabit adres de çalışmaya devam ediyor.");
+  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">💵 TEFAS + 🏷 ŞİRKET HARİTASI</div>';
+  h+=sagKart(sy("tefasHata")?"uyari":(sy("tefasCagri")?"iyi":"bilgi"),
+      "TEFAS çağrı: <b>"+sy("tefasCagri")+"</b> · hata: <b>"+sy("tefasHata")+"</b>",
+      sy("tefasHata")?("Son hata: "+E(String(c.sonTefasHata||"?"))+". TEFAS erişilemezse KAP Radar sekmesi bunu kırmızı yazar; başka hiçbir şey etkilenmez.")
+                     :"TEFAS hisse fonlarının toplam büyüklüğünü verir — borsaya para girip girmediğinin ikinci kaynağı.");
+  h+=sagKart("bilgi","Tanınan şirket sayısı: <b>"+(c.sirketSayisi||0)+"</b>",
+      "Bu harita KAP akışından kendi kendine büyüyor: her bildirimde hisse kodu + şirket ünvanı geliyor. Dışarıdan hazır liste indirmiyoruz.");
+  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">🌊 ABSORPSİYON</div>';
+  h+=sagKart("bilgi","Yapılan tarama: <b>"+sy("absTarama")+"</b>",
+      "Her tarama en fazla 16 hisseye bakar (Cloudflare istek başına 50 alt-istek sınırı) ve sonuç 30 dakika saklanır.");
   el("govde").innerHTML=h;
   var y=el("sgYenile");if(y)y.onclick=function(){tit();saglikCiz()};
 }
@@ -2923,11 +3359,18 @@ if(!gov||!gov.initData||!A.BOT_TOKEN)return JS({ok:!1,hata:"initData yok"},401);
 const uid=await dogrulaInitData(gov.initData,A.BOT_TOKEN).catch(()=>null);
 if(!uid)return JS({ok:!1,hata:"dogrulanamadi"},401);
 if(await B(A,uid))return JS({ok:!1,hata:"erisim kapali"},403);
-/* 1️⃣ Cloudflare yerel rate limit — SINIR_API binding'i TANIMLI DEĞİLSE
-   hiçbir kısıt yok (fail-open). Tanımlarsan önerilen: 300 istek / 60 sn
-   (normal kullanım dakikada ~20 istek; 15 kat pay var). */
-if(!await sinirGec(A,"SINIR_API","u"+uid))
-  return JS({ok:!1,hata:"çok hızlı — birkaç saniye bekle"},429);
+/* 1️⃣ + B) KADEMELİ hız sınırı. SINIR_API binding'i TANIMLI DEĞİLSE
+   hiçbir kısıt yok (fail-open). Kademeler:
+     yönetici  → hiç sınırlanmaz (kendi panelin yavaşlamasın)
+     süper üye → SINIR_API_VIP varsa o, yoksa SINIR_API
+     normal    → SINIR_API
+   Önerilen: SINIR_API 300 istek/60 sn (normal kullanım ~20/dk, 15 kat pay). */
+if(!d(uid)){
+  const vipMi=await suparUyeMi(A,uid).catch(()=>!1);
+  const bindingAdi=vipMi&&A.SINIR_API_VIP?"SINIR_API_VIP":"SINIR_API";
+  if(!await sinirGec(A,bindingAdi,(vipMi?"v":"n")+uid))
+    return JS({ok:!1,hata:"çok hızlı — birkaç saniye bekle"},429);
+}
 const YON=d(uid),KOD=v=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10),ID=v=>String(v||"").replace(/\D/g,"");
 if("/api/veri"===$.pathname){
 const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid),portfoy=await XP(A,uid),portfoyGecmis=await XPG(A,uid),portfoyGunluk=await XPGUNLUK(A,uid);
@@ -3084,6 +3527,42 @@ return{kodlar:kodlar,konu:d.subject||"",tarih:d.publishDate||"",disclosureIndex:
 }).filter(d=>d.kodlar.length>0)
 .sort((a,b)=>(b.disclosureIndex||0)-(a.disclosureIndex||0)).slice(0,60);
 return JS({ok:!0,liste:sonuc})}
+/* 🌊 ABSORPSİYON — sinyal listelerindeki hisseler + senin takip ettiklerin.
+   Sonuç 30 dakika önbellekte; her açılışta Yahoo'ya yeniden gidilmez. */
+if("/api/absorpsiyon"===$.pathname){
+const fav=await X(A,uid),pf=await XP(A,uid);
+const paket=await absorpsiyonTara(A,[...fav,...Object.keys(pf)]).catch(()=>null);
+if(!paket)return JS({ok:!0,liste:[],taranan:0,yas:0});
+const izlenen=new Set([...fav,...Object.keys(pf)]);
+return JS({ok:!0,taranan:paket.taranan||0,yas:Math.round((Date.now()-(paket.ts||0))/6e4),
+liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenen.has(x.kod)},x))})}
+/* 🧠 KAP RADAR — aynı bildirimler, ama kategoriye ayrılmış ve önem
+   puanına göre sıralanmış hâlde. Üstte TEFAS fon akışı şeridi var. */
+if("/api/kapradar"===$.pathname){
+const liste=await kapListesiCache(A);
+const fav=await X(A,uid),pf2=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf2)]);
+const sirket=await kapSirketOku(A);
+let fon={};try{const h=A.VERI&&await A.VERI.get("kapFon");if(h){const j=JSON.parse(h);if(j.gun===onayDonemi())fon=j.hisseler||{}}}catch(e){}
+const sonuc=liste.map(dd=>{
+const kodlar=String(dd.relatedStocks||"").split(",").map(x=>x.trim()).filter(Boolean);
+if(!kodlar.length)return null;
+const kat=kapSinifla(dd.subject);
+const fonSay=Math.max(...kodlar.map(k=>(fon[k]&&fon[k].n)||0),0);
+return{kodlar:kodlar,sirket:sirket[kodlar[0]]||"",konu:dd.subject||"",
+tarih:dd.publishDate||"",disclosureIndex:dd.disclosureIndex,
+kat:kat.kod,katAd:kat.ad,ik:kat.ik,fonSay:fonSay,
+onem:kapOnemDuzelt(kat.onem,dd,fonSay),
+takipte:kodlar.some(k=>izlenen.has(k))}
+}).filter(Boolean).sort((x,y)=>(y.onem-x.onem)||((y.disclosureIndex||0)-(x.disclosureIndex||0))).slice(0,80);
+const sayim={};for(const x of sonuc)sayim[x.kat]=(sayim[x.kat]||0)+1;
+let tefas=null;try{const h=A.VERI&&await A.VERI.get("tefas");if(h)tefas=JSON.parse(h)}catch(e){}
+return JS({ok:!0,liste:sonuc,sayim:sayim,sirketSayisi:Object.keys(sirket).length,
+kategoriler:KAP_KATEGORI.map(k=>({kod:k.kod,ad:k.ad,ik:k.ik})),tefas:tefas})}
+/* 💵 TEFAS — ikinci kaynak. "yenile:1" ile önbelleği atlayıp canlı çeker
+   (bağlantıyı test etmek için). Hata varsa ham mesajı ekrana basar. */
+if("/api/tefas"===$.pathname){
+const paket=await tefasOzet(A,!!gov.yenile).catch(e=>({ok:!1,hata:String((e&&e.message)||e).slice(0,140)}));
+return JS({ok:!0,tefas:paket})}
 if("/api/temettu"===$.pathname){
 const paket=await temettuListesiCache(A);
 const liste=paket.liste||[];
@@ -3313,9 +3792,16 @@ text:"🔎 <code>"+hid+"</code>\n\nSüper üye: <b>"+(supar?"EVET":"hayır")+"</
 })()),new Response("ok")}
 if(i&&!await onayVarMi(A,t.from.id)){q.waitUntil(uyeKaydet(A,t.from,s).catch(()=>{}));
 return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:ONAY_METIN,parse_mode:"HTML",reply_markup:ONAY_KLAVYE})),new Response("ok")}if(i&&q.waitUntil(uyeKaydet(A,t.from,s)),
-i&&(n.startsWith("/panel")||n.startsWith("/yonetici")))return d(t.from.id)?(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_web_page_preview:!0,
-text:"🛠 <b>Yönetici paneli</b>\n\nAşağıdaki düğmeye dokun — panel tarayıcıda açılır.\n\nAdres:\n<code>"+r()+"</code>",reply_markup:{inline_keyboard:[[{text:"🛠 Paneli aç",url:r()}],[{text:"◀️ Menü",
-callback_data:"menu"}]]}})),new Response("ok")):(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"Bu komut yöneticiye özeldir.",reply_markup:u(t.from.id)})),new Response("ok"))
+i&&(n.startsWith("/panel")||n.startsWith("/yonetici")))return d(t.from.id)?(q.waitUntil((async()=>{
+/* B) Her /panel komutunda 30 dakika geçerli, imzalı YENİ bir adres
+   üretilir. Eski sabit ?key= adresi de çalışmaya devam ediyor. */
+let baglanti;
+try{baglanti=n+"/panel?t="+encodeURIComponent(await panelTokenUret(A,t.from.id))}
+catch(e){baglanti=r()}
+await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_web_page_preview:!0,
+text:"🛠 <b>Yönetici paneli</b>\n\nAşağıdaki düğmeye dokun — panel tarayıcıda açılır.\n\n⏳ Bu bağlantı <b>30 dakika</b> geçerli; süresi dolunca yeniden <code>/panel</code> yaz.\n\nAdres:\n<code>"+baglanti+"</code>",
+reply_markup:{inline_keyboard:[[{text:"🛠 Paneli aç",url:baglanti}],[{text:"◀️ Menü",callback_data:"menu"}]]}})
+})()),new Response("ok")):(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"Bu komut yöneticiye özeldir.",reply_markup:u(t.from.id)})),new Response("ok"))
 ;if(i&&n.startsWith("/davet"))return q.waitUntil((async()=>{const e=(await b(A.BOT_TOKEN,"getMe",{}))?.result?.username||"bot";await b(A.BOT_TOKEN,"sendMessage",PY(e,t.from.id,t.chat.id))})()),new Response("ok")
 const o=a.toUpperCase().replace(/[^A-ZÇĞİÖŞÜ]/g,"");return i&&!a.startsWith("/")&&o.length>=3&&o.length<=6&&o.length===a.trim().length?(q.waitUntil((async()=>{const e=await g(A)
 ;await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_web_page_preview:!0,text:P(e,o),reply_markup:u(t.from.id)})})()),
