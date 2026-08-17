@@ -232,7 +232,16 @@ const gecmis=await alarmGecmisi(e),bilinen=new Set(gecmis.kodlar||[]);
 const uygun=yeniListe.filter(x=>x&&x.kod
 &&!(null!=x.potansiyel&&Number(x.potansiyel)<=0)
 &&!/İZLEMEDE/.test(String(x.guc||"")));
-const yeniGirenler=uygun.filter(x=>!bilinen.has(x.kod));
+/* DUZELTME: "bilinen" seti gunde bir sifirlaniyor, ama hafta sonu piyasa
+   kapaliyken bile takvim gunu degisiyor -- Cuma'nin sinyali Cumartesi/
+   Pazar/Pazartesi her sifirlamada yeniden "yeni" sayilip tekrar tekrar
+   gonderiliyordu. Simdi ek sart: sinyalin KENDI zaman damgasi (sinyalTs)
+   gercekten son birkac saat icinde olmali -- gunler once olusmus bir
+   sinyal bir daha asla "YENI" diye gonderilmez. */
+const TAZE_ESIK_SN=6*3600;   // 6 saat -- bu pencerenin disindaki sinyal "eski" sayilir
+const simdiSn=Math.floor(Date.now()/1000);
+const yeniGirenler=uygun.filter(x=>!bilinen.has(x.kod)
+&&x.sinyalTs&&(simdiSn-Number(x.sinyalTs))<=TAZE_ESIK_SN);
 if(!yeniGirenler.length)return;
 for(const x of yeniGirenler)bilinen.add(x.kod);
 await e.VERI.put("alarmGun",JSON.stringify({gun:onayDonemi(),kodlar:[...bilinen].slice(-300)}));
