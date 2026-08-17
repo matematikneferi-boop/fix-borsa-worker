@@ -1,5 +1,5 @@
 const e=new Set(["6819672343"]),t="kolayfix",a="11.5";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
-;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null;const c=new Set(["tavan","potansiyel","fibo","uzunvade","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
+;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null,oTS=0;const c=new Set(["tavan","potansiyel","fibo","uzunvade","haftalik","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun","adayHafta"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
 ;const r=await b(e.BOT_TOKEN,"getMe",{}),u=r&&r.result&&r.result.username;return u?(BUN=u,e.VERI&&await e.VERI.put("botuser",u).catch(()=>{}),u):null}
@@ -15,6 +15,7 @@ t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
 [{text:"📊 1 SAAT · orta trade",callback_data:"potansiyel"}],[{text:"🟨 1 saat adayları (Süper Üyelik)",callback_data:"adayOrta"}],
 [{text:"📐 4 SAAT · orta vade",callback_data:"fibo"}],[{text:"🟨 4 saat adayları (Süper Üyelik)",callback_data:"adayOrtaVade"}],
 [{text:"🗓 1 GÜN · uzun vade",callback_data:"uzunvade"}],[{text:"🟨 1 gün adayları (Süper Üyelik)",callback_data:"adayUzun"}],
+[{text:"📅 1 HAFTA · pozisyon",callback_data:"haftalik"}],[{text:"🟨 1 hafta adayları (Süper Üyelik)",callback_data:"adayHafta"}],
 [{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]);
 return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
@@ -468,8 +469,28 @@ if(eskiC){try{const j=JSON.parse(eskiC);if(Date.now()-j.ts<18e5)return{liste:j.l
 let eski=[];try{eski=await temettuTakvimiGetir(45)}catch(err){tani.push("eski KAP istisnası: "+String(err&&err.message||err))}
 if(e.VERI&&eski.length)await e.VERI.put("temettuCache",JSON.stringify({ts:Date.now(),liste:eski.slice(0,150)}));
 return{liste:eski,tani:tani}}
-async function g(e){if(o)return o;if(e.VERI){
-const t=await e.VERI.get("listeler");if(t)return o=JSON.parse(t),o}const t=await caches.default.match(new Request(l));return t?(o=await t.json().catch(()=>null),o):null}const h={kisitMin:7,
+/* LİSTE OKUMA — TAZELİK GARANTİLİ.
+   ESKİ HATA: bellekteki kopya (o) bir kez doldu mu bir daha ASLA
+   tazelenmiyordu ("if(o)return o"). Cloudflare aynı worker'i birden çok
+   izole kopyada calistirir; /push yalnız BİR kopyaya ulaşır, diğerleri
+   ilk okudukları listeyi saatlerce servis eder. Kullanıcı uygulamayı iki
+   kez açtığında iki farklı tarama sonucu görür — bir sekmede olan hisse
+   diğerinde yoktur. ARTIK: bellek kopyası en fazla TAZE_MS kadar yaşar,
+   sonra KV'den yeniden okunur. */
+const TAZE_MS=2e4,YAS=v=>v&&v.guncelleme?Date.parse(v.guncelleme)||0:0;
+async function g(e){
+if(o&&Date.now()-oTS<TAZE_MS)return o;
+let a=null,b=null;
+if(e.VERI){const t=await e.VERI.get("listeler");if(t){try{a=JSON.parse(t)}catch(x){}}}
+try{const t=await caches.default.match(new Request(l));if(t)b=await t.json().catch(()=>null)}catch(x){}
+/* En YENİ kopya kazanır: KV en fazla 2 dk'da bir yazılıyor, önbellek her
+   push'ta tazeleniyor ama yalnız kendi veri merkezinde. Elimizdeki kopya
+   ikisinden de yeniyse (bu izole kopya push'u kendisi aldıysa) korunur. */
+let y=o;
+if(!y||YAS(a)>YAS(y))y=a||y;
+if(!y||YAS(b)>YAS(y))y=b||y;
+if(y){o=y,oTS=Date.now()}
+return o}const h={kisitMin:7,
 kisitMax:18};let w=null,O=0;async function S(e,t){if(!t&&w&&Date.now()-O<6e4)return w;let a={...h};if(e.VERI){const t=await e.VERI.get("ayar");t&&(a={...a,...JSON.parse(t)})}return w=a,O=Date.now(),a}
 let T=null,x=0;async function E(e,t){if(!t&&T&&Date.now()-x<6e4)return T;if(!e.VERI)return T=[],x=Date.now(),T;const a=await e.VERI.get("vip");return T=a?JSON.parse(a):[],x=Date.now(),T}let v=null,R=0
 ;async function N(e,t){if(!t&&v&&Date.now()-R<6e4)return v;if(!e.VERI)return v=[],R=Date.now(),v;const a=await e.VERI.get("engel");return v=a?JSON.parse(a):[],R=Date.now(),v}async function B(e,t){
@@ -481,6 +502,7 @@ const s=t.kartlar[a],l=Math.max(1,Math.ceil(r.length/8));let o=e+"\n";if(t.gunce
 ;o+="<i>"+String((e.getUTCHours()+3)%24).padStart(2,"0")+":"+String(e.getUTCMinutes()).padStart(2,"0")+" · "+s.length+" hisse</i>\n"}else o+="<i>"+s.length+" hisse</i>\n";o+="<i>Sıralama: "+(A[n]||A.pot)+" · sayfa "+(i+1)+"/"+l+"</i>\n",
 o+="<i>Düğmede: solda hedefe kalan · sağda "+("aday"===a?"tetiğe kalan 🔓":"sinyalden bu yana")+"</i>\n\n";const c=8*i;return r.slice(c,c+8).forEach((e,t)=>{o+=function(e,t){const a=e=>Number(e).toFixed(2);let n="━━━━━━━━━━━━━━━━\n"
 ;n+="<b>"+t+". "+(e.rozet||"▫️")+" "+e.kod+"</b>"+(e.tf?"  ·  <i>"+e.tf+"</i>":"")+(e.etiket?"  ·  "+e.etiket:"")+"\n",
+e.canli&&(n+="⚡ <i>bar kapanmadı — teyit bekliyor</i>\n"),
 void 0!==e.giris&&null!==e.giris?n+="💵 Sinyal <b>"+a(e.giris)+"</b> → Şimdi <b>"+a(e.fiyat)+"</b>\n":n+="💵 Şimdi <b>"+a(e.fiyat)+"</b>\n";const i=I(e)
 ;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🧱 Direnç <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+="🎯 Hedef <b>"+a(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  🏆 <b>TUTTU</b>":"  ·  hedefe <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),n+="\n");const r=e.sinyalZaman||e.zaman
@@ -495,7 +517,7 @@ void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  �
   --bg:#0e1116; --kart:#161b22; --kart2:#1c2330; --ciz:#262d38;
   --yazi:#e6edf3; --soluk:#8b949e; --mavi:#388bfd;
   --yes:#3fb950; --kir:#f85149; --sar:#d29922; --mor:#a371f7;
-  --t15:#f85149; --t1s:#3fb950; --t4s:#58a6ff; --t1g:#a371f7; --tad:#d29922;
+  --t15:#f85149; --t1s:#3fb950; --t4s:#58a6ff; --t1g:#a371f7; --t1h:#ff9d4d; --tad:#d29922;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--yazi);
@@ -515,6 +537,7 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .sek.on[data-r="1SA"]{background:var(--t1s);color:#08150c}
 .sek.on[data-r="4SA"]{background:var(--t4s);color:#07182b}
 .sek.on[data-r="1G"]{background:var(--t1g)}
+.sek.on[data-r="1HAF"]{background:var(--t1h);color:#2a1400}
 .sek.on[data-r="aday"]{background:var(--tad);color:#1d1503}
 .sek.on[data-r="nötr"]{background:var(--mavi)}
 .govde{padding:10px 12px}
@@ -747,10 +770,12 @@ var TF={tavan:{ad:"15 DAKİKA",kisa:"15DK",r:"15DK",ik:"⚡",renk:"var(--t15)"},
         potansiyel:{ad:"1 SAAT",kisa:"1SA",r:"1SA",ik:"📊",renk:"var(--t1s)"},
         fibo:{ad:"4 SAAT",kisa:"4SA",r:"4SA",ik:"📐",renk:"var(--t4s)"},
         uzunvade:{ad:"1 GÜN",kisa:"1G",r:"1G",ik:"🗓",renk:"var(--t1g)"},
+        haftalik:{ad:"1 HAFTA",kisa:"1HAF",r:"1HAF",ik:"📅",renk:"var(--t1h)"},
         adayKisa:{ad:"15 DAKİKA adayları",kisa:"15DK",r:"aday",ik:"🟨",renk:"var(--tad)"},
         adayOrta:{ad:"1 SAAT adayları",kisa:"1SA",r:"aday",ik:"🟨",renk:"var(--tad)"},
         adayOrtaVade:{ad:"4 SAAT adayları",kisa:"4SA",r:"aday",ik:"🟨",renk:"var(--tad)"},
-        adayUzun:{ad:"1 GÜN adayları",kisa:"1G",r:"aday",ik:"🟨",renk:"var(--tad)"}};
+        adayUzun:{ad:"1 GÜN adayları",kisa:"1G",r:"aday",ik:"🟨",renk:"var(--tad)"},
+        adayHafta:{ad:"1 HAFTA adayları",kisa:"1HAF",r:"aday",ik:"🟨",renk:"var(--tad)"}};
 function E(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 function N(v,b){return(v==null||isNaN(v))?"—":Number(v).toFixed(b==null?2:b)}
 function Y(v){if(v==null||isNaN(v))return"";return(v>=0?"+":"")+Number(v).toFixed(2)+"%"}
@@ -788,7 +813,7 @@ function onayCiz(){
 }
 function sekCiz(){
   var s=[];
-  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(k){
+  ["tavan","potansiyel","fibo","uzunvade","haftalik"].forEach(function(k){
     var t=TF[k],n=(D.kartlar&&D.kartlar[k]&&D.kartlar[k].length)||0;
     s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
       t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
@@ -834,7 +859,7 @@ function ciz(){
    dilim sayacı / üyelik / sabit uyarı metinleri kaldırıldı. */
 function seritCiz(){
   var hepsi=[];
-  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(k){
+  ["tavan","potansiyel","fibo","uzunvade","haftalik"].forEach(function(k){
     (D.kartlar&&D.kartlar[k]||[]).forEach(function(x){
       var kr=kar(x);if(kr!=null)hepsi.push({kod:x.kod,y:kr,tf:TF[k].kisa});
     });
@@ -862,7 +887,7 @@ function seritCiz(){
 function hotCiz(){
   var kutu=el("hotSerit"); if(!kutu)return;
   var hepsi=[];
-  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(ad){
+  ["tavan","potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
     (D.kartlar&&D.kartlar[ad]||[]).forEach(function(x){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
@@ -879,7 +904,7 @@ function hotCiz(){
   genelTop.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
   genelTop=genelTop.slice(0,5);
 
-  var dilimTop=["tavan","potansiyel","fibo","uzunvade"].map(function(ad){
+  var dilimTop=["tavan","potansiyel","fibo","uzunvade","haftalik"].map(function(ad){
     var l=(D.kartlar&&D.kartlar[ad]||[]).slice();
     l.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
     var en=l[0]; if(!en)return null;
@@ -932,6 +957,8 @@ function satirHtml(k,ad){
   var sag=(pot==null)?"":(pot<=0?'<span class="sa">🏆 TUTTU</span>':'<span class="so">hedefe <b>+'+pot.toFixed(1)+"%</b></span>");
   var alt=[];
   alt.push(t.kisa);
+  /* CANLI: kırılım oluşan barda — bar kapanınca geri dönebilir. */
+  if(k.canli)alt.push("⚡ canlı");
   if(k.tetik!=null)alt.push("🔓 tetik "+N(k.tetik)+(k.tetikYuzde!=null?" · %"+Number(k.tetikYuzde).toFixed(1)+" kaldı":""));
   else if(k.giris!=null)alt.push("sinyal "+N(k.giris));
   if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
@@ -998,7 +1025,7 @@ function adayCiz(){
     el("davetGit").onclick=function(){tit();sekme="davet";ciz()};
     return;
   }
-  var alt=["adayKisa","adayOrta","adayOrtaVade","adayUzun"];
+  var alt=["adayKisa","adayOrta","adayOrtaVade","adayUzun","adayHafta"];
   var h='<div class="sirala">'+alt.map(function(a){
     var n=(D.kartlar&&D.kartlar[a]&&D.kartlar[a].length)||0;
     return '<button class="sir'+(adayTf===a?" on":"")+'" data-at="'+a+'">'+TF[a].kisa+(n?" ("+n+")":"")+"</button>";
@@ -1085,7 +1112,7 @@ function fdBagla(){
    veri göstermemek için. */
 function presetCiz(){
   var hepsi=[];
-  ["tavan","potansiyel","fibo","uzunvade"].forEach(function(ad){
+  ["tavan","potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
     (D.kartlar&&D.kartlar[ad]||[]).forEach(function(x){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
@@ -1483,6 +1510,10 @@ function detay(kod,ad){
          (k.etiket?'<span class="rozet">'+E(k.etiket)+"</span>":"")+
          (k.sinyalZaman||k.zaman?'<span class="rozet">🕐 '+E(k.sinyalZaman||k.zaman)+"</span>":"")+"</div>";
       h+='<div class="kutu"><h3>📈 Sinyal</h3>';
+      /* CANLI sinyal: kırılım henüz kapanmamış barda. Kullanıcı bunu
+         kapanmış bir sinyalle karıştırmasın diye açıkça yazılıyor. */
+      if(k.canli)h+='<div class="sat" style="color:var(--sar)"><span class="et">⚡ Canlı</span>'+
+        '<b>bar kapanmadı — teyit bekliyor</b></div>';
       if(k.giris!=null)h+='<div class="sat"><span class="et">Sinyal fiyatı</span><b>'+N(k.giris)+" ₺</b></div>";
       h+='<div class="sat"><span class="et">Şimdi</span><b>'+N(k.fiyat)+" ₺</b></div>";
       if(kr!=null)h+='<div class="sat"><span class="et">Sinyalden bu yana</span><b class="'+(kr>=0?"ye":"kr")+'">'+Y(kr)+"</b></div>";
@@ -1656,8 +1687,8 @@ function grafikCiz(kod,deneme){
 }
 var perfD=null, perfDonem="a1";
 var DONEM=[["h1","Son 1 hafta"],["a1","Son 1 ay"],["a3","Son 3 ay"],["y1","Son 1 yıl"]];
-var DRENK={"15DK":"var(--t15)","1SA":"var(--t1s)","4SA":"var(--t4s)","1G":"var(--t1g)"};
-var DAD={"15DK":"⚡ 15 DAKİKA","1SA":"📊 1 SAAT","4SA":"📐 4 SAAT","1G":"🗓 1 GÜN"};
+var DRENK={"15DK":"var(--t15)","1SA":"var(--t1s)","4SA":"var(--t4s)","1G":"var(--t1g)","1HAF":"var(--t1h)"};
+var DAD={"15DK":"⚡ 15 DAKİKA","1SA":"📊 1 SAAT","4SA":"📐 4 SAAT","1G":"🗓 1 GÜN","1HAF":"📅 1 HAFTA"};
 function perfCiz(){
   if(!perfD){
     el("govde").innerHTML='<div class="yukleniyor">performans hesaplanıyor…</div>';
@@ -1952,6 +1983,7 @@ const a=await b(e.BOT_TOKEN,"editMessageText",Object.assign({message_id:t.messag
 const t=e=>Number(e).toFixed(2),kar=I(e),tuttu=void 0!==e.potansiyel&&null!==e.potansiyel&&Number(e.potansiyel)<=0;
 let a="┏━━━━━━━━━━━━━━━━━━┓\n┃  <b>"+e.kod+"</b>  ·  <b>"+t(e.fiyat)+" ₺</b>\n┗━━━━━━━━━━━━━━━━━━┛\n";
 if(tuttu)a+="🏆 <b>HEDEF TUTTU!</b>\n\n";else if(e.guc)a+=e.guc+"\n";
+if(e.canli)a+="⚡ <b>CANLI</b> — bar henüz kapanmadı. Kırılım şu an geçerli ama bar kapanışında geri alınabilir.\n";
 if(e.zaman&&(a+="⏱ Sinyal: "+e.zaman+(e.tf?"  ·  "+e.tf:"")+"\n"),void 0!==e.giris&&null!==e.giris){a+="🚪 Sinyal fiyatı: <b>"+t(e.giris)+"</b>\n";null!==kar&&(a+=(kar>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(kar>=0?"+":"")+kar.toFixed(2)+"%</b>\n")}
 return null!=e.tetik&&(a+="🔓 Tetik seviyesi: <b>"+t(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(2)+"% kaldı":"")+"\n<i>Bu seviye kırılırsa o dilimin sinyali başlar — giriş fiyatı değildir.</i>\n"),null!=e.hedef1&&(a+="🎯 Direnç: <b>"+t(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  +"+Number(e.hedef1Yuzde).toFixed(1)+"%":"")+"\n"),e.direncler&&e.direncler.length&&(a+=(null!=e.hedef1?"🧱 Direnç: ":"🧱 Direnç: ")+e.direncler.filter(x=>null!=x).map(e=>t(e)).join(" · ")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(a+="🎯 Hedef: <b>"+t(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(a+=tuttu?"  ·  🏆 fiyat hedefin "+Math.abs(e.potansiyel).toFixed(1)+"% üstünde":"  ·  "+(e.rozet||"➡️")+" <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),a+="\n"),
@@ -2097,7 +2129,7 @@ if(z&&a)return j(a)+"\n\n"+AYNA(t,z);
 if(z)return AYNA(t,z);
 if(a)return "🔎 <b>"+t+"</b> için güncel durum\n\n"+j(a);
 return "🔎 <b>"+t+"</b>\n\nBu kod taramada bulunamadı. Yazımı kontrol et (örn. <code>THYAO</code>) ya da yeni tarama sonrası tekrar dene."}function PY(uname,userId,chatId){const link="https://t.me/"+uname+"?start=r"+userId,paylas="https://t.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(DAVET_METIN),menu=u(userId);menu.inline_keyboard=[[{text:"📤 Paylaş",url:paylas}]].concat(menu.inline_keyboard);return{chat_id:chatId,parse_mode:"HTML",disable_web_page_preview:!0,text:"📤 <b>Sistemi paylaş</b>\n\nAşağıdaki düğmeye dokun, Telegram'da kime göndereceğini seç. Davet bağlantın otomatik olarak gönderilir.",reply_markup:menu}}
-const Q={tavan:"🟥🟥🟥🟥🟥🟥🟥🟥\n⚡ <b>15 DAKİKA</b> · kısa trade\n<i>yalnız 15 dakikalık sinyaller</i>\n🟥🟥🟥🟥🟥🟥🟥🟥",potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",adayKisa:"🟨🟨🟨🟨🟨🟨🟨🟨\n⚡ <b>15 DAKİKA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};export default{async fetch(p,A,q){const $=new URL(p.url);if(n=$.origin,
+const Q={tavan:"🟥🟥🟥🟥🟥🟥🟥🟥\n⚡ <b>15 DAKİKA</b> · kısa trade\n<i>yalnız 15 dakikalık sinyaller</i>\n🟥🟥🟥🟥🟥🟥🟥🟥",potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayKisa:"🟨🟨🟨🟨🟨🟨🟨🟨\n⚡ <b>15 DAKİKA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};export default{async fetch(p,A,q){const $=new URL(p.url);if(n=$.origin,
 i=A.PANEL_KEY||A.PUSH_KEY||t,"/surum"===$.pathname)return new Response("Fix Borsa Sinyal worker surum "+a,{headers:{"content-type":"text/plain; charset=utf-8","Access-Control-Allow-Origin":"*"}})
 ;if("/setup"===$.pathname){
 const e=(e,t)=>new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#0d1117;color:#e6edf3;font:15px/1.6 system-ui,sans-serif;padding:18px"><h2 style="margin:0 0 10px">'+e+"</h2>"+t+'<p style="margin-top:18px"><a href="/" style="color:#388bfd">← Durum sayfasına dön</a></p></body>',{
@@ -2112,7 +2144,7 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 ;if("OPTIONS"===p.method)return new Response(null,{status:204,headers:ee});if("/push"===$.pathname){const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({
 "content-type":"application/json; charset=utf-8"},ee)});if("POST"!==p.method)return e({ok:!1,hata:"POST bekleniyor"},405);if(!s(A,$))return e({ok:!1,hata:"Şifre yanlış"},401)
 ;const t=await p.json().catch(()=>null);if(!t||"object"!=typeof t)return e({ok:!1,hata:"Paket okunamadı"},400);t.guncelleme=(new Date).toISOString()
-;const eskiListe=await g(A).catch(()=>null);await async function(e,t){o=t;
+;const eskiListe=await g(A).catch(()=>null);await async function(e,t){o=t,oTS=Date.now();
 /* KV YAZMA KORUMASI: sürekli mod (10 sn'de bir tarama) KV'nin günlük
    ücretsiz yazma sınırını (1000) yakabilir. Önbellek HER ZAMAN tazelenir
    (bedava ve hızlı); kalıcı KV yazımı en fazla 2 dakikada bir yapılır.
@@ -2238,7 +2270,7 @@ if(j&&j.sonuc)for(const kod of kodlar){const p=j.sonuc[kod]
 return JS({ok:!0,sonuc:sonuc})}
 if("/api/kamalar"===$.pathname){
 const L2=await g(A);
-const oncelik=["tavan","potansiyel","fibo","uzunvade","adayKisa","adayOrta","adayOrtaVade","adayUzun"];
+const oncelik=["tavan","potansiyel","fibo","uzunvade","haftalik","adayKisa","adayOrta","adayOrtaVade","adayUzun","adayHafta"];
 const kodTf={};
 if(L2&&L2.kartlar)for(const tf of oncelik){
   for(const rc of L2.kartlar[tf]||[])if(rc&&rc.kod&&!(rc.kod in kodTf))kodTf[rc.kod]=tf;
@@ -2321,8 +2353,8 @@ if("/api/performans"===$.pathname){
 const G2=await y(A),GD=G2.gunler||{},OZ=G2.ozet||{};
 const bg=new Date(Date.now()+108e5).toISOString().slice(0,10);
 const fark=gg=>Math.round((new Date(bg)-new Date(gg))/864e5);
-const TFL=["15DK","1SA","4SA","1G"],
-DUZELT=t=>({"15D":"15DK","1S":"1SA","4S":"4SA","1G":"1G","15DK":"15DK","1SA":"1SA","4SA":"4SA"})[t]||t;
+const TFL=["15DK","1SA","4SA","1G","1HAF"],
+DUZELT=t=>({"15D":"15DK","1S":"1SA","4S":"4SA","1G":"1G","1H":"1HAF","1HAF":"1HAF","15DK":"15DK","1SA":"1SA","4SA":"4SA"})[t]||t;
 const bos=()=>({n:0,kaz:0,top:0,zirve:0,eniyi:null,enkotu:null,hedefN:0,hedefTut:0,direncN:0,direncDon:0});
 const kapat=o=>o.n?{n:o.n,isabet:100*o.kaz/o.n,ort:o.top/o.n,zirve:o.zirve/o.n,
 eniyi:o.eniyi,enkotu:o.enkotu,on10k:Math.round(10000*(1+(o.top/o.n)/100)),
@@ -2378,7 +2410,7 @@ if("/api/simulasyon"===$.pathname){
    tamamlanır — orada yalnız günlük ortalama vardır, hisse bazlı ayrım yok. */
 const G2=await y(A),GD=G2.gunler||{},OZ=G2.ozet||{};
 const bg=new Date(Date.now()+108e5).toISOString().slice(0,10);
-const DUZELT=t=>({"15D":"15DK","1S":"1SA","4S":"4SA","1G":"1G","15DK":"15DK","1SA":"1SA","4SA":"4SA"})[t]||t;
+const DUZELT=t=>({"15D":"15DK","1S":"1SA","4S":"4SA","1G":"1G","1H":"1HAF","1HAF":"1HAF","15DK":"15DK","1SA":"1SA","4SA":"4SA"})[t]||t;
 let tarih=String(gov.tarih||"").slice(0,10);
 if(!/^\d{4}-\d{2}-\d{2}$/.test(tarih))tarih=bg;
 if(tarih>bg)tarih=bg;
