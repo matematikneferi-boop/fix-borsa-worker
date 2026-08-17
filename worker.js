@@ -1,5 +1,5 @@
 const e=new Set(["6819672343"]),t="kolayfix",a="11.7";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
-;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null,oTS=0;const c=new Set(["tavan","potansiyel","fibo","uzunvade","haftalik","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun","adayHafta"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
+;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null,oTS=0;const c=new Set(["potansiyel","fibo","uzunvade","haftalik","aday","adayOrta","adayOrtaVade","adayUzun","adayHafta"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
 ;const r=await b(e.BOT_TOKEN,"getMe",{}),u=r&&r.result&&r.result.username;return u?(BUN=u,e.VERI&&await e.VERI.put("botuser",u).catch(()=>{}),u):null}
@@ -11,7 +11,6 @@ function u(e){
 if(n)return{inline_keyboard:[[{text:"📱 UYGULAMAYI AÇ",web_app:{url:n+"/app"}}]]};
 const t=[];
 t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
-[{text:"⚡ 15 DAKİKA · kısa trade",callback_data:"tavan"}],[{text:"🟨 15 dakika adayları (Süper Üyelik)",callback_data:"adayKisa"}],
 [{text:"📊 1 SAAT · orta trade",callback_data:"potansiyel"}],[{text:"🟨 1 saat adayları (Süper Üyelik)",callback_data:"adayOrta"}],
 [{text:"📐 4 SAAT · orta vade",callback_data:"fibo"}],[{text:"🟨 4 saat adayları (Süper Üyelik)",callback_data:"adayOrtaVade"}],
 [{text:"🗓 1 GÜN · uzun vade",callback_data:"uzunvade"}],[{text:"🟨 1 gün adayları (Süper Üyelik)",callback_data:"adayUzun"}],
@@ -19,7 +18,7 @@ t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
 [{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]);
 return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
-const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n⚡ <b>Kısa Trade</b> · 15DK — en net kurulumlar\n📊 <b>Orta Trade</b> · 1SA — hedefi en uzak olanlar\n📐 <b>Orta Vade</b> · 4SA — bugün taze kıranlar\n🗓 <b>Uzun Vade</b> · 1G — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — kısa trade sinyaline giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
+const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>Orta Trade</b> · 1SA — hedefi en uzak olanlar\n📐 <b>Orta Vade</b> · 4SA — bugün taze kıranlar\n🗓 <b>Uzun Vade</b> · 1G — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
 /* ══════════════════════════════════════════════════════════════════════════
    🛡 DAYANIKLILIK KATMANI (sürüm 11.6)
    Altı madde buraya toplandı. HİÇBİRİ mevcut davranışı değiştirmez:
@@ -458,7 +457,7 @@ async function alarmGecmisi(e){if(!e.VERI)return{gun:"",kodlar:[]};
 const t=await e.VERI.get("alarmGun"),g=t?JSON.parse(t):{gun:"",kodlar:[]},bugun=onayDonemi();
 return g.gun!==bugun?{gun:bugun,kodlar:[]}:g}
 async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;
-const yeniListe=yeni&&yeni.kartlar&&yeni.kartlar.tavan||[];
+const yeniListe=yeni&&yeni.kartlar&&yeni.kartlar.potansiyel||[];
 if(!yeniListe.length)return;
 const gecmis=await alarmGecmisi(e),bilinen=new Set(gecmis.kodlar||[]);
 /* ALARM SADECE GERÇEKTEN GÜÇLÜ OLANLARA:
@@ -914,7 +913,7 @@ const TEMETTU_KONU="Kar Payı Dağıtım";
 const TEMETTU_POLL_MS=18e5;
 async function temettuTakvimiGetir(gunSayisi){
 const liste=await kapBildirimleriGetir(gunSayisi||30);
-return liste.filter(d=>d.subject&&d.subject.indexOf(TEMETTU_KONU)>=0&&d.relatedStocks)
+return liste.filter(d=>d.subject&&trSad(d.subject).indexOf("KAR PAYI DAGITIM")>=0&&d.relatedStocks)
 .map(d=>({kod:String(d.relatedStocks).split(",")[0].trim().toUpperCase(),tarih:(d.publishDate||"").slice(0,10),disclosureIndex:d.disclosureIndex,konu:d.subject}))}
 async function temettuKontrolVeGonder(e){
 if(!e.VERI||!e.BOT_TOKEN)return;
@@ -1029,8 +1028,17 @@ ucIleri=bas;kalan-=bu;pencereSayisi++;
 if(pencereSayisi%3===0)await gecikmeli(250)}
 return[...tumuMap.values()]}
 async function temettuTakvimiGercekGetir(tani){
-const ham=await kapBildirimleriPencereli(50,6,tani);
-tani.push(ham.length+" ham KAP bildirimi (son 50 gün, tekilleştirilmiş, filtresiz)");
+/* ESKİ HATA: pencere yalnız SON 50 GÜNdü. BIST'te "Kar Payı Dağıtım
+   İşlemlerine İlişkin Bildirim" duyuruları çoğunlukla Mart–Temmuz genel
+   kurul sezonunda çıkıyor; Ağustos ortası gibi sezon dışı bir tarihte son
+   50 günde GERÇEKTEN sıfır yeni duyuru olabiliyor (12k+ bildirim arasında
+   temettüyle hiç ilgisi olmayanlar dahil) — bu "hata" değil, "şu an yok"
+   durumuydu ama arayüzde hata gibi görünüyordu. Pencere 100 güne çıkarıldı
+   ki sezonun kuyruğundaki (ödeme tarihi hâlâ ileride olan) duyurular da
+   yakalansın. */
+const TEMETTU_GUN=100;
+const ham=await kapBildirimleriPencereli(TEMETTU_GUN,6,tani);
+tani.push(ham.length+" ham KAP bildirimi (son "+TEMETTU_GUN+" gün, tekilleştirilmiş, filtresiz)");
 if(ham.length)tani.push("örnek subject alanları: "+ham.slice(0,5).map(d=>JSON.stringify(d.subject)).join(" | "));
 const map1=d=>({kod:String(d.relatedStocks).split(",")[0].trim().toUpperCase(),tarih:(d.publishDate||"").slice(0,10),disclosureIndex:d.disclosureIndex,konu:d.subject});
 let adaylar=ham.filter(d=>d.subject&&trSad(d.subject).indexOf("KAR PAYI DAGITIM")>=0&&d.relatedStocks).map(map1);
@@ -1073,7 +1081,7 @@ if(e.VERI)await e.VERI.put("temettuSonHata",JSON.stringify({ts:Date.now(),tani:t
 /* Detay sayfaları erişilemezse (KAP WAF/yoğunluk) eski duyuru listesine düş. */
 const eskiC=e.VERI&&await e.VERI.get("temettuCache");
 if(eskiC){try{const j=JSON.parse(eskiC);if(Date.now()-j.ts<18e5)return{liste:j.liste,tani:tani.concat(["eski kv cache"])}}catch(err){}}
-let eski=[];try{eski=await temettuTakvimiGetir(45)}catch(err){tani.push("eski KAP istisnası: "+String(err&&err.message||err))}
+let eski=[];try{eski=await temettuTakvimiGetir(90)}catch(err){tani.push("eski KAP istisnası: "+String(err&&err.message||err))}
 if(e.VERI&&eski.length)await e.VERI.put("temettuCache",JSON.stringify({ts:Date.now(),liste:eski.slice(0,150)}));
 return{liste:eski,tani:tani}}
 /* LİSTE OKUMA — TAZELİK GARANTİLİ.
@@ -1127,7 +1135,7 @@ void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  �
   --bg:#0e1116; --kart:#161b22; --kart2:#1c2330; --ciz:#262d38;
   --yazi:#e6edf3; --soluk:#8b949e; --mavi:#388bfd;
   --yes:#3fb950; --kir:#f85149; --sar:#d29922; --mor:#a371f7;
-  --t15:#f85149; --t1s:#3fb950; --t4s:#58a6ff; --t1g:#a371f7; --t1h:#ff9d4d; --tad:#d29922;
+  --t1s:#3fb950; --t4s:#58a6ff; --t1g:#a371f7; --t1h:#ff9d4d; --tad:#d29922;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--yazi);
@@ -1138,12 +1146,11 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .baslik{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .baslik h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
 .saat{font-size:11.5px;color:var(--soluk);font-variant-numeric:tabular-nums}
-.sekmeler{display:flex;gap:6px;overflow-x:auto;padding-bottom:9px;scrollbar-width:none}
+.sekmeler{display:flex;flex-wrap:wrap;gap:6px;max-height:104px;overflow-y:auto;padding-bottom:9px;scrollbar-width:none}
 .sekmeler::-webkit-scrollbar{display:none}
 .sek{flex:0 0 auto;background:var(--kart);border:1px solid var(--ciz);color:var(--soluk);
   border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;white-space:nowrap}
 .sek.on{color:#fff;border-color:transparent}
-.sek.on[data-r="15DK"]{background:var(--t15)}
 .sek.on[data-r="1SA"]{background:var(--t1s);color:#08150c}
 .sek.on[data-r="4SA"]{background:var(--t4s);color:#07182b}
 .sek.on[data-r="1G"]{background:var(--t1g)}
@@ -1275,14 +1282,14 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit b{color:var(--yazi)} .serit .ay{color:#3a4553;margin:0 12px}
 .serit .ay2{color:var(--soluk);font-size:10.5px}
 .hotSerit{margin:0 0 9px}
-.hotBaslik{font-size:12px;font-weight:700;color:var(--sar);margin-bottom:6px}
-.hotSira{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
-.hotKart{flex:0 0 84px;background:var(--kart);border:1px solid var(--ciz);
-  border-left:3px solid var(--ciz);border-radius:10px;padding:8px 9px;cursor:pointer}
+.hotBaslik{font-size:11px;font-weight:700;color:var(--sar);margin-bottom:5px}
+.hotSira{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.hotKart{flex:0 0 66px;background:var(--kart);border:1px solid var(--ciz);
+  border-left:3px solid var(--ciz);border-radius:8px;padding:6px 7px;cursor:pointer}
 .hotKart:active{background:var(--kart2)}
-.hotKod{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hotDil{font-size:10.5px;color:var(--soluk);margin:2px 0}
-.hotYuzde{font-size:12.5px;font-weight:700}
+.hotKod{font-weight:700;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hotDil{font-size:9.5px;color:var(--soluk);margin:1px 0}
+.hotYuzde{font-size:11px;font-weight:700}
 .simSatir{margin-bottom:8px}
 .simSatir label{display:block;font-size:11.5px;color:var(--soluk);margin-bottom:4px}
 .simSatir input{width:100%;box-sizing:border-box;background:var(--kart2);border:1px solid var(--ciz);
@@ -1359,7 +1366,7 @@ var TG=window.Telegram&&window.Telegram.WebApp;
 try{TG.ready();TG.expand();if(TG.setHeaderColor)TG.setHeaderColor("#0e1116");
     if(TG.setBackgroundColor)TG.setBackgroundColor("#0e1116")}catch(e){}
 function tit(){try{TG.HapticFeedback.impactOccurred("light")}catch(e){}}
-var D=null, sekme="tavan", sira="pot", adayTf="adayKisa", presetSec="kaliteli", portfoySirala="deger";
+var D=null, sekme="potansiyel", sira="pot", adayTf="adayOrta", presetSec="kaliteli", portfoySirala="deger";
 /* ---------- GERİ / İLERİ ----------
    Uygulama tek sayfa olduğu için tarayıcı geçmişi yok; her ekran değişimi
    kendi yığınımıza yazılır. Telegram'ın kendi geri düğmesi de buna bağlanır:
@@ -1410,12 +1417,10 @@ function tgGeriDugme(){
     if(acik||yolIx>0)TG.BackButton.show();else TG.BackButton.hide();
   }catch(e){}
 }
-var TF={tavan:{ad:"15 DAKİKA",kisa:"15DK",r:"15DK",ik:"⚡",renk:"var(--t15)"},
-        potansiyel:{ad:"1 SAAT",kisa:"1SA",r:"1SA",ik:"📊",renk:"var(--t1s)"},
+var TF={potansiyel:{ad:"1 SAAT",kisa:"1SA",r:"1SA",ik:"📊",renk:"var(--t1s)"},
         fibo:{ad:"4 SAAT",kisa:"4SA",r:"4SA",ik:"📐",renk:"var(--t4s)"},
         uzunvade:{ad:"1 GÜN",kisa:"1G",r:"1G",ik:"🗓",renk:"var(--t1g)"},
         haftalik:{ad:"1 HAFTA",kisa:"1HAF",r:"1HAF",ik:"📅",renk:"var(--t1h)"},
-        adayKisa:{ad:"15 DAKİKA adayları",kisa:"15DK",r:"aday",ik:"🟨",renk:"var(--tad)"},
         adayOrta:{ad:"1 SAAT adayları",kisa:"1SA",r:"aday",ik:"🟨",renk:"var(--tad)"},
         adayOrtaVade:{ad:"4 SAAT adayları",kisa:"4SA",r:"aday",ik:"🟨",renk:"var(--tad)"},
         adayUzun:{ad:"1 GÜN adayları",kisa:"1G",r:"aday",ik:"🟨",renk:"var(--tad)"},
@@ -1464,7 +1469,7 @@ function onayCiz(){
 }
 function sekCiz(){
   var s=[];
-  ["tavan","potansiyel","fibo","uzunvade","haftalik"].forEach(function(k){
+  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(k){
     var t=TF[k],n=(D.kartlar&&D.kartlar[k]&&D.kartlar[k].length)||0;
     s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
       t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
@@ -1520,7 +1525,7 @@ function ciz(){
    dilim sayacı / üyelik / sabit uyarı metinleri kaldırıldı. */
 function seritCiz(){
   var hepsi=[];
-  ["tavan","potansiyel","fibo","uzunvade","haftalik"].forEach(function(k){
+  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(k){
     (D.kartlar&&D.kartlar[k]||[]).forEach(function(x){
       var kr=kar(x);if(kr!=null)hepsi.push({kod:x.kod,y:kr,tf:TF[k].kisa});
     });
@@ -1542,13 +1547,13 @@ function seritCiz(){
 }
 /* ---------- 🔥 EN GÜÇLÜ SİNYALLER — TÜM SEKMELERİN ÜSTÜNDE SABİT ÖZET ----------
    İki satır: (1) tüm dilimler karışık, kalite puanı en yüksek 5 farklı hisse
-   ("en güçlülerin güçlüsü") ve (2) her dilimin (15DK/1SA/4SA/1G) KENDİ en
+   ("en güçlülerin güçlüsü") ve (2) her dilimin (1SA/4SA/1G) KENDİ en
    güçlü hissesi -- bir dilim genel top 5'e girmese bile kendi en iyisi burada
    görünür. Dokununca satirBagla() ile aynı detay ekranı açılır. */
 function hotCiz(){
   var kutu=el("hotSerit"); if(!kutu)return;
   var hepsi=[];
-  ["tavan","potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
+  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
     (D.kartlar&&D.kartlar[ad]||[]).forEach(function(x){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
@@ -1565,7 +1570,7 @@ function hotCiz(){
   genelTop.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
   genelTop=genelTop.slice(0,5);
 
-  var dilimTop=["tavan","potansiyel","fibo","uzunvade","haftalik"].map(function(ad){
+  var dilimTop=["potansiyel","fibo","uzunvade","haftalik"].map(function(ad){
     var l=(D.kartlar&&D.kartlar[ad]||[]).slice();
     l.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
     var en=l[0]; if(!en)return null;
@@ -1688,7 +1693,7 @@ function adayCiz(){
     el("davetGit").onclick=function(){tit();sekme="davet";ciz()};
     return;
   }
-  var alt=["adayKisa","adayOrta","adayOrtaVade","adayUzun","adayHafta"];
+  var alt=["adayOrta","adayOrtaVade","adayUzun","adayHafta"];
   var h='<div class="sirala">'+alt.map(function(a){
     var n=(D.kartlar&&D.kartlar[a]&&D.kartlar[a].length)||0;
     return '<button class="sir'+(adayTf===a?" on":"")+'" data-at="'+a+'">'+TF[a].kisa+(n?" ("+n+")":"")+"</button>";
@@ -1727,7 +1732,7 @@ function kamaTara(){
   }).catch(function(){kamaTararken=false;el("govde").innerHTML='<div class="bos">Bağlantı hatası.</div>'});
 }
 var fDilim="hepsi";
-var FDILIM=[["hepsi","Tümü"],["15DK","15DK"],["1SA","1SA"],["4SA","4SA"],
+var FDILIM=[["hepsi","Tümü"],["1SA","1SA"],["4SA","4SA"],
             ["1G","1G"],["1HAF","Hafta"],["1AY","Ay"]];
 function kamaGoster(){
   var tum=(kamaD&&kamaD.sonuc)||[];
@@ -1775,7 +1780,7 @@ function fdBagla(){
    veri göstermemek için. */
 function presetCiz(){
   var hepsi=[];
-  ["tavan","potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
+  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
     (D.kartlar&&D.kartlar[ad]||[]).forEach(function(x){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
@@ -1845,7 +1850,7 @@ function temettuCiz(){
   post("/api/temettu",{}).then(function(v){
     var liste=(v&&v.liste)||[],gercek=!!(v&&v.gercekTarih);
     if(!liste.length){
-      el("govde").innerHTML='<div class="bos"><b>💰 Temettü Takvimi</b><br><br>Şu an gösterilecek kayıt yok.<br>Birazdan tekrar dene.</div>'+
+      el("govde").innerHTML='<div class="bos"><b>💰 Temettü Takvimi</b><br><br>Şu an ödeme tarihi ileride olan bir kâr payı duyurusu yok.<br>BIST\'te temettü duyuruları çoğunlukla Mart–Temmuz genel kurul sezonunda çıkar; sezon dışında liste boş görünmesi normaldir. Yeni bir duyuru çıktığında burada listelenir.</div>'+
         (v&&v.tani?'<div class="uyari" style="text-align:left;white-space:pre-wrap">TANI (sadece admin):\\n'+E(v.tani.join("\\n"))+'</div>':"");
       return;
     }
@@ -1922,7 +1927,7 @@ function portfoyCiz(){
     var satirDeger=fiyat!=null?poz.lot*fiyat:null;
     if(satirDeger!=null){toplamMaliyet+=satirMaliyet;toplamDeger+=satirDeger;adet++}
     var kz=fiyat!=null?(fiyat/poz.maliyet-1)*100:null, tutar=fiyat!=null?(fiyat-poz.maliyet)*poz.lot:null;
-    satirlar.push({kod:kod,poz:poz,fiyat:fiyat,kz:kz,tutar:tutar,satirDeger:satirDeger||0,ad:bul?bul.ad:"tavan"});
+    satirlar.push({kod:kod,poz:poz,fiyat:fiyat,kz:kz,tutar:tutar,satirDeger:satirDeger||0,ad:bul?bul.ad:""});
   });
   var kzToplam=toplamMaliyet>0?100*(toplamDeger/toplamMaliyet-1):0, farkToplam=toplamDeger-toplamMaliyet;
   var gercekToplam=gecmis.reduce(function(a,x){return a+(x.kar||0)},0);
@@ -1964,7 +1969,7 @@ function portfoyCiz(){
   h+='<div class="uyari">Satıra dokun: detay/düzenle/sat. Yatırım tavsiyesi değildir.</div>';
   el("govde").innerHTML=h;
   [].forEach.call(document.querySelectorAll("#govde .satir"),function(row){
-    row.onclick=function(){var kod=row.getAttribute("data-kod");tit();detay(kod,(portfoyBul(kod)||{}).ad||"tavan")};
+    row.onclick=function(){var kod=row.getAttribute("data-kod");tit();detay(kod,(portfoyBul(kod)||{}).ad||"")};
   });
   [].forEach.call(document.querySelectorAll("#govde [data-sirala]"),function(btn){
     btn.onclick=function(){portfoySirala=btn.getAttribute("data-sirala");portfoyCiz()};
@@ -2108,7 +2113,7 @@ function favCiz(){
       var x=(D.kartlar[a]||[]).filter(function(y){return y.kod===kod})[0];
       if(x){k=x;ad=a}
     });
-    if(k)bul.push({k:k,ad:ad}); else bul.push({k:{kod:kod,fiyat:null},ad:"tavan",yok:true});
+    if(k)bul.push({k:k,ad:ad}); else bul.push({k:{kod:kod,fiyat:null},ad:"",yok:true});
   });
   if(!bul.length){
     el("govde").innerHTML='<div class="bos"><b>⭐ Takip listem</b><br><br>Listen boş.<br>'+
@@ -2117,7 +2122,7 @@ function favCiz(){
   }
   var pf=D.portfoy||{};
   el("govde").innerHTML=portfoyOzetiCiz(pf,bul)+bul.map(function(x){
-    var satir=x.yok?'<div class="satir" data-kod="'+E(x.k.kod)+'" data-l="tavan">'+
+    var satir=x.yok?'<div class="satir" data-kod="'+E(x.k.kod)+'" data-l="">'+
       '<div class="sol"><div class="kod">'+E(x.k.kod)+"</div>"+
       '<div class="altbilgi">şu an hiçbir listede değil</div></div>'+
       '<div class="sag"><div class="yuzde so">detay ▸</div></div></div>'
@@ -2730,8 +2735,8 @@ function rotGoster(){
 }
 var perfD=null, perfDonem="a1";
 var DONEM=[["h1","Son 1 hafta"],["a1","Son 1 ay"],["a3","Son 3 ay"],["y1","Son 1 yıl"]];
-var DRENK={"15DK":"var(--t15)","1SA":"var(--t1s)","4SA":"var(--t4s)","1G":"var(--t1g)","1HAF":"var(--t1h)"};
-var DAD={"15DK":"⚡ 15 DAKİKA","1SA":"📊 1 SAAT","4SA":"📐 4 SAAT","1G":"🗓 1 GÜN","1HAF":"📅 1 HAFTA"};
+var DRENK={"1SA":"var(--t1s)","4SA":"var(--t4s)","1G":"var(--t1g)","1HAF":"var(--t1h)"};
+var DAD={"1SA":"📊 1 SAAT","4SA":"📐 4 SAAT","1G":"🗓 1 GÜN","1HAF":"📅 1 HAFTA"};
 function perfCiz(){
   if(!perfD){
     el("govde").innerHTML='<div class="yukleniyor">performans hesaplanıyor…</div>';
@@ -3015,7 +3020,7 @@ try{
 basla();
 </script></body></html>
 `;
-const BILGI_METIN="ℹ️ <b>YUMATU 1 NEDİR?</b>\n\nBIST hisseleri için otomatik teknik tarama yapan bir <b>yapay zekâ</b> sistemidir. Sonuçlar <b>120.657 barlık</b> geçmiş veri üzerinde çalışan tarama motorundan çıkar. Gün içinde düzenli aralıklarla taranır, sonuçlar burada listelenir.\n\n<b>İçermez:</b> insan görüşü, şirket analizi, haber ya da bilanço değerlendirmesi. Yalnızca fiyat ve hacim matematiğidir.\n\n<b>4 liste — her biri YALNIZ kendi zaman diliminden:</b>\n⚡ <b>15 DAKİKA</b> — yalnız 15 dakikalık sinyaller\n📊 <b>1 SAAT</b> — yalnız 1 saatlik sinyaller\n📐 <b>4 SAAT</b> — yalnız 4 saatlik sinyaller\n🗓 <b>1 GÜN</b> — yalnız günlük sinyaller\n\nBir liste başka bir dilimin sinyalini <b>asla</b> göstermez; başlıkta yazan dilim ile kartın içindeki dilim her zaman aynıdır.\n\n🔎 <b>Hisse sorgulama</b>\nSohbete hisse kodunu yaz (örn. <code>THYAO</code>). O hissenin <b>iki yönünü birden</b> gönderirim: yukarı için direnç ve yükseliş hedefi, aşağı için destek ve düşüş hedefi. Hisse listelerde olmasa bile cevap alırsın.\n\n<b>Diğer düğmeler:</b>\n🏅 <b>İlk 3\'ü</b> — son taramanın en iyi 3 sonucu\n⭐ <b>Takip listem</b> — seçtiğin hisseleri anlık kâr/zararıyla takip et; eklemek/çıkarmak için hep aynı ⭐ düğmesine dokun\n🟨 <b>Adaylar</b> 👑 — her dilim için <i>henüz kırmadı ama makul mesafede.</i> Tetik seviyesini ve kırarsa gideceği hedefi gösterir; yani sinyal oluşmadan ÖNCE görürsün <b>(Süper Üyelik)</b>\n👑 <b>Anlık uyarı (Süper Üyelik)</b> — bir hisse 15 DAKİKA listesine girdiği an sana özel mesaj gelir\n\n<b>Süper Üyelikte neler açılıyor?</b>\n🟨 Aday listeleri (her dilim için)\n👑 Anlık uyarı mesajları\n⏳ Bekleme yok — listeler ve hisse sorguları anında\n\n<b>Süper Üyelik nasıl kazanılır?</b>\n📤 Sistemi paylaş düğmesiyle arkadaşlarını davet et. Davet sayacın hiç sıfırlanmaz, tüm zamanların toplamı olarak birikir. <b>Her 20 davette</b> süper üyeliğin <b>1 ay</b> açılır ya da (zaten süper üyeysen) mevcut süren üzerine <b>1 ay daha eklenir</b> — yani davet etmeye devam ettikçe süper üyeliğin otomatik uzar.\n\n<b>Neden bazen bekleme çıkıyor?</b>\nSistem çok sayıda kullanıcıya aynı anda hizmet verir; bu yüzden bazı işlemlerde kısa bir bekleme uygulanır. Bu, herkesin hizmeti düzgün alabilmesi içindir.\n\n<b>🔴 RİSK UYARISI</b>\n• Buradaki hiçbir çıktı <b>yatırım tavsiyesi değildir</b>.\n• Teknik tarama <b>geleceği bilmez</b>; hedefler tutmayabilir.\n• Geçmiş performans gelecek için <b>garanti vermez</b>.\n• Borsada <b>anaparanın tamamını kaybedebilirsin</b>.\n• Bu sonuçlara dayanarak işlem yapmak <b>tehlikelidir</b>. Sorumluluk tamamen sana aittir.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";function FAVKB(e){const t=[];for(let a=0;a<e.length;a+=2)t.push(e.slice(a,a+2).map(a=>({text:"❌ "+a,callback_data:"fav:"+a})));return t.push([{text:"◀️ Menü",callback_data:"menu"}]),{inline_keyboard:t}}
+const BILGI_METIN="ℹ️ <b>YUMATU 1 NEDİR?</b>\n\nBIST hisseleri için otomatik teknik tarama yapan bir <b>yapay zekâ</b> sistemidir. Sonuçlar <b>120.657 barlık</b> geçmiş veri üzerinde çalışan tarama motorundan çıkar. Gün içinde düzenli aralıklarla taranır, sonuçlar burada listelenir.\n\n<b>İçermez:</b> insan görüşü, şirket analizi, haber ya da bilanço değerlendirmesi. Yalnızca fiyat ve hacim matematiğidir.\n\n<b>3 liste — her biri YALNIZ kendi zaman diliminden:</b>\n📊 <b>1 SAAT</b> — yalnız 1 saatlik sinyaller\n📐 <b>4 SAAT</b> — yalnız 4 saatlik sinyaller\n🗓 <b>1 GÜN</b> — yalnız günlük sinyaller\n\nBir liste başka bir dilimin sinyalini <b>asla</b> göstermez; başlıkta yazan dilim ile kartın içindeki dilim her zaman aynıdır.\n\n🔎 <b>Hisse sorgulama</b>\nSohbete hisse kodunu yaz (örn. <code>THYAO</code>). O hissenin <b>iki yönünü birden</b> gönderirim: yukarı için direnç ve yükseliş hedefi, aşağı için destek ve düşüş hedefi. Hisse listelerde olmasa bile cevap alırsın.\n\n<b>Diğer düğmeler:</b>\n🏅 <b>İlk 3\'ü</b> — son taramanın en iyi 3 sonucu\n⭐ <b>Takip listem</b> — seçtiğin hisseleri anlık kâr/zararıyla takip et; eklemek/çıkarmak için hep aynı ⭐ düğmesine dokun\n🟨 <b>Adaylar</b> 👑 — her dilim için <i>henüz kırmadı ama makul mesafede.</i> Tetik seviyesini ve kırarsa gideceği hedefi gösterir; yani sinyal oluşmadan ÖNCE görürsün <b>(Süper Üyelik)</b>\n👑 <b>Anlık uyarı (Süper Üyelik)</b> — bir hisse güçlü bir sinyale girdiği an sana özel mesaj gelir\n\n<b>Süper Üyelikte neler açılıyor?</b>\n🟨 Aday listeleri (her dilim için)\n👑 Anlık uyarı mesajları\n⏳ Bekleme yok — listeler ve hisse sorguları anında\n\n<b>Süper Üyelik nasıl kazanılır?</b>\n📤 Sistemi paylaş düğmesiyle arkadaşlarını davet et. Davet sayacın hiç sıfırlanmaz, tüm zamanların toplamı olarak birikir. <b>Her 20 davette</b> süper üyeliğin <b>1 ay</b> açılır ya da (zaten süper üyeysen) mevcut süren üzerine <b>1 ay daha eklenir</b> — yani davet etmeye devam ettikçe süper üyeliğin otomatik uzar.\n\n<b>Neden bazen bekleme çıkıyor?</b>\nSistem çok sayıda kullanıcıya aynı anda hizmet verir; bu yüzden bazı işlemlerde kısa bir bekleme uygulanır. Bu, herkesin hizmeti düzgün alabilmesi içindir.\n\n<b>🔴 RİSK UYARISI</b>\n• Buradaki hiçbir çıktı <b>yatırım tavsiyesi değildir</b>.\n• Teknik tarama <b>geleceği bilmez</b>; hedefler tutmayabilir.\n• Geçmiş performans gelecek için <b>garanti vermez</b>.\n• Borsada <b>anaparanın tamamını kaybedebilirsin</b>.\n• Bu sonuçlara dayanarak işlem yapmak <b>tehlikelidir</b>. Sorumluluk tamamen sana aittir.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";function FAVKB(e){const t=[];for(let a=0;a<e.length;a+=2)t.push(e.slice(a,a+2).map(a=>({text:"❌ "+a,callback_data:"fav:"+a})));return t.push([{text:"◀️ Menü",callback_data:"menu"}]),{inline_keyboard:t}}
 function K(e,t,a,n,i){
 const r=e.kartlar[t],s=Math.max(1,Math.ceil(i.length/8)),l=[];l.push(["pot","kar","yeni"].map(e=>({text:(e===a?"✅ ":"")+A[e],callback_data:"l:"+t+":"+e+":0"})));const o=8*n,c=i.slice(o,o+8),d=e=>{
 const t=I(e),a=void 0!==e.potansiyel&&null!==e.potansiyel?Number(e.potansiyel):null,n=null===a?"":a<=0?"🏆 ":"+"+a.toFixed(1)+"% ",i=null!==t?"  "+(t>=0?"+":"")+t.toFixed(1)+"%":(null!=e.tetikYuzde?"  🔓"+Number(e.tetikYuzde).toFixed(1)+"%":"")
@@ -3249,7 +3254,7 @@ if(z&&a)return j(a)+"\n\n"+AYNA(t,z);
 if(z)return AYNA(t,z);
 if(a)return "🔎 <b>"+t+"</b> için güncel durum\n\n"+j(a);
 return "🔎 <b>"+t+"</b>\n\nBu kod taramada bulunamadı. Yazımı kontrol et (örn. <code>THYAO</code>) ya da yeni tarama sonrası tekrar dene."}function PY(uname,userId,chatId){const link="https://t.me/"+uname+"?start=r"+userId,paylas="https://t.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(DAVET_METIN),menu=u(userId);menu.inline_keyboard=[[{text:"📤 Paylaş",url:paylas}]].concat(menu.inline_keyboard);return{chat_id:chatId,parse_mode:"HTML",disable_web_page_preview:!0,text:"📤 <b>Sistemi paylaş</b>\n\nAşağıdaki düğmeye dokun, Telegram'da kime göndereceğini seç. Davet bağlantın otomatik olarak gönderilir.",reply_markup:menu}}
-const Q={tavan:"🟥🟥🟥🟥🟥🟥🟥🟥\n⚡ <b>15 DAKİKA</b> · kısa trade\n<i>yalnız 15 dakikalık sinyaller</i>\n🟥🟥🟥🟥🟥🟥🟥🟥",potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayKisa:"🟨🟨🟨🟨🟨🟨🟨🟨\n⚡ <b>15 DAKİKA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};const _ANA={async fetch(p,A,q){ORTAM=A;const $=new URL(p.url);if(n=$.origin,
+const Q={potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};const _ANA={async fetch(p,A,q){ORTAM=A;const $=new URL(p.url);if(n=$.origin,
 i=A.PANEL_KEY||A.PUSH_KEY||t,"/surum"===$.pathname)return new Response("Fix Borsa Sinyal worker surum "+a,{headers:{"content-type":"text/plain; charset=utf-8","Access-Control-Allow-Origin":"*"}})
 ;if("/setup"===$.pathname){
 const e=(e,t)=>new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#0d1117;color:#e6edf3;font:15px/1.6 system-ui,sans-serif;padding:18px"><h2 style="margin:0 0 10px">'+e+"</h2>"+t+'<p style="margin-top:18px"><a href="/" style="color:#388bfd">← Durum sayfasına dön</a></p></body>',{
@@ -3319,7 +3324,7 @@ const e=await a(5e3),t=await Y(A),n=await F(A),py=await PK(A),i=new Set(await E(
 const e=await L(A),t=await F(A),n=await Y(A),i=await E(A,!0),r=await N(A,!0),s=await S(A,!0),py=await PK(A);let l=await a(1e3);const o=e=>{const t=l.find(t=>String(t.id)===String(e))
 ;return t&&(t.ad||(t.kullanici?"@"+t.kullanici:""))||""};for(const e of l){const t=n[String(e.id)]||{};e.sorgu=t.toplam||0,e.sonAktif=t.son||null,e.paylas=py[String(e.id)]||0}
 l.sort((e,t)=>(t.katilim||"").localeCompare(e.katilim||""));const c=Object.entries(t).map(([e,t])=>({id:e,n:t,ad:o(e),paylas:py[String(e)]||0})).sort((e,t)=>t.n-e.n).slice(0,50),d=Object.entries(n).map(([e,t])=>({id:e,
-ad:o(e),toplam:t.toplam||0,tavan:t.tavan||0,potansiyel:t.potansiyel||0,fibo:t.fibo||0,detay:t.detay||0,son:t.son||null
+ad:o(e),toplam:t.toplam||0,potansiyel:t.potansiyel||0,fibo:t.fibo||0,detay:t.detay||0,son:t.son||null
 })).sort((e,t)=>t.toplam-e.toplam).slice(0,50),u=Math.floor(Date.now()/1e3),f=Object.values(n).filter(e=>e.son&&u-e.son<86400).length,b=Object.values(n).filter(e=>e.son&&u-e.son<604800).length,p=await g(A)
 ;let y=null;if(A.VERI){const e=await A.VERI.get("sonYayin");e&&(y=JSON.parse(e))}return new Response(JSON.stringify({toplam:e.toplam||0,gun:e.gun||{},basis:e.basis||{},kullanicilar:l.slice(0,400),
 referans:c,sorguLider:d,vip:i,engel:r,ayar:s,aktif24:f,aktif7g:b,sonYayin:y,listeGuncelleme:p?p.guncelleme:null,listeOzet:p&&p.kartlar?Object.keys(p.kartlar).filter(e=>"sira"!==e).map(e=>({ad:e,
@@ -3420,7 +3425,7 @@ if(j&&j.sonuc)for(const kod of kodlar){const p=j.sonuc[kod]
 return JS({ok:!0,sonuc:sonuc})}
 if("/api/kamalar"===$.pathname){
 const L2=await g(A);
-const oncelik=["tavan","potansiyel","fibo","uzunvade","haftalik","adayKisa","adayOrta","adayOrtaVade","adayUzun","adayHafta"];
+const oncelik=["potansiyel","fibo","uzunvade","haftalik","adayOrta","adayOrtaVade","adayUzun","adayHafta"];
 const kodTf={};
 if(L2&&L2.kartlar)for(const tf of oncelik){
   for(const rc of L2.kartlar[tf]||[])if(rc&&rc.kod&&!(rc.kod in kodTf))kodTf[rc.kod]=tf;
@@ -3588,7 +3593,7 @@ if("/api/performans"===$.pathname){
 const G2=await y(A),GD=G2.gunler||{},OZ=G2.ozet||{};
 const bg=new Date(Date.now()+108e5).toISOString().slice(0,10);
 const fark=gg=>Math.round((new Date(bg)-new Date(gg))/864e5);
-const TFL=["15DK","1SA","4SA","1G","1HAF"],
+const TFL=["1SA","4SA","1G","1HAF"],
 DUZELT=t=>({"15D":"15DK","1S":"1SA","4S":"4SA","1G":"1G","1H":"1HAF","1HAF":"1HAF","15DK":"15DK","1SA":"1SA","4SA":"4SA"})[t]||t;
 const bos=()=>({n:0,kaz:0,top:0,zirve:0,eniyi:null,enkotu:null,hedefN:0,hedefTut:0,direncN:0,direncDon:0});
 const kapat=o=>o.n?{n:o.n,isabet:100*o.kaz/o.n,ort:o.top/o.n,zirve:o.zirve/o.n,
