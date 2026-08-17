@@ -1,0 +1,40 @@
+name: Bekci (Tetikleyici)
+
+# Bu workflow tek basina hicbir tarama yapmaz. Tek isi: her 8 dakikada
+# bir uyanip, Fibo Tarama ve Formasyon workflow'larini GitHub'in kendi
+# API'si uzerinden "workflow_dispatch" ile zorla tetiklemek. Boylece
+# o iki workflow'un KENDI schedule'i bir turu atlasa bile, bu bekci
+# ayni dakikada onlari yine de calistirmis olur.
+#
+# Disariya token/hesap gerekmez -- GitHub'in her calistirmaya otomatik
+# verdigi GITHUB_TOKEN yeterli (workflow_dispatch icin ozel olarak
+# izinli).
+
+on:
+  schedule:
+    - cron: "*/8 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  tetikle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Fibo Tarama'yi tetikle
+        run: |
+          curl -sS -o /dev/null -w "fibo-tara: %{http_code}\n" -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/fibo-tara.yml/dispatches \
+            -d '{"ref":"main"}'
+
+      - name: Formasyon'u tetikle
+        run: |
+          curl -sS -o /dev/null -w "formasyon: %{http_code}\n" -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/formasyon.yml/dispatches \
+            -d '{"ref":"main"}'
