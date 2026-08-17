@@ -495,6 +495,8 @@ kisitMax:18};let w=null,O=0;async function S(e,t){if(!t&&w&&Date.now()-O<6e4)ret
 let T=null,x=0;async function E(e,t){if(!t&&T&&Date.now()-x<6e4)return T;if(!e.VERI)return T=[],x=Date.now(),T;const a=await e.VERI.get("vip");return T=a?JSON.parse(a):[],x=Date.now(),T}let v=null,R=0
 ;async function N(e,t){if(!t&&v&&Date.now()-R<6e4)return v;if(!e.VERI)return v=[],R=Date.now(),v;const a=await e.VERI.get("engel");return v=a?JSON.parse(a):[],R=Date.now(),v}async function B(e,t){
 return!d(t)&&(await N(e)).includes(String(t))}function M(e){return new Request("https://kisit.local/u/"+e)}function M60(e){return new Request("https://kisit60.local/u/"+e)}async function D(e){try{return await caches.default.delete(M(e)),!0}catch(e){return!1}}
+/* TR gününe göre "bugün mü" — bot mesajlarındaki 🆕 işareti için. */
+const BUGUN_MU=e=>{if(!e||!e.sinyalTs)return!1;const g=v=>Math.floor((Number(v)+10800)/86400);return g(e.sinyalTs)===g(Date.now()/1e3)};
 function I(e){return void 0!==e.kar&&null!==e.kar?Number(e.kar):e.giris>0&&e.fiyat>0?100*(Number(e.fiyat)/Number(e.giris)-1):null}const A={pot:"🎯 Hedefe kalan",kar:"💰 Kâr/Zarar",yeni:"🕐 En yeni"}
 ;function z(e,t,a){const n=e.kartlar&&e.kartlar[t]||[],i=n.length,r=[...Array(i).keys()];if("pot"===a)return r;const s=e.kartlar&&e.kartlar.sira&&e.kartlar.sira[t]&&e.kartlar.sira[t][a]
 ;return Array.isArray(s)&&s.length===i?s:"kar"===a?r.sort((e,t)=>(I(n[t])??-9999)-(I(n[e])??-9999)):r.sort((e,t)=>(n[t].sinyalTs||0)-(n[e].sinyalTs||0))}function U(e,t,a,n,i,r,YON){
@@ -503,6 +505,7 @@ const s=t.kartlar[a],l=Math.max(1,Math.ceil(r.length/8));let o=e+"\n";if(t.gunce
 o+="<i>Düğmede: solda hedefe kalan · sağda "+("aday"===a?"tetiğe kalan 🔓":"sinyalden bu yana")+"</i>\n\n";const c=8*i;return r.slice(c,c+8).forEach((e,t)=>{o+=function(e,t){const a=e=>Number(e).toFixed(2);let n="━━━━━━━━━━━━━━━━\n"
 ;n+="<b>"+t+". "+(e.rozet||"▫️")+" "+e.kod+"</b>"+(e.tf?"  ·  <i>"+e.tf+"</i>":"")+(e.etiket?"  ·  "+e.etiket:"")+"\n",
 e.canli&&(n+="⚡ <i>bar kapanmadı — teyit bekliyor</i>\n"),
+BUGUN_MU(e)&&(n+="🆕 <b>BUGÜN sinyal verdi</b>\n"),
 void 0!==e.giris&&null!==e.giris?n+="💵 Sinyal <b>"+a(e.giris)+"</b> → Şimdi <b>"+a(e.fiyat)+"</b>\n":n+="💵 Şimdi <b>"+a(e.fiyat)+"</b>\n";const i=I(e)
 ;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🧱 Direnç <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+="🎯 Hedef <b>"+a(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  🏆 <b>TUTTU</b>":"  ·  hedefe <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),n+="\n");const r=e.sinyalZaman||e.zaman
@@ -559,7 +562,36 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .yuzde{font-size:12px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
 .ye{color:var(--yes)} .kr{color:var(--kir)} .sa{color:var(--sar)} .so{color:var(--soluk)}
 .rz{font-size:13px;margin-right:2px}
+/* BUGÜN vurgusu: bugün sinyal veren satır gözden kaçmasın. Rozet parlak,
+   satırın kendisi hafif yeşil zeminli — listeyi kaydırırken göz doğrudan
+   bunlara takılır. */
+.bgn{display:inline-block;background:var(--yes);color:#05130a;font-size:10px;
+  font-weight:900;letter-spacing:.4px;border-radius:6px;padding:2px 5px;
+  margin-right:5px;vertical-align:2px}
+.satir.bgnSatir{background:linear-gradient(90deg,rgba(63,185,80,.16),var(--kart) 55%);
+  border-color:rgba(63,185,80,.45)}
+.hotKart.bgnKart{box-shadow:0 0 0 1px rgba(63,185,80,.55) inset}
+.hotKart.bgnKart .hotKod::after{content:"•";color:var(--yes);margin-left:4px;font-weight:900}
 .bos{text-align:center;color:var(--soluk);padding:38px 18px;font-size:13.5px;line-height:1.7}
+/* 🔄 ROTASYON: dört çeyrek grafiği + sektör listesi */
+.rrgKutu{background:var(--kart);border:1px solid var(--ciz);border-radius:12px;padding:8px;margin-bottom:10px}
+.rrgAcik{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+.rrgAcik span{font-size:10.5px;padding:3px 7px;border-radius:6px;font-weight:800}
+.q1{background:rgba(63,185,80,.18);color:#7ee787}
+.q2{background:rgba(210,153,34,.18);color:#e3b341}
+.q3{background:rgba(56,139,253,.18);color:#79c0ff}
+.q4{background:rgba(248,81,73,.18);color:#ff7b72}
+.rrgGrup{font-size:12px;font-weight:800;color:var(--soluk);margin:14px 0 6px;
+  text-transform:uppercase;letter-spacing:.5px}
+.rrgSat{display:flex;align-items:center;gap:8px;background:var(--kart);
+  border:1px solid var(--ciz);border-left:3px solid var(--ciz);border-radius:11px;
+  padding:9px 11px;margin-bottom:7px}
+.rrgAd{flex:1;min-width:0;font-weight:800;font-size:14px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rrgSay{font-size:11px;color:var(--soluk);font-weight:600}
+.rrgOlc{text-align:right;font-size:11px;color:var(--soluk);font-variant-numeric:tabular-nums}
+.rrgHis{font-size:11.5px;color:var(--soluk);margin:-2px 0 9px 12px;line-height:1.7}
+.rrgHis b{color:var(--yazi)}
 .yukleniyor{text-align:center;color:var(--soluk);padding:40px;font-size:13px}
 .kutu{background:var(--kart);border:1px solid var(--ciz);border-radius:12px;
   padding:13px;margin-bottom:10px}
@@ -742,6 +774,8 @@ function yolGit(adim){
   gezCiz();window.scrollTo(0,0);
 }
 function ekranAdi(){
+  if(sekme==="hata")return"🩺 Hatalar";
+  if(sekme==="rot")return"🔄 Sektör Rotasyonu";
   if(sekme==="perf")return"📈 Performans";
   if(sekme==="davet")return"📤 Davet";
   if(sekme==="panel")return"🛠 Panel";
@@ -785,6 +819,13 @@ function post(yol,gov){
   return fetch(yol,{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify(gov)}).then(function(r){return r.json()});
 }
+/* TR takvimine göre "bugün mü?" — sinyalTs saniye cinsinden, +3 saat ofsetle
+   gün numarasına çevrilip bugünün gün numarasıyla karşılaştırılıyor. */
+function trGun(sn){return Math.floor((Number(sn)+10800)/86400)}
+function bugunMu(k){
+  if(!k||!k.sinyalTs)return false;
+  return trGun(k.sinyalTs)===trGun(Date.now()/1000);
+}
 function kar(k){
   if(k.kar!=null)return Number(k.kar);
   if(k.giris>0&&k.fiyat>0)return(k.fiyat/k.giris-1)*100;
@@ -820,6 +861,7 @@ function sekCiz(){
   });
   s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar</button>');
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon</button>');
+  s.push('<button class="sek'+(sekme==="rot"?" on":"")+'" data-r="nötr" data-s="rot">🔄 Rotasyon</button>');
   s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
   s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
@@ -828,6 +870,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="temettu"?" on":"")+'" data-r="nötr" data-s="temettu">💰 Temettü</button>');
   s.push('<button class="sek'+(sekme==="davet"?" on":"")+'" data-r="nötr" data-s="davet">📤 Davet</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
+  if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
   el("sekmeler").innerHTML=s.join("");
   [].forEach.call(el("sekmeler").children,function(b){
     b.onclick=function(){tit();sekme=b.dataset.s;sira="pot";ciz();window.scrollTo(0,0)};
@@ -840,6 +883,8 @@ function ciz(){
   seritCiz();
   hotCiz();
   sekCiz();
+  if(sekme==="hata")return hataCiz();
+  if(sekme==="rot")return rotCiz();
   if(sekme==="perf")return perfCiz();
   if(sekme==="kama")return kamaCiz();
   if(sekme==="davet")return davetCiz();
@@ -914,7 +959,7 @@ function hotCiz(){
   function kartHtml(x){
     var t=TF[x._ad]||{kisa:x.tf||"",renk:"var(--ciz)"};
     var kr=kar(x);
-    return '<div class="hotKart" data-kod="'+E(x.kod)+'" data-l="'+x._ad+'" style="border-left-color:'+t.renk+'">'+
+    return '<div class="hotKart'+(bugunMu(x)?" bgnKart":"")+'" data-kod="'+E(x.kod)+'" data-l="'+x._ad+'" style="border-left-color:'+t.renk+'">'+
       '<div class="hotKod">'+E(x.kod)+'</div>'+
       '<div class="hotDil">'+t.kisa+'</div>'+
       '<div class="hotYuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+'</div>'+
@@ -962,8 +1007,10 @@ function satirHtml(k,ad){
   if(k.tetik!=null)alt.push("🔓 tetik "+N(k.tetik)+(k.tetikYuzde!=null?" · %"+Number(k.tetikYuzde).toFixed(1)+" kaldı":""));
   else if(k.giris!=null)alt.push("sinyal "+N(k.giris));
   if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
-  return '<div class="satir" data-kod="'+E(k.kod)+'" data-l="'+ad+'" style="border-left-color:'+t.renk+'">'+
-    '<div class="sol"><div class="kod">'+(k.rozet?'<span class="rz">'+k.rozet+"</span>":"")+E(k.kod)+"</div>"+
+  var bg=bugunMu(k);
+  return '<div class="satir'+(bg?" bgnSatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'" style="border-left-color:'+t.renk+'">'+
+    '<div class="sol"><div class="kod">'+(k.rozet?'<span class="rz">'+k.rozet+"</span>":"")+
+    (bg?'<span class="bgn">BUGÜN</span>':"")+E(k.kod)+"</div>"+
     '<div class="altbilgi">'+E(alt.join(" · "))+"</div></div>"+
     '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
     '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?sag:Y(kr))+"</div></div></div>";
@@ -1007,7 +1054,7 @@ function listeCiz(ad){
   var l=dizil(ad), t=TF[ad];
   if(!l.length){
     el("govde").innerHTML='<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>Şu an bu dilimde sinyal yok.<br>'+
-      'Zayıf sinyalle liste doldurulmuyor — üç şartı birden sağlayan hisse çıkmadığında liste boş kalır.</div>';
+      'Zayıf sinyalle liste doldurulmuyor — iki şartı birden sağlayan hisse çıkmadığında liste boş kalır.</div>';
     return;
   }
   el("govde").innerHTML=sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
@@ -1685,6 +1732,145 @@ function grafikCiz(kod,deneme){
     }
   }).catch(function(){var k2=el("mumKutu"); if(k2)k2.innerHTML='<p class="bilgi">Grafik verisi alınamadı.</p>'});
 }
+/* ================== 🔄 SEKTÖR ROTASYONU SEKMESİ ==================
+   "Bugün hangi sektör öne geçiyor?" — dört çeyrek grafiği + sektör listesi.
+   Ölçüm tarayıcıda (yumatu.html) yapılıyor, burası sadece gösteriyor.
+     yatay eksen  = RS-Ratio   → piyasaya göre GÜÇ    (100 = piyasa ortalaması)
+     dikey eksen  = RS-Momentum → o gücün İVMESİ
+   Rotasyon saat yönünde döner: Gelişen → Lider → Zayıflayan → Geride. */
+/* ================== 🩺 HATALAR SEKMESİ (yalnız yönetici) ==================
+   Worker'da sessizce yutulan hataları görünür kılar. Boş olması iyi haber.
+   "Test kaydı at" düğmesi zincirin çalıştığını doğrulamak için. */
+function hataCiz(){
+  el("govde").innerHTML='<div class="yukleniyor">hata kaydı okunuyor…</div>';
+  post("/api/hatalar",{}).then(hataGoster)
+    .catch(function(){el("govde").innerHTML='<div class="bos">Okunamadı.</div>'});
+}
+function hataGoster(v){
+  if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Yetkisiz ya da okunamadı.</div>';return}
+  var l=v.liste||[];
+  var h='<div class="sirala"><button class="sir" id="htDene">🧪 Test kaydı at</button>'+
+        '<button class="sir" id="htYenile">🔄 Yenile</button>'+
+        (l.length?'<button class="sir" id="htSil">🗑 Temizle</button>':"")+'</div>';
+  h+='<div class="uyari" style="margin-top:0">Kayıt yeri: KV · son '+l.length+' hata · '+
+     'Sentry: '+(v.sentry?"<b>bağlı</b>":"kapalı (SENTRY_DSN tanımlı değil)")+'</div>';
+  if(!l.length){
+    h+='<div class="bos"><b>✅ Kayıtlı hata yok</b><br><br>'+
+       'Worker son dağıtımdan bu yana beklenmeyen bir hata üretmedi.<br>'+
+       'Zincirin çalıştığını görmek için 🧪 Test kaydı at.</div>';
+  }else{
+    h+=l.map(function(x){
+      var d=new Date((x.t||0)*1000);
+      var s2=function(n){return String(n).padStart(2,"0")};
+      var zm=s2((d.getUTCHours()+3)%24)+":"+s2(d.getUTCMinutes())+" · "+
+             s2(d.getUTCDate())+"/"+s2(d.getUTCMonth()+1);
+      return '<div class="satir" style="border-left-color:var(--kir);align-items:flex-start">'+
+        '<div class="sol"><div class="kod" style="font-size:13.5px">'+E(x.msg||"?")+'</div>'+
+        '<div class="altbilgi" style="white-space:normal">'+E(x.yer||"")+
+        (x.yol?" · "+E(x.yol):"")+" · "+zm+'</div>'+
+        (x.iz?'<div class="altbilgi" style="white-space:normal;opacity:.6;margin-top:4px">'+
+          E(x.iz)+'</div>':"")+
+        '</div></div>';
+    }).join("");
+  }
+  el("govde").innerHTML=h;
+  var d1=el("htDene");if(d1)d1.onclick=function(){tit();d1.disabled=true;
+    post("/api/hatalar",{dene:1}).then(hataGoster)};
+  var d2=el("htYenile");if(d2)d2.onclick=function(){tit();hataCiz()};
+  var d3=el("htSil");if(d3)d3.onclick=function(){tit();d3.disabled=true;
+    post("/api/hatalar",{temizle:1}).then(hataGoster)};
+}
+var rotD=null;
+function rotCeyrek(x){
+  return x.o>=100?(x.i>=100?1:2):(x.i>=100?3:4);
+}
+var ROT_AD={1:"🟢 LİDER",2:"🟡 ZAYIFLAYAN",3:"🔵 GELİŞEN",4:"🔴 GERİDE"};
+var ROT_ACIK={1:"güçlü ve hızlanıyor",2:"hâlâ güçlü ama ivme kaybediyor",
+              3:"zayıf ama toparlıyor — erken sinyal burada",4:"zayıf ve yavaşlıyor"};
+var ROT_RENK={1:"var(--yes)",2:"var(--sar)",3:"var(--mavi)",4:"var(--kir)"};
+function rotCiz(){
+  if(rotD){rotGoster();return}
+  el("govde").innerHTML='<div class="yukleniyor">rotasyon hesaplanıyor…</div>';
+  post("/api/rotasyon",{}).then(function(v){
+    if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Rotasyon verisi okunamadı.</div>';return}
+    rotD=v;rotGoster();
+  }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı hatası.</div>'});
+}
+function rotSvg(liste){
+  var W=320,H=300,P=26;
+  var deg=[];liste.forEach(function(x){deg.push(x.o);deg.push(x.i)});
+  var enUz=1;deg.forEach(function(v){enUz=Math.max(enUz,Math.abs(v-100))});
+  enUz=enUz*1.15;
+  var X=function(v){return P+(W-2*P)*((v-100)/(2*enUz)+0.5)};
+  var Y=function(v){return H-P-(H-2*P)*((v-100)/(2*enUz)+0.5)};
+  var mx=X(100),my=Y(100);
+  var h='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+  /* çeyrek zeminleri */
+  h+='<rect x="'+mx+'" y="'+P+'" width="'+(W-P-mx)+'" height="'+(my-P)+'" fill="rgba(63,185,80,.09)"/>';
+  h+='<rect x="'+mx+'" y="'+my+'" width="'+(W-P-mx)+'" height="'+(H-P-my)+'" fill="rgba(210,153,34,.09)"/>';
+  h+='<rect x="'+P+'" y="'+P+'" width="'+(mx-P)+'" height="'+(my-P)+'" fill="rgba(56,139,253,.09)"/>';
+  h+='<rect x="'+P+'" y="'+my+'" width="'+(mx-P)+'" height="'+(H-P-my)+'" fill="rgba(248,81,73,.09)"/>';
+  h+='<line x1="'+mx+'" y1="'+P+'" x2="'+mx+'" y2="'+(H-P)+'" stroke="#3a4552" stroke-width="1"/>';
+  h+='<line x1="'+P+'" y1="'+my+'" x2="'+(W-P)+'" y2="'+my+'" stroke="#3a4552" stroke-width="1"/>';
+  h+='<text x="'+(W-P-2)+'" y="'+(P+11)+'" text-anchor="end" font-size="9" fill="#7ee787">LİDER</text>';
+  h+='<text x="'+(W-P-2)+'" y="'+(H-P-3)+'" text-anchor="end" font-size="9" fill="#e3b341">ZAYIFLAYAN</text>';
+  h+='<text x="'+(P+2)+'" y="'+(P+11)+'" font-size="9" fill="#79c0ff">GELİŞEN</text>';
+  h+='<text x="'+(P+2)+'" y="'+(H-P-3)+'" font-size="9" fill="#ff7b72">GERİDE</text>';
+  /* sektör noktaları — en güçlü 12 tanesi etiketli */
+  liste.slice(0,12).forEach(function(x){
+    var cx=X(x.o),cy=Y(x.i),c=ROT_RENK[rotCeyrek(x)];
+    var r=Math.max(3.5,Math.min(8,3+Math.sqrt(x.n)));
+    h+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r.toFixed(1)+
+       '" fill="'+c+'" fill-opacity=".85"/>';
+    h+='<text x="'+(cx+r+3).toFixed(1)+'" y="'+(cy+3).toFixed(1)+
+       '" font-size="8.5" fill="#c9d3de">'+E(x.ad.slice(0,11))+'</text>';
+  });
+  h+='<text x="'+(W/2)+'" y="'+(H-6)+'" text-anchor="middle" font-size="8.5" fill="#6e7a88">'+
+     '← zayıf   ·   GÜÇ (piyasaya göre)   ·   güçlü →</text>';
+  return h+'</svg>';
+}
+function rotGoster(){
+  if(rotD.yok){
+    el("govde").innerHTML='<div class="bos"><b>🔄 Sektör Rotasyonu</b><br><br>'+
+      'Henüz rotasyon verisi yok.<br>Bir sonraki taramadan sonra burası dolar.</div>';
+    return;
+  }
+  var liste=rotD.liste||[];
+  if(!liste.length){el("govde").innerHTML='<div class="bos">Gruplanacak sektör bulunamadı.</div>';return}
+  var h='<div class="rrgKutu">'+rotSvg(liste)+'</div>';
+  h+='<div class="rrgAcik">'+
+     '<span class="q1">LİDER güçlü+hızlanıyor</span>'+
+     '<span class="q3">GELİŞEN toparlıyor</span>'+
+     '<span class="q2">ZAYIFLAYAN ivme kaybı</span>'+
+     '<span class="q4">GERİDE zayıf</span></div>';
+  [1,3,2,4].forEach(function(q){
+    var grup=liste.filter(function(x){return rotCeyrek(x)===q});
+    if(!grup.length)return;
+    h+='<div class="rrgGrup">'+ROT_AD[q]+' — '+ROT_ACIK[q]+'</div>';
+    grup.forEach(function(x){
+      h+='<div class="rrgSat" style="border-left-color:'+ROT_RENK[q]+'">'+
+         '<div><div class="rrgAd">'+E(x.ad)+'</div>'+
+         '<div class="rrgSay">'+x.n+' hisse</div></div>'+
+         '<div style="flex:1"></div>'+
+         '<div class="rrgOlc">güç <b style="color:var(--yazi)">'+x.o.toFixed(1)+'</b><br>'+
+         'ivme <b style="color:var(--yazi)">'+x.i.toFixed(1)+'</b></div>'+
+         '<div class="yuzde '+(x.g>=0?"ye":"kr")+'" style="min-width:52px;text-align:right">'+Y(x.g)+'</div>'+
+         '</div>';
+      if(x.hisseler&&x.hisseler.length){
+        h+='<div class="rrgHis">'+x.hisseler.map(function(y){
+          return '<b>'+E(y.kod)+'</b> '+(y.g>=0?"+":"")+Number(y.g).toFixed(1)+'%';
+        }).join(" · ")+'</div>';
+      }
+    });
+  });
+  h+='<div class="uyari">Ölçüm '+(rotD.toplam||0)+' hissenin son 60 günlük getirisi üzerinden, '+
+     'referans <b>eşit ağırlıklı piyasa ortalaması</b> (endeks değil). '+
+     '100 = piyasayla aynı. 5 günlük getiri yüzdesi sağda.'+
+     (rotD.sektorKaynak?'':'<br><br>⚠️ <b>sektor.json henüz yok</b> — hisselerin çoğu "Diğer" grubunda '+
+     'toplanıyor. Sektör dosyasını üretince bu ekran gerçek anlamına kavuşur.')+
+     '</div>';
+  el("govde").innerHTML=h;
+}
 var perfD=null, perfDonem="a1";
 var DONEM=[["h1","Son 1 hafta"],["a1","Son 1 ay"],["a3","Son 3 ay"],["y1","Son 1 yıl"]];
 var DRENK={"15DK":"var(--t15)","1SA":"var(--t1s)","4SA":"var(--t4s)","1G":"var(--t1g)","1HAF":"var(--t1h)"};
@@ -2039,10 +2225,87 @@ LOGO:"Teknoloji/Yazılım",KAREL:"Teknoloji/Yazılım",ARENA:"Teknoloji/Yazılı
 DSTKF:"Finansal Kiralama",GARFA:"Finansal Kiralama",ISFIN:"Finansal Kiralama",
 ASTOR:"Enerji/Petrokimya",PETUN:"Gıda/İçecek",MAVI:"Perakende",LKMNH:"Sağlık",SELEC:"Sağlık",
 };
-async function sektorAl(e,kod){
+/* ================== 🩺 HATA KAYDI ==================
+   Worker'da bir şey patladığında bugüne kadar HİÇBİR YERDE görünmüyordu:
+   catch(e){} blokları hatayı sessizce yutuyor, kullanıcı "çalışmıyor" diyor,
+   sebebi bilinmiyordu. (İzole-kopya bug'ı aylarca böyle yaşadı.)
+   Sentry SDK'sı bir derleme adımı gerektirdiği ve sen worker'ı elle
+   yapıştırarak dağıttığın için BAĞIMLILIKSIZ çözüm: son 60 hata KV'de bir
+   halka tamponda tutulur, 🩺 Hatalar sekmesinde görünür.
+   SENTRY_DSN tanımlarsan ayrıca oraya da düz fetch ile gönderilir — SDK yok. */
+const HATA_AZAMI=60;
+async function hataYaz(A,yer,err,istek){
+  try{
+    if(!A||!A.VERI)return;
+    const kayit={
+      t:Math.floor(Date.now()/1000),
+      yer:String(yer||"?").slice(0,40),
+      msg:String((err&&err.message)||err||"?").slice(0,300),
+      iz:String((err&&err.stack)||"").split("\n").slice(0,4).join(" | ").slice(0,400),
+      yol:istek?String(new URL(istek.url).pathname).slice(0,60):""
+    };
+    const eski=await A.VERI.get("hatalar");
+    let liste=[];try{liste=eski?JSON.parse(eski):[]}catch(e){liste=[]}
+    liste.unshift(kayit);
+    if(liste.length>HATA_AZAMI)liste=liste.slice(0,HATA_AZAMI);
+    await A.VERI.put("hatalar",JSON.stringify(liste));
+    if(A.SENTRY_DSN)await sentryGonder(A,kayit).catch(()=>{});
+  }catch(e){/* hata kaydederken hata: sessiz geç, sistemi durdurma */}
+}
+/* Sentry'ye SDK'sız gönderim: DSN'i parçalayıp store uç noktasına POST.
+   DSN yoksa hiç çağrılmaz — yani tamamen isteğe bağlı. */
+async function sentryGonder(A,kayit){
+  const m=/^https:\/\/([^@]+)@([^/]+)\/(.+)$/.exec(String(A.SENTRY_DSN||""));
+  if(!m)return;
+  const [,anahtar,host,proje]=m;
+  await fetch("https://"+host+"/api/"+proje+"/store/",{
+    method:"POST",
+    headers:{"Content-Type":"application/json",
+      "X-Sentry-Auth":"Sentry sentry_version=7, sentry_key="+anahtar+", sentry_client=fixborsa/1.0"},
+    body:JSON.stringify({
+      timestamp:kayit.t,platform:"javascript",level:"error",
+      logger:kayit.yer,
+      message:{formatted:kayit.msg},
+      extra:{iz:kayit.iz,yol:kayit.yol}
+    })
+  });
+}
+async function hatalariOku(A){
+  if(!A||!A.VERI)return[];
+  try{const c=await A.VERI.get("hatalar");return c?JSON.parse(c):[]}catch(e){return[]}
+}
+/* ---------- SEKTÖR KAYNAĞI ----------
+   Gömülü SEKTOR_HARITA yalnız ~111 hisse kapsıyor, havuzda 432 var — geri
+   kalan hepsi "Diğer" görünüyordu. sektor.json (GitHub Actions'ta borsapy
+   ile üretiliyor) tüm BIST'i kapsar. Öncelik sırası:
+     1) elle düzeltme (KV: sektorEk)  2) sektor.json  3) gömülü harita  4) Diğer
+   sektor.json okunamazsa sistem eskisi gibi çalışmaya devam eder. */
+const SEKTOR_URL="https://raw.githubusercontent.com/matematikneferi-boop/fix-borsa-worker/main/sektor.json";
+let _sBellek=null,_sZaman=0;
+async function sektorlariGetir(A){
+  const simdi=Date.now();
+  if(_sBellek&&simdi-_sZaman<216e5)return _sBellek;   /* 6 saat */
+  if(A&&A.VERI){const c=await A.VERI.get("sektorJson");
+    if(c){try{_sBellek=JSON.parse(c);_sZaman=simdi;return _sBellek}catch(e){}}}
+  try{
+    const r=await fetch(SEKTOR_URL+"?_="+Math.floor(simdi/216e5),{cf:{cacheTtl:21600}});
+    if(!r.ok)return _sBellek||null;
+    const j=await r.json();
+    _sBellek=j;_sZaman=simdi;
+    if(A&&A.VERI)await A.VERI.put("sektorJson",JSON.stringify(j),{expirationTtl:86400});
+    return j;
+  }catch(e){return _sBellek||null}
+}
+async function sektorEkAl(e){
 if(!e._sektorEk){
 try{const s=e.VERI&&await e.VERI.get("sektorEk");e._sektorEk=s?JSON.parse(s):{}}catch(err){e._sektorEk={}}}
-return(e._sektorEk&&e._sektorEk[kod])||SEKTOR_HARITA[kod]||"Diğer"}
+return e._sektorEk||{}}
+async function sektorAl(e,kod){
+const ek=await sektorEkAl(e);
+if(ek[kod])return ek[kod];
+const j=await sektorlariGetir(e);
+const d=j&&j.sektor&&j.sektor[kod];
+return d||SEKTOR_HARITA[kod]||"Diğer"}
 /* ============ 📅 GÜNLÜK PORTFÖY DEĞER ANLIK GÖRÜNTÜSÜ (performans grafiği için) ============
    Bu worker'da native bir cron yok; mevcut mimariye sadık kalarak, gelen her
    Telegram webhook isteğinde bir KEZ tetiklenip KV'deki zaman damgasıyla
@@ -2129,7 +2392,7 @@ if(z&&a)return j(a)+"\n\n"+AYNA(t,z);
 if(z)return AYNA(t,z);
 if(a)return "🔎 <b>"+t+"</b> için güncel durum\n\n"+j(a);
 return "🔎 <b>"+t+"</b>\n\nBu kod taramada bulunamadı. Yazımı kontrol et (örn. <code>THYAO</code>) ya da yeni tarama sonrası tekrar dene."}function PY(uname,userId,chatId){const link="https://t.me/"+uname+"?start=r"+userId,paylas="https://t.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(DAVET_METIN),menu=u(userId);menu.inline_keyboard=[[{text:"📤 Paylaş",url:paylas}]].concat(menu.inline_keyboard);return{chat_id:chatId,parse_mode:"HTML",disable_web_page_preview:!0,text:"📤 <b>Sistemi paylaş</b>\n\nAşağıdaki düğmeye dokun, Telegram'da kime göndereceğini seç. Davet bağlantın otomatik olarak gönderilir.",reply_markup:menu}}
-const Q={tavan:"🟥🟥🟥🟥🟥🟥🟥🟥\n⚡ <b>15 DAKİKA</b> · kısa trade\n<i>yalnız 15 dakikalık sinyaller</i>\n🟥🟥🟥🟥🟥🟥🟥🟥",potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayKisa:"🟨🟨🟨🟨🟨🟨🟨🟨\n⚡ <b>15 DAKİKA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};export default{async fetch(p,A,q){const $=new URL(p.url);if(n=$.origin,
+const Q={tavan:"🟥🟥🟥🟥🟥🟥🟥🟥\n⚡ <b>15 DAKİKA</b> · kısa trade\n<i>yalnız 15 dakikalık sinyaller</i>\n🟥🟥🟥🟥🟥🟥🟥🟥",potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayKisa:"🟨🟨🟨🟨🟨🟨🟨🟨\n⚡ <b>15 DAKİKA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};const _ANA={async fetch(p,A,q){const $=new URL(p.url);if(n=$.origin,
 i=A.PANEL_KEY||A.PUSH_KEY||t,"/surum"===$.pathname)return new Response("Fix Borsa Sinyal worker surum "+a,{headers:{"content-type":"text/plain; charset=utf-8","Access-Control-Allow-Origin":"*"}})
 ;if("/setup"===$.pathname){
 const e=(e,t)=>new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#0d1117;color:#e6edf3;font:15px/1.6 system-ui,sans-serif;padding:18px"><h2 style="margin:0 0 10px">'+e+"</h2>"+t+'<p style="margin-top:18px"><a href="/" style="color:#388bfd">← Durum sayfasına dön</a></p></body>',{
@@ -2291,6 +2554,35 @@ for(const kod of Object.keys(j.sonuc)){
 sonuc.sort((a,b)=>b.kalite-a.kalite);
 return JS({ok:!0,sonuc:sonuc.slice(0,300),eksik:!1,guncelleme:j.guncelleme||null})}
 
+/* 🔄 SEKTÖR ROTASYONU: tarayıcının hesapladığı RS-Ratio / RS-Momentum
+   değerlerini sektöre göre gruplar. Ağır iş tarayıcıda yapıldığı için
+   burada yalnız toplama var. Sekme açıldığında çağrılır. */
+/* 🩺 HATA KAYDI — yalnız yönetici. Silme de buradan. */
+if("/api/hatalar"===$.pathname){
+if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+if(gov.temizle){if(A.VERI)await A.VERI.put("hatalar","[]");return JS({ok:!0,liste:[]})}
+if(gov.dene){await hataYaz(A,"test",new Error("test kaydı — bu bir arıza değil"),p);}
+return JS({ok:!0,liste:await hatalariOku(A),sentry:!!A.SENTRY_DSN})}
+if("/api/rotasyon"===$.pathname){
+const L2=await g(A);
+const R=L2&&L2.rrg&&L2.rrg.hisse;
+if(!R||!Object.keys(R).length)return JS({ok:!0,yok:!0});
+const ek=await sektorEkAl(A),SJ=await sektorlariGetir(A),hj=(SJ&&SJ.sektor)||{};
+const bul=k=>ek[k]||hj[k]||SEKTOR_HARITA[k]||"Diğer";
+const grup={};
+for(const kod of Object.keys(R)){
+const v=R[kod];if(!v||typeof v.o!=="number")continue;
+const ad=bul(kod),gg=grup[ad]||(grup[ad]={ad:ad,n:0,o:0,i:0,g:0,hisseler:[]});
+gg.n++,gg.o+=v.o,gg.i+=v.i,gg.g+=Number(v.g)||0,gg.hisseler.push({kod:kod,o:v.o,i:v.i,g:v.g});
+}
+const R2=x=>Math.round(100*x)/100;
+const liste=Object.keys(grup).map(k=>grup[k]).filter(x=>x.n>=2).map(x=>({
+ad:x.ad,n:x.n,o:R2(x.o/x.n),i:R2(x.i/x.n),g:R2(x.g/x.n),
+hisseler:x.hisseler.sort((a,b)=>(b.o+b.i)-(a.o+a.i)).slice(0,6)}));
+liste.sort((a,b)=>(b.o+b.i)-(a.o+a.i));
+return JS({ok:!0,liste:liste,toplam:Object.keys(R).length,
+sektorKaynak:SJ?(SJ.sayi||Object.keys(hj).length):0,
+referans:(L2.rrg&&L2.rrg.referans)||"",guncelleme:(L2.rrg&&L2.rrg.guncelleme)||null})}
 if("/api/fav"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 let f=await X(A,uid);const ekli=!f.includes(kod);f=ekli?[kod,...f]:f.filter(x=>x!==kod);f=f.slice(0,30);
@@ -2694,3 +2986,12 @@ const e=await b(A.BOT_TOKEN,"getMe",{});e&&e.ok&&(i=!0,n=e.result.username)}catc
 e.result.last_error_message&&(s=e.result.last_error_message))}catch(e){}}
 const l=A.PUSH_KEY||t,o=a&&a.kartlar?Object.keys(a.kartlar).filter(e=>"sira"!==e).map(e=>e+": "+a.kartlar[e].length).join(" · "):"",c=(e,t,a)=>'<div class="s '+(e?"ok":"yok")+'"><div class="i">'+(e?"✅":"⚠️")+"</div><div><b>"+t+'</b><div class="a">'+a+"</div></div></div>",d='<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fix Borsa Sinyal · Durum</title><style>body{margin:0;background:#0d1117;color:#e6edf3;font:15px/1.55 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 14px}.s{display:flex;gap:10px;background:#161b22;border:1px solid #272e37;border-radius:12px;padding:12px;margin-bottom:9px}.s.yok{border-color:#6b2b2b;background:#22171a}.i{font-size:18px;line-height:1.3}.a{color:#8b949e;font-size:13px;margin-top:3px}a.d{display:block;background:#388bfd;color:#fff;text-decoration:none;text-align:center;border-radius:11px;padding:13px;font-weight:700;margin-top:10px}a.d.ikinci{background:#21262d;border:1px solid #272e37;color:#e6edf3}code{background:#1c2330;padding:2px 6px;border-radius:5px;font-size:13px;word-break:break-all}ol{padding-left:20px;margin:8px 0 0}li{margin-bottom:7px}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px;font-size:14px}</style></head><body><h1>Fix Borsa Sinyal · Durum</h1><div class="a" style="margin:-8px 0 12px">yazılım sürümü <b>'+a+'</b></div>'+c(i,"Bot anahtarı",A.BOT_TOKEN?i?"geçerli · @"+(n||"?"):"TANIMLI AMA GEÇERSİZ — Telegram bu anahtarı tanımıyor. Başına/sonuna tırnak veya boşluk karışmış olabilir.":"BOT_TOKEN tanımlı değil — Settings → Variables kısmından ekle")+c(!!r,"Telegram bağlantısı",r?"bağlı"+(s?" · son hata: "+s:""):"bağlı değil — aşağıdaki Bağla düğmesine bas")+c(e,"Hafıza (üye kayıtları)",e?"bağlı":"BAĞLI DEĞİL — üyeler, davetler ve panel çalışmaz")+c(!!a,"Hisse listeleri",a?"yüklü · "+(o||"")+" · "+new Date(a.guncelleme).toLocaleString("tr-TR"):"henüz yüklenmedi — telefondaki uygulamada Worker adresi <code>"+$.origin+"</code> ve şifre <code>"+l+"</code> yazılı olmalı, sonra <b>TARA VE BULUTA YÜKLE</b>")+'<a class="d" href="/panel?key='+encodeURIComponent(l)+'">🛠 Yönetici panelini aç</a><div class="a" style="margin-top:8px">Panel bir <b>web sayfası</b>, Telegram\'da değil. Telegram\'da botun menüsünde de <b>🛠 Yönetici paneli</b> düğmesi var (sadece sen görürsün) ya da bota <code>/panel</code> yazabilirsin — ikisi de bu sayfayı açar. Bu adresi telefonun ana ekranına kısayol olarak eklemen en pratiği.</div>'+(r&&i&&!s?"":'<a class="d ikinci" href="/setup">🔗 Telegram\'a bağla</a>')+'<div style="margin-top:16px" class="a">Telefondaki uygulamaya yazacakların:<br>Worker adresi: <code>'+$.origin+"</code><br>Şifre: <code>"+l+"</code></div>"+(e?"":'<div class="kur"><b>⚠️ Hafıza bağlı değil — nasıl bağlanır</b><div class="a" style="margin:6px 0">Bot listeleri gösterir ama kimin üye olduğunu, kimin kimi davet ettiğini hatırlayamaz. Panel de boş kalır. Bir kez yapılır, 2 dakika sürer:</div><ol><li>Cloudflare panelinde soldaki menüden <b>Storage &amp; Databases</b> → <b>KV</b>.</li><li><b>Create a namespace</b> / <b>Oluştur</b>. Adına <code>fixborsa</code> yaz, kaydet.</li><li>Soldan <b>Compute (Workers)</b> → bu worker\'ı aç → <b>Settings</b> → <b>Bindings</b>.</li><li><b>Add binding</b> → <b>KV namespace</b> seç.</li><li><b>Variable name</b> kutusuna tam olarak <code>VERI</code> yaz (büyük harf, Türkçe İ değil düz I).</li><li><b>KV namespace</b> kutusundan az önce oluşturduğun <code>fixborsa</code>\'ı seç ve <b>Deploy</b>.</li><li>Bu sayfayı yenile — burası ✅ olacak.</li></ol></div>')+"</body></html>"
 ;return new Response(d,{headers:{"content-type":"text/html; charset=utf-8"}})}}};
+/* Tüm istekler bu kapıdan geçer: beklenmeyen bir hata çıkarsa artık sessizce
+   kaybolmuyor, 🩺 Hatalar sekmesine düşüyor. Davranış değişmiyor — hata
+   yoksa hiçbir ek iş yapılmıyor. */
+export default{async fetch(p,A,q){
+try{return await _ANA.fetch(p,A,q)}
+catch(err){
+try{q.waitUntil(hataYaz(A,"fetch",err,p))}catch(e){await hataYaz(A,"fetch",err,p).catch(()=>{})}
+return new Response(JSON.stringify({ok:!1,hata:"sunucu hatası"}),
+  {status:500,headers:{"content-type":"application/json; charset=utf-8"}})}}};
