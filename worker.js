@@ -1,4 +1,4 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.5";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="11.6";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null,oTS=0;const c=new Set(["tavan","potansiyel","fibo","uzunvade","haftalik","aday","adayKisa","adayOrta","adayOrtaVade","adayUzun","adayHafta"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
@@ -20,7 +20,223 @@ t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
 return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
 const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n⚡ <b>Kısa Trade</b> · 15DK — en net kurulumlar\n📊 <b>Orta Trade</b> · 1SA — hedefi en uzak olanlar\n📐 <b>Orta Vade</b> · 4SA — bugün taze kıranlar\n🗓 <b>Uzun Vade</b> · 1G — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — kısa trade sinyaline giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
-;async function b(e,t,a){return fetch(`https://api.telegram.org/bot${e}/${t}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(a)}).then(e=>e.json()).catch(()=>null)}
+/* ══════════════════════════════════════════════════════════════════════════
+   🛡 DAYANIKLILIK KATMANI (sürüm 11.6)
+   Altı madde buraya toplandı. HİÇBİRİ mevcut davranışı değiştirmez:
+   her parça "yoksa serbest bırak" (fail-open) mantığıyla yazıldı, yani
+   binding tanımlamazsan / KV yoksa sistem eskisi gibi çalışmaya devam eder.
+     1) Cloudflare yerel Rate Limiting binding sarmalayıcısı
+     2) Telegram gönderim kovası + 429 retry_after bekleme
+     3) KV tabanlı çakışma kilidi (aynı arka plan işi üst üste başlamasın)
+     4) Panel anahtarı kaba-kuvvet koruması
+     5) KAP çekiminde zaman aşımı + tekrar deneme + sağlık kaydı
+     6) KAP çoklu bildirim (fon/pay işlemi) tespiti
+   Hepsinin çıktısı 🛡 Sistem sekmesinde görünür — kör nokta kalmasın.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Ortam (env) referansı: sayaç yazan yardımcıların imzasını değiştirmemek
+   için her istekte tazelenir. Aynı isolate içinde geçerlidir. */
+let ORTAM=null;
+
+/* ---------- 📊 SAĞLIK SAYAÇLARI ----------
+   Bellekte tutulur, en fazla 60 saniyede bir KV'ye yazılır (KV günlük yazma
+   sınırını yakmamak için). Isolate geri dönüşürse sayaç sıfırlanır — bu
+   yüzden KV'deki toplam "en az bu kadar" anlamına gelir. */
+const SAGLIK_ANAHTAR="saglik";
+let SAG={},SAG_SON_YAZIM=0,SAG_KIRLI=!1;
+function saglikArtir(alan,adet){SAG[alan]=(SAG[alan]||0)+(adet||1);SAG_KIRLI=!0;saglikBelkiYaz()}
+function saglikSet(alan,deger){SAG[alan]=deger;SAG_KIRLI=!0;saglikBelkiYaz()}
+function saglikBelkiYaz(){
+  const A=ORTAM;
+  if(!A||!A.VERI||!SAG_KIRLI)return;
+  if(Date.now()-SAG_SON_YAZIM<6e4)return;
+  SAG_SON_YAZIM=Date.now();SAG_KIRLI=!1;
+  const kopya=Object.assign({},SAG);SAG={};
+  saglikBirlestir(A,kopya).catch(()=>{});
+}
+async function saglikBirlestir(A,ek){
+  try{
+    if(!A||!A.VERI)return;
+    const ham=await A.VERI.get(SAGLIK_ANAHTAR);
+    let v={};try{v=ham?JSON.parse(ham):{}}catch(e){v={}}
+    const bugun=onayDonemi();
+    if(v.gun!==bugun)v={gun:bugun};          /* her gün TR 09:00'da sıfırlanır */
+    for(const k of Object.keys(ek)){
+      if(k.indexOf("son")===0)v[k]=ek[k];    /* "son..." alanları üzerine yazılır */
+      else v[k]=(v[k]||0)+ek[k];             /* diğerleri toplanır */
+    }
+    v.yazim=Math.floor(Date.now()/1000);
+    await A.VERI.put(SAGLIK_ANAHTAR,JSON.stringify(v));
+  }catch(e){}
+}
+async function saglikOku(A){
+  try{
+    if(!A||!A.VERI)return Object.assign({gun:onayDonemi()},SAG);
+    const ham=await A.VERI.get(SAGLIK_ANAHTAR);
+    let v={};try{v=ham?JSON.parse(ham):{}}catch(e){v={}}
+    if(v.gun!==onayDonemi())v={gun:onayDonemi()};
+    for(const k of Object.keys(SAG)){       /* henüz yazılmamış bellek sayaçları */
+      if(k.indexOf("son")===0)v[k]=SAG[k];else v[k]=(v[k]||0)+SAG[k];
+    }
+    return v;
+  }catch(e){return{}}
+}
+
+/* ---------- 1️⃣ CLOUDFLARE YEREL RATE LIMITING BINDING ----------
+   wrangler.toml / Settings → Bindings → "Rate limiting" ile tanımlanır.
+   Durable Object gerektirmez, ücretsiz planda çalışır.
+   TANIMLI DEĞİLSE bu fonksiyon her zaman true döner — yani hiçbir şey kısıtlanmaz.
+   Cloudflare bu sayacın "eventually consistent" olduğunu söylüyor: kesin
+   değildir, o yüzden limitleri gerçek ihtiyacın %20 üstünde tut. */
+async function sinirGec(A,bindingAdi,anahtar){
+  try{
+    const bnd=A&&A[bindingAdi];
+    if(!bnd||"function"!=typeof bnd.limit)return!0;   /* binding yok → serbest */
+    const s=await bnd.limit({key:String(anahtar||"?").slice(0,120)});
+    if(s&&!1===s.success){saglikArtir("sinir:"+bindingAdi);return!1}
+    return!0;
+  }catch(e){return!0}                                  /* hata → serbest, sistemi durdurma */
+}
+
+/* ---------- 2️⃣ TELEGRAM GÖNDERİM KOVASI + 429 YÖNETİMİ ----------
+   Telegram sınırları: global ~30 mesaj/sn, aynı sohbete ~1 msg/sn,
+   gruplarda 20 msg/dk. Broadcast'te 429 yiyince mesajlar sessizce
+   kayboluyordu (b() null dönüyor, sayaç "başarısız" diyordu, sebebi
+   bilinmiyordu). Artık: sıraya sokuyoruz + 429 gelirse retry_after kadar
+   bekleyip AYNI mesajı bir kez daha deniyoruz. */
+const TG_SANIYE_LIMIT=25;                       /* 30'un %20 altı — pay bırakıldı */
+const TG_ARA_MS=Math.ceil(1e3/TG_SANIYE_LIMIT);
+const TG_AZAMI_BEKLEME=10;                      /* retry_after bundan uzunsa bekleme, bırak */
+const TG_GONDERIM_RX=/^(send|copyMessage|forwardMessage|editMessage)/;
+let TG_SIRA_SON=0;
+async function tgSiraBekle(metod){
+  if(!TG_GONDERIM_RX.test(metod))return;        /* getMe, getWebhookInfo vb. kısıtlanmaz */
+  const simdi=Date.now(),hedef=Math.max(simdi,TG_SIRA_SON+TG_ARA_MS);
+  TG_SIRA_SON=hedef;
+  const bekle=hedef-simdi;
+  if(bekle>0)await gecikmeli(bekle);
+}
+async function b(e,t,a){
+  const AZAMI=3;
+  for(let deneme=0;deneme<AZAMI;deneme++){
+    await tgSiraBekle(t);
+    let r=null,j=null;
+    try{
+      r=await fetch(`https://api.telegram.org/bot${e}/${t}`,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(a)});
+      j=await r.json().catch(()=>null);
+    }catch(err){j=null}
+    if(j&&j.ok){if(TG_GONDERIM_RX.test(t))saglikArtir("tgGonderim");return j}
+    const kod=(j&&j.error_code)||(r&&r.status)||0;
+    if(429===kod){
+      const sn=Number((j&&j.parameters&&j.parameters.retry_after)||1);
+      saglikArtir("tg429");saglikSet("son429",Math.floor(Date.now()/1e3));saglikSet("sonRetryAfter",sn);
+      if(deneme<AZAMI-1&&sn<=TG_AZAMI_BEKLEME){await gecikmeli(1e3*sn+250);continue}
+      return j;
+    }
+    if(403===kod){saglikArtir("tgEngelli");return j}   /* kullanıcı botu engellemiş — tekrar denemek boşuna */
+    if(400===kod)  {saglikArtir("tgHata400");return j}
+    if(kod>=500&&deneme<AZAMI-1){await gecikmeli(400*(deneme+1));continue}
+    if(!j)saglikArtir("tgAgHatasi");
+    return j;                                          /* null olabilir — eski davranışla birebir aynı */
+  }
+  return null;
+}
+
+/* ---------- 3️⃣ KV TABANLI ÇAKIŞMA KİLİDİ ----------
+   Sürekli modda /push 10 saniyede bir geliyor; arka plan işleri (KAP taraması,
+   geçmiş doldurma, alarm) önceki turu bitmeden yeniden başlıyordu. Bu hem
+   Yahoo/KAP'a çift istek hem de KV yazma sınırını gereksiz yakma demekti.
+   NOT: KV "eventually consistent" — bu kilit %100 garanti değil, ama üst üste
+   binen çalıştırmaların büyük çoğunluğunu keser. Kesin garanti isteyen bir iş
+   için Durable Object gerekir (şu an gerek yok).
+
+   İKİ KADEMELİ TASARIM — sebebi önemli:
+   • 1. kademe BELLEK kilidi: bedava, anında, KV'ye tek bir yazma bile yapmaz.
+     /push 10 saniyede bir geldiği için asıl çakışma zaten aynı isolate
+     içinde oluyor; bu kademe onu keser.
+   • 2. kademe KV kilidi: SADECE seyrek ve pahalı işler için (GitHub Actions
+     tetikleme gibi). Her push'ta KV kilidi almak günlük 1000 yazma sınırını
+     dakikalar içinde yakardı — o yüzden varsayılan KAPALI. */
+const KILITLER={};
+function bellekKilitAl(ad,saniye){
+  const simdi=Date.now();
+  if(KILITLER[ad]&&KILITLER[ad]>simdi)return!1;
+  KILITLER[ad]=simdi+1e3*saniye;return!0;
+}
+function bellekKilitBirak(ad){delete KILITLER[ad]}
+async function kvKilitAl(A,ad,saniye){
+  if(!A||!A.VERI)return!0;
+  try{
+    const k="kilit:"+ad,v=await A.VERI.get(k);
+    if(v&&Number(v)>Date.now())return!1;
+    await A.VERI.put(k,String(Date.now()+1e3*saniye),{expirationTtl:Math.max(60,saniye)});
+    return!0;
+  }catch(e){return!0}
+}
+async function kvKilitBirak(A,ad){try{if(A&&A.VERI)await A.VERI.delete("kilit:"+ad)}catch(e){}}
+async function kilitli(A,ad,saniye,is,kvDe){
+  if(!bellekKilitAl(ad,saniye)){saglikArtir("kilitAtlandi");return"kilitli"}
+  let kvAlindi=!1;
+  try{
+    if(kvDe){
+      if(!await kvKilitAl(A,ad,saniye)){saglikArtir("kilitAtlandi");return"kilitli"}
+      kvAlindi=!0;
+    }
+    return await is();
+  }finally{
+    bellekKilitBirak(ad);
+    if(kvAlindi)await kvKilitBirak(A,ad);
+  }
+}
+
+/* ---------- 4️⃣ PANEL ANAHTARI KABA-KUVVET KORUMASI ----------
+   Önceden /panel?key=... sadece düz string karşılaştırmasıydı: sınırsız
+   deneme yapılabiliyordu. Artık IP başına yanlış deneme sayılıyor; eşik
+   aşılınca o IP bir süre kapıdan giremiyor. Doğru anahtar sayacı sıfırlar,
+   yani sen hiçbir şey hissetmezsin. */
+const PANEL_AZAMI_YANLIS=8,PANEL_CEZA_SN=900;
+function istekIP(p){try{return p.headers.get("CF-Connecting-IP")||p.headers.get("X-Forwarded-For")||"?"}catch(e){return"?"}}
+/* Zamanlama saldırısına kapalı karşılaştırma (uzunluk farkı sızdırmaz). */
+function esitMi(a,b2){
+  const x=String(a||""),y=String(b2||"");
+  let f=x.length^y.length;
+  for(let i=0;i<Math.max(x.length,y.length);i++)f|=(x.charCodeAt(i%x.length||0)||0)^(y.charCodeAt(i%y.length||0)||0);
+  return 0===f&&x.length===y.length;
+}
+async function kapiKontrol(A,$,p,yerelSinir){
+  const ip=istekIP(p);
+  try{
+    if(A.VERI){
+      const c=await A.VERI.get("panelCeza:"+ip);
+      if(c&&Number(c)>Date.now()){saglikArtir("panelCeza");return{ok:!1,kod:429,mesaj:"çok fazla hatalı deneme — birkaç dakika sonra tekrar dene"}}
+    }
+    /* 1️⃣ maddeyle birleşim: binding tanımlıysa IP başına da sınır uygula */
+    if(yerelSinir&&!await sinirGec(A,"SINIR_PANEL",ip))
+      return{ok:!1,kod:429,mesaj:"çok fazla istek"};
+    if(s(A,$)){
+      /* KV YAZMA KORUMASI: sayaç zaten yoksa delete ÇAĞIRMA.
+         delete bir "yazma" işlemidir; /push 10 saniyede bir geldiği için
+         her doğru anahtarda silme yapmak günlük 1000 yazma sınırını
+         saatler içinde yakardı. Okuma bedava sayılır (günde 100.000). */
+      if(A.VERI){
+        const n=await A.VERI.get("panelYanlis:"+ip);
+        if(n)await A.VERI.delete("panelYanlis:"+ip).catch(()=>{});
+      }
+      return{ok:!0};
+    }
+    saglikArtir("panelYanlis");saglikSet("sonPanelYanlis",Math.floor(Date.now()/1e3));
+    if(A.VERI){
+      const n=Number(await A.VERI.get("panelYanlis:"+ip)||0)+1;
+      await A.VERI.put("panelYanlis:"+ip,String(n),{expirationTtl:PANEL_CEZA_SN});
+      if(n>=PANEL_AZAMI_YANLIS){
+        await A.VERI.put("panelCeza:"+ip,String(Date.now()+1e3*PANEL_CEZA_SN),{expirationTtl:PANEL_CEZA_SN});
+        saglikArtir("panelKilit");saglikSet("sonPanelKilitIP",String(ip).slice(0,45));
+      }
+    }
+    return{ok:!1,kod:401,mesaj:"yetkisiz"};
+  }catch(e){return{ok:s(A,$)?!0:!1,kod:401,mesaj:"yetkisiz"}}
+}
 let p=0;const DETAY_GUN=90,OZET_GUN=365;async function y(e){if(!e.VERI)return{gunler:{},ozet:{}};const t=await e.VERI.get("gecmis");if(!t)return{gunler:{},ozet:{}};const gp=JSON.parse(t);return gp.gunler=gp.gunler||{},gp.ozet=gp.ozet||{},gp}async function k(e,t,a){if(!e.VERI)return;if(!a&&Date.now()-p<6e5)return
 ;p=Date.now();const n=await y(e),i=new Date((r||Date.now())+108e5).toISOString().slice(0,10);var r;const s=function(e){const t={};if(!e||!e.kartlar)return t
 ;for(const a of Object.keys(e.kartlar))if("sira"!==a)for(const n of e.kartlar[a]||[])n&&n.kod&&n.fiyat>0&&(t[n.kod]=Number(n.fiyat));return t}(t);if(n.gunler[i]=n.gunler[i]||{kayitlar:{}},
@@ -122,6 +338,12 @@ async function formasyonTetikle(A){
   if(!A||!A.GH_TOKEN)return"token yok";
   const simdi=Date.now();
   if(simdi-_fTetik<FORMASYON_ARALIK)return"beklemede";
+  /* 3️⃣ Çakışma kilidi: iki istek aynı anda gelirse GitHub Actions iki kez
+     tetiklenmesin (Actions dakikası boşa gitmesin). Bellek kilidi bedava. */
+  if(!bellekKilitAl("formasyonTetik",120)){saglikArtir("kilitAtlandi");return"beklemede"}
+  try{return await formasyonTetikleIc(A,simdi)}finally{bellekKilitBirak("formasyonTetik")}
+}
+async function formasyonTetikleIc(A,simdi){
   if(A.VERI){
     const onceki=Number(await A.VERI.get("formasyonTetik")||0);
     if(simdi-onceki<FORMASYON_ARALIK)return"beklemede";
@@ -135,8 +357,11 @@ async function formasyonTetikle(A){
                "User-Agent":"fix-borsa-worker","Content-Type":"application/json"},
       body:JSON.stringify({event_type:"tarama-bitti"})
     });
+    saglikSet("sonFormasyonTetik",Math.floor(Date.now()/1e3));
+    saglikSet("sonFormasyonSonuc",r.ok?"başlatıldı":("github "+r.status));
+    if(!r.ok)saglikArtir("formasyonHata");
     return r.ok?"başlatıldı":("github "+r.status);
-  }catch(e){return"hata"}
+  }catch(e){saglikArtir("formasyonHata");saglikSet("sonFormasyonSonuc","hata");return"hata"}
 }
 async function yfKapanislar(kod){try{const a=await yfCekTek("query1.finance.yahoo.com",kod);if(a)return a}catch(e){console.error("yfCekTek query1 hata",kod,e&&e.message)}
 try{const b=await yfCekTek("query2.finance.yahoo.com",kod);if(b)return b}catch(e){console.error("yfCekTek query2 hata",kod,e&&e.message)}
@@ -261,12 +486,101 @@ for(const uid of kullanicilar.slice(0,ALARM_MAX_ALICI))await b(e.BOT_TOKEN,"send
    kalanını asla etkilemez. */
 const KAP_API="https://www.kap.org.tr/tr/api/disclosure/members/byCriteria";
 const KAP_POLL_MS=175000;
-async function kapBildirimleriGetir(gunSayisi){
-const simdi=new Date(Date.now()+108e5),bas=new Date(simdi.getTime()-gunSayisi*864e5),fmt=d=>d.toISOString().slice(0,10);
-try{
-const r=await fetch(KAP_API,{method:"POST",headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},body:JSON.stringify({fromDate:fmt(bas),toDate:fmt(simdi),mkkMemberOidList:[],subjectList:[]})});
-if(!r.ok)return[];const j=await r.json().catch(()=>null);return Array.isArray(j)?j:[]
-}catch(err){return[]}}
+/* 5️⃣ KAP ÇEKİMİ — ZAMAN AŞIMI + TEKRAR DENEME + SAĞLIK KAYDI
+   pykap / kap-tr-sdk gibi olgun istemcilerin yaptığı üç şeyi ekledik:
+   (a) istek asılı kalmasın diye zaman aşımı, (b) tek seferlik ağ hatasında
+   pes etmeyip bir kez daha deneme, (c) "en son ne zaman veri gelebildi"
+   kaydı. Eskiden KAP sessizce boş dönünce KAP sekmesi boş kalıyordu ve
+   sebebini anlamanın yolu yoktu; artık 🛡 Sistem sekmesinde görünüyor.
+   İmza aynı: kapBildirimleriGetir(gunSayisi) — tüm eski çağrılar çalışır.
+   İsteğe bağlı ikinci parametre: {konular:[...]} → KAP subjectList filtresi. */
+const KAP_ZAMAN_ASIMI_MS=9e3;
+async function kapSaglikYaz(A,alan,deger){
+  try{
+    if(!A||!A.VERI)return;
+    const ham=await A.VERI.get("kapSaglik");
+    let v={};try{v=ham?JSON.parse(ham):{}}catch(e){v={}}
+    v[alan]=deger;v.yazim=Math.floor(Date.now()/1e3);
+    await A.VERI.put("kapSaglik",JSON.stringify(v));
+  }catch(e){}
+}
+let KAP_SON_BASARI=0,KAP_ARDISIK_HATA=0,KAP_SON_HATA="";
+async function kapBildirimleriGetir(gunSayisi,secenek){
+  const simdi=new Date(Date.now()+108e5),bas=new Date(simdi.getTime()-gunSayisi*864e5),
+        fmt=d=>d.toISOString().slice(0,10),
+        govde=JSON.stringify({fromDate:fmt(bas),toDate:fmt(simdi),mkkMemberOidList:[],
+          subjectList:(secenek&&secenek.konular)||[]});
+  for(let deneme=0;deneme<2;deneme++){
+    const iptal=new AbortController();
+    const zamanlayici=setTimeout(()=>{try{iptal.abort()}catch(e){}},KAP_ZAMAN_ASIMI_MS);
+    try{
+      const r=await fetch(KAP_API,{method:"POST",signal:iptal.signal,
+        headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},
+        body:govde});
+      clearTimeout(zamanlayici);
+      if(!r.ok){
+        KAP_SON_HATA="HTTP "+r.status;
+        if(r.status>=500&&0===deneme){await gecikmeli(600);continue}
+        KAP_ARDISIK_HATA++;saglikArtir("kapHata");
+        kapSaglikYaz(ORTAM,"sonHata",KAP_SON_HATA);return[];
+      }
+      const j=await r.json().catch(()=>null);
+      if(!Array.isArray(j)){
+        KAP_SON_HATA="beklenmeyen yanıt (JSON dizi değil)";KAP_ARDISIK_HATA++;saglikArtir("kapHata");
+        kapSaglikYaz(ORTAM,"sonHata",KAP_SON_HATA);return[];
+      }
+      KAP_SON_BASARI=Math.floor(Date.now()/1e3);KAP_ARDISIK_HATA=0;KAP_SON_HATA="";
+      saglikArtir("kapCagri");saglikSet("sonKapBasari",KAP_SON_BASARI);
+      return j;
+    }catch(err){
+      clearTimeout(zamanlayici);
+      KAP_SON_HATA=String((err&&err.message)||err||"?").slice(0,120);
+      if(0===deneme){await gecikmeli(600);continue}
+      KAP_ARDISIK_HATA++;saglikArtir("kapHata");
+      kapSaglikYaz(ORTAM,"sonHata",KAP_SON_HATA);
+      return[];
+    }
+  }
+  return[];
+}
+
+/* 6️⃣ ÇOKLU BİLDİRİM (FON / PAY İŞLEMİ) TESPİTİ
+   kap-notifier'ın mantığı: bildirimi sadece iletme — SAY ve tekrarı yakala.
+   Aynı hisse için gün içinde birden fazla "pay alım/satım, geri alım,
+   ortaklık yapısı" bildirimi çıkması kurumsal/fon hareketinin en ucuz
+   göstergesidir. Burada sadece SAYIYORUZ ve 🛡 Sistem sekmesinde
+   gösteriyoruz — kimseye ekstra mesaj gitmiyor, yani spam riski yok. */
+const FON_KONU_RX=/(PAY ALIM|PAY SATIS|PAY GERI ALIM|GERI ALIM|ORTAKLIK YAPISI|PAY SAHIPLIGI|SERMAYEDE PAY|ONEMLI NITELIKTE|BIRLESME|DEVRALMA|BEDELLI|TAHSISLI)/;
+async function kapFonIzle(A,yeniBildirimler){
+  try{
+    if(!A||!A.VERI||!yeniBildirimler||!yeniBildirimler.length)return;
+    const bugun=onayDonemi();
+    const ham=await A.VERI.get("kapFon");
+    let v={};try{v=ham?JSON.parse(ham):{}}catch(e){v={}}
+    if(v.gun!==bugun)v={gun:bugun,hisseler:{}};
+    v.hisseler=v.hisseler||{};
+    let degisti=!1;
+    for(const d of yeniBildirimler){
+      if(!d||!d.relatedStocks||!d.subject)continue;
+      if(!FON_KONU_RX.test(trSad(d.subject)))continue;
+      for(const kodHam of String(d.relatedStocks).split(",")){
+        const kod=kodHam.trim().toUpperCase();if(!kod)continue;
+        const h=v.hisseler[kod]||(v.hisseler[kod]={n:0,konular:[],son:0});
+        h.n++;h.son=Math.floor(Date.now()/1e3);
+        const kisa=String(d.subject).slice(0,60);
+        if(h.konular.indexOf(kisa)<0)h.konular=h.konular.concat([kisa]).slice(-4);
+        degisti=!0;
+      }
+    }
+    if(!degisti)return;
+    /* En çok bildirim alan 25 hisse yeter — KV kaydı şişmesin. */
+    const sirali=Object.keys(v.hisseler).sort((x,y)=>v.hisseler[y].n-v.hisseler[x].n).slice(0,25);
+    const yeni={};for(const k of sirali)yeni[k]=v.hisseler[k];
+    v.hisseler=yeni;
+    await A.VERI.put("kapFon",JSON.stringify(v));
+    saglikArtir("fonKaydi");
+  }catch(e){}
+}
 /* İzlenen kod → uid eşlemesi: ⭐ takip listesi + 💼 portföy birleşimi (union).
    fav:/portfoy: KV'lerini olduğu gibi okuyor — yeni bir yapı eklenmedi. */
 async function kapIzleyicileriGetir(e){
@@ -289,6 +603,8 @@ const sonIndexStr=await e.VERI.get("kapSonIndex"),sonIndex=sonIndexStr?Number(so
 await e.VERI.put("kapSonIndex",String(maxIndex));
 if(!sonIndex)return;
 const yeni=liste.filter(d=>d.disclosureIndex>sonIndex&&d.relatedStocks);if(!yeni.length)return;
+/* 6️⃣ Fon/pay işlemi sayacı — izleyici olsun olmasın her zaman işler. */
+await kapFonIzle(e,yeni).catch(()=>{});
 const izleyiciler=await kapIzleyicileriGetir(e);if(!Object.keys(izleyiciler).length)return;
 for(const d of yeni.slice(0,20)){
 const kodlar=String(d.relatedStocks).split(",").map(x=>x.trim()).filter(Boolean);if(!kodlar.length)continue;
@@ -775,6 +1091,7 @@ function yolGit(adim){
 }
 function ekranAdi(){
   if(sekme==="hata")return"🩺 Hatalar";
+  if(sekme==="sag")return"🛡 Sistem";
   if(sekme==="rot")return"🔄 Sektör Rotasyonu";
   if(sekme==="perf")return"📈 Performans";
   if(sekme==="davet")return"📤 Davet";
@@ -871,6 +1188,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="davet"?" on":"")+'" data-r="nötr" data-s="davet">📤 Davet</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
+  if(D.yon)s.push('<button class="sek'+(sekme==="sag"?" on":"")+'" data-r="nötr" data-s="sag">🛡 Sistem</button>');
   el("sekmeler").innerHTML=s.join("");
   [].forEach.call(el("sekmeler").children,function(b){
     b.onclick=function(){tit();sekme=b.dataset.s;sira="pot";ciz();window.scrollTo(0,0)};
@@ -884,6 +1202,7 @@ function ciz(){
   hotCiz();
   sekCiz();
   if(sekme==="hata")return hataCiz();
+  if(sekme==="sag")return saglikCiz();
   if(sekme==="rot")return rotCiz();
   if(sekme==="perf")return perfCiz();
   if(sekme==="kama")return kamaCiz();
@@ -1780,6 +2099,108 @@ function hataGoster(v){
   var d3=el("htSil");if(d3)d3.onclick=function(){tit();d3.disabled=true;
     post("/api/hatalar",{temizle:1}).then(hataGoster)};
 }
+/* ================== 🛡 SİSTEM SEKMESİ (yalnız yönetici) ==================
+   Altı dayanıklılık maddesinin tamamı burada görünür:
+   Telegram 429/engelli sayaçları, çakışma kilidi atlamaları, panel
+   kaba-kuvvet denemeleri, KAP çekim sağlığı, KAP çoklu bildirim (fon)
+   radarı ve Cloudflare rate-limit binding'lerinin bağlı olup olmadığı.
+   Hepsi "sessizce olan" şeyler — bu sekme onları görünür kılmak için var. */
+function sagSaat(ts){
+  if(!ts)return"—";
+  var d=new Date(ts*1000),s2=function(n){return String(n).padStart(2,"0")};
+  return s2((d.getUTCHours()+3)%24)+":"+s2(d.getUTCMinutes())+" · "+s2(d.getUTCDate())+"/"+s2(d.getUTCMonth()+1);
+}
+function sagKart(durum,baslik,alt){
+  var renk=durum==="iyi"?"var(--yes)":(durum==="uyari"?"var(--sar)":(durum==="kotu"?"var(--kir)":"var(--mavi)"));
+  var ik=durum==="iyi"?"✅":(durum==="uyari"?"⚠️":(durum==="kotu"?"⛔":"ℹ️"));
+  return '<div class="satir" style="border-left-color:'+renk+';align-items:flex-start">'+
+    '<div class="sol"><div class="kod" style="font-size:13.5px">'+ik+" "+baslik+'</div>'+
+    '<div class="altbilgi" style="white-space:normal">'+alt+'</div></div></div>';
+}
+function saglikCiz(){
+  el("govde").innerHTML='<div class="yukleniyor">sistem durumu okunuyor…</div>';
+  post("/api/saglik",{}).then(saglikGoster)
+    .catch(function(){el("govde").innerHTML='<div class="bos">Okunamadı.</div>'});
+}
+function saglikGoster(v){
+  if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Yetkisiz ya da okunamadı.</div>';return}
+  var c=v.sayac||{},k=v.kap||{},f=v.fon||{},bd=v.binding||{};
+  var sy=function(x){return Number(c[x]||0)};
+  var h='<div class="sirala"><button class="sir" id="sgYenile">🔄 Yenile</button></div>';
+  h+='<div class="uyari" style="margin-top:0">Sayaçlar her gün TR 09:00 itibarıyla sıfırlanır · '+
+     'sürüm <b>'+E(v.surum||"")+'</b> · bugünkü push: <b>'+sy("push")+'</b></div>';
+
+  /* --- 2️⃣ Telegram gönderim sağlığı --- */
+  var r429=sy("tg429"),gnd=sy("tgGonderim"),eng=sy("tgEngelli"),ag=sy("tgAgHatasi");
+  var oran=gnd?Math.round(1000*r429/gnd)/10:0;
+  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">2️⃣ TELEGRAM GÖNDERİM</div>';
+  h+=sagKart(r429===0?"iyi":(oran<2?"uyari":"kotu"),
+      "429 (hız sınırı): <b>"+r429+"</b> · başarılı gönderim: <b>"+gnd+"</b>",
+      r429===0?"Bugün hiç hız sınırına takılmadın. Kova saniyede "+(v.tgLimit||25)+" mesaja ayarlı."
+              :"Mesajların %"+oran+"'i 429 yedi, hepsi retry_after kadar beklenip tekrar denendi. "+
+               "Son 429: "+sagSaat(c.son429)+" · beklenen süre: "+(c.sonRetryAfter||"?")+" sn. "+
+               "Oran %2'yi geçerse kovayı düşür.");
+  if(eng||ag)h+=sagKart(eng>gnd*0.1&&gnd?"uyari":"bilgi",
+      "Botu engelleyen: <b>"+eng+"</b> · ağ hatası: <b>"+ag+"</b>",
+      "403 alan kullanıcılar botu silmiş/engellemiş demektir — tekrar denenmiyor, boşuna kota harcanmıyor.");
+
+  /* --- 3️⃣ Çakışma kilidi --- */
+  var atl=sy("kilitAtlandi");
+  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">3️⃣ ÇAKIŞMA KİLİDİ</div>';
+  h+=sagKart(atl>500?"uyari":"iyi","Atlanan tekrar tur: <b>"+atl+"</b>",
+      atl?"Bu kadar kez bir arka plan işi (KAP/geçmiş/alarm/formasyon) önceki turu bitmeden yeniden başlatılmak istendi ve engellendi. Yüksek sayı normaldir — push 10 saniyede bir geliyor."
+         :"Henüz çakışma olmadı.");
+  h+=sagKart(v.gh?"iyi":"uyari","Formasyon tetikleme: <b>"+E(c.sonFormasyonSonuc||"—")+"</b>",
+      (v.gh?"GH_TOKEN tanımlı. ":"GH_TOKEN yok — GitHub Actions taraması tetiklenemiyor. ")+
+      "Son deneme: "+sagSaat(c.sonFormasyonTetik)+" · başarısız: "+sy("formasyonHata"));
+
+  /* --- 4️⃣ Panel güvenliği --- */
+  var yan=sy("panelYanlis"),kil=sy("panelKilit");
+  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">4️⃣ PANEL GÜVENLİĞİ</div>';
+  h+=sagKart(kil?"kotu":(yan?"uyari":"iyi"),
+      "Yanlış anahtar denemesi: <b>"+yan+"</b> · kilitlenen IP: <b>"+kil+"</b>",
+      yan?("Son yanlış deneme: "+sagSaat(c.sonPanelYanlis)+
+           (c.sonPanelKilitIP?" · son kilitlenen IP: "+E(String(c.sonPanelKilitIP)):"")+
+           ". 8 yanlış denemeden sonra o IP 15 dakika kapıdan giremiyor.")
+         :"Kimse yanlış anahtarla girmeye çalışmadı.");
+
+  /* --- 1️⃣ Cloudflare yerel rate limit --- */
+  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">1️⃣ CLOUDFLARE HIZ SINIRI</div>';
+  h+=sagKart(bd.panel&&bd.api?"iyi":"uyari",
+      "SINIR_PANEL: <b>"+(bd.panel?"bağlı":"yok")+"</b> · SINIR_API: <b>"+(bd.api?"bağlı":"yok")+"</b>",
+      (bd.panel||bd.api)
+        ? ("Engellenen istek: panel "+sy("sinir:SINIR_PANEL")+" · api "+sy("sinir:SINIR_API")+
+           ". Cloudflare bu sayacın kesin olmadığını söylüyor — limiti gerçek ihtiyacın %20 üstünde tut.")
+        : "Binding tanımlı değil, bu yüzden hiçbir kısıt uygulanmıyor (sistem eskisi gibi çalışıyor). Eklemek için: Worker → Settings → Bindings → Rate limiting. Öneri: SINIR_PANEL 20 istek/60 sn, SINIR_API 300 istek/60 sn.");
+
+  /* --- 5️⃣ KAP çekim sağlığı --- */
+  var kh=Number(k.ardisikHata||0);
+  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">5️⃣ KAP VERİ SAĞLIĞI</div>';
+  h+=sagKart(kh>=2?"kotu":(kh===1?"uyari":"iyi"),
+      "Son başarılı çekim: <b>"+sagSaat(k.sonBasari)+"</b>",
+      "Bugün çağrı: "+sy("kapCagri")+" · hata: "+sy("kapHata")+" · art arda hata: "+kh+
+      (k.sonHata?" · son hata: "+E(String(k.sonHata)):"")+
+      ". Tarama aralığı "+(k.aralikSn||175)+" sn (KV yazma sınırı yüzünden bilinçli olarak düşürülmedi). "+
+      "Her istekte 9 sn zaman aşımı + 1 kez tekrar deneme var.");
+
+  /* --- 6️⃣ Fon / pay işlemi radarı --- */
+  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">6️⃣ KAP ÇOKLU BİLDİRİM RADARI</div>';
+  var fl=f.liste||[];
+  if(!fl.length){
+    h+=sagKart("bilgi","Bugün çoklu bildirim yok",
+      "Aynı hisseye gün içinde birden fazla pay alım/satım, geri alım veya ortaklık yapısı bildirimi gelirse burada listelenir. Kimseye ekstra mesaj gitmez — bu sadece senin radarın.");
+  }else{
+    h+=fl.map(function(x){
+      var cok=x.n>=2;
+      return '<div class="satir" style="border-left-color:'+(cok?"var(--sar)":"var(--mavi)")+';align-items:flex-start">'+
+        '<div class="sol"><div class="kod">'+E(x.kod)+' <span class="rozet">'+x.n+' bildirim</span></div>'+
+        '<div class="altbilgi" style="white-space:normal">'+E((x.konular||[]).join(" · ").slice(0,150))+
+        '<br>son: '+sagSaat(x.son)+'</div></div></div>';
+    }).join("");
+  }
+  el("govde").innerHTML=h;
+  var y=el("sgYenile");if(y)y.onclick=function(){tit();saglikCiz()};
+}
 var rotD=null;
 function rotCeyrek(x){
   return x.o>=100?(x.i>=100?1:2):(x.i>=100?3:4);
@@ -2392,7 +2813,7 @@ if(z&&a)return j(a)+"\n\n"+AYNA(t,z);
 if(z)return AYNA(t,z);
 if(a)return "🔎 <b>"+t+"</b> için güncel durum\n\n"+j(a);
 return "🔎 <b>"+t+"</b>\n\nBu kod taramada bulunamadı. Yazımı kontrol et (örn. <code>THYAO</code>) ya da yeni tarama sonrası tekrar dene."}function PY(uname,userId,chatId){const link="https://t.me/"+uname+"?start=r"+userId,paylas="https://t.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(DAVET_METIN),menu=u(userId);menu.inline_keyboard=[[{text:"📤 Paylaş",url:paylas}]].concat(menu.inline_keyboard);return{chat_id:chatId,parse_mode:"HTML",disable_web_page_preview:!0,text:"📤 <b>Sistemi paylaş</b>\n\nAşağıdaki düğmeye dokun, Telegram'da kime göndereceğini seç. Davet bağlantın otomatik olarak gönderilir.",reply_markup:menu}}
-const Q={tavan:"🟥🟥🟥🟥🟥🟥🟥🟥\n⚡ <b>15 DAKİKA</b> · kısa trade\n<i>yalnız 15 dakikalık sinyaller</i>\n🟥🟥🟥🟥🟥🟥🟥🟥",potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayKisa:"🟨🟨🟨🟨🟨🟨🟨🟨\n⚡ <b>15 DAKİKA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};const _ANA={async fetch(p,A,q){const $=new URL(p.url);if(n=$.origin,
+const Q={tavan:"🟥🟥🟥🟥🟥🟥🟥🟥\n⚡ <b>15 DAKİKA</b> · kısa trade\n<i>yalnız 15 dakikalık sinyaller</i>\n🟥🟥🟥🟥🟥🟥🟥🟥",potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayKisa:"🟨🟨🟨🟨🟨🟨🟨🟨\n⚡ <b>15 DAKİKA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};const _ANA={async fetch(p,A,q){ORTAM=A;const $=new URL(p.url);if(n=$.origin,
 i=A.PANEL_KEY||A.PUSH_KEY||t,"/surum"===$.pathname)return new Response("Fix Borsa Sinyal worker surum "+a,{headers:{"content-type":"text/plain; charset=utf-8","Access-Control-Allow-Origin":"*"}})
 ;if("/setup"===$.pathname){
 const e=(e,t)=>new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#0d1117;color:#e6edf3;font:15px/1.6 system-ui,sans-serif;padding:18px"><h2 style="margin:0 0 10px">'+e+"</h2>"+t+'<p style="margin-top:18px"><a href="/" style="color:#388bfd">← Durum sayfasına dön</a></p></body>',{
@@ -2405,7 +2826,11 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 ;return a&&a.ok?e("✅ Bağlantı kuruldu","<p>Bot: <b>@"+(t.result.username||"?")+"</b></p><p>Artık Telegram'da bota <b>/start</b> yazabilirsin.</p>"):e("⚠️ Bağlanamadı","<p>"+(a&&a.description||"bilinmeyen hata")+"</p>")
 }const ee={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, GET, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"86400"}
 ;if("OPTIONS"===p.method)return new Response(null,{status:204,headers:ee});if("/push"===$.pathname){const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({
-"content-type":"application/json; charset=utf-8"},ee)});if("POST"!==p.method)return e({ok:!1,hata:"POST bekleniyor"},405);if(!s(A,$))return e({ok:!1,hata:"Şifre yanlış"},401)
+"content-type":"application/json; charset=utf-8"},ee)});if("POST"!==p.method)return e({ok:!1,hata:"POST bekleniyor"},405);
+/* 4️⃣ /push için de kaba-kuvvet sayacı — ama yerel rate limit YOK:
+   tarayıcı uygulaman 10 saniyede bir buraya yazıyor, onu kısıtlamak
+   sistemi durdururdu. Sadece YANLIŞ anahtar denemeleri sayılıyor. */
+{const kk=await kapiKontrol(A,$,p,!1);if(!kk.ok)return e({ok:!1,hata:429===kk.kod?kk.mesaj:"Şifre yanlış"},kk.kod)}
 ;const t=await p.json().catch(()=>null);if(!t||"object"!=typeof t)return e({ok:!1,hata:"Paket okunamadı"},400);t.guncelleme=(new Date).toISOString()
 ;const eskiListe=await g(A).catch(()=>null);await async function(e,t){o=t,oTS=Date.now();
 /* KV YAZMA KORUMASI: sürekli mod (10 sn'de bir tarama) KV'nin günlük
@@ -2416,11 +2841,25 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 const SIMDI=Date.now();
 if(e.VERI&&(SIMDI-KVSON>12e4)){KVSON=SIMDI;await e.VERI.put("listeler",JSON.stringify(t))}
 await caches.default.put(new Request(l),new Response(JSON.stringify(t),{headers:{"Cache-Control":"max-age=86400",
-"content-type":"application/json"}}))}(A,t),q.waitUntil(k(A,t).catch(()=>{})),q.waitUntil(gecmisiDoldur(A,t).catch(()=>{})),q.waitUntil(alarmGonder(A,eskiListe,t).catch(()=>{})),q.waitUntil(kapKontrolVeGonder(A).catch(()=>{})),q.waitUntil(temettuKontrolVeGonder(A).catch(()=>{})),q.waitUntil(portfoyGunlukSnapshotAl(A).catch(()=>{}))
+"content-type":"application/json"}}))}(A,t),/* 3️⃣ ÇAKIŞMA KİLİDİ: işler eskisi gibi PARALEL başlar (davranış aynı),
+   ama her biri kendi kilidini alır — bir öncekinin turu bitmeden aynı iş
+   ikinci kez başlamaz. Kilit alınamazsa o tur sessizce atlanır ve
+   🛡 Sistem sekmesinde "atlanan tur" olarak sayılır. */
+q.waitUntil(kilitli(A,"gecmisKaydi",60,()=>k(A,t)).catch(()=>{})),
+q.waitUntil(kilitli(A,"gecmisiDoldur",180,()=>gecmisiDoldur(A,t)).catch(()=>{})),
+q.waitUntil(kilitli(A,"alarm",60,()=>alarmGonder(A,eskiListe,t)).catch(()=>{})),
+q.waitUntil(kilitli(A,"kap",90,()=>kapKontrolVeGonder(A)).catch(()=>{})),
+q.waitUntil(kilitli(A,"temettu",120,()=>temettuKontrolVeGonder(A)).catch(()=>{})),
+q.waitUntil(kilitli(A,"portfoySnapshot",60,()=>portfoyGunlukSnapshotAl(A)).catch(()=>{})),
+saglikArtir("push")   /* sayaç bellekte artar, KV'ye en fazla 60 sn'de bir yazılır */
 /* Formasyon taramasini da tetikle — arka planda, yanit beklemeden. */
 ;const frmDurum=await formasyonTetikle(A).catch(()=>"hata")
 ;const n=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+(t.kartlar[e]||[]).length).join(" · "):""
-;return e({ok:!0,surum:a,depo:!!A.VERI,sayim:n,guncelleme:t.guncelleme,formasyon:frmDurum})}if($.pathname.startsWith("/panel")){if(!s(A,$))return new Response("yetkisiz",{status:401})
+;return e({ok:!0,surum:a,depo:!!A.VERI,sayim:n,guncelleme:t.guncelleme,formasyon:frmDurum})}if($.pathname.startsWith("/panel")){
+/* 4️⃣ + 1️⃣ Panel kapısı: IP başına yanlış deneme sayacı + (tanımlıysa)
+   Cloudflare yerel rate limit. Doğru anahtarla girişte hiçbir fark yok. */
+const kk=await kapiKontrol(A,$,p,!0);
+if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401})
 ;const t="POST"===p.method?await p.json().catch(()=>({})):{},a=async e=>{const t=[];if(!A.VERI)return t;let a=null;for(;t.length<e;){const n=await A.VERI.list({prefix:"u:",limit:1e3,cursor:a||void 0})
 ;for(const a of n.keys){const n=await A.VERI.get(a.name);if(n&&t.push(JSON.parse(n)),t.length>=e)break}if(n.list_complete||!n.cursor)break;a=n.cursor}return t};if("/panel/vip"===$.pathname){
 let e=[...await E(A,!0)];if(t.ekle){const a=String(t.ekle).replace(/\D/g,"");a&&!e.includes(a)&&e.push(a)}return t.sil&&(e=e.filter(e=>e!==String(t.sil))),await async function(e,t){
@@ -2484,6 +2923,11 @@ if(!gov||!gov.initData||!A.BOT_TOKEN)return JS({ok:!1,hata:"initData yok"},401);
 const uid=await dogrulaInitData(gov.initData,A.BOT_TOKEN).catch(()=>null);
 if(!uid)return JS({ok:!1,hata:"dogrulanamadi"},401);
 if(await B(A,uid))return JS({ok:!1,hata:"erisim kapali"},403);
+/* 1️⃣ Cloudflare yerel rate limit — SINIR_API binding'i TANIMLI DEĞİLSE
+   hiçbir kısıt yok (fail-open). Tanımlarsan önerilen: 300 istek / 60 sn
+   (normal kullanım dakikada ~20 istek; 15 kat pay var). */
+if(!await sinirGec(A,"SINIR_API","u"+uid))
+  return JS({ok:!1,hata:"çok hızlı — birkaç saniye bekle"},429);
 const YON=d(uid),KOD=v=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10),ID=v=>String(v||"").replace(/\D/g,"");
 if("/api/veri"===$.pathname){
 const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid),portfoy=await XP(A,uid),portfoyGecmis=await XPG(A,uid),portfoyGunluk=await XPGUNLUK(A,uid);
@@ -2563,6 +3007,26 @@ if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
 if(gov.temizle){if(A.VERI)await A.VERI.put("hatalar","[]");return JS({ok:!0,liste:[]})}
 if(gov.dene){await hataYaz(A,"test",new Error("test kaydı — bu bir arıza değil"),p);}
 return JS({ok:!0,liste:await hatalariOku(A),sentry:!!A.SENTRY_DSN})}
+/* 🛡 SİSTEM SAĞLIĞI — yalnız yönetici.
+   Altı dayanıklılık maddesinin tamamının çıktısı tek ekranda. */
+if("/api/saglik"===$.pathname){
+if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+const sg=await saglikOku(A);
+let kapSag={};try{const h=A.VERI&&await A.VERI.get("kapSaglik");if(h)kapSag=JSON.parse(h)}catch(e){}
+let fon={};try{const h=A.VERI&&await A.VERI.get("kapFon");if(h)fon=JSON.parse(h)}catch(e){}
+const L2=await g(A);
+const fonListe=Object.keys((fon&&fon.hisseler)||{})
+  .map(k=>Object.assign({kod:k},fon.hisseler[k]))
+  .sort((x,y)=>y.n-x.n).slice(0,12);
+return JS({ok:!0,
+  surum:a,
+  sayac:sg,
+  kap:{sonBasari:sg.sonKapBasari||0,ardisikHata:KAP_ARDISIK_HATA,sonHata:KAP_SON_HATA||kapSag.sonHata||"",aralikSn:Math.round(KAP_POLL_MS/1e3)},
+  fon:{gun:fon.gun||"",liste:fonListe},
+  binding:{panel:!(!A.SINIR_PANEL),api:!(!A.SINIR_API)},
+  depo:!!A.VERI,gh:!!A.GH_TOKEN,
+  tgLimit:TG_SANIYE_LIMIT,
+  sonTarama:(L2&&L2.guncelleme)||""})}
 if("/api/rotasyon"===$.pathname){
 const L2=await g(A);
 const R=L2&&L2.rrg&&L2.rrg.hisse;
