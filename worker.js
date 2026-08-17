@@ -1146,7 +1146,7 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .baslik{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .baslik h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
 .saat{font-size:11.5px;color:var(--soluk);font-variant-numeric:tabular-nums}
-.sekmeler{display:flex;flex-wrap:wrap;gap:6px;max-height:104px;overflow-y:auto;padding-bottom:9px;scrollbar-width:none}
+.sekmeler{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:9px;scrollbar-width:none}
 .sekmeler::-webkit-scrollbar{display:none}
 .sek{flex:0 0 auto;background:var(--kart);border:1px solid var(--ciz);color:var(--soluk);
   border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;white-space:nowrap}
