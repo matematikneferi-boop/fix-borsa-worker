@@ -1283,6 +1283,13 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit .ay2{color:var(--soluk);font-size:10.5px}
 .hotSerit{margin:0 0 9px}
 .hotBaslik{font-size:11px;font-weight:700;color:var(--sar);margin-bottom:5px}
+.hotBasSat{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.araRow{display:flex;align-items:center;gap:4px;flex:0 0 auto}
+.araGir{width:64px;max-width:26vw;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
+  border-radius:7px;padding:3px 6px;font-size:11px;font-weight:700;text-transform:uppercase}
+.araGir::placeholder{color:var(--soluk);text-transform:none;font-weight:400}
+.araBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;
+  padding:3px 7px;font-size:12px;line-height:1.4}
 .hotSira{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 .hotKart{flex:0 0 66px;background:var(--kart);border:1px solid var(--ciz);
   border-left:3px solid var(--ciz);border-radius:8px;padding:6px 7px;cursor:pointer}
@@ -1550,6 +1557,18 @@ function seritCiz(){
    ("en güçlülerin güçlüsü") ve (2) her dilimin (1SA/4SA/1G) KENDİ en
    güçlü hissesi -- bir dilim genel top 5'e girmese bile kendi en iyisi burada
    görünür. Dokununca satirBagla() ile aynı detay ekranı açılır. */
+var ARA_HTML='<div class="araRow"><input id="araGir" class="araGir" placeholder="Hisse" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button></div>';
+function araBagla(){
+  var g=el("araGir"),b=el("araBtn");
+  if(!g||!b)return;
+  function git(){
+    var kod=(g.value||"").trim().toUpperCase();
+    if(!kod)return;
+    tit();detay(kod,"");g.value="";g.blur();
+  }
+  b.onclick=git;
+  g.onkeydown=function(e){if(e.key==="Enter")git()};
+}
 function hotCiz(){
   var kutu=el("hotSerit"); if(!kutu)return;
   var hepsi=[];
@@ -1558,7 +1577,10 @@ function hotCiz(){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
   });
-  if(!hepsi.length){kutu.innerHTML="";return}
+  if(!hepsi.length){
+    kutu.innerHTML='<div class="hotBaslik hotBasSat"><span>🔥 En güçlülerin güçlüsü</span>'+ARA_HTML+'</div>';
+    araBagla();return;
+  }
 
   var enIyiKod={};
   hepsi.forEach(function(x){
@@ -1589,13 +1611,16 @@ function hotCiz(){
 
   var h='';
   if(genelTop.length)
-    h+='<div class="hotBaslik">🔥 En güçlülerin güçlüsü — 5</div><div class="hotSira">'+
+    h+='<div class="hotBaslik hotBasSat"><span>🔥 En güçlülerin güçlüsü — 5</span>'+ARA_HTML+'</div><div class="hotSira">'+
        genelTop.map(kartHtml).join("")+"</div>";
+  else
+    h+='<div class="hotBaslik hotBasSat"><span>🔥 En güçlülerin güçlüsü</span>'+ARA_HTML+'</div>';
   if(dilimTop.length)
     h+='<div class="hotBaslik" style="margin-top:8px">📌 Her dilimin en güçlüsü</div><div class="hotSira">'+
        dilimTop.map(kartHtml).join("")+"</div>";
   kutu.innerHTML=h;
   satirBagla();
+  araBagla();
 }
 function sirCiz(akt){
   var o=[["pot","🎯 Hedefe kalan"],["kar","💰 Kâr/Zarar"],["yeni","🕐 En yeni"]];
