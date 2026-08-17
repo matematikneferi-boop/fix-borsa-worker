@@ -509,12 +509,39 @@ for(const uid of kullanicilar.slice(0,ALARM_MAX_ALICI))await b(e.BOT_TOKEN,"send
    sinyallerin üstüne "kim topluyor?" katmanıdır. Bunu ekranda da yazıyoruz.
 
    PUAN = hacim katı × aralık darlığı × kapanış konumu (0-100). */
+/* Eşikler artık sabit değil — yönetici panelinden ayarlanabilir, KV'de
+   saklanır ("absAyar" anahtarı). Varsayılanlar önceki denemelerden sonra
+   iyice gevşetildi (1.4/0.95 → 1.15/1.15) çünkü taranan evren küçük
+   (en fazla 16 hisse) ve BIST günlük barlarında klasik "1.8x hacim + dar
+   aralık" birlikteliği nadir çıkıyor. */
+const ABS_VARSAYILAN={hacimEsik:1.15,darlikEsik:1.15};
+async function absAyarAl(A){
+  if(!A.VERI)return ABS_VARSAYILAN;
+  try{
+    const c=await A.VERI.get("absAyar");
+    if(c){
+      const j=JSON.parse(c);
+      const h=Number(j.hacimEsik),d=Number(j.darlikEsik);
+      return{hacimEsik:(h>1&&h<10)?h:ABS_VARSAYILAN.hacimEsik,
+             darlikEsik:(d>0&&d<3)?d:ABS_VARSAYILAN.darlikEsik}
+    }
+  }catch(e){}
+  return ABS_VARSAYILAN;
+}
+async function absAyarKaydet(A,hacimEsik,darlikEsik){
+  const h=Number(hacimEsik),d=Number(darlikEsik);
+  if(!(h>1&&h<10)||!(d>0&&d<3))return null;
+  const ayar={hacimEsik:h,darlikEsik:d};
+  if(A.VERI)await A.VERI.put("absAyar",JSON.stringify(ayar)).catch(()=>{});
+  return ayar;
+}
 function ortancaAl(dizi){
   if(!dizi.length)return 0;
   const d=dizi.slice().sort((a,b)=>a-b),m=Math.floor(d.length/2);
   return d.length%2?d[m]:(d[m-1]+d[m])/2;
 }
-function absorpsiyonHesapla(mumlar){
+function absorpsiyonHesapla(mumlar,ayar){
+  ayar=ayar||ABS_VARSAYILAN;
   try{
     if(!mumlar||mumlar.length<25)return null;
     const son=mumlar[mumlar.length-1];
@@ -533,11 +560,13 @@ function absorpsiyonHesapla(mumlar){
     const darlik=aralik/aralikOrt;                     /* 1 = normal, 0.4 = çok dar */
     const yayilim=son.high-son.low;
     const konum=yayilim>0?(son.close-son.low)/yayilim:0.5;  /* 1 = tepede kapandı */
-    /* Absorpsiyon şartı: hacim en az 1.4 kat VE aralık normalin biraz altında
-       (önceki eşik 1.8x / 0.85 çok az hisseyi yakalıyordu — gevşetildi) */
-    if(hacimKat<1.4||darlik>0.95)return null;
-    const hacimP=Math.min(1,(hacimKat-1.4)/2.1);       /* 1.4x→0, 3.5x→1 */
-    const darP=Math.min(1,(0.95-darlik)/0.65);         /* 0.95→0, 0.30→1 */
+    /* Absorpsiyon şartı: hacim en az X kat VE aralık normalin altında —
+       eşikler ayar.hacimEsik / ayar.darlikEsik'ten geliyor (yönetici panelinden). */
+    if(hacimKat<ayar.hacimEsik||darlik>ayar.darlikEsik)return null;
+    /* Puanlama sabit çapalarla yapılır (eşik değişse de ölçek bozulmasın):
+       1x hacim → 0 puan, 4x → tam puan; aralık 1.0 → 0 puan, 0.3 → tam puan. */
+    const hacimP=Math.min(1,Math.max(0,(hacimKat-1)/3));
+    const darP=Math.min(1,Math.max(0,(1-darlik)/0.7));
     const konumP=Math.abs(konum-0.5)*2;                /* uçlara yakınlık */
     const puan=Math.round(100*(0.45*hacimP+0.35*darP+0.20*konumP));
     const yon=konum>=0.6?"talep":(konum<=0.4?"arz":"kararsız");
@@ -553,7 +582,11 @@ function absorpsiyonHesapla(mumlar){
    + ~8 KV işlemi = 40 — sınırın altında güvenli pay kalıyor. */
 const ABS_TAVAN=16,ABS_CACHE_MS=18e5; /* 30 dakika */
 async function absorpsiyonTara(A,ekKodlar){
-  const c=A.VERI&&await A.VERI.get("absorpsiyon");
+  const ayar=await absAyarAl(A);
+  /* Önbellek anahtarına eşikler işleniyor: yönetici ayarı değiştirince
+     eski (belki boş) sonuç değil, anında yeni tarama devreye girer. */
+  const anahtar="absorpsiyon_v2:"+ayar.hacimEsik+":"+ayar.darlikEsik;
+  const c=A.VERI&&await A.VERI.get(anahtar);
   if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<ABS_CACHE_MS)return j}catch(e){}}
   const L=await g(A),kodSet=new Set();
   if(L&&L.kartlar)for(const k of Object.keys(L.kartlar)){
@@ -566,13 +599,13 @@ async function absorpsiyonTara(A,ekKodlar){
   for(const kod of kodlar){
     try{
       const r=await yfMumlar(kod);
-      const a=absorpsiyonHesapla(r&&r.veri);
+      const a=absorpsiyonHesapla(r&&r.veri,ayar);
       if(a)bulunan.push(Object.assign({kod:kod},a));
     }catch(e){}
   }
   bulunan.sort((x,y)=>y.puan-x.puan);
-  const paket={ts:Date.now(),taranan:kodlar.length,liste:bulunan.slice(0,30)};
-  if(A.VERI)await A.VERI.put("absorpsiyon",JSON.stringify(paket)).catch(()=>{});
+  const paket={ts:Date.now(),taranan:kodlar.length,liste:bulunan.slice(0,30),ayar:ayar};
+  if(A.VERI)await A.VERI.put(anahtar,JSON.stringify(paket)).catch(()=>{});
   saglikArtir("absTarama");
   return paket;
 }
@@ -1283,21 +1316,21 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit>span{display:inline-block;padding-left:100%;animation:kay 34s linear infinite;will-change:transform}
 .serit b{color:var(--yazi)} .serit .ay{color:#3a4553;margin:0 12px}
 .serit .ay2{color:var(--soluk);font-size:10.5px}
-.hotSerit{margin:0 0 9px}
+.hotSerit{margin:0 0 6px}
 .araSat{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .araGir{flex:0 1 150px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
   border-radius:8px;padding:6px 9px;font-size:13px;font-weight:700;text-transform:uppercase}
 .araGir::placeholder{color:var(--soluk);text-transform:none;font-weight:400}
 .araBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
   padding:6px 11px;font-size:14px;line-height:1.4}
-.hotBaslik{font-size:11px;font-weight:700;color:var(--sar);margin-bottom:5px}
-.hotSira{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
-.hotKart{flex:0 0 66px;background:var(--kart);border:1px solid var(--ciz);
-  border-left:3px solid var(--ciz);border-radius:8px;padding:6px 7px;cursor:pointer}
+.hotBaslik{font-size:10px;font-weight:700;color:var(--sar);margin-bottom:3px}
+.hotSira{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
+.hotKart{flex:0 0 54px;background:var(--kart);border:1px solid var(--ciz);
+  border-left:3px solid var(--ciz);border-radius:7px;padding:4px 5px;cursor:pointer}
 .hotKart:active{background:var(--kart2)}
-.hotKod{font-weight:700;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hotDil{font-size:9.5px;color:var(--soluk);margin:1px 0}
-.hotYuzde{font-size:11px;font-weight:700}
+.hotKod{font-weight:700;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hotDil{font-size:8.5px;color:var(--soluk);margin:1px 0}
+.hotYuzde{font-size:9.5px;font-weight:700}
 .simSatir{margin-bottom:8px}
 .simSatir label{display:block;font-size:11.5px;color:var(--soluk);margin-bottom:4px}
 .simSatir input{width:100%;box-sizing:border-box;background:var(--kart2);border:1px solid var(--ciz);
@@ -1613,7 +1646,7 @@ function hotCiz(){
     h+='<div class="hotBaslik">🔥 En güçlülerin güçlüsü — 5</div><div class="hotSira">'+
        genelTop.map(kartHtml).join("")+"</div>";
   if(dilimTop.length)
-    h+='<div class="hotBaslik" style="margin-top:8px">📌 Her dilimin en güçlüsü</div><div class="hotSira">'+
+    h+='<div class="hotBaslik" style="margin-top:5px">📌 Her dilimin en güçlüsü</div><div class="hotSira">'+
        dilimTop.map(kartHtml).join("")+"</div>";
   kutu.innerHTML=h;
   satirBagla();
@@ -2444,6 +2477,20 @@ function absGoster(v){
      '<b>Arz</b> = satıcı yutuyor (gün dipte kapandı).<br><br>'+
      '⚠️ Bu bir <b>yaklaşık ölçüm</b>: gerçek order-flow verisi (her emrin tek tek kaydı) '+
      'bizde yok, günlük barlardan hesaplanıyor. Yanılabilir. Tek başına al/sat sebebi değildir.</div>';
+  /* 🔐 Eşik ayarları — YALNIZ yöneticiye görünür. Kaydedince önbellek
+     anahtarı da değiştiği için hemen yeni eşiklerle taranır. */
+  if(D.yon&&v&&v.ayar){
+    h+='<div class="kutu" style="margin-bottom:10px"><h3>🔐 Eşikler (sadece sende)</h3>'+
+       '<div class="altbilgi" style="margin-bottom:8px">Ne kadar küçükse o kadar gevşek — daha çok hisse yakalanır.</div>'+
+       '<div class="sat"><span class="et">Hacim eşiği (kat)</span>'+
+       '<input id="absHacim" type="number" step="0.05" min="1.01" max="9.99" value="'+E(String(v.ayar.hacimEsik))+'" '+
+       'style="width:70px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>'+
+       '<div class="sat"><span class="et">Aralık darlığı eşiği</span>'+
+       '<input id="absDarlik" type="number" step="0.05" min="0.05" max="2.99" value="'+E(String(v.ayar.darlikEsik))+'" '+
+       'style="width:70px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>'+
+       '<button class="dg" id="absAyarKaydet" style="margin-top:8px">💾 Kaydet ve yeniden tara</button>'+
+       '<div class="altbilgi" id="absAyarDurum" style="margin-top:6px"></div></div>';
+  }
   h+='<div class="altbilgi" style="margin:10px 0 6px;opacity:.75">Taranan hisse: '+
      ((v&&v.taranan)||0)+' · ölçüm yaşı: '+((v&&v.yas)||0)+' dk (30 dakikada bir tazelenir)</div>';
   if(!l.length){
@@ -2470,6 +2517,22 @@ function absGoster(v){
   var y=el("absYenile");if(y)y.onclick=function(){tit();absD=null;
     el("govde").innerHTML='<div class="yukleniyor">yeniden ölçülüyor…</div>';
     post("/api/absorpsiyon",{}).then(function(v2){absD=v2;absGoster(v2)})};
+  var k=el("absAyarKaydet");
+  if(k)k.onclick=function(){
+    tit();k.disabled=true;k.textContent="…";
+    var hacimEsik=Number(el("absHacim").value),darlikEsik=Number(el("absDarlik").value);
+    post("/api/absAyar",{hacimEsik:hacimEsik,darlikEsik:darlikEsik}).then(function(r){
+      k.disabled=false;k.textContent="💾 Kaydet ve yeniden tara";
+      if(r&&r.ok){
+        el("absAyarDurum").textContent="✅ Kaydedildi, yeniden taranıyor…";
+        absD=null;
+        post("/api/absorpsiyon",{}).then(function(v2){absD=v2;absGoster(v2)});
+      }else{
+        el("absAyarDurum").textContent="⚠️ "+((r&&r.hata)||"kaydedilemedi");
+      }
+    }).catch(function(){k.disabled=false;k.textContent="💾 Kaydet ve yeniden tara";
+      el("absAyarDurum").textContent="⚠️ bağlantı hatası"});
+  };
 }
 /* ================== 🧠 KAP RADAR SEKMESİ ==================
    Ham KAP listesi (📰 sekmesi) her şeyi tarih sırasıyla verir. Radar ise
@@ -3562,7 +3625,16 @@ const paket=await absorpsiyonTara(A,[...fav,...Object.keys(pf)]).catch(()=>null)
 if(!paket)return JS({ok:!0,liste:[],taranan:0,yas:0});
 const izlenen=new Set([...fav,...Object.keys(pf)]);
 return JS({ok:!0,taranan:paket.taranan||0,yas:Math.round((Date.now()-(paket.ts||0))/6e4),
-liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenen.has(x.kod)},x))})}
+liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenen.has(x.kod)},x)),
+ayar:YON?(paket.ayar||await absAyarAl(A)):null})}
+/* 🌊 Absorpsiyon eşiklerini kaydet — SADECE yönetici. Kaydedince yeni
+   önbellek anahtarına düştüğü için bir sonraki istekte anında yeni
+   eşiklerle taranır, 30 dakika beklemeye gerek yok. */
+if("/api/absAyar"===$.pathname){
+if(!YON)return JS({ok:!1,hata:"yetki yok"},403);
+const ayar=await absAyarKaydet(A,gov.hacimEsik,gov.darlikEsik);
+if(!ayar)return JS({ok:!1,hata:"geçersiz değer"},400);
+return JS({ok:!0,ayar:ayar})}
 /* 🧠 KAP RADAR — aynı bildirimler, ama kategoriye ayrılmış ve önem
    puanına göre sıralanmış hâlde. Üstte TEFAS fon akışı şeridi var. */
 if("/api/kapradar"===$.pathname){
