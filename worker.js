@@ -1786,28 +1786,52 @@ function kamaTara(){
   }).catch(function(){kamaTararken=false;el("govde").innerHTML='<div class="bos">Bağlantı hatası.</div>'});
 }
 var fDilim="hepsi";
+var fTip="hepsi";
 var FDILIM=[["hepsi","Tümü"],["1SA","1SA"],["4SA","4SA"],
             ["1G","1G"],["1HAF","Hafta"],["1AY","Ay"]];
+/* TİP SÜZGECİ: sabit bir liste yerine listede o an gerçekten var olan
+   formasyon tiplerinden (x.tip) üretiliyor — Python tarafında yeni bir tip
+   eklenirse (ör. "ikili tepe") buraya kod değişmeden otomatik düşer. */
+function tipListesiCikar(tum){
+  var s=[];
+  tum.forEach(function(x){if(x.tip&&s.indexOf(x.tip)===-1)s.push(x.tip)});
+  return s;
+}
 function kamaGoster(){
   var tum=(kamaD&&kamaD.sonuc)||[];
-  var l=fDilim==="hepsi"?tum:tum.filter(function(x){return x.tf===fDilim});
+  var l=tum.filter(function(x){
+    return(fDilim==="hepsi"||x.tf===fDilim)&&(fTip==="hepsi"||x.tip===fTip);
+  });
   var h='';
   if(tum.length){
     h+='<div class="pz">'+FDILIM.map(function(x){
-      var n=x[0]==="hepsi"?tum.length:tum.filter(function(y){return y.tf===x[0]}).length;
+      var n=x[0]==="hepsi"
+        ?tum.filter(function(y){return fTip==="hepsi"||y.tip===fTip}).length
+        :tum.filter(function(y){return y.tf===x[0]&&(fTip==="hepsi"||y.tip===fTip)}).length;
       if(x[0]!=="hepsi"&&!n)return"";
       return '<button class="sir'+(fDilim===x[0]?" on":"")+'" data-fd="'+x[0]+'">'+
         x[1]+' <b>'+n+'</b></button>';
     }).join("")+"</div>";
+    var tipler=tipListesiCikar(tum);
+    if(tipler.length>1){
+      h+='<div class="pz">'+[["hepsi","Tümü"]].concat(tipler.map(function(t){return[t,t]})).map(function(x){
+        var n=x[0]==="hepsi"
+          ?tum.filter(function(y){return fDilim==="hepsi"||y.tf===fDilim}).length
+          :tum.filter(function(y){return y.tip===x[0]&&(fDilim==="hepsi"||y.tf===fDilim)}).length;
+        if(x[0]!=="hepsi"&&!n)return"";
+        return '<button class="sir'+(fTip===x[0]?" on":"")+'" data-ft="'+E(x[0])+'">'+
+          E(x[1])+' <b>'+n+'</b></button>';
+      }).join("")+"</div>";
+    }
   }
   if(kamaD&&kamaD.eksik)h+='<div class="bos" style="padding:10px 14px;font-size:12.5px">⏳ Formasyon dosyası henüz yayınlanmadı — tarama gecelik çalışır.</div>';
   else if(kamaD&&kamaD.guncelleme)h+='<div class="et" style="padding:8px 14px;font-size:11.5px">🕒 Son tarama: '+E(String(kamaD.guncelleme).slice(0,16).replace("T"," "))+'</div>';
   if(!l.length){
     h+='<div class="bos"><b>📐 Formasyonlar</b><br><br>'+
-      (tum.length?"Bu zaman diliminde formasyon yok — üstten başka bir dilim seç."
+      (tum.length?"Bu süzgeçte formasyon yok — üstten başka bir dilim veya tip seç."
                  :"Şu an hiçbir hissede yeterli kalitede formasyon (kama, üçgen, bayrak, ikili dip) tespit edilmedi.<br>Formasyonlar sürekli değişir, birazdan tekrar bakın.")+
       "</div>";
-    el("govde").innerHTML=h; fdBagla(); return;
+    el("govde").innerHTML=h; fdBagla(); ftBagla(); return;
   }
   h+=l.map(function(x){
     var renk=x.yon==="al"?"#3fb950":(x.yon==="sat"?"#f85149":"#d29922");
@@ -1818,13 +1842,18 @@ function kamaGoster(){
       '<div class="sag"><div class="yuzde so">kalite <b>%'+x.kalite+'</b></div></div></div>';
   }).join('');
   el("govde").innerHTML=h;
-  satirBagla(); fdBagla();
+  satirBagla(); fdBagla(); ftBagla();
 }
-/* Zaman dilimi süzgeci: veri zaten yüklü, filtreleme tamamen tarayıcıda —
-   yeni istek atılmaz. */
+/* Zaman dilimi ve tip süzgeci: veri zaten yüklü, filtreleme tamamen
+   tarayıcıda — yeni istek atılmaz. */
 function fdBagla(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-fd]"),function(b){
     b.onclick=function(){tit();fDilim=b.dataset.fd;kamaGoster()};
+  });
+}
+function ftBagla(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-ft]"),function(b){
+    b.onclick=function(){tit();fTip=b.dataset.ft;kamaGoster()};
   });
 }
 /* HAZIR PRESETLER: dört ana listeyi (tavan/potansiyel/fibo/uzunvade) birleştirip
