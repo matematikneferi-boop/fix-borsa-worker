@@ -1249,6 +1249,10 @@ body{margin:0;background:var(--bg);color:var(--yazi);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .alt2{font-size:11px;color:var(--soluk);margin-top:2px;font-variant-numeric:tabular-nums}
 .alt2 b{color:var(--yazi)}
+.yorumSat{font-size:13px;color:var(--soluk);margin-top:5px;font-variant-numeric:tabular-nums}
+.yorumSat b{color:var(--yazi);font-weight:800}
+.anlatim{font-size:12.5px;color:var(--soluk);margin-top:8px;line-height:1.5}
+.anlatim b{color:var(--yazi)}
 .sag{text-align:right;flex:0 0 auto}
 .fiyat{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
 .yuzde{font-size:12px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
@@ -2353,7 +2357,7 @@ function detay(kod,ad){
       h+='<div class="dbas"><div class="k">'+E(kod)+"</div></div>"+
          '<div class="bilgi">Bu hisse şu an hiçbir listede değil — aşağıda güncel iki yönlü durumu var.</div>';
     }
-    h+='<div class="kutu"><h3>📊 Grafik<span id="desenRozet"></span></h3><div id="mumKutu" class="mumKutu"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div></div>';
+    h+='<div class="kutu"><h3>📊 Grafik<span id="desenRozet"></span></h3><div id="mumKutu" class="mumKutu"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div><div id="desenYorum"></div></div>';
     var G=(v&&v.gecmis)||[];
     var gG=G.filter(function(x){return !x.dolgu});
     if(gG.length){
@@ -2484,7 +2488,8 @@ function grafikCiz(kod,ad,deneme){
         wickUpColor:"#3fb950",wickDownColor:"#f85149"
       });
       seri.setData(veri.map(function(b){return{time:b.time,open:b.open,high:b.high,low:b.low,close:b.close}}));
-      var rz=el("desenRozet"),d=v&&v.desen;
+      var rz=el("desenRozet"),yr=el("desenYorum"),d=v&&v.desen;
+      var sonFiyat=veri.length?veri[veri.length-1].close:null;
       if(d&&d.ust&&d.alt){
         var renk=d.yon==="al"?"#3fb950":(d.yon==="sat"?"#f85149":"#d29922");
         /* Pine gibi: P1-P3 / P2-P4 arası DÜZ çizgi, sonrası NOKTALI uzatma. */
@@ -2496,13 +2501,15 @@ function grafikCiz(kod,ad,deneme){
         };
         cizgi(d.ust,0);cizgi(d.alt,0);cizgi(d.ustUz,2);cizgi(d.altUz,2);
         if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk+';border-color:'+renk+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+"</span>";
+        if(yr)yr.innerHTML=desenYorumHtml(d,sonFiyat,renk);
       }else if(d&&d.tip){
         /* Bu dilimde formasyon var ama çizgi geometrisi tarama tarafında
            henüz üretilmiyor (yalnız özet) — rozeti göster, çizgi çizme,
            kullanıcıyı yanıltma. */
         var renk2=d.yon==="al"?"#3fb950":(d.yon==="sat"?"#f85149":"#d29922");
         if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk2+';border-color:'+renk2+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+" · çizgi yok</span>";
-      }else if(rz)rz.innerHTML="";
+        if(yr)yr.innerHTML="";
+      }else{if(rz)rz.innerHTML="";if(yr)yr.innerHTML=""}
       chart.timeScale().fitContent();
       var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
       window.addEventListener("resize",yenidenBoyutla);
@@ -2510,6 +2517,39 @@ function grafikCiz(kod,ad,deneme){
       var k2=el("mumKutu"); if(k2)k2.innerHTML='<p class="bilgi">Grafik çizilemedi.</p>';
     }
   }).catch(function(){var k2=el("mumKutu"); if(k2)k2.innerHTML='<p class="bilgi">Grafik verisi alınamadı.</p>'});
+}
+/* Formasyon detayını "şurası şu, burası bu" diye somut seviyelere döken
+   yorum kutusu. Üst/alt sınır her zaman görsel olarak ust/alt çizgisinin
+   son noktası; onay/iptal ise yöne göre hangisinin tetik hangisinin geçersiz
+   kılma seviyesi olduğunu belirler (yon="al" → onay üstte, iptal altta). */
+function desenYorumHtml(d,sonFiyat,renk){
+  var ustV=d.ust&&d.ust.length?d.ust[d.ust.length-1].value:null;
+  var altV=d.alt&&d.alt.length?d.alt[d.alt.length-1].value:null;
+  if(ustV==null||altV==null)return"";
+  var onay,iptal,onayLbl,iptalLbl;
+  if(d.yon==="al"){onay=ustV;iptal=altV;onayLbl="Yukarı";iptalLbl="Aşağı"}
+  else if(d.yon==="sat"){onay=altV;iptal=ustV;onayLbl="Aşağı";iptalLbl="Yukarı"}
+  else{onay=null;iptal=null}
+  var h='<h3 style="margin-top:12px">🧭 Formasyon yorumu</h3>';
+  h+='<div class="yorumSat">🧱 Üst direnç <b>'+N(ustV)+'</b></div>';
+  h+='<div class="yorumSat">🛟 Alt destek <b>'+N(altV)+'</b></div>';
+  if(onay!=null){
+    var onayYuzde=(sonFiyat>0)?(onay-sonFiyat)/sonFiyat*100:null;
+    h+='<div class="yorumSat">🔓 Onay (kırılım) <b>'+N(onay)+'</b>'+
+      (onayYuzde!=null?'  ·  '+(onayYuzde>=0?"+":"")+onayYuzde.toFixed(1)+'% kaldı':'')+'</div>';
+  }
+  if(iptal!=null)h+='<div class="yorumSat">🚫 İptal seviyesi <b>'+N(iptal)+'</b></div>';
+  if(d.hedef!=null){
+    var hedefYuzde=(sonFiyat>0)?(d.hedef-sonFiyat)/sonFiyat*100:null;
+    h+='<div class="yorumSat">🎯 Hedef <b>'+N(d.hedef)+'</b>'+
+      (hedefYuzde!=null?'  ·  '+(hedefYuzde>=0?"+":"")+hedefYuzde.toFixed(1)+'%':'')+'</div>';
+  }
+  var anlatim;
+  if(d.yon==="al")anlatim="Yukarı <b>"+N(onay)+"</b> üzerinde kapanış görülürse formasyon teyit olur"+(d.hedef!=null?", hedef <b>"+N(d.hedef)+"</b> bölgesi":"")+". Aşağı <b>"+N(iptal)+"</b> altına sarkarsa formasyon geçersiz sayılır.";
+  else if(d.yon==="sat")anlatim="Aşağı <b>"+N(onay)+"</b> altına iniş görülürse formasyon teyit olur"+(d.hedef!=null?", hedef <b>"+N(d.hedef)+"</b> bölgesi":"")+". Yukarı <b>"+N(iptal)+"</b> üzerine çıkarsa formasyon geçersiz sayılır.";
+  else anlatim="Yön belirsiz — iki taraflı kırılım bekleniyor. Yukarı <b>"+N(ustV)+"</b> kırılırsa yükseliş, aşağı <b>"+N(altV)+"</b> kırılırsa düşüş sinyali sayılır; kırılım teyit olana kadar yön net değildir.";
+  h+='<p class="anlatim">'+anlatim+'</p>';
+  return h;
 }
 /* ================== 🔄 SEKTÖR ROTASYONU SEKMESİ ==================
    "Bugün hangi sektör öne geçiyor?" — dört çeyrek grafiği + sektör listesi.
