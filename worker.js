@@ -1292,6 +1292,7 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .baslik{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .anaMenuBtn{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);border-radius:9px;
   padding:7px 11px;font-size:12.5px;font-weight:700;white-space:nowrap;order:-1}
+.sekmeAdi{font-size:15.5px;font-weight:800}
 .baslik h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
 .saat{font-size:11.5px;color:var(--soluk);font-variant-numeric:tabular-nums}
 .sekmeler{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,auto);gap:6px;
@@ -1517,8 +1518,8 @@ textarea.gir{min-height:88px;resize:vertical}
 </div>
 
 <div class="ust">
-  <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><h1>📊 Fix Borsa Sinyal</h1><div class="saat" id="saat"></div></div>
-  <div class="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button></div>
+  <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><h1 id="baslikYazi">📊 Fix Borsa Sinyal</h1><span id="sekmeAdi" class="sekmeAdi"></span><div class="saat" id="saat"></div></div>
+  <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button></div>
   <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
   <div class="sekmeler" id="sekmeler"></div>
@@ -1673,12 +1674,21 @@ function sekCiz(){
 function ciz(){
   yolYaz();
   el("saat").textContent=(D.yon&&D.guncelleme)?("🔐 son tarama "+D.guncelleme):"";
-  /* Kayan yazı ve "hot" şeridi yalnızca ana sekmede (varsayılan liste)
-     gösterilir — başka bir sekmeye geçince o sekmeyle ilgisi olmayan bu
-     iki şerit ekrandan tamamen kalkar, "hangi sekmeye basarsam basayım
-     sadece onunla ilgili şeyler olsun" isteği için. */
-  if(sekme==="potansiyel"){seritCiz();hotCiz()}
-  else{el("serit").innerHTML="";el("hotSerit").innerHTML=""}
+  /* Ana sekme dışında: başlık logosu, arama kutusu, kayan yazı ve "hot"
+     şeridi kalkar — üstte sadece 🏠 Ana Menü ve o sekmenin adı kalır,
+     geri kalan tüm dikey alan doğrudan o sekmenin içeriğine ayrılır. */
+  var basYazi=el("baslikYazi"),sekAdi=el("sekmeAdi"),araS=el("araSat");
+  if(sekme==="potansiyel"){
+    if(basYazi)basYazi.style.display="";
+    if(sekAdi)sekAdi.style.display="none";
+    if(araS)araS.style.display="";
+    seritCiz();hotCiz();
+  }else{
+    if(basYazi)basYazi.style.display="none";
+    if(sekAdi){sekAdi.style.display="";sekAdi.textContent=ekranAdi()}
+    if(araS)araS.style.display="none";
+    el("serit").innerHTML="";el("hotSerit").innerHTML="";
+  }
   sekCiz();
   if(sekme==="hata")return hataCiz();
   if(sekme==="sag")return saglikCiz();
@@ -2070,10 +2080,22 @@ function kamaGoster(){
     if(x.bugunOnay)durumEt='<span class="rozetKucuk" style="color:#3fb950;border-color:#3fb950">🆕 Bugün onay</span>';
     else if(x.onaylandi===true)durumEt='<span class="rozetKucuk" style="color:#58a6ff;border-color:#58a6ff">✅ Onaylandı</span>';
     else if(x.onaylandi===false)durumEt='<span class="rozetKucuk" style="color:var(--soluk);border-color:var(--ciz)">⏳ Bekliyor</span>';
+    /* Sağ üstteki büyük rakam artık seçili SIRALAMAYA göre değişiyor —
+       "onaya en yakın" seçiliyken kalite değil, sıralamanın kendisi olan
+       mesafe % görünsün; aksi halde hangi ölçüte göre sıralandığı hiç
+       görünmüyordu, kullanıcı sıralamanın çalışıp çalışmadığını anlayamıyordu.
+       Kalite her zaman altında küçük olarak da yazılı kalıyor. */
+    var sagUst;
+    if(fSirala==="yakin"&&x.kirilimYuzde!=null)
+      sagUst='<div class="yuzde so">kalan <b>'+(x.kirilimYuzde>=0?"+":"")+Number(x.kirilimYuzde).toFixed(1)+'%</b></div><div class="altN" style="margin-top:2px">kalite %'+x.kalite+'</div>';
+    else if(fSirala==="rr"&&x.riskOdul!=null)
+      sagUst='<div class="yuzde so">R:Ö <b>1:'+x.riskOdul.toFixed(1)+'</b></div><div class="altN" style="margin-top:2px">kalite %'+x.kalite+'</div>';
+    else
+      sagUst='<div class="yuzde so">kalite <b>%'+x.kalite+'</b></div>';
     return '<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+E(x.tf)+'" data-form="1" style="border-left-color:'+renk+'">'+
       '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
       '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E(x.tf||"")+'</div>'+altSat+durumEt+'</div>'+
-      '<div class="sag"><div class="yuzde so">kalite <b>%'+x.kalite+'</b></div></div></div>';
+      '<div class="sag">'+sagUst+'</div></div>';
   }).join('');
   el("govde").innerHTML=h;
   satirBagla(); fdBagla(); ftBagla(); fuBagla(); fmBagla(); fsBagla(); mesafeManuelBagla();
@@ -3892,6 +3914,33 @@ const j=await formasyonlariGetir(A);const sonuc={};
 if(j&&j.sonuc)for(const kod of kodlar){const p=j.sonuc[kod]
 ;if(p&&p.tip)sonuc[kod]={tip:p.tip,yon:p.yon,kalite:p.kalite||0}}
 return JS({ok:!0,sonuc:sonuc})}
+/* CANLI FİYAT ÖNBELLEĞİ: formasyon.json gece bir kez üretiliyor ve
+   içindeki fiyat genelde YOK ya da bayat — bu yüzden mesafe (%) ve
+   "onay aldı mı" hiç hesaplanamıyordu, süzgeçler boş kalıyordu.
+   Burada aynı /api/mumlar'ın kullandığı canlı Yahoo kaynağından (yfMumlar)
+   son kapanışı çekip KV'de kısa süre saklıyoruz — her istek Yahoo'ya
+   gitmesin, art arda açılışlarda önbellekten gelsin diye. */
+async function formasyonCanliFiyat(A,kod){
+  var anahtar="ff:"+kod;
+  try{
+    if(A.VERI){
+      var c=await A.VERI.get(anahtar);
+      if(c){var o=JSON.parse(c);if(o&&typeof o.f==="number"&&(Date.now()-o.t)<6e5)return o.f}
+    }
+  }catch(e){}
+  try{
+    var r=await yfMumlar(kod,"1d","5d");
+    var v=r&&r.veri;
+    if(v&&v.length){
+      var f=v[v.length-1].close;
+      if(typeof f==="number"&&f>0){
+        if(A.VERI)await A.VERI.put(anahtar,JSON.stringify({f:f,t:Date.now()}),{expirationTtl:1200}).catch(function(){});
+        return f;
+      }
+    }
+  }catch(e){}
+  return null;
+}
 if("/api/kamalar"===$.pathname){
 const L2=await g(A);
 const oncelik=["potansiyel","fibo","uzunvade","haftalik","adayOrta","adayOrtaVade","adayUzun","adayHafta"];
@@ -3899,14 +3948,6 @@ const kodTf={};const kodFiyat={};
 if(L2&&L2.kartlar)for(const tf of oncelik){
   for(const rc of L2.kartlar[tf]||[]){
     if(rc&&rc.kod&&!(rc.kod in kodTf))kodTf[rc.kod]=tf;
-    /* CANLI FİYAT DÜZELTMESİ: formasyon.json gece bir kez üretiliyor,
-       içindeki p.fiyat o anın fiyatı — gün içinde bayatlıyor, hatta
-       bazı kayıtlarda hiç yok (null). O zaman kırılıma/onaya kalan yüzde
-       hesaplanamıyor ve mesafe süzgeçleri (≤%2/≤%5/≤%10) o hisseyi hiç
-       göstermiyordu — filtre "çalışmıyormuş" gibi görünüyordu. Burada
-       gün içi taramadan (L2.kartlar) o kodun EN GÜNCEL fiyatını alıp
-       öncelikli olarak kullanıyoruz; formasyon.json'daki fiyat sadece
-       hiçbir listede yoksa yedek olarak kalıyor. */
     if(rc&&rc.kod&&typeof rc.fiyat==="number")kodFiyat[rc.kod]=rc.fiyat;
   }
 }
@@ -3914,32 +3955,69 @@ const j=await formasyonlariGetir(A);
 if(!j||!j.sonuc)return JS({ok:!0,sonuc:[],eksik:!0,guncelleme:null});
 const grup=typeof gov.grup==="string"?gov.grup:"";
 const sonuc=[];
+/* Formasyonu tamamlamış (hedefine ulaşmış) kayıtlar listeden tamamen
+   düşürülür — kırılıp hedefe varan bir formasyon artık "aktif" değildir,
+   listede görünmeye devam etmesi kafa karıştırıcı. */
 for(const kod of Object.keys(j.sonuc)){
   const p=j.sonuc[kod];if(!p||!p.tip)continue;
   const dl=Array.isArray(p.dilimler)&&p.dilimler.length?p.dilimler
     :[{tf:p.tf||"1G",tip:p.tip,yon:p.yon,kalite:p.kalite||0,ust:p.ust,alt:p.alt,hedef:p.hedef}];
-  const fiyat=(typeof kodFiyat[kod]==="number")?kodFiyat[kod]:((typeof p.fiyat==="number")?p.fiyat:null);
+  const fiyat0=(typeof kodFiyat[kod]==="number")?kodFiyat[kod]:((typeof p.fiyat==="number")?p.fiyat:null);
   for(const d0 of dl){
     if(grup&&p.grup!==grup)continue;
     const d=desenSinirDuzelt(d0);
     const hedef=(typeof d.hedef==="number")?d.hedef:null;
     const kirilim=kirilimSeviyesi(d);
     const iptal=iptalSeviyesi(d);
-    const onaylandi=onayDurumu(d.yon,fiyat,kirilim);
     sonuc.push({
       kod:kod,tf:d.tf||"",tip:d.tip,yon:d.yon,kalite:d.kalite||0,grup:p.grup||"",
-      fiyat:fiyat,
-      hedef:hedef,hedefYuzde:(hedef!=null&&fiyat>0)?(hedef-fiyat)/fiyat*100:null,
-      kirilim:kirilim,kirilimYuzde:(kirilim!=null&&fiyat>0)?(kirilim-fiyat)/fiyat*100:null,
-      iptal:iptal,
-      onaylandi:onaylandi,
-      riskOdul:riskOdulHesapla(d.yon,fiyat,hedef,iptal)
+      fiyat:fiyat0,hedef:hedef,kirilim:kirilim,iptal:iptal
     });
   }
 }
-await onayGunlukIsaretle(A,sonuc);
-sonuc.sort((a,b)=>b.kalite-a.kalite);
-return JS({ok:!0,sonuc:sonuc.slice(0,300),eksik:!1,guncelleme:j.guncelleme||null})}
+/* Fiyatı hâlâ eksik olan kayıtların en kaliteli 30 tanesini canlı çekiyoruz
+   (istek başına sınırlı — Yahoo'yu boğmamak ve isteği yavaşlatmamak için).
+   KV önbelleği sayesinde birkaç dakika içinde aktif taranan hemen her
+   kod için fiyat birikmiş oluyor, sonraki açılışlar önbellekten anında
+   döner. */
+const eksikKodlar=[...new Set(sonuc.filter(x=>x.fiyat==null).map(x=>x.kod))];
+eksikKodlar.sort((ka,kb)=>{
+  const qa=Math.max(...sonuc.filter(x=>x.kod===ka).map(x=>x.kalite||0));
+  const qb=Math.max(...sonuc.filter(x=>x.kod===kb).map(x=>x.kalite||0));
+  return qb-qa;
+});
+const hedefKodlar=eksikKodlar.slice(0,30);
+for(let i=0;i<hedefKodlar.length;i+=6){
+  const dilim2=hedefKodlar.slice(i,i+6);
+  const sonuclar=await Promise.all(dilim2.map(k=>formasyonCanliFiyat(A,k).catch(()=>null)));
+  dilim2.forEach((k,idx)=>{
+    const f=sonuclar[idx];
+    if(typeof f==="number")sonuc.forEach(x=>{if(x.kod===k)x.fiyat=f});
+  });
+}
+/* Şimdi yüzdeleri/onay durumunu (elimizdeki en güncel fiyatla) hesapla,
+   hedefine ulaşmış formasyonları listeden çıkar. */
+const sonNihai=[];
+for(const x of sonuc){
+  const fiyat=x.fiyat;
+  const onaylandi=onayDurumu(x.yon,fiyat,x.kirilim);
+  const hedefTamam=(x.hedef!=null&&fiyat!=null)?
+    (x.yon==="al"?fiyat>=x.hedef:(x.yon==="sat"?fiyat<=x.hedef:false)):false;
+  if(hedefTamam)continue;
+  sonNihai.push({
+    kod:x.kod,tf:x.tf,tip:x.tip,yon:x.yon,kalite:x.kalite,grup:x.grup,
+    fiyat:fiyat,
+    hedef:x.hedef,hedefYuzde:(x.hedef!=null&&fiyat>0)?(x.hedef-fiyat)/fiyat*100:null,
+    kirilim:x.kirilim,kirilimYuzde:(x.kirilim!=null&&fiyat>0)?(x.kirilim-fiyat)/fiyat*100:null,
+    iptal:x.iptal,
+    onaylandi:onaylandi,
+    riskOdul:riskOdulHesapla(x.yon,fiyat,x.hedef,x.iptal)
+  });
+}
+await onayGunlukIsaretle(A,sonNihai);
+sonNihai.sort((a,b)=>b.kalite-a.kalite);
+return JS({ok:!0,sonuc:sonNihai.slice(0,300),eksik:!1,guncelleme:j.guncelleme||null})}
+
 
 /* 🔄 SEKTÖR ROTASYONU: tarayıcının hesapladığı RS-Ratio / RS-Momentum
    değerlerini sektöre göre gruplar. Ağır iş tarayıcıda yapıldığı için
