@@ -765,9 +765,10 @@ async function absAyarAl(A){
     const c=await A.VERI.get("absAyar");
     if(c){
       const j=JSON.parse(c);
-      const h=Number(j.hacimEsik),d=Number(j.darlikEsik);
+      const h=Number(j.hacimEsik),d=Number(j.darlikEsik),pz=Number(j.puanEsik);
       return{hacimEsik:(h>1&&h<10)?h:ABS_VARSAYILAN.hacimEsik,
-             darlikEsik:(d>0&&d<3)?d:ABS_VARSAYILAN.darlikEsik}
+             darlikEsik:(d>0&&d<3)?d:ABS_VARSAYILAN.darlikEsik,
+             puanEsik:(pz>=0&&pz<=100)?pz:0}
     }
   }catch(e){}
   return ABS_VARSAYILAN;
@@ -804,9 +805,15 @@ function absorpsiyonHesapla(mumlar,ayar){
     const darlik=aralik/aralikOrt;                     /* 1 = normal, 0.4 = çok dar */
     const yayilim=son.high-son.low;
     const konum=yayilim>0?(son.close-son.low)/yayilim:0.5;  /* 1 = tepede kapandı */
-    /* Absorpsiyon şartı: hacim en az X kat VE aralık normalin altında —
-       eşikler ayar.hacimEsik / ayar.darlikEsik'ten geliyor (yönetici panelinden). */
-    if(hacimKat<ayar.hacimEsik||darlik>ayar.darlikEsik)return null;
+    /* ⚠️ ESKIDEN BURADA ELENIYORDU — VE ASIL BUG BUYDU.
+       Esigi gecemeyen hisse icin null donuluyordu; yani OLCUM ile SUZGEC
+       ic ice gecmisti. Sonuc: esik degistirildiginde eldeki birikim
+       (esigi gecmis eski hisseler) oldugu gibi duruyor, elenmisler ise
+       hic kaydedilmedigi icin geri gelemiyordu. Kullanici esigi 1.01'den
+       1.4'e cekiyor, ekranda hicbir sey degismiyordu.
+       ARTIK: her hisse icin OLCUM her zaman kaydedilir (hacimKat, darlik,
+       konum, puan). Esik SUZGEC olarak GOSTERIM aninda uygulanir. Boylece
+       esigi degistirmek yeniden tarama gerektirmez, sonuc ANINDA degisir. */
     /* Puanlama sabit çapalarla yapılır (eşik değişse de ölçek bozulmasın):
        1x hacim → 0 puan, 4x → tam puan; aralık 1.0 → 0 puan, 0.3 → tam puan. */
     const hacimP=Math.min(1,Math.max(0,(hacimKat-1)/3));
@@ -814,7 +821,8 @@ function absorpsiyonHesapla(mumlar,ayar){
     const konumP=Math.abs(konum-0.5)*2;                /* uçlara yakınlık */
     const puan=Math.round(100*(0.45*hacimP+0.35*darP+0.20*konumP));
     const yon=konum>=0.6?"talep":(konum<=0.4?"arz":"kararsız");
-    return{puan:puan,hacimKat:Math.round(hacimKat*10)/10,
+    return{gecti:!(hacimKat<ayar.hacimEsik||darlik>ayar.darlikEsik),
+      puan:puan,hacimKat:Math.round(hacimKat*10)/10,
       darlik:Math.round(darlik*100)/100,konum:Math.round(konum*100),
       yon:yon,fiyat:son.close,zaman:son.time};
   }catch(e){return null}
@@ -895,9 +903,8 @@ async function absDilimTara(A,ekKodlar){
   let bir={ts:0,imlec:0,ayar:null,sonuc:{}};
   try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)||bir}catch(_){}
   if(!bir.sonuc||typeof bir.sonuc!=="object")bir.sonuc={};
-  /* Esik degisirse eski olcumler gecersizdir. */
-  const esikAd=ayar.hacimEsik+":"+ayar.darlikEsik;
-  if(bir.ayar!==esikAd){bir={ts:0,imlec:0,ayar:esikAd,sonuc:{}}}
+  /* Olcumler esikten BAGIMSIZ oldugu icin esik degisince artik sifirlama
+     YOK — birikim aynen kullanilir, suzgec gosterimde uygulanir. */
   const dilim=await absDilimOku(A);
   const bas=(Number(bir.imlec)||0)%evren.length;
   const kodlar=[];
@@ -911,8 +918,9 @@ async function absDilimTara(A,ekKodlar){
       try{
         const r=await yfMumlar(kod);
         const a=absorpsiyonHesapla(r&&r.veri,ayar);
+        /* Esigi gecmese bile KAYDEDILIR — suzgec gosterimde uygulanacak. */
         if(a)bir.sonuc[kod]=Object.assign({kod:kod,ts:Date.now()},a);
-        else delete bir.sonuc[kod];
+        else delete bir.sonuc[kod];        /* veri yetersiz: olculemedi */
         islenen++;
       }catch(_){hata=true}
     }
@@ -954,14 +962,27 @@ async function absorpsiyonTara(A,ekKodlar){
     try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)}catch(_){}
   }
   const sonuc=(bir&&bir.sonuc)||{};
-  const bulunan=Object.keys(sonuc).map(k=>sonuc[k]);
-  bulunan.sort((x,y)=>y.puan-x.puan);
+  const tumu=Object.keys(sonuc).map(k=>sonuc[k]);
+  /* SUZGEC BURADA — birikim ham olcumdur, esik anlik uygulanir. */
+  const gecen=tumu.filter(x=>{
+    if(!(Number(x.hacimKat)>=ayar.hacimEsik))return false;
+    if(!(Number(x.darlik)<=ayar.darlikEsik))return false;
+    if(Number(ayar.puanEsik)>0&&!(Number(x.puan)>=ayar.puanEsik))return false;
+    return true;
+  });
+  gecen.sort((x,y)=>y.puan-x.puan);
+  const evrenN=(bir&&bir.evren)||tumu.length;
+  const olculenN=(bir&&bir.olculen)||0;
   const paket={ts:(bir&&bir.ts)||Date.now(),
-    taranan:(bir&&bir.evren)||bulunan.length,
-    olculen:(bir&&bir.olculen)||0,
+    evren:evrenN,
+    olculen:olculenN,
+    kalan:Math.max(0,evrenN-olculenN),
+    elenen:Math.max(0,tumu.length-gecen.length),
+    cikan:gecen.length,
+    taranan:evrenN,                       /* geriye uyum */
     imlec:(bir&&bir.imlec)||0,
     calisiyor:await absCalisiyorMu(A),
-    liste:bulunan.slice(0,30),ayar:ayar};
+    liste:gecen.slice(0,60),ayar:ayar};
   if(A.VERI)await A.VERI.put(anahtar,JSON.stringify(paket),{expirationTtl:3600}).catch(()=>{});
   saglikArtir("absTarama");
   return paket;
@@ -3138,11 +3159,16 @@ function absGoster(v){
   h+='<div class="kutu" style="margin:10px 0 8px;padding:9px 11px">'+
      '<div class="altbilgi" style="opacity:.85">'+
      (calisiyor?"🔄 Arka planda taranıyor":"⏸ Tarama durduruldu")+
-     ' · <b>'+olculen+' / '+evren+'</b> hisse ölçüldü · son ölçüm '+((v&&v.yas)||0)+' dk önce</div>'+
+     ' · son ölçüm '+((v&&v.yas)||0)+' dk önce</div>'+
+     '<div class="altbilgi" style="margin-top:4px">'+
+     'ölçülen <b>'+olculen+'</b> / '+evren+'  ·  kalan <b>'+((v&&v.kalan)||0)+'</b>'+
+     '  ·  eşiği geçen <b style="color:var(--yes)">'+((v&&v.cikan)||0)+'</b>'+
+     '  ·  elenen '+((v&&v.elenen)||0)+'</div>'+
      '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
      '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
      '<div class="altbilgi" style="margin-top:6px;opacity:.6">Tarama tur tur ilerler; '+
-     'sonuç çıktıkça liste kendiliğinden dolar. Sayfayı kapatsan da arka planda devam eder.</div>'+
+     'sonuç çıktıkça liste kendiliğinden dolar. Sayfayı kapatsan da arka planda devam eder. '+
+     'Eşik değişikliği yeniden tarama gerektirmez — ölçümler saklı, süzgeç anında uygulanır.</div>'+
      '</div>';
   if(!l.length){
     h+='<div class="bos"><b>Şu an absorpsiyon bulunamadı</b><br><br>'+
