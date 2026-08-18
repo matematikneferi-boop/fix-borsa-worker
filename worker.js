@@ -568,6 +568,22 @@ const ALARM_MAX_ALICI=45;
 async function alarmGecmisi(e){if(!e.VERI)return{gun:"",kodlar:[]};
 const t=await e.VERI.get("alarmGun"),g=t?JSON.parse(t):{gun:"",kodlar:[]},bugun=onayDonemi();
 return g.gun!==bugun?{gun:bugun,kodlar:[]}:g}
+/* ANAHTAR = kod|dilim|C(anli)/K(apanmis).
+   ESKIDEN SADECE KOD IDI. Anlik (canli) uyari gidince kod sete giriyordu;
+   bar kapanip sinyal GERCEKTEN teyit oldugunda ikinci mesaj asla gitmiyordu.
+   Ayni hisse iki farkli dilimde kirsa da tek mesaj cikiyordu. */
+const alarmAnahtar=x=>String(x.kod)+"|"+String(x.tfKod||x.tf||"?")+"|"+(x.canli?"C":"K");
+/* TAZELIK DILIME GORE. 6 saat sabit esik, 15 dakikalik bir sinyal icin
+   fazlasiyla genisti: 5 bar once olusmus bir kirilim "yeni" diye gidiyordu.
+   Canli (bar kapanmamis) sinyalde pencere en dar: gecikmis canli uyari
+   yaniltir, cunku bar coktan kapanmis olabilir. */
+const ALARM_TAZE={"15DK":45*60,"1SA":2*3600,"4SA":6*3600,"1G":20*3600,"1H":72*3600,"1A":240*3600};
+/* CANLI sinyalde sinyalTs, olusmakta olan barin BASLANGIC damgasidir; 1 saatlik
+   barda bu 59 dakika once olabilir. Bu yuzden canli pencere = bar suresi + 20 dk. */
+const ALARM_BAR={"15DK":900,"1SA":3600,"4SA":14400,"1G":86400,"1H":604800,"1A":2592000};
+const alarmTazeEsik=x=>x.canli
+?((ALARM_BAR[String(x.tfKod||"")]||3600)+1200)
+:(ALARM_TAZE[String(x.tfKod||"")]||6*3600);
 async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;
 const yeniListe=yeni&&yeni.kartlar&&yeni.kartlar.potansiyel||[];
 if(!yeniListe.length)return;
@@ -585,16 +601,20 @@ const uygun=yeniListe.filter(x=>x&&x.kod
    gonderiliyordu. Simdi ek sart: sinyalin KENDI zaman damgasi (sinyalTs)
    gercekten son birkac saat icinde olmali -- gunler once olusmus bir
    sinyal bir daha asla "YENI" diye gonderilmez. */
-const TAZE_ESIK_SN=6*3600;   // 6 saat -- bu pencerenin disindaki sinyal "eski" sayilir
 const simdiSn=Math.floor(Date.now()/1000);
-const yeniGirenler=uygun.filter(x=>!bilinen.has(x.kod)
-&&x.sinyalTs&&(simdiSn-Number(x.sinyalTs))<=TAZE_ESIK_SN);
+const yeniGirenler=uygun.filter(x=>!bilinen.has(alarmAnahtar(x))
+&&x.sinyalTs&&(simdiSn-Number(x.sinyalTs))<=alarmTazeEsik(x));
 if(!yeniGirenler.length)return;
-for(const x of yeniGirenler)bilinen.add(x.kod);
-await e.VERI.put("alarmGun",JSON.stringify({gun:onayDonemi(),kodlar:[...bilinen].slice(-300)}));
+for(const x of yeniGirenler)bilinen.add(alarmAnahtar(x));
+await e.VERI.put("alarmGun",JSON.stringify({gun:onayDonemi(),kodlar:[...bilinen].slice(-600)}));
 const kullanicilar=await alarmKullanicilari(e);
 if(!kullanicilar.length)return;
-const baslik=yeniGirenler.length>1?"🚨 <b>"+yeniGirenler.length+" YENİ GÜÇLÜ SİNYAL</b>\n\n":"🚨 <b>GÜÇLÜ SİNYALE GİRDİ</b>\n\n";
+/* Anlik kirilim ile teyitli kirilim ayni baslikta gitmemeli — biri
+   "su an oluyor", digeri "bar kapandi, teyitli". */
+const hepCanli=yeniGirenler.every(x=>!!x.canli);
+const baslik=yeniGirenler.length>1
+?(hepCanli?"⚡ <b>"+yeniGirenler.length+" ANLIK KIRILIM</b> · <i>bar kapanmadı</i>\n\n":"🚨 <b>"+yeniGirenler.length+" YENİ GÜÇLÜ SİNYAL</b>\n\n")
+:(hepCanli?"⚡ <b>ANLIK KIRILIM</b> · <i>bar kapanmadı</i>\n\n":"🚨 <b>GÜÇLÜ SİNYALE GİRDİ</b>\n\n");
 const metin=baslik+yeniGirenler.slice(0,6).map(hisse=>j(hisse)).join("\n")+
 (yeniGirenler.length>6?"\n<i>…ve "+(yeniGirenler.length-6)+" hisse daha. Menüden ⚡ Kısa Trade listesine bak.</i>":"");
 for(const uid of kullanicilar.slice(0,ALARM_MAX_ALICI))await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,text:metin,parse_mode:"HTML",disable_web_page_preview:!0})}
