@@ -342,6 +342,18 @@ async function formasyonlariGetir(A){
     return j;
   }catch(e){return _fBellek||null}
 }
+/* Formasyon satırında "şurayı kırarsa başlar" seviyesini üretir: yön "al"
+   ise üst sınır (ust), "sat" ise alt sınır (alt) çizgisinin en güncel
+   (son) noktası — o sınır kırılırsa formasyon teyit olur. Simetrik üçgen
+   gibi yönsüz ("nötr") durumlarda tek bir kırılım seviyesi yoktur, null
+   döner. */
+function kirilimSeviyesi(d){
+  if(!d)return null;
+  var hat=d.yon==="al"?d.ust:(d.yon==="sat"?d.alt:null);
+  if(!hat||!hat.length)return null;
+  var son=hat[hat.length-1];
+  return(son&&typeof son.value==="number")?son.value:null;
+}
 /* Artik grafik istenen dilime gore ciziliyor (bkz. MUM_ARALIK), o yuzden
    cizgi de o dilime gore secilir:
    1) tf==="1G" ve p.gunluk varsa → o (gunluk her zaman ayrica tutulur)
@@ -1235,6 +1247,8 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .kod{font-weight:800;font-size:15.5px;letter-spacing:.3px}
 .altbilgi{font-size:11.5px;color:var(--soluk);margin-top:3px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.alt2{font-size:11px;color:var(--soluk);margin-top:2px;font-variant-numeric:tabular-nums}
+.alt2 b{color:var(--yazi)}
 .sag{text-align:right;flex:0 0 auto}
 .fiyat{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
 .yuzde{font-size:12px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
@@ -1827,25 +1841,35 @@ var fDilim="hepsi";
 var fTip="hepsi";
 var FDILIM=[["hepsi","Tümü"],["1SA","1SA"],["4SA","4SA"],
             ["1G","1G"],["1HAF","Hafta"],["1AY","Ay"]];
-/* TİP SÜZGECİ: sabit bir liste yerine listede o an gerçekten var olan
-   formasyon tiplerinden (x.tip) üretiliyor — Python tarafında yeni bir tip
-   eklenirse (ör. "ikili tepe") buraya kod değişmeden otomatik düşer. */
+/* TİP SÜZGECİ artık yön (Boğa/Ayı) fark etmeksizin ANA ŞEKLE göre
+   grupluyor: "Boğa Flaması" + "Ayı Flaması" → tek "Flama" butonu.
+   Aksi halde aynı formasyon yön yüzünden ikiye bölünüp "flama seçtim ama
+   yarısı gözükmüyor" hissi veriyordu. İkili Dip / İkili Tepe ayrı kalıyor
+   çünkü ikisi zaten tek yönlü ve genelde bilerek ayrı aranıyor. */
+function tipTemel(tip){
+  if(!tip)return tip;
+  if(tip.indexOf("Flama")>=0)return"Flama";
+  if(tip.indexOf("Bayrağı")>=0)return"Bayrak";
+  if(tip.indexOf("Kama")>=0)return"Kama";
+  if(tip.indexOf("Üçgen")>=0)return"Üçgen";
+  return tip;
+}
 function tipListesiCikar(tum){
   var s=[];
-  tum.forEach(function(x){if(x.tip&&s.indexOf(x.tip)===-1)s.push(x.tip)});
+  tum.forEach(function(x){var t=tipTemel(x.tip);if(t&&s.indexOf(t)===-1)s.push(t)});
   return s;
 }
 function kamaGoster(){
   var tum=(kamaD&&kamaD.sonuc)||[];
   var l=tum.filter(function(x){
-    return(fDilim==="hepsi"||x.tf===fDilim)&&(fTip==="hepsi"||x.tip===fTip);
+    return(fDilim==="hepsi"||x.tf===fDilim)&&(fTip==="hepsi"||tipTemel(x.tip)===fTip);
   });
   var h='';
   if(tum.length){
     h+='<div class="pz">'+FDILIM.map(function(x){
       var n=x[0]==="hepsi"
-        ?tum.filter(function(y){return fTip==="hepsi"||y.tip===fTip}).length
-        :tum.filter(function(y){return y.tf===x[0]&&(fTip==="hepsi"||y.tip===fTip)}).length;
+        ?tum.filter(function(y){return fTip==="hepsi"||tipTemel(y.tip)===fTip}).length
+        :tum.filter(function(y){return y.tf===x[0]&&(fTip==="hepsi"||tipTemel(y.tip)===fTip)}).length;
       if(x[0]!=="hepsi"&&!n)return"";
       return '<button class="sir'+(fDilim===x[0]?" on":"")+'" data-fd="'+x[0]+'">'+
         x[1]+' <b>'+n+'</b></button>';
@@ -1855,7 +1879,7 @@ function kamaGoster(){
       h+='<div class="pz">'+[["hepsi","Tümü"]].concat(tipler.map(function(t){return[t,t]})).map(function(x){
         var n=x[0]==="hepsi"
           ?tum.filter(function(y){return fDilim==="hepsi"||y.tf===fDilim}).length
-          :tum.filter(function(y){return y.tip===x[0]&&(fDilim==="hepsi"||y.tf===fDilim)}).length;
+          :tum.filter(function(y){return tipTemel(y.tip)===x[0]&&(fDilim==="hepsi"||y.tf===fDilim)}).length;
         if(x[0]!=="hepsi"&&!n)return"";
         return '<button class="sir'+(fTip===x[0]?" on":"")+'" data-ft="'+E(x[0])+'">'+
           E(x[1])+' <b>'+n+'</b></button>';
@@ -1874,9 +1898,14 @@ function kamaGoster(){
   h+=l.map(function(x){
     var renk=x.yon==="al"?"#3fb950":(x.yon==="sat"?"#f85149":"#d29922");
     var ikon=x.yon==="al"?"📈":"📉";
+    var altSat='';
+    if(x.kirilim!=null)altSat+='<div class="alt2">🔓 Kırılım <b>'+N(x.kirilim)+'</b>'+
+      (x.kirilimYuzde!=null?'  ·  '+(x.kirilimYuzde>=0?"+":"")+Number(x.kirilimYuzde).toFixed(1)+'% kaldı':'')+'</div>';
+    if(x.hedef!=null)altSat+='<div class="alt2">🎯 Hedef <b>'+N(x.hedef)+'</b>'+
+      (x.hedefYuzde!=null?'  ·  '+(x.hedefYuzde>=0?"+":"")+Number(x.hedefYuzde).toFixed(1)+'%':'')+'</div>';
     return '<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+E(x.tf)+'" style="border-left-color:'+renk+'">'+
       '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
-      '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E(x.tf||"")+'</div></div>'+
+      '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E(x.tf||"")+'</div>'+altSat+'</div>'+
       '<div class="sag"><div class="yuzde so">kalite <b>%'+x.kalite+'</b></div></div></div>';
   }).join('');
   el("govde").innerHTML=h;
@@ -3599,10 +3628,18 @@ const sonuc=[];
 for(const kod of Object.keys(j.sonuc)){
   const p=j.sonuc[kod];if(!p||!p.tip)continue;
   const dl=Array.isArray(p.dilimler)&&p.dilimler.length?p.dilimler
-    :[{tf:p.tf||"1G",tip:p.tip,yon:p.yon,kalite:p.kalite||0}];
+    :[{tf:p.tf||"1G",tip:p.tip,yon:p.yon,kalite:p.kalite||0,ust:p.ust,alt:p.alt,hedef:p.hedef}];
+  const fiyat=(typeof p.fiyat==="number")?p.fiyat:null;
   for(const d of dl){
     if(grup&&p.grup!==grup)continue;
-    sonuc.push({kod:kod,tf:d.tf||"",tip:d.tip,yon:d.yon,kalite:d.kalite||0,grup:p.grup||""});
+    const hedef=(typeof d.hedef==="number")?d.hedef:null;
+    const kirilim=kirilimSeviyesi(d);
+    sonuc.push({
+      kod:kod,tf:d.tf||"",tip:d.tip,yon:d.yon,kalite:d.kalite||0,grup:p.grup||"",
+      fiyat:fiyat,
+      hedef:hedef,hedefYuzde:(hedef!=null&&fiyat>0)?(hedef-fiyat)/fiyat*100:null,
+      kirilim:kirilim,kirilimYuzde:(kirilim!=null&&fiyat>0)?(kirilim-fiyat)/fiyat*100:null
+    });
   }
 }
 sonuc.sort((a,b)=>b.kalite-a.kalite);
