@@ -354,6 +354,62 @@ function kirilimSeviyesi(d){
   var son=hat[hat.length-1];
   return(son&&typeof son.value==="number")?son.value:null;
 }
+/* Kırılımın tam tersi: bu seviye kırılırsa formasyon geçersiz sayılır
+   ("iptal" / stop seviyesi). yon="al" ise alt sınır, "sat" ise üst sınır. */
+function iptalSeviyesi(d){
+  if(!d)return null;
+  var hat=d.yon==="al"?d.alt:(d.yon==="sat"?d.ust:null);
+  if(!hat||!hat.length)return null;
+  var son=hat[hat.length-1];
+  return(son&&typeof son.value==="number")?son.value:null;
+}
+/* Fiyat, kırılım seviyesini yön yönünde geçmiş mi ("onay aldı") ? */
+function onayDurumu(yon,fiyat,kirilim){
+  if(fiyat==null||kirilim==null)return null;
+  if(yon==="al")return fiyat>=kirilim;
+  if(yon==="sat")return fiyat<=kirilim;
+  return null;
+}
+/* Risk:Ödül oranı — (hedefe kalan kâr) / (iptale kadar olan risk).
+   İkisi de pozitif olmalı, aksi halde (formasyon zaten geçersiz/gerçekleşmiş
+   demektir) null döner — yanlış/yanıltıcı bir oran göstermemek için. */
+function riskOdulHesapla(yon,fiyat,hedef,iptal){
+  if(fiyat==null||hedef==null||iptal==null)return null;
+  if(yon==="al"){
+    var risk=fiyat-iptal,odul=hedef-fiyat;
+    return(risk>0&&odul>0)?odul/risk:null;
+  }
+  if(yon==="sat"){
+    var risk2=iptal-fiyat,odul2=fiyat-hedef;
+    return(risk2>0&&odul2>0)?odul2/risk2:null;
+  }
+  return null;
+}
+function istGunu(ts){
+  try{return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Istanbul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(ts||Date.now()))}
+  catch(e){return new Date(ts||Date.now()).toISOString().slice(0,10)}
+}
+/* "Bugün onay aldı" etiketi için gün-başı anlık görüntüsüyle karşılaştırma.
+   Gün değiştiğinde (ya da ilk çalıştırmada) o anki onay durumu KV'ye günün
+   BAŞLANGIÇ referansı olarak kaydedilir; aynı gün içindeki sonraki
+   çağrılarda hep bu sabit referansla kıyaslanır — böylece "bugün onaylandı"
+   etiketi gün boyunca kararlı kalır, her istekte değişip durmaz. */
+async function onayGunlukIsaretle(A,sonuc){
+  var bugun=istGunu();
+  var anahtar="formasyonOnayGecmisi";
+  var onceki=null;
+  try{if(A.VERI){var raw=await A.VERI.get(anahtar);if(raw)onceki=JSON.parse(raw)}}catch(e){}
+  var oncekiDurum=(onceki&&onceki.durum)||{};
+  var yeniDurum={};
+  sonuc.forEach(function(x){
+    var key=x.kod+"|"+x.tf;
+    yeniDurum[key]=!!x.onaylandi;
+    x.bugunOnay=!!(x.onaylandi&&oncekiDurum[key]===false);
+  });
+  if(!onceki||onceki.tarih!==bugun){
+    try{if(A.VERI)await A.VERI.put(anahtar,JSON.stringify({tarih:bugun,durum:yeniDurum}),{expirationTtl:172800})}catch(e){}
+  }
+}
 /* Artik grafik istenen dilime gore ciziliyor (bkz. MUM_ARALIK), o yuzden
    cizgi de o dilime gore secilir:
    1) tf==="1G" ve p.gunluk varsa → o (gunluk her zaman ayrica tutulur)
@@ -1249,6 +1305,8 @@ body{margin:0;background:var(--bg);color:var(--yazi);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .alt2{font-size:11px;color:var(--soluk);margin-top:2px;font-variant-numeric:tabular-nums}
 .alt2 b{color:var(--yazi)}
+.rozetKucuk{display:inline-block;border:1px solid;border-radius:6px;padding:1px 7px;
+  font-size:10px;font-weight:700;margin-top:5px}
 .yorumSat{font-size:13px;color:var(--soluk);margin-top:5px;font-variant-numeric:tabular-nums}
 .yorumSat b{color:var(--yazi);font-weight:800}
 .anlatim{font-size:12.5px;color:var(--soluk);margin-top:8px;line-height:1.5}
@@ -1391,12 +1449,6 @@ textarea.gir{min-height:88px;resize:vertical}
 .sinP i{font-style:normal;color:var(--soluk);font-weight:400;margin-left:2px}
 @keyframes kay{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
 @media (prefers-reduced-motion:reduce){.serit>span{animation:none;padding-left:12px}}
-.gez{display:flex;gap:8px;align-items:center;padding:9px 0 2px}
-.gez button{flex:0 0 auto;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
-  border-radius:9px;padding:8px 15px;font-size:13px;font-weight:700}
-.gez button:disabled{opacity:.32}
-.gez .nerede{flex:1;text-align:center;font-size:12px;color:var(--soluk);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #splash{position:fixed;inset:0;z-index:999;background:radial-gradient(120% 120% at 50% 20%,#161f2e 0%,var(--bg) 62%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
   transition:opacity .5s ease,visibility .5s ease}
@@ -1436,11 +1488,6 @@ textarea.gir{min-height:88px;resize:vertical}
   <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
   <div class="sekmeler" id="sekmeler"></div>
-  <div class="gez">
-    <button id="gezGeri">◀ Geri</button>
-    <div class="nerede" id="nerede"></div>
-    <button id="gezIleri">İleri ▶</button>
-  </div>
 </div>
 <div class="govde" id="govde"><div class="yukleniyor">yükleniyor…</div></div>
 <div class="katman" id="katman"></div>
@@ -1494,10 +1541,6 @@ function ekranAdi(){
   return TF[sekme]?TF[sekme].ik+" "+TF[sekme].ad:"";
 }
 function gezCiz(){
-  var g=el("gezGeri"),i=el("gezIleri");
-  if(!g||!i)return;
-  g.disabled=yolIx<=0;i.disabled=yolIx>=yol.length-1;
-  el("nerede").textContent=ekranAdi();
   tgGeriDugme();
 }
 function tgGeriDugme(){
@@ -1644,10 +1687,11 @@ function seritCiz(){
   el("serit").innerHTML='<span style="animation-duration:'+sure+'s">'+ic+'<span class="ay">◆</span>'+ic+'<span class="ay">◆</span></span>';
 }
 /* ---------- 🔥 EN GÜÇLÜ SİNYALLER — TÜM SEKMELERİN ÜSTÜNDE SABİT ÖZET ----------
-   İki satır: (1) tüm dilimler karışık, kalite puanı en yüksek 5 farklı hisse
-   ("en güçlülerin güçlüsü") ve (2) her dilimin (1SA/4SA/1G) KENDİ en
-   güçlü hissesi -- bir dilim genel top 5'e girmese bile kendi en iyisi burada
-   görünür. Dokununca satirBagla() ile aynı detay ekranı açılır. */
+   Tek satır: kalite puanı en yüksek 5 hisse ("genel top") + her dilimin
+   (1SA/4SA/1G/1HAF) kendi en iyisi — genel top'a girmemiş olsa bile eklenir,
+   zaten genelde çakıştığı için satır fazla uzamaz. Önceden iki ayrı başlıklı
+   satırdı, okuma alanı için tek satıra indirildi. Dokununca satirBagla() ile
+   aynı detay ekranı açılır. */
 function araBagla(){
   var g=el("araGir"),b=el("araBtn");
   if(!g||!b||g.dataset.bagli)return;
@@ -1676,16 +1720,16 @@ function hotCiz(){
     var mv=enIyiKod[x.kod];
     if(!mv||(x.kalite||0)>(mv.kalite||0))enIyiKod[x.kod]=x;
   });
-  var genelTop=Object.keys(enIyiKod).map(function(k){return enIyiKod[k]});
-  genelTop.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
-  genelTop=genelTop.slice(0,5);
-
-  var dilimTop=["potansiyel","fibo","uzunvade","haftalik"].map(function(ad){
+  var genel=Object.keys(enIyiKod).map(function(k){return enIyiKod[k]});
+  genel.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
+  var secilen=genel.slice(0,5);
+  var varOlan={}; secilen.forEach(function(x){varOlan[x.kod]=true});
+  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
     var l=(D.kartlar&&D.kartlar[ad]||[]).slice();
     l.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
-    var en=l[0]; if(!en)return null;
-    var y=Object.assign({},en);y._ad=ad;return y;
-  }).filter(Boolean);
+    var en=l[0]; if(!en||varOlan[en.kod])return;
+    var y=Object.assign({},en);y._ad=ad;secilen.push(y);varOlan[en.kod]=true;
+  });
 
   function kartHtml(x){
     var t=TF[x._ad]||{kisa:x.tf||"",renk:"var(--ciz)"};
@@ -1698,12 +1742,9 @@ function hotCiz(){
   }
 
   var h='';
-  if(genelTop.length)
-    h+='<div class="hotBaslik">🔥 En güçlülerin güçlüsü — 5</div><div class="hotSira">'+
-       genelTop.map(kartHtml).join("")+"</div>";
-  if(dilimTop.length)
-    h+='<div class="hotBaslik" style="margin-top:5px">📌 Her dilimin en güçlüsü</div><div class="hotSira">'+
-       dilimTop.map(kartHtml).join("")+"</div>";
+  if(secilen.length)
+    h+='<div class="hotBaslik">🔥 Güçlüler</div><div class="hotSira">'+
+       secilen.map(kartHtml).join("")+"</div>";
   kutu.innerHTML=h;
   satirBagla();
 }
@@ -1843,8 +1884,14 @@ function kamaTara(){
 }
 var fDilim="hepsi";
 var fTip="hepsi";
+var fDurum="hepsi";
+var fMesafe="hepsi";
+var fSirala="kalite";
 var FDILIM=[["hepsi","Tümü"],["1SA","1SA"],["4SA","4SA"],
             ["1G","1G"],["1HAF","Hafta"],["1AY","Ay"]];
+var FDURUM=[["hepsi","Tümü"],["bugun","🆕 Bugün onay aldı"],["onay","✅ Onaylandı"],["bekliyor","⏳ Bekliyor"]];
+var FMESAFE=[["hepsi","Tümü"],["2","🔥 ≤%2"],["5","≤%5"],["10","≤%10"],["uzak","🌙 >%10"]];
+var FSIRALA=[["kalite","Kaliteye göre"],["yakin","Onaya en yakın"],["rr","En iyi Risk:Ödül"]];
 /* TİP SÜZGECİ artık yön (Boğa/Ayı) fark etmeksizin ANA ŞEKLE göre
    grupluyor: "Boğa Flaması" + "Ayı Flaması" → tek "Flama" butonu.
    Aksi halde aynı formasyon yön yüzünden ikiye bölünüp "flama seçtim ama
@@ -1863,41 +1910,76 @@ function tipListesiCikar(tum){
   tum.forEach(function(x){var t=tipTemel(x.tip);if(t&&s.indexOf(t)===-1)s.push(t)});
   return s;
 }
+/* Onaya kalan mesafeyi (kırılımYuzde mutlak değeri) kovaya ayırır —
+   "şurayı kırarsa başlar" seviyesine ne kadar yakınız sorusuna cevap. */
+function mesafeBucket(x){
+  if(x.kirilimYuzde==null)return null;
+  var m=Math.abs(x.kirilimYuzde);
+  if(m<=2)return"2";
+  if(m<=5)return"5";
+  if(m<=10)return"10";
+  return"uzak";
+}
+function durumUyar(x){
+  if(fDurum==="hepsi")return true;
+  if(fDurum==="onay")return x.onaylandi===true;
+  if(fDurum==="bekliyor")return x.onaylandi===false;
+  if(fDurum==="bugun")return x.bugunOnay===true;
+  return true;
+}
+function mesafeUyar(x){return fMesafe==="hepsi"||mesafeBucket(x)===fMesafe}
+function dilimTipUyar(x){return(fDilim==="hepsi"||x.tf===fDilim)&&(fTip==="hepsi"||tipTemel(x.tip)===fTip)}
 function kamaGoster(){
   var tum=(kamaD&&kamaD.sonuc)||[];
-  var l=tum.filter(function(x){
-    return(fDilim==="hepsi"||x.tf===fDilim)&&(fTip==="hepsi"||tipTemel(x.tip)===fTip);
+  var l=tum.filter(function(x){return dilimTipUyar(x)&&durumUyar(x)&&mesafeUyar(x)});
+  if(fSirala==="yakin")l.sort(function(a,b){
+    var av=a.kirilimYuzde==null?1e9:Math.abs(a.kirilimYuzde),bv=b.kirilimYuzde==null?1e9:Math.abs(b.kirilimYuzde);
+    return av-bv;
   });
+  else if(fSirala==="rr")l.sort(function(a,b){
+    var av=a.riskOdul==null?-1:a.riskOdul,bv=b.riskOdul==null?-1:b.riskOdul;
+    return bv-av;
+  });
+  else l.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
   var h='';
   if(tum.length){
+    /* Dilim + tip filtreleri birbirini, durum/mesafe kendini süzer —
+       her satır kendi ekseninde sayar, diğerlerini sabit tutar. */
     h+='<div class="pz">'+FDILIM.map(function(x){
-      var n=x[0]==="hepsi"
-        ?tum.filter(function(y){return fTip==="hepsi"||tipTemel(y.tip)===fTip}).length
-        :tum.filter(function(y){return y.tf===x[0]&&(fTip==="hepsi"||tipTemel(y.tip)===fTip)}).length;
+      var n=tum.filter(function(y){return(x[0]==="hepsi"||y.tf===x[0])&&(fTip==="hepsi"||tipTemel(y.tip)===fTip)&&durumUyar(y)&&mesafeUyar(y)}).length;
       if(x[0]!=="hepsi"&&!n)return"";
-      return '<button class="sir'+(fDilim===x[0]?" on":"")+'" data-fd="'+x[0]+'">'+
-        x[1]+' <b>'+n+'</b></button>';
+      return '<button class="sir'+(fDilim===x[0]?" on":"")+'" data-fd="'+x[0]+'">'+x[1]+' <b>'+n+'</b></button>';
     }).join("")+"</div>";
     var tipler=tipListesiCikar(tum);
     if(tipler.length>1){
       h+='<div class="pz">'+[["hepsi","Tümü"]].concat(tipler.map(function(t){return[t,t]})).map(function(x){
-        var n=x[0]==="hepsi"
-          ?tum.filter(function(y){return fDilim==="hepsi"||y.tf===fDilim}).length
-          :tum.filter(function(y){return tipTemel(y.tip)===x[0]&&(fDilim==="hepsi"||y.tf===fDilim)}).length;
+        var n=tum.filter(function(y){return(x[0]==="hepsi"||tipTemel(y.tip)===x[0])&&(fDilim==="hepsi"||y.tf===fDilim)&&durumUyar(y)&&mesafeUyar(y)}).length;
         if(x[0]!=="hepsi"&&!n)return"";
-        return '<button class="sir'+(fTip===x[0]?" on":"")+'" data-ft="'+E(x[0])+'">'+
-          E(x[1])+' <b>'+n+'</b></button>';
+        return '<button class="sir'+(fTip===x[0]?" on":"")+'" data-ft="'+E(x[0])+'">'+E(x[1])+' <b>'+n+'</b></button>';
       }).join("")+"</div>";
     }
+    h+='<div class="pz">'+FDURUM.map(function(x){
+      var n=tum.filter(function(y){return dilimTipUyar(y)&&mesafeUyar(y)&&(x[0]==="hepsi"||(x[0]==="onay"?y.onaylandi===true:x[0]==="bekliyor"?y.onaylandi===false:x[0]==="bugun"?y.bugunOnay===true:true))}).length;
+      if(x[0]!=="hepsi"&&!n)return"";
+      return '<button class="sir'+(fDurum===x[0]?" on":"")+'" data-fu="'+x[0]+'">'+x[1]+' <b>'+n+'</b></button>';
+    }).join("")+"</div>";
+    h+='<div class="pz">'+FMESAFE.map(function(x){
+      var n=tum.filter(function(y){return dilimTipUyar(y)&&durumUyar(y)&&(x[0]==="hepsi"||mesafeBucket(y)===x[0])}).length;
+      if(x[0]!=="hepsi"&&!n)return"";
+      return '<button class="sir'+(fMesafe===x[0]?" on":"")+'" data-fm="'+x[0]+'">'+x[1]+' <b>'+n+'</b></button>';
+    }).join("")+"</div>";
+    h+='<div class="pz">'+FSIRALA.map(function(x){
+      return '<button class="sir'+(fSirala===x[0]?" on":"")+'" data-fs="'+x[0]+'">↕️ '+x[1]+'</button>';
+    }).join("")+"</div>";
   }
   if(kamaD&&kamaD.eksik)h+='<div class="bos" style="padding:10px 14px;font-size:12.5px">⏳ Formasyon dosyası henüz yayınlanmadı — tarama gecelik çalışır.</div>';
   else if(kamaD&&kamaD.guncelleme)h+='<div class="et" style="padding:8px 14px;font-size:11.5px">🕒 Son tarama: '+E(String(kamaD.guncelleme).slice(0,16).replace("T"," "))+'</div>';
   if(!l.length){
     h+='<div class="bos"><b>📐 Formasyonlar</b><br><br>'+
-      (tum.length?"Bu süzgeçte formasyon yok — üstten başka bir dilim veya tip seç."
+      (tum.length?"Bu süzgeçte formasyon yok — üstten başka bir filtre seç."
                  :"Şu an hiçbir hissede yeterli kalitede formasyon (kama, üçgen, bayrak, ikili dip) tespit edilmedi.<br>Formasyonlar sürekli değişir, birazdan tekrar bakın.")+
       "</div>";
-    el("govde").innerHTML=h; fdBagla(); ftBagla(); return;
+    el("govde").innerHTML=h; fdBagla(); ftBagla(); fuBagla(); fmBagla(); fsBagla(); return;
   }
   h+=l.map(function(x){
     var renk=x.yon==="al"?"#3fb950":(x.yon==="sat"?"#f85149":"#d29922");
@@ -1907,16 +1989,21 @@ function kamaGoster(){
       (x.kirilimYuzde!=null?'  ·  '+(x.kirilimYuzde>=0?"+":"")+Number(x.kirilimYuzde).toFixed(1)+'% kaldı':'')+'</div>';
     if(x.hedef!=null)altSat+='<div class="alt2">🎯 Hedef <b>'+N(x.hedef)+'</b>'+
       (x.hedefYuzde!=null?'  ·  '+(x.hedefYuzde>=0?"+":"")+Number(x.hedefYuzde).toFixed(1)+'%':'')+'</div>';
+    if(x.riskOdul!=null)altSat+='<div class="alt2">⚖️ Risk:Ödül <b>1 : '+x.riskOdul.toFixed(1)+'</b></div>';
+    var durumEt='';
+    if(x.bugunOnay)durumEt='<span class="rozetKucuk" style="color:#3fb950;border-color:#3fb950">🆕 Bugün onay</span>';
+    else if(x.onaylandi===true)durumEt='<span class="rozetKucuk" style="color:#58a6ff;border-color:#58a6ff">✅ Onaylandı</span>';
+    else if(x.onaylandi===false)durumEt='<span class="rozetKucuk" style="color:var(--soluk);border-color:var(--ciz)">⏳ Bekliyor</span>';
     return '<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+E(x.tf)+'" style="border-left-color:'+renk+'">'+
       '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
-      '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E(x.tf||"")+'</div>'+altSat+'</div>'+
+      '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E(x.tf||"")+'</div>'+altSat+durumEt+'</div>'+
       '<div class="sag"><div class="yuzde so">kalite <b>%'+x.kalite+'</b></div></div></div>';
   }).join('');
   el("govde").innerHTML=h;
-  satirBagla(); fdBagla(); ftBagla();
+  satirBagla(); fdBagla(); ftBagla(); fuBagla(); fmBagla(); fsBagla();
 }
-/* Zaman dilimi ve tip süzgeci: veri zaten yüklü, filtreleme tamamen
-   tarayıcıda — yeni istek atılmaz. */
+/* Dilim / tip / durum / mesafe / sıralama süzgeçleri: veri zaten yüklü,
+   filtreleme tamamen tarayıcıda — yeni istek atılmaz. */
 function fdBagla(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-fd]"),function(b){
     b.onclick=function(){tit();fDilim=b.dataset.fd;kamaGoster()};
@@ -1925,6 +2012,21 @@ function fdBagla(){
 function ftBagla(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-ft]"),function(b){
     b.onclick=function(){tit();fTip=b.dataset.ft;kamaGoster()};
+  });
+}
+function fuBagla(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-fu]"),function(b){
+    b.onclick=function(){tit();fDurum=b.dataset.fu;kamaGoster()};
+  });
+}
+function fmBagla(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-fm]"),function(b){
+    b.onclick=function(){tit();fMesafe=b.dataset.fm;kamaGoster()};
+  });
+}
+function fsBagla(){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-fs]"),function(b){
+    b.onclick=function(){tit();fSirala=b.dataset.fs;kamaGoster()};
   });
 }
 /* HAZIR PRESETLER: dört ana listeyi (tavan/potansiyel/fibo/uzunvade) birleştirip
@@ -3235,8 +3337,6 @@ function panelCiz(){
     el("pTam").onclick=function(){tit();try{TG.openLink(v.panelUrl)}catch(e){location.href=v.panelUrl}};
   });
 }
-el("gezGeri").onclick=function(){tit();yolGit(-1)};
-el("gezIleri").onclick=function(){tit();yolGit(1)};
 try{
   TG.BackButton.onClick(function(){
     var K=el("katman");
@@ -3674,14 +3774,20 @@ for(const kod of Object.keys(j.sonuc)){
     if(grup&&p.grup!==grup)continue;
     const hedef=(typeof d.hedef==="number")?d.hedef:null;
     const kirilim=kirilimSeviyesi(d);
+    const iptal=iptalSeviyesi(d);
+    const onaylandi=onayDurumu(d.yon,fiyat,kirilim);
     sonuc.push({
       kod:kod,tf:d.tf||"",tip:d.tip,yon:d.yon,kalite:d.kalite||0,grup:p.grup||"",
       fiyat:fiyat,
       hedef:hedef,hedefYuzde:(hedef!=null&&fiyat>0)?(hedef-fiyat)/fiyat*100:null,
-      kirilim:kirilim,kirilimYuzde:(kirilim!=null&&fiyat>0)?(kirilim-fiyat)/fiyat*100:null
+      kirilim:kirilim,kirilimYuzde:(kirilim!=null&&fiyat>0)?(kirilim-fiyat)/fiyat*100:null,
+      iptal:iptal,
+      onaylandi:onaylandi,
+      riskOdul:riskOdulHesapla(d.yon,fiyat,hedef,iptal)
     });
   }
 }
+await onayGunlukIsaretle(A,sonuc);
 sonuc.sort((a,b)=>b.kalite-a.kalite);
 return JS({ok:!0,sonuc:sonuc.slice(0,300),eksik:!1,guncelleme:j.guncelleme||null})}
 
