@@ -2076,6 +2076,7 @@ function kamaGoster(){
     if(x.hedef!=null)altSat+='<div class="alt2">🎯 Hedef <b>'+N(x.hedef)+'</b>'+
       (x.hedefYuzde!=null?'  ·  '+(x.hedefYuzde>=0?"+":"")+Number(x.hedefYuzde).toFixed(1)+'%':'')+'</div>';
     if(x.riskOdul!=null)altSat+='<div class="alt2">⚖️ Risk:Ödül <b>1 : '+x.riskOdul.toFixed(1)+'</b></div>';
+    if(x.digerDilimler&&x.digerDilimler.length)altSat+='<div class="alt2">🕒 Diğer dilimlerde de var: <b>'+x.digerDilimler.map(E).join(", ")+'</b></div>';
     var durumEt='';
     if(x.bugunOnay)durumEt='<span class="rozetKucuk" style="color:#3fb950;border-color:#3fb950">🆕 Bugün onay</span>';
     else if(x.onaylandi===true)durumEt='<span class="rozetKucuk" style="color:#58a6ff;border-color:#58a6ff">✅ Onaylandı</span>';
@@ -3914,109 +3915,52 @@ const j=await formasyonlariGetir(A);const sonuc={};
 if(j&&j.sonuc)for(const kod of kodlar){const p=j.sonuc[kod]
 ;if(p&&p.tip)sonuc[kod]={tip:p.tip,yon:p.yon,kalite:p.kalite||0}}
 return JS({ok:!0,sonuc:sonuc})}
-/* CANLI FİYAT ÖNBELLEĞİ: formasyon.json gece bir kez üretiliyor ve
-   içindeki fiyat genelde YOK ya da bayat — bu yüzden mesafe (%) ve
-   "onay aldı mı" hiç hesaplanamıyordu, süzgeçler boş kalıyordu.
-   Burada aynı /api/mumlar'ın kullandığı canlı Yahoo kaynağından (yfMumlar)
-   son kapanışı çekip KV'de kısa süre saklıyoruz — her istek Yahoo'ya
-   gitmesin, art arda açılışlarda önbellekten gelsin diye. */
-async function formasyonCanliFiyat(A,kod){
-  var anahtar="ff:"+kod;
-  try{
-    if(A.VERI){
-      var c=await A.VERI.get(anahtar);
-      if(c){var o=JSON.parse(c);if(o&&typeof o.f==="number"&&(Date.now()-o.t)<6e5)return o.f}
-    }
-  }catch(e){}
-  try{
-    var r=await yfMumlar(kod,"1d","5d");
-    var v=r&&r.veri;
-    if(v&&v.length){
-      var f=v[v.length-1].close;
-      if(typeof f==="number"&&f>0){
-        if(A.VERI)await A.VERI.put(anahtar,JSON.stringify({f:f,t:Date.now()}),{expirationTtl:1200}).catch(function(){});
-        return f;
-      }
-    }
-  }catch(e){}
-  return null;
-}
+/* 📐 FORMASYON LİSTESİ — kök sebep düzeltmesi:
+   Gönderdiğin formasyon.json örneğinde HER hissede fiyat zaten var
+   (tara.py 8 dakikada bir çalışıp tazeliyor) — sorun fiyat eksikliği
+   değilmiş. Asıl hata: p.dilimler[] dizisi yalnızca "bu hissede şu
+   dilimde de bir şeyler var" ÖZETİ (sadece tf/tip/yon/kalite) — kırılım
+   çizgilerini (ust/alt), hedefi ve kırılım seviyesini İÇERMİYOR. Önceki
+   kod bu özet dizisini geometriymiş gibi işleyip geometrisiz satırlar
+   üretiyordu; kırılımSeviyesi() de hep null dönüyor, mesafe hiç
+   hesaplanamıyordu — süzgeçler bu yüzden "çalışmıyormuş" gibi görünüyordu.
+   Artık her hissenin TEK "en iyi" formasyonu (tam geometrisi olan üst
+   seviye kayıt) kullanılıyor — taramadaki TÜM hisseler (187/240 gibi)
+   dahil, tek bir Yahoo isteği bile atmadan. */
 if("/api/kamalar"===$.pathname){
-const L2=await g(A);
-const oncelik=["potansiyel","fibo","uzunvade","haftalik","adayOrta","adayOrtaVade","adayUzun","adayHafta"];
-const kodTf={};const kodFiyat={};
-if(L2&&L2.kartlar)for(const tf of oncelik){
-  for(const rc of L2.kartlar[tf]||[]){
-    if(rc&&rc.kod&&!(rc.kod in kodTf))kodTf[rc.kod]=tf;
-    if(rc&&rc.kod&&typeof rc.fiyat==="number")kodFiyat[rc.kod]=rc.fiyat;
-  }
-}
 const j=await formasyonlariGetir(A);
 if(!j||!j.sonuc)return JS({ok:!0,sonuc:[],eksik:!0,guncelleme:null});
 const grup=typeof gov.grup==="string"?gov.grup:"";
 const sonuc=[];
-/* Formasyonu tamamlamış (hedefine ulaşmış) kayıtlar listeden tamamen
-   düşürülür — kırılıp hedefe varan bir formasyon artık "aktif" değildir,
-   listede görünmeye devam etmesi kafa karıştırıcı. */
 for(const kod of Object.keys(j.sonuc)){
   const p=j.sonuc[kod];if(!p||!p.tip)continue;
-  const dl=Array.isArray(p.dilimler)&&p.dilimler.length?p.dilimler
-    :[{tf:p.tf||"1G",tip:p.tip,yon:p.yon,kalite:p.kalite||0,ust:p.ust,alt:p.alt,hedef:p.hedef}];
-  const fiyat0=(typeof kodFiyat[kod]==="number")?kodFiyat[kod]:((typeof p.fiyat==="number")?p.fiyat:null);
-  for(const d0 of dl){
-    if(grup&&p.grup!==grup)continue;
-    const d=desenSinirDuzelt(d0);
-    const hedef=(typeof d.hedef==="number")?d.hedef:null;
-    const kirilim=kirilimSeviyesi(d);
-    const iptal=iptalSeviyesi(d);
-    sonuc.push({
-      kod:kod,tf:d.tf||"",tip:d.tip,yon:d.yon,kalite:d.kalite||0,grup:p.grup||"",
-      fiyat:fiyat0,hedef:hedef,kirilim:kirilim,iptal:iptal
-    });
-  }
-}
-/* Fiyatı hâlâ eksik olan kayıtların en kaliteli 30 tanesini canlı çekiyoruz
-   (istek başına sınırlı — Yahoo'yu boğmamak ve isteği yavaşlatmamak için).
-   KV önbelleği sayesinde birkaç dakika içinde aktif taranan hemen her
-   kod için fiyat birikmiş oluyor, sonraki açılışlar önbellekten anında
-   döner. */
-const eksikKodlar=[...new Set(sonuc.filter(x=>x.fiyat==null).map(x=>x.kod))];
-eksikKodlar.sort((ka,kb)=>{
-  const qa=Math.max(...sonuc.filter(x=>x.kod===ka).map(x=>x.kalite||0));
-  const qb=Math.max(...sonuc.filter(x=>x.kod===kb).map(x=>x.kalite||0));
-  return qb-qa;
-});
-const hedefKodlar=eksikKodlar.slice(0,30);
-for(let i=0;i<hedefKodlar.length;i+=6){
-  const dilim2=hedefKodlar.slice(i,i+6);
-  const sonuclar=await Promise.all(dilim2.map(k=>formasyonCanliFiyat(A,k).catch(()=>null)));
-  dilim2.forEach((k,idx)=>{
-    const f=sonuclar[idx];
-    if(typeof f==="number")sonuc.forEach(x=>{if(x.kod===k)x.fiyat=f});
-  });
-}
-/* Şimdi yüzdeleri/onay durumunu (elimizdeki en güncel fiyatla) hesapla,
-   hedefine ulaşmış formasyonları listeden çıkar. */
-const sonNihai=[];
-for(const x of sonuc){
-  const fiyat=x.fiyat;
-  const onaylandi=onayDurumu(x.yon,fiyat,x.kirilim);
-  const hedefTamam=(x.hedef!=null&&fiyat!=null)?
-    (x.yon==="al"?fiyat>=x.hedef:(x.yon==="sat"?fiyat<=x.hedef:false)):false;
+  if(grup&&p.grup!==grup)continue;
+  const d=desenSinirDuzelt(p);
+  const fiyat=(typeof p.fiyat==="number")?p.fiyat:null;
+  const hedef=(typeof d.hedef==="number")?d.hedef:null;
+  const kirilim=kirilimSeviyesi(d);
+  const iptal=iptalSeviyesi(d);
+  const onaylandi=onayDurumu(d.yon,fiyat,kirilim);
+  /* Hedefine ulaşmış formasyon artık aktif sayılmaz, listeden düşer. */
+  const hedefTamam=(hedef!=null&&fiyat!=null)?
+    (d.yon==="al"?fiyat>=hedef:(d.yon==="sat"?fiyat<=hedef:false)):false;
   if(hedefTamam)continue;
-  sonNihai.push({
-    kod:x.kod,tf:x.tf,tip:x.tip,yon:x.yon,kalite:x.kalite,grup:x.grup,
+  const digerDilimler=(Array.isArray(p.dilimler)?p.dilimler:[])
+    .filter(x=>x&&x.tf&&x.tf!==p.tf).map(x=>x.tf);
+  sonuc.push({
+    kod:kod,tf:p.tf||"",tip:p.tip,yon:p.yon,kalite:p.kalite||0,grup:p.grup||"",
     fiyat:fiyat,
-    hedef:x.hedef,hedefYuzde:(x.hedef!=null&&fiyat>0)?(x.hedef-fiyat)/fiyat*100:null,
-    kirilim:x.kirilim,kirilimYuzde:(x.kirilim!=null&&fiyat>0)?(x.kirilim-fiyat)/fiyat*100:null,
-    iptal:x.iptal,
+    hedef:hedef,hedefYuzde:(hedef!=null&&fiyat>0)?(hedef-fiyat)/fiyat*100:null,
+    kirilim:kirilim,kirilimYuzde:(kirilim!=null&&fiyat>0)?(kirilim-fiyat)/fiyat*100:null,
+    iptal:iptal,
     onaylandi:onaylandi,
-    riskOdul:riskOdulHesapla(x.yon,fiyat,x.hedef,x.iptal)
+    digerDilimler:digerDilimler,
+    riskOdul:riskOdulHesapla(d.yon,fiyat,hedef,iptal)
   });
 }
-await onayGunlukIsaretle(A,sonNihai);
-sonNihai.sort((a,b)=>b.kalite-a.kalite);
-return JS({ok:!0,sonuc:sonNihai.slice(0,300),eksik:!1,guncelleme:j.guncelleme||null})}
+await onayGunlukIsaretle(A,sonuc);
+sonuc.sort((a,b)=>b.kalite-a.kalite);
+return JS({ok:!0,sonuc:sonuc.slice(0,300),eksik:!1,guncelleme:j.guncelleme||null})}
 
 
 /* 🔄 SEKTÖR ROTASYONU: tarayıcının hesapladığı RS-Ratio / RS-Momentum
