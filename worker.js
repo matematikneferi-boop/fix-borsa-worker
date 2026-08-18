@@ -758,7 +758,7 @@ await alarmKuyrukBosalt(e);}
    iyice gevşetildi (1.4/0.95 → 1.15/1.15) çünkü taranan evren küçük
    (en fazla 16 hisse) ve BIST günlük barlarında klasik "1.8x hacim + dar
    aralık" birlikteliği nadir çıkıyor. */
-const ABS_VARSAYILAN={hacimEsik:1.15,darlikEsik:1.15};
+const ABS_VARSAYILAN={hacimEsik:1.15,darlikEsik:1.15,puanEsik:0};
 async function absAyarAl(A){
   if(!A.VERI)return ABS_VARSAYILAN;
   try{
@@ -773,10 +773,11 @@ async function absAyarAl(A){
   }catch(e){}
   return ABS_VARSAYILAN;
 }
-async function absAyarKaydet(A,hacimEsik,darlikEsik){
+async function absAyarKaydet(A,hacimEsik,darlikEsik,puanEsik){
   const h=Number(hacimEsik),d=Number(darlikEsik);
+  let pz=Number(puanEsik); if(!(pz>=0&&pz<=100))pz=0;
   if(!(h>1&&h<10)||!(d>0&&d<3))return null;
-  const ayar={hacimEsik:h,darlikEsik:d};
+  const ayar={hacimEsik:h,darlikEsik:d,puanEsik:pz};
   if(A.VERI)await A.VERI.put("absAyar",JSON.stringify(ayar)).catch(()=>{});
   return ayar;
 }
@@ -876,21 +877,81 @@ async function absDilimYaz(A,v){
 }
 /* Taranacak evren: sinyal listelerindeki hisseler + favori/portfoy +
    havuzun tamami (sektor.json tum BIST'i kapsiyor). */
-async function absEvren(A,ekKodlar){
-  const kodSet=new Set();
+const KOD_GECERLI=/^[A-Z][A-Z0-9]{2,5}$/;
+const kodTemiz=v=>String(v||"").toUpperCase().replace(/\.IS$/,"").replace(/[^A-Z0-9]/g,"");
+/* Evren nereden geliyor? Uc kaynak, dusme sirasiyla:
+   1) SOZLUK — tarayici her turda TARADIGI TUM hisseler icin sozluk
+      gonderiyor (tgSozluk sinSonVeri'nin tamamini geziyor). Yani havuzun
+      tamami zaten KV'de duruyor, EK AG ISTEGI YOK. Asil kaynak budur.
+   2) havuz.json — depodaki resmi liste (tara.py de bunu kullaniyor).
+   3) sektor.json — SON CARE. Eskiden buradan okuyordum ve HATALIYDI:
+      dosya duz bir kod listesi degil, kodlar j.sektor ALTINDA. Object.keys(j)
+      ["sektor"] donuyordu; evren bu yuzden 432 yerine sadece sinyal
+      listesindeki 27 hissede kaliyordu. */
+const HAVUZ_URL="https://raw.githubusercontent.com/matematikneferi-boop/fix-borsa-worker/main/havuz.json";
+async function absHavuzGetir(A){
+  try{const c=A.VERI&&await A.VERI.get("absHavuz");
+    if(c){const j=JSON.parse(c);
+      if(Date.now()-j.ts<216e5&&Array.isArray(j.kodlar)&&j.kodlar.length)return j.kodlar}}catch(_){}
   try{
-    const L=await g(A);
-    if(L&&L.kartlar)for(const k of Object.keys(L.kartlar)){
-      if("sira"===k||0===k.indexOf("aday"))continue;
-      for(const x of(L.kartlar[k]||[]))if(x&&x.kod)kodSet.add(String(x.kod));
+    const r=await fetch(HAVUZ_URL+"?_="+Math.floor(Date.now()/216e5),{cf:{cacheTtl:21600}});
+    if(r.ok){
+      const j=await r.json();
+      let ham=[];
+      if(Array.isArray(j))ham=j;
+      else if(j&&Array.isArray(j.kodlar))ham=j.kodlar;
+      else if(j&&Array.isArray(j.hisseler))ham=j.hisseler;
+      else if(j&&typeof j==="object")ham=Object.keys(j);
+      const kodlar=[...new Set(ham.map(x=>kodTemiz(
+        typeof x==="string"?x:(x&&(x.kod||x.sembol||x.symbol))||"")).filter(k=>KOD_GECERLI.test(k)))];
+      if(kodlar.length){
+        if(A.VERI)await A.VERI.put("absHavuz",JSON.stringify({ts:Date.now(),kodlar}),{expirationTtl:86400}).catch(()=>{});
+        return kodlar;
+      }
     }
   }catch(_){}
-  for(const k of(ekKodlar||[]))if(k)kodSet.add(String(k));
+  return [];
+}
+async function absEvren(A,ekKodlar){
+  const kodSet=new Set(); const kaynak=[];
+  let L=null; try{ L=await g(A) }catch(_){}
+  /* 1) sozluk = tarayicinin taradigi TUM havuz */
   try{
-    const sk=await sektorlariGetir(A);
-    if(sk&&typeof sk==="object")for(const k of Object.keys(sk))if(k)kodSet.add(String(k).toUpperCase());
+    if(L&&L.sozluk&&typeof L.sozluk==="object"){
+      let n=0;
+      for(const k of Object.keys(L.sozluk)){const c=kodTemiz(k);if(KOD_GECERLI.test(c)){kodSet.add(c);n++}}
+      if(n)kaynak.push("sözlük:"+n);
+    }
   }catch(_){}
-  return [...kodSet];
+  /* 2) havuz.json */
+  if(kodSet.size<100){
+    try{const hv=await absHavuzGetir(A);
+      if(hv.length){for(const k of hv)kodSet.add(k);kaynak.push("havuz.json:"+hv.length)}}catch(_){}
+  }
+  /* 3) sektor.json — DOGRU KATMAN: kodlar j.sektor icinde */
+  if(kodSet.size<100){
+    try{
+      const sk=await sektorlariGetir(A);
+      const harita=(sk&&sk.sektor&&typeof sk.sektor==="object")?sk.sektor:
+                   ((sk&&typeof sk==="object")?sk:null);
+      if(harita){
+        let n=0;
+        for(const k of Object.keys(harita)){const c=kodTemiz(k);if(KOD_GECERLI.test(c)){kodSet.add(c);n++}}
+        if(n)kaynak.push("sektör.json:"+n);
+      }
+    }catch(_){}
+  }
+  /* 4) sinyal listeleri + favori/portfoy — her hâlükârda eklenir */
+  try{
+    if(L&&L.kartlar)for(const k of Object.keys(L.kartlar)){
+      if("sira"===k||0===k.indexOf("aday"))continue;
+      for(const x of(L.kartlar[k]||[]))if(x&&x.kod){const c=kodTemiz(x.kod);if(KOD_GECERLI.test(c))kodSet.add(c)}
+    }
+  }catch(_){}
+  for(const k of(ekKodlar||[])){const c=kodTemiz(k);if(KOD_GECERLI.test(c))kodSet.add(c)}
+  const liste=[...kodSet];
+  liste.kaynak=kaynak.join(" · ")||"yalnız sinyal listesi";
+  return liste;
 }
 /* Bir DILIM tarar, sonuclari birikime isler, imleci ilerletir.
    Mini App'i bekletmez — /push turlarinda arka planda cagrilir. */
@@ -932,6 +993,7 @@ async function absDilimTara(A,ekKodlar){
   bir.imlec=(bas+islenen)%evren.length;
   bir.ts=Date.now();
   bir.evren=evren.length;
+  bir.kaynak=evren.kaynak||"";
   /* Kac hisse en az bir kez olculdu — tablo dolarken ilerleme gostergesi.
      Absorpsiyon BULUNMAYAN hisse de olculmustur; ayri set'te tutulur. */
   if(!Array.isArray(bir.gorulen))bir.gorulen=[];
@@ -982,6 +1044,7 @@ async function absorpsiyonTara(A,ekKodlar){
     taranan:evrenN,                       /* geriye uyum */
     imlec:(bir&&bir.imlec)||0,
     calisiyor:await absCalisiyorMu(A),
+    kaynak:(bir&&bir.kaynak)||"",
     liste:gecen.slice(0,60),ayar:ayar};
   if(A.VERI)await A.VERI.put(anahtar,JSON.stringify(paket),{expirationTtl:3600}).catch(()=>{});
   saglikArtir("absTarama");
@@ -3149,7 +3212,10 @@ function absGoster(v){
        '<div class="sat"><span class="et">Aralık darlığı eşiği</span>'+
        '<input id="absDarlik" type="number" step="0.05" min="0.05" max="2.99" value="'+E(String(v.ayar.darlikEsik))+'" '+
        'style="width:70px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>'+
-       '<button class="dg" id="absAyarKaydet" style="margin-top:8px">💾 Kaydet ve yeniden tara</button>'+
+       '<div class="sat"><span class="et">En düşük puan</span>'+
+       '<input id="absPuan" type="number" step="5" min="0" max="100" value="'+E(String((v.ayar.puanEsik)||0))+'" '+
+       'style="width:70px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>'+
+       '<button class="dg" id="absAyarKaydet" style="margin-top:8px">💾 Kaydet ve süz (anında)</button>'+
        '<div class="altbilgi" id="absAyarDurum" style="margin-top:6px"></div></div>';
   }
   /* İLERLEME — tarama arka planda dönerken tablo dolar. Kullanici
@@ -3164,6 +3230,7 @@ function absGoster(v){
      'ölçülen <b>'+olculen+'</b> / '+evren+'  ·  kalan <b>'+((v&&v.kalan)||0)+'</b>'+
      '  ·  eşiği geçen <b style="color:var(--yes)">'+((v&&v.cikan)||0)+'</b>'+
      '  ·  elenen '+((v&&v.elenen)||0)+'</div>'+
+     ((v&&v.kaynak)?'<div class="altbilgi" style="margin-top:3px;opacity:.55">evren kaynağı: '+E(v.kaynak)+'</div>':"")+
      '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
      '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
      '<div class="altbilgi" style="margin-top:6px;opacity:.6">Tarama tur tur ilerler; '+
@@ -3201,7 +3268,8 @@ function absGoster(v){
   if(k)k.onclick=function(){
     tit();k.disabled=true;k.textContent="…";
     var hacimEsik=Number(el("absHacim").value),darlikEsik=Number(el("absDarlik").value);
-    post("/api/absAyar",{hacimEsik:hacimEsik,darlikEsik:darlikEsik}).then(function(r){
+    var puanEsik=Number((el("absPuan")||{}).value||0);
+    post("/api/absAyar",{hacimEsik:hacimEsik,darlikEsik:darlikEsik,puanEsik:puanEsik}).then(function(r){
       k.disabled=false;k.textContent="💾 Kaydet ve yeniden tara";
       if(r&&r.ok){
         el("absAyarDurum").textContent="✅ Kaydedildi, yeniden taranıyor…";
@@ -4349,13 +4417,15 @@ if("/api/absorpsiyon"===$.pathname){
 const fav=await X(A,uid),pf=await XP(A,uid);
 /* DUR / DEVAM — yalniz yonetici. Birikim korunur, sadece yeni olcum durur. */
 if(gov&&(gov.dur===1||gov.dur===0)){
-  if(!YON(uid))return JS({ok:!1,hata:"yetkisiz"},403);
+  if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
   await absDurdurAyarla(A,gov.dur===1);
 }
 const paket=await absorpsiyonTara(A,[...fav,...Object.keys(pf)]).catch(()=>null);
 if(!paket)return JS({ok:!0,liste:[],taranan:0,olculen:0,yas:0,calisiyor:!0});
 const izlenen=new Set([...fav,...Object.keys(pf)]);
 return JS({ok:!0,taranan:paket.taranan||0,olculen:paket.olculen||0,
+evren:paket.evren||0,kalan:paket.kalan||0,cikan:paket.cikan||0,elenen:paket.elenen||0,
+kaynak:paket.kaynak||"",
 calisiyor:paket.calisiyor!==!1,
 yas:Math.round((Date.now()-(paket.ts||0))/6e4),
 liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenen.has(x.kod)},x)),
@@ -4365,7 +4435,7 @@ ayar:YON?(paket.ayar||await absAyarAl(A)):null})}
    eşiklerle taranır, 30 dakika beklemeye gerek yok. */
 if("/api/absAyar"===$.pathname){
 if(!YON)return JS({ok:!1,hata:"yetki yok"},403);
-const ayar=await absAyarKaydet(A,gov.hacimEsik,gov.darlikEsik);
+const ayar=await absAyarKaydet(A,gov.hacimEsik,gov.darlikEsik,gov.puanEsik);
 if(!ayar)return JS({ok:!1,hata:"geçersiz değer"},400);
 return JS({ok:!0,ayar:ayar})}
 /* 🧠 KAP RADAR — aynı bildirimler, ama kategoriye ayrılmış ve önem
