@@ -840,6 +840,16 @@ function absorpsiyonHesapla(mumlar,ayar){
    BIRIKMIS tam listeyi gorur.
    Dilim boyu, alarm dagitimindaki gibi kendi kendini olcer. */
 const ABS_CACHE_MS=18e5;              /* 30 dakika — tek hissenin olcum yasi */
+/* DUR/DEVAM: arka plan taramasi istenildiginde durdurulabilir. Durdurulunca
+   BIRIKIM SILINMEZ — tablo neyi bulmussa onu gostermeye devam eder, sadece
+   yeni olcum alinmaz. Devam edilince imlec kaldigi yerden yurur. */
+async function absCalisiyorMu(A){
+  try{return (await A.VERI.get("absDurduruldu"))!=="1"}catch(_){return true}
+}
+async function absDurdurAyarla(A,dur){
+  try{ if(dur)await A.VERI.put("absDurduruldu","1");
+       else await A.VERI.delete("absDurduruldu"); }catch(_){}
+}
 const ABS_DILIM_TABAN=8, ABS_DILIM_TAVAN=120;
 const ABS_SURE_TAVAN_MS=1e4;          /* bir turda absorpsiyona ayrilan azami sure */
 const ABS_ES=6;                       /* es zamanli Yahoo cagrisi */
@@ -878,6 +888,7 @@ async function absEvren(A,ekKodlar){
    Mini App'i bekletmez — /push turlarinda arka planda cagrilir. */
 async function absDilimTara(A,ekKodlar){
   if(!A||!A.VERI)return;
+  if(!(await absCalisiyorMu(A)))return;      /* kullanici durdurdu */
   const ayar=await absAyarAl(A);
   const evren=await absEvren(A,ekKodlar);
   if(!evren.length)return;
@@ -913,6 +924,12 @@ async function absDilimTara(A,ekKodlar){
   bir.imlec=(bas+islenen)%evren.length;
   bir.ts=Date.now();
   bir.evren=evren.length;
+  /* Kac hisse en az bir kez olculdu — tablo dolarken ilerleme gostergesi.
+     Absorpsiyon BULUNMAYAN hisse de olculmustur; ayri set'te tutulur. */
+  if(!Array.isArray(bir.gorulen))bir.gorulen=[];
+  const gs=new Set(bir.gorulen); for(const k of kodlar)gs.add(k);
+  bir.gorulen=[...gs].slice(-1200);
+  bir.olculen=bir.gorulen.length;
   /* Bayat olcumleri at: 2 saatten eski sonuc listede kalmasin. */
   const kes=Date.now()-2*ABS_CACHE_MS;
   for(const k of Object.keys(bir.sonuc))if(Number(bir.sonuc[k].ts||0)<kes)delete bir.sonuc[k];
@@ -923,14 +940,16 @@ async function absorpsiyonTara(A,ekKodlar){
   const ayar=await absAyarAl(A);
   /* Önbellek anahtarına eşikler işleniyor: yönetici ayarı değiştirince
      eski (belki boş) sonuç değil, anında yeni tarama devreye girer. */
-  const anahtar="absorpsiyon_v2:"+ayar.hacimEsik+":"+ayar.darlikEsik;
-  const c=A.VERI&&await A.VERI.get(anahtar);
-  if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<ABS_CACHE_MS)return j}catch(e){}}
+  /* v3: eski 16 hisselik paketler 30 dakika boyunca servis edilip
+     "Taranan hisse: 16" yazmaya devam ediyordu. Anahtar degisince o
+     paketler bir daha okunamaz. Ayrica artik paket ONBELLEKTEN degil,
+     BIRIKIMDEN uretiliyor — tablo tarama ilerledikce dolsun diye. */
+  const anahtar="absorpsiyon_v3:"+ayar.hacimEsik+":"+ayar.darlikEsik;
   /* Birikim bossa (ilk acilis, esik degisimi) kullaniciyi bos ekranla
      birakmamak icin hemen bir dilim tara; sonrasi arka planda ilerler. */
   let bir=null;
   try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)}catch(_){}
-  if(!bir||!bir.sonuc||!Object.keys(bir.sonuc).length){
+  if((!bir||!bir.sonuc||!Object.keys(bir.sonuc).length)&&await absCalisiyorMu(A)){
     await absDilimTara(A,ekKodlar).catch(()=>{});
     try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)}catch(_){}
   }
@@ -939,7 +958,9 @@ async function absorpsiyonTara(A,ekKodlar){
   bulunan.sort((x,y)=>y.puan-x.puan);
   const paket={ts:(bir&&bir.ts)||Date.now(),
     taranan:(bir&&bir.evren)||bulunan.length,
+    olculen:(bir&&bir.olculen)||0,
     imlec:(bir&&bir.imlec)||0,
+    calisiyor:await absCalisiyorMu(A),
     liste:bulunan.slice(0,30),ayar:ayar};
   if(A.VERI)await A.VERI.put(anahtar,JSON.stringify(paket),{expirationTtl:3600}).catch(()=>{});
   saglikArtir("absTarama");
@@ -3086,7 +3107,10 @@ function absCiz(){
 }
 function absGoster(v){
   var l=(v&&v.liste)||[];
-  var h='<div class="sirala"><button class="sir" id="absYenile">🔄 Yeniden ölç</button></div>';
+  var calisiyor=!v||v.calisiyor!==false;
+  var h='<div class="sirala"><button class="sir" id="absYenile">🔄 Yenile</button>'+
+        (D.yon?'<button class="sir" id="absDur">'+(calisiyor?"⏸ Taramayı durdur":"▶️ Taramayı sürdür")+'</button>':"")+
+        '</div>';
   h+='<div class="uyari" style="margin-top:0"><b>🌊 Absorpsiyon nedir?</b><br>'+
      'Bir günde hacim normalin çok üstüne çıkıp fiyat neredeyse hiç oynamadıysa, '+
      'gelen satışları/alışları birileri yutuyor demektir. <b>Talep</b> = alıcı yutuyor (gün tepede kapandı), '+
@@ -3107,8 +3131,19 @@ function absGoster(v){
        '<button class="dg" id="absAyarKaydet" style="margin-top:8px">💾 Kaydet ve yeniden tara</button>'+
        '<div class="altbilgi" id="absAyarDurum" style="margin-top:6px"></div></div>';
   }
-  h+='<div class="altbilgi" style="margin:10px 0 6px;opacity:.75">Taranan hisse: '+
-     ((v&&v.taranan)||0)+' · ölçüm yaşı: '+((v&&v.yas)||0)+' dk (30 dakikada bir tazelenir)</div>';
+  /* İLERLEME — tarama arka planda dönerken tablo dolar. Kullanici
+     "16 hisse" gibi sabit bir sayi degil, gercek ilerlemeyi gorur. */
+  var evren=(v&&v.taranan)||0, olculen=(v&&v.olculen)||0;
+  var yuzde=evren?Math.min(100,Math.round(olculen/evren*100)):0;
+  h+='<div class="kutu" style="margin:10px 0 8px;padding:9px 11px">'+
+     '<div class="altbilgi" style="opacity:.85">'+
+     (calisiyor?"🔄 Arka planda taranıyor":"⏸ Tarama durduruldu")+
+     ' · <b>'+olculen+' / '+evren+'</b> hisse ölçüldü · son ölçüm '+((v&&v.yas)||0)+' dk önce</div>'+
+     '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
+     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
+     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Tarama tur tur ilerler; '+
+     'sonuç çıktıkça liste kendiliğinden dolar. Sayfayı kapatsan da arka planda devam eder.</div>'+
+     '</div>';
   if(!l.length){
     h+='<div class="bos"><b>Şu an absorpsiyon bulunamadı</b><br><br>'+
        'Taranan hisselerin hiçbirinde "yüksek hacim + dar aralık" birleşimi yok. '+
@@ -3133,6 +3168,9 @@ function absGoster(v){
   var y=el("absYenile");if(y)y.onclick=function(){tit();absD=null;
     el("govde").innerHTML='<div class="yukleniyor">yeniden ölçülüyor…</div>';
     post("/api/absorpsiyon",{}).then(function(v2){absD=v2;absGoster(v2)})};
+  var dd=el("absDur");if(dd)dd.onclick=function(){tit();dd.disabled=true;
+    post("/api/absorpsiyon",{dur:calisiyor?1:0}).then(function(v2){absD=v2;absGoster(v2)})
+      .catch(function(){dd.disabled=false})};
   var k=el("absAyarKaydet");
   if(k)k.onclick=function(){
     tit();k.disabled=true;k.textContent="…";
@@ -4283,10 +4321,17 @@ return JS({ok:!0,liste:sonuc})}
    Sonuç 30 dakika önbellekte; her açılışta Yahoo'ya yeniden gidilmez. */
 if("/api/absorpsiyon"===$.pathname){
 const fav=await X(A,uid),pf=await XP(A,uid);
+/* DUR / DEVAM — yalniz yonetici. Birikim korunur, sadece yeni olcum durur. */
+if(gov&&(gov.dur===1||gov.dur===0)){
+  if(!YON(uid))return JS({ok:!1,hata:"yetkisiz"},403);
+  await absDurdurAyarla(A,gov.dur===1);
+}
 const paket=await absorpsiyonTara(A,[...fav,...Object.keys(pf)]).catch(()=>null);
-if(!paket)return JS({ok:!0,liste:[],taranan:0,yas:0});
+if(!paket)return JS({ok:!0,liste:[],taranan:0,olculen:0,yas:0,calisiyor:!0});
 const izlenen=new Set([...fav,...Object.keys(pf)]);
-return JS({ok:!0,taranan:paket.taranan||0,yas:Math.round((Date.now()-(paket.ts||0))/6e4),
+return JS({ok:!0,taranan:paket.taranan||0,olculen:paket.olculen||0,
+calisiyor:paket.calisiyor!==!1,
+yas:Math.round((Date.now()-(paket.ts||0))/6e4),
 liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenen.has(x.kod)},x)),
 ayar:YON?(paket.ayar||await absAyarAl(A)):null})}
 /* 🌊 Absorpsiyon eşiklerini kaydet — SADECE yönetici. Kaydedince yeni
