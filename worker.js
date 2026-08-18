@@ -1290,6 +1290,8 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .ust{position:sticky;top:0;z-index:20;background:var(--bg);
   padding:10px 12px 0;border-bottom:1px solid var(--ciz)}
 .baslik{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.anaMenuBtn{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);border-radius:9px;
+  padding:7px 11px;font-size:12.5px;font-weight:700;white-space:nowrap;order:-1}
 .baslik h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
 .saat{font-size:11.5px;color:var(--soluk);font-variant-numeric:tabular-nums}
 .sekmeler{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,auto);gap:6px;
@@ -1515,7 +1517,7 @@ textarea.gir{min-height:88px;resize:vertical}
 </div>
 
 <div class="ust">
-  <div class="baslik"><h1>📊 Fix Borsa Sinyal</h1><div class="saat" id="saat"></div></div>
+  <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><h1>📊 Fix Borsa Sinyal</h1><div class="saat" id="saat"></div></div>
   <div class="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button></div>
   <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
@@ -1671,8 +1673,12 @@ function sekCiz(){
 function ciz(){
   yolYaz();
   el("saat").textContent=(D.yon&&D.guncelleme)?("🔐 son tarama "+D.guncelleme):"";
-  seritCiz();
-  hotCiz();
+  /* Kayan yazı ve "hot" şeridi yalnızca ana sekmede (varsayılan liste)
+     gösterilir — başka bir sekmeye geçince o sekmeyle ilgisi olmayan bu
+     iki şerit ekrandan tamamen kalkar, "hangi sekmeye basarsam basayım
+     sadece onunla ilgili şeyler olsun" isteği için. */
+  if(sekme==="potansiyel"){seritCiz();hotCiz()}
+  else{el("serit").innerHTML="";el("hotSerit").innerHTML=""}
   sekCiz();
   if(sekme==="hata")return hataCiz();
   if(sekme==="sag")return saglikCiz();
@@ -1985,6 +1991,23 @@ function kamaGoster(){
   });
   else l.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
   var h='';
+  /* "ONAY ALANLAR" ÖZETİ: kullanıcı hiçbir filtreye dokunmadan da, üst
+     direncini/desteğini kırıp onay almış hisseleri görsün diye — seçili
+     süzgeçten bağımsız olarak HER ZAMAN üstte, en fazla 8 tanesi. */
+  var onayAlanlar=tum.filter(function(x){return x.onaylandi===true})
+    .sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
+  if(onayAlanlar.length){
+    h+='<div class="pzEt">✅ Onay noktasını kıranlar ('+onayAlanlar.length+')</div>';
+    h+=onayAlanlar.slice(0,8).map(function(x){
+      var renk=x.yon==="al"?"#3fb950":(x.yon==="sat"?"#f85149":"#d29922");
+      var ikon=x.yon==="al"?"📈":"📉";
+      return '<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+E(x.tf)+'" data-form="1" style="border-left-color:'+renk+'">'+
+        '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
+        '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E(x.tf||"")+
+        (x.bugunOnay?' · <span class="rozetKucuk" style="color:#3fb950;border-color:#3fb950">🆕 Bugün</span>':'')+
+        '</div></div><div class="sag"><div class="yuzde so">kalite <b>%'+x.kalite+'</b></div></div></div>';
+    }).join("");
+  }
   if(tum.length){
     /* Dilim + tip filtreleri birbirini, durum/mesafe kendini süzer —
        her satır kendi ekseninde sayar, diğerlerini sabit tutar. Her grubun
@@ -3446,6 +3469,21 @@ try{
   });
 }catch(e){}
 araBagla();
+/* 🏠 ANA MENÜ: her ekranda üstte sabit duran tek düğme. Açık bir detay/
+   formasyon katmanı varsa önce onu kapatır, sonra hangi sekmede olursak
+   olalım ana listeye (varsayılan sekme) döner — "geri" tuşu gibi değil,
+   doğrudan başa sıfırlar. */
+function anaMenu(){
+  tit();
+  var K=el("katman");
+  if(K&&K.classList.contains("ac")){K.classList.remove("ac");K.classList.remove("genis");K.innerHTML=""}
+  sekme="potansiyel";sira="pot";adayTf="adayOrta";
+  fDilim="hepsi";fTip="hepsi";fDurum="hepsi";fMesafe="hepsi";fMesafeManuel=null;
+  tgGeriDugme();
+  ciz();
+  window.scrollTo(0,0);
+}
+var amb=el("anaMenuBtn");if(amb)amb.onclick=anaMenu;
 basla();
 </script></body></html>
 `;
@@ -3857,9 +3895,20 @@ return JS({ok:!0,sonuc:sonuc})}
 if("/api/kamalar"===$.pathname){
 const L2=await g(A);
 const oncelik=["potansiyel","fibo","uzunvade","haftalik","adayOrta","adayOrtaVade","adayUzun","adayHafta"];
-const kodTf={};
+const kodTf={};const kodFiyat={};
 if(L2&&L2.kartlar)for(const tf of oncelik){
-  for(const rc of L2.kartlar[tf]||[])if(rc&&rc.kod&&!(rc.kod in kodTf))kodTf[rc.kod]=tf;
+  for(const rc of L2.kartlar[tf]||[]){
+    if(rc&&rc.kod&&!(rc.kod in kodTf))kodTf[rc.kod]=tf;
+    /* CANLI FİYAT DÜZELTMESİ: formasyon.json gece bir kez üretiliyor,
+       içindeki p.fiyat o anın fiyatı — gün içinde bayatlıyor, hatta
+       bazı kayıtlarda hiç yok (null). O zaman kırılıma/onaya kalan yüzde
+       hesaplanamıyor ve mesafe süzgeçleri (≤%2/≤%5/≤%10) o hisseyi hiç
+       göstermiyordu — filtre "çalışmıyormuş" gibi görünüyordu. Burada
+       gün içi taramadan (L2.kartlar) o kodun EN GÜNCEL fiyatını alıp
+       öncelikli olarak kullanıyoruz; formasyon.json'daki fiyat sadece
+       hiçbir listede yoksa yedek olarak kalıyor. */
+    if(rc&&rc.kod&&typeof rc.fiyat==="number")kodFiyat[rc.kod]=rc.fiyat;
+  }
 }
 const j=await formasyonlariGetir(A);
 if(!j||!j.sonuc)return JS({ok:!0,sonuc:[],eksik:!0,guncelleme:null});
@@ -3869,7 +3918,7 @@ for(const kod of Object.keys(j.sonuc)){
   const p=j.sonuc[kod];if(!p||!p.tip)continue;
   const dl=Array.isArray(p.dilimler)&&p.dilimler.length?p.dilimler
     :[{tf:p.tf||"1G",tip:p.tip,yon:p.yon,kalite:p.kalite||0,ust:p.ust,alt:p.alt,hedef:p.hedef}];
-  const fiyat=(typeof p.fiyat==="number")?p.fiyat:null;
+  const fiyat=(typeof kodFiyat[kod]==="number")?kodFiyat[kod]:((typeof p.fiyat==="number")?p.fiyat:null);
   for(const d0 of dl){
     if(grup&&p.grup!==grup)continue;
     const d=desenSinirDuzelt(d0);
