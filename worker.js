@@ -555,7 +555,103 @@ a&&String(a)!==String(t.id)){const t=await F(e);t[a]=(t[a]||0)+1,await e.VERI.pu
 ;const sy=t[a],kalan=20-(sy%20===0?20:sy%20),ac=sy%20===0
 ;e.BOT_TOKEN&&await fetch("https://api.telegram.org/bot"+e.BOT_TOKEN+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:a,text:(ac?"🎉 Az önce davet ettiğin biri katıldı! Toplam davet sayın: "+sy+" — süper üyeliğin 1 ay açıldı/uzadı 👑":"🎉 Az önce davet ettiğin biri katıldı! Toplam davet sayın: "+sy+". Süper üyeliğe "+kalan+" davet kaldı.")})}).catch(()=>{})
 ;ac&&await suparUyeSuresiUzat(e,a)}return!0};
-const ALARM_MAX_ALICI=45;
+/* ══════════ 📣 ALARM DAGITIMI — 784'DEN 30.000'E ══════════
+   ESKI HALI: kullanicilar.slice(0,45) — alarm en fazla 45 kisiye gidiyordu,
+   geri kalan HERKES sessizce dusuyordu. 45 rakami tesadufi degil: Cloudflare
+   Workers ucretsiz planda bir istek en fazla 50 dis cagri yapabilir.
+
+   OLCULEN GERCEK: Telegram botlara saniyede ~30 mesaj veriyor (burada 25'e
+   ayarli). Yani OZEL MESAJLA:
+       784 kisi  -> ~31 saniye
+     5.000 kisi  -> ~3,3 dakika
+    30.000 kisi  -> ~20 DAKIKA
+   30 bin kisiye DM ile "anlik kirilim" duyurmak fizigen mumkun degil.
+
+   COZUM IKI KATMANLI:
+   1) KANAL YAYINI (asil olcek cozumu) — ALARM_KANAL tanimliysa mesaj tek
+      istekle kanala gider. Abone 784 de olsa 300.000 de olsa sure ayni:
+      bir saniyenin altinda, tek alt-istek. Olcek sorunu burada biter.
+   2) OZEL MESAJ KUYRUGU (kisisel bildirim isteyenler icin) — alicilar KV'de
+      bir ise yazilir, her /push turunda bir PARCA gonderilir ve IMLEC
+      kaydedilir. Boylece kimse sessizce dusmez; is yarim kalirsa bir sonraki
+      tur kaldigi yerden devam eder. Alt-istek sinirina carparsa da imlec o
+      ana kadar gonderileni saklar — plan ucretsiz de olsa ucretli de olsa
+      kendi kendini onarir. */
+/* "AZAMI KAC KISI?" — PLANI BILMEDEN OGRENEN PARCA BOYU
+   Bir /push icinde kac ozel mesaj gonderilebilecegini ONCEDEN bilemeyiz;
+   iki ayri tavan var ve ikisi de plana bagli:
+     · Cloudflare alt-istek siniri  (ucretsiz 50 · ucretli 1000)
+     · Isteğin toplam calisma suresi (Telegram 25 msg/sn ile sinirli
+       oldugumuz icin 500 mesaj ~20 saniye demek)
+   Tahmin yerine OLCUYORUZ: her tur, sure tavanina ya da ilk hataya kadar
+   gonderiyoruz. Hata gelirse ogrenilen tavan o ana kadar basarilanin %80'i
+   olarak KV'ye yazilir; hatasiz tamamlanirsa tavan %25 buyutulur. Birkac
+   turda sistem kendi plani icin gercek azamiyi bulur ve orada kalir.
+   ALARM_PARCA degiskeni tanimlanirsa ogrenme devre disi kalir, o deger
+   sabit kullanilir. */
+const ALARM_PARCA_TAVAN=900;
+const ALARM_PARCA_TABAN=10;
+const ALARM_SURE_TAVAN_MS=2e4;     /* bir turda gonderime ayrilan azami sure */
+async function alarmParcaOku(e){
+  const sabit=Number(e&&e.ALARM_PARCA);
+  if(isFinite(sabit)&&sabit>0)return Math.max(ALARM_PARCA_TABAN,Math.min(ALARM_PARCA_TAVAN,sabit));
+  try{const v=Number(await e.VERI.get("alarmParcaOgrenilen"));
+    if(isFinite(v)&&v>=ALARM_PARCA_TABAN)return Math.min(ALARM_PARCA_TAVAN,v)}catch(_){}
+  return 300;                       /* ilk tur icin iyimser baslangic */
+}
+async function alarmParcaYaz(e,v){
+  const y=Math.max(ALARM_PARCA_TABAN,Math.min(ALARM_PARCA_TAVAN,Math.floor(v)));
+  try{await e.VERI.put("alarmParcaOgrenilen",String(y))}catch(_){}
+}
+const ALARM_KUYRUK_TTL=3600;
+const ALARM_IS_AZAMI=4;      /* kuyrukta bekleyebilecek en fazla alarm isi */
+
+async function alarmKuyrugaKoy(e,metin,alicilar){
+  if(!e.VERI||!Array.isArray(alicilar)||!alicilar.length)return;
+  let kuyruk={isler:[]};
+  try{const h=await e.VERI.get("alarmKuyruk");if(h)kuyruk=JSON.parse(h)||{isler:[]}}catch(_){}
+  if(!Array.isArray(kuyruk.isler))kuyruk.isler=[];
+  kuyruk.isler.push({metin:metin,alicilar:alicilar,ix:0,ts:Date.now()});
+  /* Sinyal bayatladiysa kuyrukta bekletmenin anlami yok: en yeniler kalir. */
+  if(kuyruk.isler.length>ALARM_IS_AZAMI)kuyruk.isler=kuyruk.isler.slice(-ALARM_IS_AZAMI);
+  await e.VERI.put("alarmKuyruk",JSON.stringify(kuyruk),{expirationTtl:ALARM_KUYRUK_TTL});
+}
+
+async function alarmKuyrukBosalt(e){
+  if(!e.VERI||!e.BOT_TOKEN)return;
+  let kuyruk=null;
+  try{const h=await e.VERI.get("alarmKuyruk");if(!h)return;kuyruk=JSON.parse(h)}catch(_){}
+  if(!kuyruk||!Array.isArray(kuyruk.isler)||!kuyruk.isler.length){
+    await e.VERI.delete("alarmKuyruk").catch(()=>{});return;
+  }
+  const is=kuyruk.isler[0];
+  /* 30 dakikadan eski alarm gonderilmez — geciken sinyal yanlis sinyaldir. */
+  if(!is||!Array.isArray(is.alicilar)||Date.now()-Number(is.ts||0)>18e5){
+    kuyruk.isler.shift();
+    await e.VERI.put("alarmKuyruk",JSON.stringify(kuyruk),{expirationTtl:ALARM_KUYRUK_TTL});
+    return;
+  }
+  const parca=await alarmParcaOku(e);
+  const bas=Number(is.ix)||0, son=Math.min(is.alicilar.length,bas+parca);
+  const t0=Date.now();
+  let i=bas, sureDoldu=false, hata=false;
+  try{
+    for(;i<son;i++){
+      if(Date.now()-t0>ALARM_SURE_TAVAN_MS){sureDoldu=true;break}
+      await b(e.BOT_TOKEN,"sendMessage",{chat_id:is.alicilar[i],text:is.metin,
+        parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
+    }
+  }catch(_){ hata=true; /* alt-istek siniri vb. — imlec o ana kadarini saklar */ }
+  /* OGRENME: hata varsa geri cekil, temiz bittiyse biraz zorla. */
+  const gonderilen=i-bas;
+  if(hata) await alarmParcaYaz(e,Math.max(ALARM_PARCA_TABAN,gonderilen*0.8));
+  else if(!sureDoldu && gonderilen>=parca) await alarmParcaYaz(e,parca*1.25);
+  else if(sureDoldu) await alarmParcaYaz(e,Math.max(ALARM_PARCA_TABAN,gonderilen));
+  is.ix=i;
+  if(is.ix>=is.alicilar.length)kuyruk.isler.shift();
+  if(!kuyruk.isler.length)await e.VERI.delete("alarmKuyruk").catch(()=>{});
+  else await e.VERI.put("alarmKuyruk",JSON.stringify(kuyruk),{expirationTtl:ALARM_KUYRUK_TTL});
+}
 /* ================== 🚨 ALARM — GÜNLÜK HAFIZA ==================
    ESKİ MANTIK YALNIZCA BİR ÖNCEKİ TARAMAYA BAKIYORDU. Aralık 5 dakikayken
    iş görüyordu; SÜREKLİ MODDA (10 sn) iki tarama arasında liste neredeyse
@@ -617,7 +713,23 @@ const baslik=yeniGirenler.length>1
 :(hepCanli?"⚡ <b>ANLIK KIRILIM</b> · <i>bar kapanmadı</i>\n\n":"🚨 <b>GÜÇLÜ SİNYALE GİRDİ</b>\n\n");
 const metin=baslik+yeniGirenler.slice(0,6).map(hisse=>j(hisse)).join("\n")+
 (yeniGirenler.length>6?"\n<i>…ve "+(yeniGirenler.length-6)+" hisse daha. Menüden ⚡ Kısa Trade listesine bak.</i>":"");
-for(const uid of kullanicilar.slice(0,ALARM_MAX_ALICI))await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,text:metin,parse_mode:"HTML",disable_web_page_preview:!0})}
+/* GONDERIM SIRAYLA yapiliyordu: 45 kisiye 45 ardisik Telegram cagrisi,
+   her biri ~200-400 ms -> alarmin son alicisina varmasi 10-18 saniye.
+   "Anlik kirilim" iddiasiyla celisen bir gecikme. Telegram farkli
+   kullanicilara saniyede ~30 mesaji kaldirir; 15'erli paralel gruplar
+   hem bu sinirin altinda kalir hem sureyi ~1 saniyeye indirir.
+   Bir alicinin dusmesi (bot engellenmis vb.) digerlerini durdurmasin
+   diye her gonderim kendi hatasini yutar. */
+/* 1) KANAL — tek istek, abone sayisindan bagimsiz, once bu gider. */
+const kanal=String((e.ALARM_KANAL||"")).trim();
+if(kanal){
+  await b(e.BOT_TOKEN,"sendMessage",{chat_id:kanal,text:metin,
+    parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
+}
+/* 2) OZEL MESAJ — kuyruga yaz, ilk parcayi hemen gonder, gerisi
+      sonraki /push turlarinda kaldigi yerden devam eder. */
+await alarmKuyrugaKoy(e,metin,kullanicilar);
+await alarmKuyrukBosalt(e);}
 /* ══════════════════════════════════════════════════════════════════════════
    🧩 İKİNCİ PAKET (sürüm 11.7) — beş yeni katman
      A) Absorpsiyon / order-flow tespiti (günlük barlardan)
@@ -3799,6 +3911,9 @@ await caches.default.put(new Request(l),new Response(JSON.stringify(t),{headers:
 q.waitUntil(kilitli(A,"gecmisKaydi",60,()=>k(A,t)).catch(()=>{})),
 q.waitUntil(kilitli(A,"gecmisiDoldur",180,()=>gecmisiDoldur(A,t)).catch(()=>{})),
 q.waitUntil(kilitli(A,"alarm",60,()=>alarmGonder(A,eskiListe,t)).catch(()=>{})),
+/* Yeni alarm olmasa bile bekleyen kuyruk her turda bir parca ilerler:
+   yarim kalmis bir dagitim bir sonraki taramada tamamlanir. */
+q.waitUntil(kilitli(A,"alarmKuyruk",50,()=>alarmKuyrukBosalt(A)).catch(()=>{})),
 q.waitUntil(kilitli(A,"kap",90,()=>kapKontrolVeGonder(A)).catch(()=>{})),
 q.waitUntil(kilitli(A,"temettu",120,()=>temettuKontrolVeGonder(A)).catch(()=>{})),
 q.waitUntil(kilitli(A,"portfoySnapshot",60,()=>portfoyGunlukSnapshotAl(A)).catch(()=>{})),
