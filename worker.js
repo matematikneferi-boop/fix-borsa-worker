@@ -824,7 +824,101 @@ function absorpsiyonHesapla(mumlar,ayar){
    yapmaya izin veriyor; KV okuma/yazmaları da bu bütçeden düşüyor ve
    yfMumlar gerekirse iki host deniyor. En kötü durumda 16 hisse = 32 istek
    + ~8 KV işlemi = 40 — sınırın altında güvenli pay kalıyor. */
-const ABS_TAVAN=16,ABS_CACHE_MS=18e5; /* 30 dakika */
+/* ══════════ 🌊 ABSORPSIYON EVRENI — 16'DAN TUM HAVUZA ══════════
+   ESKI HALI: slice(0,16). Yalnizca sinyal listelerindeki ilk 16 hisse
+   taraniyordu, havuzdaki 432'nin geri kalani hic bakilmadi. Ustelik
+   dongu SIRAYLA calisiyordu (her hisse icin bir Yahoo cagrisi, arka
+   arkaya) — 16'da bile birkac saniye.
+   16'yi dogrudan 432 yapmak sistemi kirar:
+     · Cloudflare alt-istek siniri (ucretsiz 50 · ucretli 1000)
+     · 432 ardisik cagri = dakikalar; Mini App istegi zaman asimina ugrar
+   COZUM — PARCALI VE KALDIGI YERDEN DEVAM EDEN TARAMA:
+   Havuz tek seferde degil, her turda bir DILIM taranir; sonuclar KV'de
+   birikir ve imlec nerede kalindigini tutar. Her /push turunda (~50 sn)
+   bir dilim daha ilerler, birkac dakikada tum havuz taranmis olur ve
+   surekli dondugu icin veri hep taze kalir. Mini App ise beklemeden
+   BIRIKMIS tam listeyi gorur.
+   Dilim boyu, alarm dagitimindaki gibi kendi kendini olcer. */
+const ABS_CACHE_MS=18e5;              /* 30 dakika — tek hissenin olcum yasi */
+const ABS_DILIM_TABAN=8, ABS_DILIM_TAVAN=120;
+const ABS_SURE_TAVAN_MS=1e4;          /* bir turda absorpsiyona ayrilan azami sure */
+const ABS_ES=6;                       /* es zamanli Yahoo cagrisi */
+const ABS_BIRIKIM_TTL=7200;
+
+async function absDilimOku(A){
+  const sabit=Number(A&&A.ABS_DILIM);
+  if(isFinite(sabit)&&sabit>0)return Math.max(ABS_DILIM_TABAN,Math.min(ABS_DILIM_TAVAN,sabit));
+  try{const v=Number(await A.VERI.get("absDilimOgrenilen"));
+    if(isFinite(v)&&v>=ABS_DILIM_TABAN)return Math.min(ABS_DILIM_TAVAN,v)}catch(_){}
+  return 32;
+}
+async function absDilimYaz(A,v){
+  try{await A.VERI.put("absDilimOgrenilen",
+    String(Math.max(ABS_DILIM_TABAN,Math.min(ABS_DILIM_TAVAN,Math.floor(v)))))}catch(_){}
+}
+/* Taranacak evren: sinyal listelerindeki hisseler + favori/portfoy +
+   havuzun tamami (sektor.json tum BIST'i kapsiyor). */
+async function absEvren(A,ekKodlar){
+  const kodSet=new Set();
+  try{
+    const L=await g(A);
+    if(L&&L.kartlar)for(const k of Object.keys(L.kartlar)){
+      if("sira"===k||0===k.indexOf("aday"))continue;
+      for(const x of(L.kartlar[k]||[]))if(x&&x.kod)kodSet.add(String(x.kod));
+    }
+  }catch(_){}
+  for(const k of(ekKodlar||[]))if(k)kodSet.add(String(k));
+  try{
+    const sk=await sektorlariGetir(A);
+    if(sk&&typeof sk==="object")for(const k of Object.keys(sk))if(k)kodSet.add(String(k).toUpperCase());
+  }catch(_){}
+  return [...kodSet];
+}
+/* Bir DILIM tarar, sonuclari birikime isler, imleci ilerletir.
+   Mini App'i bekletmez — /push turlarinda arka planda cagrilir. */
+async function absDilimTara(A,ekKodlar){
+  if(!A||!A.VERI)return;
+  const ayar=await absAyarAl(A);
+  const evren=await absEvren(A,ekKodlar);
+  if(!evren.length)return;
+  let bir={ts:0,imlec:0,ayar:null,sonuc:{}};
+  try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)||bir}catch(_){}
+  if(!bir.sonuc||typeof bir.sonuc!=="object")bir.sonuc={};
+  /* Esik degisirse eski olcumler gecersizdir. */
+  const esikAd=ayar.hacimEsik+":"+ayar.darlikEsik;
+  if(bir.ayar!==esikAd){bir={ts:0,imlec:0,ayar:esikAd,sonuc:{}}}
+  const dilim=await absDilimOku(A);
+  const bas=(Number(bir.imlec)||0)%evren.length;
+  const kodlar=[];
+  for(let i=0;i<dilim;i++)kodlar.push(evren[(bas+i)%evren.length]);
+  const t0=Date.now();
+  let sira=0,islenen=0,hata=false;
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      if(Date.now()-t0>ABS_SURE_TAVAN_MS)return;
+      const kod=kodlar[sira++];
+      try{
+        const r=await yfMumlar(kod);
+        const a=absorpsiyonHesapla(r&&r.veri,ayar);
+        if(a)bir.sonuc[kod]=Object.assign({kod:kod,ts:Date.now()},a);
+        else delete bir.sonuc[kod];
+        islenen++;
+      }catch(_){hata=true}
+    }
+  };
+  try{await Promise.all(Array.from({length:Math.min(ABS_ES,kodlar.length)},isci))}
+  catch(_){hata=true}
+  if(hata)await absDilimYaz(A,Math.max(ABS_DILIM_TABAN,islenen*0.8));
+  else if(islenen>=dilim)await absDilimYaz(A,dilim*1.25);
+  bir.imlec=(bas+islenen)%evren.length;
+  bir.ts=Date.now();
+  bir.evren=evren.length;
+  /* Bayat olcumleri at: 2 saatten eski sonuc listede kalmasin. */
+  const kes=Date.now()-2*ABS_CACHE_MS;
+  for(const k of Object.keys(bir.sonuc))if(Number(bir.sonuc[k].ts||0)<kes)delete bir.sonuc[k];
+  await A.VERI.put("absBirikim",JSON.stringify(bir),{expirationTtl:ABS_BIRIKIM_TTL}).catch(()=>{});
+  saglikArtir("absTarama");
+}
 async function absorpsiyonTara(A,ekKodlar){
   const ayar=await absAyarAl(A);
   /* Önbellek anahtarına eşikler işleniyor: yönetici ayarı değiştirince
@@ -832,24 +926,22 @@ async function absorpsiyonTara(A,ekKodlar){
   const anahtar="absorpsiyon_v2:"+ayar.hacimEsik+":"+ayar.darlikEsik;
   const c=A.VERI&&await A.VERI.get(anahtar);
   if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<ABS_CACHE_MS)return j}catch(e){}}
-  const L=await g(A),kodSet=new Set();
-  if(L&&L.kartlar)for(const k of Object.keys(L.kartlar)){
-    if("sira"===k||0===k.indexOf("aday"))continue;
-    for(const x of(L.kartlar[k]||[]))if(x&&x.kod)kodSet.add(String(x.kod));
+  /* Birikim bossa (ilk acilis, esik degisimi) kullaniciyi bos ekranla
+     birakmamak icin hemen bir dilim tara; sonrasi arka planda ilerler. */
+  let bir=null;
+  try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)}catch(_){}
+  if(!bir||!bir.sonuc||!Object.keys(bir.sonuc).length){
+    await absDilimTara(A,ekKodlar).catch(()=>{});
+    try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)}catch(_){}
   }
-  for(const k of(ekKodlar||[]))if(k)kodSet.add(String(k));
-  const kodlar=[...kodSet].slice(0,ABS_TAVAN);
-  const bulunan=[];
-  for(const kod of kodlar){
-    try{
-      const r=await yfMumlar(kod);
-      const a=absorpsiyonHesapla(r&&r.veri,ayar);
-      if(a)bulunan.push(Object.assign({kod:kod},a));
-    }catch(e){}
-  }
+  const sonuc=(bir&&bir.sonuc)||{};
+  const bulunan=Object.keys(sonuc).map(k=>sonuc[k]);
   bulunan.sort((x,y)=>y.puan-x.puan);
-  const paket={ts:Date.now(),taranan:kodlar.length,liste:bulunan.slice(0,30),ayar:ayar};
-  if(A.VERI)await A.VERI.put(anahtar,JSON.stringify(paket)).catch(()=>{});
+  const paket={ts:(bir&&bir.ts)||Date.now(),
+    taranan:(bir&&bir.evren)||bulunan.length,
+    imlec:(bir&&bir.imlec)||0,
+    liste:bulunan.slice(0,30),ayar:ayar};
+  if(A.VERI)await A.VERI.put(anahtar,JSON.stringify(paket),{expirationTtl:3600}).catch(()=>{});
   saglikArtir("absTarama");
   return paket;
 }
@@ -3914,6 +4006,9 @@ q.waitUntil(kilitli(A,"alarm",60,()=>alarmGonder(A,eskiListe,t)).catch(()=>{})),
 /* Yeni alarm olmasa bile bekleyen kuyruk her turda bir parca ilerler:
    yarim kalmis bir dagitim bir sonraki taramada tamamlanir. */
 q.waitUntil(kilitli(A,"alarmKuyruk",50,()=>alarmKuyrukBosalt(A)).catch(()=>{})),
+/* Absorpsiyon havuzu her turda bir dilim ilerler; birkac dakikada
+   tum evren taranmis ve surekli tazelenir olur. */
+q.waitUntil(kilitli(A,"absDilim",50,()=>absDilimTara(A,[])).catch(()=>{})),
 q.waitUntil(kilitli(A,"kap",90,()=>kapKontrolVeGonder(A)).catch(()=>{})),
 q.waitUntil(kilitli(A,"temettu",120,()=>temettuKontrolVeGonder(A)).catch(()=>{})),
 q.waitUntil(kilitli(A,"portfoySnapshot",60,()=>portfoyGunlukSnapshotAl(A)).catch(()=>{})),
