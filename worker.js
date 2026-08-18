@@ -363,6 +363,21 @@ function iptalSeviyesi(d){
   var son=hat[hat.length-1];
   return(son&&typeof son.value==="number")?son.value:null;
 }
+/* GÜVENLİK KEMERİ: formasyon.json'daki bazı kayıtlarda üst/alt sınır
+   çizgileri ters etiketlenmiş geliyor (üst değeri alt değerinden küçük) —
+   bu durumda onay/iptal/hedef yorumu da tersine dönüyor (ör. "iptal
+   seviyesi" fiyatın altında görünüyor, oysa satış yönlü bir formasyonda
+   iptal her zaman üstte olmalı). Çizgilerin SON noktalarına bakıp üst<alt
+   ise ikisini yer değiştirir; girdiyi bozmadan (yeni obje) düzeltilmiş
+   halini döner. Zaten doğru sıradaysa dokunmaz. */
+function desenSinirDuzelt(d){
+  if(!d||!d.ust||!d.alt||!d.ust.length||!d.alt.length)return d;
+  var us=d.ust[d.ust.length-1],as=d.alt[d.alt.length-1];
+  var uv=us&&typeof us.value==="number"?us.value:null;
+  var av=as&&typeof as.value==="number"?as.value:null;
+  if(uv==null||av==null||uv>=av)return d;
+  return Object.assign({},d,{ust:d.alt,alt:d.ust,ustUz:d.altUz,altUz:d.ustUz});
+}
 /* Fiyat, kırılım seviyesini yön yönünde geçmiş mi ("onay aldı") ? */
 function onayDurumu(yon,fiyat,kirilim){
   if(fiyat==null||kirilim==null)return null;
@@ -423,11 +438,11 @@ async function formasyonBul(A,kod,tf){
   const p=j&&j.sonuc&&j.sonuc[kod];
   if(!p)return null;
   tf=mumTfNormal(tf);
-  if(tf==="1G"&&p.gunluk)return Object.assign({tf:"1G"},p.gunluk);
-  if(p.tf===tf&&p.ust&&p.alt)return{tf:tf,tip:p.tip,yon:p.yon,kalite:p.kalite,ust:p.ust,alt:p.alt,ustUz:p.ustUz,altUz:p.altUz,hedef:p.hedef,grup:p.grup};
+  if(tf==="1G"&&p.gunluk)return desenSinirDuzelt(Object.assign({tf:"1G"},p.gunluk));
+  if(p.tf===tf&&p.ust&&p.alt)return desenSinirDuzelt({tf:tf,tip:p.tip,yon:p.yon,kalite:p.kalite,ust:p.ust,alt:p.alt,ustUz:p.ustUz,altUz:p.altUz,hedef:p.hedef,grup:p.grup});
   if(Array.isArray(p.dilimler)){
     const d=p.dilimler.find(x=>x&&x.tf===tf);
-    if(d)return Object.assign({tf:tf,eksikCizgi:!0},d);
+    if(d)return desenSinirDuzelt(Object.assign({tf:tf,eksikCizgi:!0},d));
   }
   return null;
 }
@@ -1365,6 +1380,13 @@ textarea.gir{min-height:88px;resize:vertical}
 .katman{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;
   padding:14px 12px calc(30px + env(safe-area-inset-bottom));display:none}
 .katman.ac{display:block}
+/* FORMASYON SAYFASI: normal detaydan (sinyal kartı, portföy düğmeleri vb.)
+   bilerek ayrı tutulur — "orası ayrı bir dünya" — kendi başlığı, daha
+   büyük grafiği ve yalnız formasyona özel içeriği olan tam sayfa. */
+.katman.genis{background:var(--bg)}
+.fBaslikBuyuk{font-size:20px;font-weight:800;letter-spacing:.3px;margin-bottom:2px}
+.fAltBaslik{font-size:12.5px;color:var(--soluk);margin-bottom:12px}
+.mumKutu.genis{height:320px}
 .kapat{position:sticky;top:0;display:flex;justify-content:space-between;align-items:center;
   background:var(--bg);padding:2px 0 12px;margin-bottom:2px}
 .kapat button{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);
@@ -1393,7 +1415,17 @@ textarea.gir{min-height:88px;resize:vertical}
 .link{background:var(--bg);border:1px solid var(--ciz);border-radius:9px;padding:11px;
   font-size:12.5px;word-break:break-all;font-family:ui-monospace,monospace;color:var(--mavi)}
 .durum{font-size:12.5px;color:var(--soluk);margin-top:8px;min-height:17px}
-.pz{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none}
+.pz{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.pzEt{font-size:10.5px;font-weight:800;color:var(--soluk);text-transform:uppercase;
+  letter-spacing:.5px;margin:10px 2px 5px}
+.pzEt:first-child{margin-top:2px}
+.mesafeManuel{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.mesafeManuel input{width:64px;background:var(--bg);border:1px solid var(--ciz);color:var(--yazi);
+  border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit}
+.mesafeManuel span{font-size:12px;color:var(--soluk)}
+.mesafeManuel button{background:var(--mavi);color:#fff;border:0;border-radius:8px;
+  padding:6px 11px;font-size:12px;font-weight:700}
+.mesafeManuel button.temiz{background:transparent;border:1px solid var(--ciz);color:var(--soluk)}
 .pz::-webkit-scrollbar{display:none}
 .buyukN{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.15}
 .altN{font-size:11px;color:var(--soluk);margin-top:3px}
@@ -1789,7 +1821,11 @@ function satirHtml(k,ad){
 }
 function satirBagla(){
   [].forEach.call(document.querySelectorAll("[data-kod]"),function(b){
-    b.onclick=function(){tit();detay(b.dataset.kod,b.dataset.l)};
+    b.onclick=function(){
+      tit();
+      if(b.dataset.form)formasyonDetay(b.dataset.kod,b.dataset.l);
+      else detay(b.dataset.kod,b.dataset.l);
+    };
   });
   formasyonRozetUygula();
 }
@@ -1886,6 +1922,7 @@ var fDilim="hepsi";
 var fTip="hepsi";
 var fDurum="hepsi";
 var fMesafe="hepsi";
+var fMesafeManuel=null;
 var fSirala="kalite";
 var FDILIM=[["hepsi","Tümü"],["1SA","1SA"],["4SA","4SA"],
             ["1G","1G"],["1HAF","Hafta"],["1AY","Ay"]];
@@ -1927,7 +1964,13 @@ function durumUyar(x){
   if(fDurum==="bugun")return x.bugunOnay===true;
   return true;
 }
-function mesafeUyar(x){return fMesafe==="hepsi"||mesafeBucket(x)===fMesafe}
+/* Elle girilen yüzde eşiği (ör. "%1.5 kaldı") hazır kovaların (≤%2, ≤%5…)
+   ÖNÜNE geçer — kullanıcı kendi mesafesini yazdıysa hazır seçenek yok
+   sayılır. Boşsa eski kova mantığına döner. */
+function mesafeUyar(x){
+  if(fMesafeManuel!=null)return x.kirilimYuzde!=null&&Math.abs(x.kirilimYuzde)<=fMesafeManuel;
+  return fMesafe==="hepsi"||mesafeBucket(x)===fMesafe;
+}
 function dilimTipUyar(x){return(fDilim==="hepsi"||x.tf===fDilim)&&(fTip==="hepsi"||tipTemel(x.tip)===fTip)}
 function kamaGoster(){
   var tum=(kamaD&&kamaD.sonuc)||[];
@@ -1944,31 +1987,41 @@ function kamaGoster(){
   var h='';
   if(tum.length){
     /* Dilim + tip filtreleri birbirini, durum/mesafe kendini süzer —
-       her satır kendi ekseninde sayar, diğerlerini sabit tutar. */
-    h+='<div class="pz">'+FDILIM.map(function(x){
+       her satır kendi ekseninde sayar, diğerlerini sabit tutar. Her grubun
+       üstünde küçük bir başlık var artık — aksi halde art arda gelen dört
+       "Tümü" düğmesi aynı satırın kopyası gibi görünüyordu. */
+    h+='<div class="pzEt">⏱ Zaman dilimi</div><div class="pz">'+FDILIM.map(function(x){
       var n=tum.filter(function(y){return(x[0]==="hepsi"||y.tf===x[0])&&(fTip==="hepsi"||tipTemel(y.tip)===fTip)&&durumUyar(y)&&mesafeUyar(y)}).length;
       if(x[0]!=="hepsi"&&!n)return"";
       return '<button class="sir'+(fDilim===x[0]?" on":"")+'" data-fd="'+x[0]+'">'+x[1]+' <b>'+n+'</b></button>';
     }).join("")+"</div>";
     var tipler=tipListesiCikar(tum);
     if(tipler.length>1){
-      h+='<div class="pz">'+[["hepsi","Tümü"]].concat(tipler.map(function(t){return[t,t]})).map(function(x){
+      h+='<div class="pzEt">📐 Formasyon tipi</div><div class="pz">'+[["hepsi","Tümü"]].concat(tipler.map(function(t){return[t,t]})).map(function(x){
         var n=tum.filter(function(y){return(x[0]==="hepsi"||tipTemel(y.tip)===x[0])&&(fDilim==="hepsi"||y.tf===fDilim)&&durumUyar(y)&&mesafeUyar(y)}).length;
         if(x[0]!=="hepsi"&&!n)return"";
         return '<button class="sir'+(fTip===x[0]?" on":"")+'" data-ft="'+E(x[0])+'">'+E(x[1])+' <b>'+n+'</b></button>';
       }).join("")+"</div>";
     }
-    h+='<div class="pz">'+FDURUM.map(function(x){
+    h+='<div class="pzEt">📍 Durum</div><div class="pz">'+FDURUM.map(function(x){
       var n=tum.filter(function(y){return dilimTipUyar(y)&&mesafeUyar(y)&&(x[0]==="hepsi"||(x[0]==="onay"?y.onaylandi===true:x[0]==="bekliyor"?y.onaylandi===false:x[0]==="bugun"?y.bugunOnay===true:true))}).length;
       if(x[0]!=="hepsi"&&!n)return"";
       return '<button class="sir'+(fDurum===x[0]?" on":"")+'" data-fu="'+x[0]+'">'+x[1]+' <b>'+n+'</b></button>';
     }).join("")+"</div>";
-    h+='<div class="pz">'+FMESAFE.map(function(x){
+    h+='<div class="pzEt">🎯 Onaya mesafe</div><div class="pz">'+FMESAFE.map(function(x){
       var n=tum.filter(function(y){return dilimTipUyar(y)&&durumUyar(y)&&(x[0]==="hepsi"||mesafeBucket(y)===x[0])}).length;
       if(x[0]!=="hepsi"&&!n)return"";
-      return '<button class="sir'+(fMesafe===x[0]?" on":"")+'" data-fm="'+x[0]+'">'+x[1]+' <b>'+n+'</b></button>';
+      return '<button class="sir'+(fMesafeManuel==null&&fMesafe===x[0]?" on":"")+'" data-fm="'+x[0]+'">'+x[1]+' <b>'+n+'</b></button>';
     }).join("")+"</div>";
-    h+='<div class="pz">'+FSIRALA.map(function(x){
+    /* Elle mesafe girişi: hazır kovalar (≤%2/≤%5…) yetmediğinde kullanıcı
+       kendi eşiğini yazabilsin diye — ör. "1.3" yazınca sadece onaya
+       %1.3 ve daha yakın kalanlar listelenir. */
+    h+='<div class="mesafeManuel"><span>elle: kalan ≤ %</span>'+
+      '<input type="number" inputmode="decimal" step="0.1" min="0" id="mesafeManuelKutu" value="'+(fMesafeManuel!=null?fMesafeManuel:"")+'" placeholder="ör. 1.5">'+
+      '<button id="mesafeManuelUygula">Uygula</button>'+
+      (fMesafeManuel!=null?'<button class="temiz" id="mesafeManuelTemizle">✕ Temizle</button>':'')+
+      "</div>";
+    h+='<div class="pzEt">↕️ Sıralama</div><div class="pz">'+FSIRALA.map(function(x){
       return '<button class="sir'+(fSirala===x[0]?" on":"")+'" data-fs="'+x[0]+'">↕️ '+x[1]+'</button>';
     }).join("")+"</div>";
   }
@@ -1979,7 +2032,7 @@ function kamaGoster(){
       (tum.length?"Bu süzgeçte formasyon yok — üstten başka bir filtre seç."
                  :"Şu an hiçbir hissede yeterli kalitede formasyon (kama, üçgen, bayrak, ikili dip) tespit edilmedi.<br>Formasyonlar sürekli değişir, birazdan tekrar bakın.")+
       "</div>";
-    el("govde").innerHTML=h; fdBagla(); ftBagla(); fuBagla(); fmBagla(); fsBagla(); return;
+    el("govde").innerHTML=h; fdBagla(); ftBagla(); fuBagla(); fmBagla(); fsBagla(); mesafeManuelBagla(); return;
   }
   h+=l.map(function(x){
     var renk=x.yon==="al"?"#3fb950":(x.yon==="sat"?"#f85149":"#d29922");
@@ -1994,13 +2047,29 @@ function kamaGoster(){
     if(x.bugunOnay)durumEt='<span class="rozetKucuk" style="color:#3fb950;border-color:#3fb950">🆕 Bugün onay</span>';
     else if(x.onaylandi===true)durumEt='<span class="rozetKucuk" style="color:#58a6ff;border-color:#58a6ff">✅ Onaylandı</span>';
     else if(x.onaylandi===false)durumEt='<span class="rozetKucuk" style="color:var(--soluk);border-color:var(--ciz)">⏳ Bekliyor</span>';
-    return '<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+E(x.tf)+'" style="border-left-color:'+renk+'">'+
+    return '<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+E(x.tf)+'" data-form="1" style="border-left-color:'+renk+'">'+
       '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
       '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E(x.tf||"")+'</div>'+altSat+durumEt+'</div>'+
       '<div class="sag"><div class="yuzde so">kalite <b>%'+x.kalite+'</b></div></div></div>';
   }).join('');
   el("govde").innerHTML=h;
-  satirBagla(); fdBagla(); ftBagla(); fuBagla(); fmBagla(); fsBagla();
+  satirBagla(); fdBagla(); ftBagla(); fuBagla(); fmBagla(); fsBagla(); mesafeManuelBagla();
+}
+/* Elle yazılan yüzde eşiğini bağlar: Uygula'ya basınca ya da Enter'a
+   basınca değeri okur, geçerliyse hazır kova filtresinin önüne geçirir. */
+function mesafeManuelBagla(){
+  var kutu=el("mesafeManuelKutu");
+  if(!kutu)return;
+  var uygula=function(){
+    tit();
+    var v=Number(String(kutu.value).replace(",","."));
+    fMesafeManuel=(kutu.value!==""&&v>=0)?v:null;
+    kamaGoster();
+  };
+  var b=el("mesafeManuelUygula");if(b)b.onclick=uygula;
+  kutu.onkeydown=function(e){if(e.key==="Enter")uygula()};
+  var t=el("mesafeManuelTemizle");
+  if(t)t.onclick=function(){tit();fMesafeManuel=null;kamaGoster()};
 }
 /* Dilim / tip / durum / mesafe / sıralama süzgeçleri: veri zaten yüklü,
    filtreleme tamamen tarayıcıda — yeni istek atılmaz. */
@@ -2417,6 +2486,37 @@ function portfoyOzetiCiz(pf,bul){
     '<div class="ikili"><div><div class="buyukN">'+toplamDeger.toFixed(2)+' ₺</div><div class="altN">güncel değer</div></div>'+
     '<div><div class="buyukN '+(kz>=0?"ye":"kr")+'">'+Y(kz)+'</div><div class="altN">'+(fark>=0?"+":"")+fark.toFixed(2)+' ₺</div></div></div></div>';
 }
+/* 📐 FORMASYON SAYFASI: Formasyon listesindeki bir satıra dokununca açılır.
+   Genel detay() kartını (sinyal fiyatı, portföy düğmeleri, favoriler…)
+   BİLEREK kullanmaz — formasyonun tek işi olan geniş grafik + yorum kutusu
+   dışında hiçbir şeyle karışmasın diye kendi sade sayfası vardır. */
+function formasyonDetay(kod,ad){
+  var K=el("katman");
+  var kapatEt=function(){tit();K.classList.remove("ac");K.classList.remove("genis");K.innerHTML="";tgGeriDugme()};
+  K.innerHTML='<div class="kapat"><b>📐 '+E(kod)+'</b><button id="dkapat">✕ Kapat</button></div>'+
+    '<div class="yukleniyor">yükleniyor…</div>';
+  K.classList.add("ac");K.classList.add("genis");tgGeriDugme();
+  el("dkapat").onclick=kapatEt;
+  var h='<div class="kapat"><b>📐 Formasyon</b><button id="dkapat">✕ Kapat</button></div>';
+  h+='<div class="fBaslikBuyuk">'+E(kod)+'</div>';
+  h+='<div class="fAltBaslik">'+E(ad||"")+' dilimi · bu sayfa yalnız formasyona odaklanır</div>';
+  h+='<div class="kutu"><h3>📊 Grafik<span id="desenRozet"></span></h3>'+
+     '<div id="mumKutu" class="mumKutu genis"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div>'+
+     '<div id="desenYorum"></div></div>';
+  h+='<button class="dg ik" id="fHisseDg">📈 Bu hissenin sinyal kartını gör</button>';
+  h+='<button class="dg" id="fPaylasDg">📤 Paylaş</button>';
+  h+='<div class="uyari">⚠️ Yatırım tavsiyesi değildir. Formasyon geçmişi gelecek performansı garanti etmez.</div>';
+  K.innerHTML=h;
+  grafikCiz(kod,ad,0,320);
+  el("dkapat").onclick=kapatEt;
+  el("fHisseDg").onclick=function(){tit();K.classList.remove("genis");detay(kod,ad)};
+  el("fPaylasDg").onclick=function(){
+    tit();
+    var m="📐 "+kod+" · "+(ad||"")+" formasyonu\\\\n\\\\n🤖 Fix Borsa Sinyal ile takip ediyorum, sen de katıl 👇";
+    var u="https://t.me/share/url?url="+encodeURIComponent(D.link)+"&text="+encodeURIComponent(m);
+    try{TG.openTelegramLink(u)}catch(e){location.href=u}
+  };
+}
 function detay(kod,ad){
   var K=el("katman");
   K.innerHTML='<div class="kapat"><b>'+E(kod)+'</b><button id="dkapat">✕ Kapat</button></div>'+
@@ -2564,10 +2664,10 @@ function detay(kod,ad){
 /* MUM GRAFİĞİ: detay() paneli içinde ayrı, engellemeyen bir çağrı — detay
    metni beklemeden kendi hızında gelir. CDN veya veri yoksa sessizce bir
    uyarı yazar, panelin geri kalanını hiçbir şekilde etkilemez. */
-function grafikCiz(kod,ad,deneme){
+function grafikCiz(kod,ad,deneme,yukseklik){
   deneme=deneme||0;
   var tf=tfCoz(ad);
-  if(!window.LightweightCharts&&deneme<20){setTimeout(function(){grafikCiz(kod,ad,deneme+1)},150);return}
+  if(!window.LightweightCharts&&deneme<20){setTimeout(function(){grafikCiz(kod,ad,deneme+1,yukseklik)},150);return}
   post("/api/mumlar",{kod:kod,tf:tf}).then(function(v){
     var kutu=el("mumKutu"); if(!kutu)return;
     try{
@@ -2579,7 +2679,7 @@ function grafikCiz(kod,ad,deneme){
       kutu.innerHTML='';
       var saatlik=(tf==="1SA"||tf==="4SA");
       var chart=LightweightCharts.createChart(kutu,{
-        width:kutu.clientWidth||320, height:220,
+        width:kutu.clientWidth||320, height:yukseklik||220,
         layout:{background:{color:"transparent"},textColor:"#e6edf3"},
         grid:{vertLines:{color:"#262d38"},horzLines:{color:"#262d38"}},
         timeScale:{timeVisible:saatlik,secondsVisible:false},
@@ -3770,8 +3870,9 @@ for(const kod of Object.keys(j.sonuc)){
   const dl=Array.isArray(p.dilimler)&&p.dilimler.length?p.dilimler
     :[{tf:p.tf||"1G",tip:p.tip,yon:p.yon,kalite:p.kalite||0,ust:p.ust,alt:p.alt,hedef:p.hedef}];
   const fiyat=(typeof p.fiyat==="number")?p.fiyat:null;
-  for(const d of dl){
+  for(const d0 of dl){
     if(grup&&p.grup!==grup)continue;
+    const d=desenSinirDuzelt(d0);
     const hedef=(typeof d.hedef==="number")?d.hedef:null;
     const kirilim=kirilimSeviyesi(d);
     const iptal=iptalSeviyesi(d);
