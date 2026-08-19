@@ -729,7 +729,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-19-b · elle tara düğmesi · KISA/ORTA/UZUN";
+const WORKER_SURUM="2026-08-19-c · tara düğmesi (arama satırı) · KAP teşhis";
 const BEKLENEN_TARAYICI_SURUM="2026-08-19-b";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1920,7 +1920,7 @@ textarea.gir{min-height:88px;resize:vertical}
 
 <div class="ust">
   <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><h1 id="baslikYazi">📊 Fix Borsa Sinyal</h1><span id="sekmeAdi" class="sekmeAdi"></span><div class="saat" id="saat"></div></div>
-  <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button></div>
+  <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button><button id="taraBtn" class="araBtn" style="display:none" title="Şimdi tara ve buluta yükle">🔄</button></div>
   <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
   <div class="sekmeler" id="sekmeler"></div>
@@ -2157,6 +2157,27 @@ function araBagla(){
   }
   b.onclick=git;
   g.onkeydown=function(e){if(e.key==="Enter")git()};
+  /* 🔄 ELLE TARAMA — yalnız yönetici. Otomatik tarama takıldığında
+     beklemeden yeni tur başlatır. Düğme diğer kullanıcılarda hiç
+     görünmez (D.yon sunucudan geliyor, istemcide uydurulamaz). */
+  /* Bu arayuzde bir "uyar" yardimcisi yok; Telegram'in kendi uyari
+     penceresini kullaniyoruz, o da yoksa sessizce geciyoruz. */
+  function taraUyar(m){ try{ TG.showAlert(String(m)) }catch(e){ try{ console.log(m) }catch(_){} } }
+  var tb=el("taraBtn");
+  if(tb&&D&&D.yon){
+    tb.style.display="";
+    tb.onclick=function(){
+      tit(); tb.disabled=true; var eski=tb.textContent; tb.textContent="…";
+      post("/api/tara",{}).then(function(v){
+        tb.textContent=v&&v.ok?"✅":"⚠️";
+        if(v&&v.mesaj)taraUyar(v.mesaj);
+        setTimeout(function(){tb.textContent=eski;tb.disabled=false},4000);
+      }).catch(function(){
+        tb.textContent="⚠️";taraUyar("İstek gönderilemedi.");
+        setTimeout(function(){tb.textContent=eski;tb.disabled=false},4000);
+      });
+    };
+  }
 }
 function hotCiz(){
   var kutu=el("hotSerit"); if(!kutu)return;
@@ -2602,7 +2623,16 @@ function kapCiz(){
   post("/api/kap",{}).then(function(v){
     var liste=(v&&v.liste)||[];
     if(!liste.length){
-      el("govde").innerHTML='<div class="bos"><b>📰 KAP Bildirimleri</b><br><br>Şu an gösterilecek bildirim yok.<br>Birazdan tekrar dene.</div>';
+      var tes="";
+      if(v&&v.sonHata)tes+='<br><br><span style="color:var(--kr)">Hata: '+E(String(v.sonHata))+'</span>';
+      if(v&&v.ardisikHata)tes+='<br><span class="altbilgi">ardışık hata: '+v.ardisikHata+'</span>';
+      if(v&&v.sonBasari)tes+='<br><span class="altbilgi">son başarılı çekim: '+
+        new Date(v.sonBasari*1000).toLocaleString("tr-TR")+'</span>';
+      else if(v)tes+='<br><span class="altbilgi">bu worker açıldığından beri hiç başarılı çekim olmadı</span>';
+      if(v&&v.hamSayi)tes+='<br><span class="altbilgi">KAP '+v.hamSayi+
+        ' bildirim döndü ama hiçbirinde hisse kodu yok</span>';
+      el("govde").innerHTML='<div class="bos"><b>📰 KAP Bildirimleri</b><br><br>'+
+        'Şu an gösterilecek bildirim yok.'+tes+'</div>';
       return;
     }
     el("govde").innerHTML=liste.map(function(d){
@@ -4539,7 +4569,15 @@ const kodlar=String(d.relatedStocks||"").split(",").map(x=>x.trim()).filter(Bool
 return{kodlar:kodlar,konu:d.subject||"",tarih:d.publishDate||"",disclosureIndex:d.disclosureIndex,takipte:kodlar.some(k=>izlenen.has(k))}
 }).filter(d=>d.kodlar.length>0)
 .sort((a,b)=>(b.disclosureIndex||0)-(a.disclosureIndex||0)).slice(0,60);
-return JS({ok:!0,liste:sonuc})}
+/* Liste bos gelince ekranda "birazdan tekrar dene" yaziyordu ve SEBEP
+   hicbir yerde gorunmuyordu. KAP disaridan cekilen bir kaynak; sorun
+   bizde degil KAP tarafinda da olabilir (endpoint degisimi, IP engeli,
+   zaman asimi). Teshis bilgisini yaniyla birlikte gonderiyoruz. */
+return JS({ok:!0,liste:sonuc,
+  hamSayi:liste.length,
+  sonHata:KAP_SON_HATA||"",
+  ardisikHata:KAP_ARDISIK_HATA||0,
+  sonBasari:KAP_SON_BASARI||0})}
 /* 🌊 ABSORPSİYON — sinyal listelerindeki hisseler + senin takip ettiklerin.
    Sonuç 30 dakika önbellekte; her açılışta Yahoo'ya yeniden gidilmez. */
 if("/api/absorpsiyon"===$.pathname){
@@ -4562,6 +4600,11 @@ ayar:YON?(paket.ayar||await absAyarAl(A)):null})}
 /* 🌊 Absorpsiyon eşiklerini kaydet — SADECE yönetici. Kaydedince yeni
    önbellek anahtarına düştüğü için bir sonraki istekte anında yeni
    eşiklerle taranır, 30 dakika beklemeye gerek yok. */
+/* 🔄 Elle tarama — yalnız yönetici. */
+if("/api/tara"===$.pathname){
+if(!YON)return JS({ok:!1,mesaj:"Yetkin yok."},403);
+const s2=await taramaTetikle(A);
+return JS({ok:!!s2.ok,mesaj:s2.mesaj})}
 if("/api/absAyar"===$.pathname){
 if(!YON)return JS({ok:!1,hata:"yetki yok"},403);
 const ayar=await absAyarKaydet(A,gov.hacimEsik,gov.darlikEsik,gov.puanEsik);
