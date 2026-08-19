@@ -729,7 +729,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-19-c · tara düğmesi (arama satırı) · KAP teşhis";
+const WORKER_SURUM="2026-08-19-d · tara düğmesi düzeltildi · KAP teşhis";
 const BEKLENEN_TARAYICI_SURUM="2026-08-19-b";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2079,6 +2079,7 @@ function sekCiz(){
 }
 function ciz(){
   yolYaz();
+  taraDugmeCiz();          /* D geldikten sonra yönetici düğmesi belirir */
   el("saat").textContent=(D.yon&&D.guncelleme)?("🔐 son tarama "+D.guncelleme):"";
   /* Ana sekme dışında: başlık logosu, arama kutusu, kayan yazı ve "hot"
      şeridi kalkar — üstte sadece 🏠 Ana Menü ve o sekmenin adı kalır,
@@ -2160,24 +2161,32 @@ function araBagla(){
   /* 🔄 ELLE TARAMA — yalnız yönetici. Otomatik tarama takıldığında
      beklemeden yeni tur başlatır. Düğme diğer kullanıcılarda hiç
      görünmez (D.yon sunucudan geliyor, istemcide uydurulamaz). */
-  /* Bu arayuzde bir "uyar" yardimcisi yok; Telegram'in kendi uyari
-     penceresini kullaniyoruz, o da yoksa sessizce geciyoruz. */
-  function taraUyar(m){ try{ TG.showAlert(String(m)) }catch(e){ try{ console.log(m) }catch(_){} } }
+}
+/* 🔄 ELLE TARAMA DÜĞMESİ — yalnız yönetici.
+   HATALIYDI: bu blok araBagla() içindeydi. araBagla, g.dataset.bagli
+   kilidiyle SADECE BİR KEZ çalışır ve ilk çalıştığında D (sunucudan gelen
+   kullanıcı verisi) henüz null oluyor. D.yon false görülüp düğme gizli
+   kalıyor, kilit yüzünden de bir daha hiç denenmiyordu. Artık her çizimde
+   ayrıca çağrılıyor; D geldiği anda düğme beliriyor. */
+function taraDugmeCiz(){
   var tb=el("taraBtn");
-  if(tb&&D&&D.yon){
-    tb.style.display="";
-    tb.onclick=function(){
-      tit(); tb.disabled=true; var eski=tb.textContent; tb.textContent="…";
-      post("/api/tara",{}).then(function(v){
-        tb.textContent=v&&v.ok?"✅":"⚠️";
-        if(v&&v.mesaj)taraUyar(v.mesaj);
-        setTimeout(function(){tb.textContent=eski;tb.disabled=false},4000);
-      }).catch(function(){
-        tb.textContent="⚠️";taraUyar("İstek gönderilemedi.");
-        setTimeout(function(){tb.textContent=eski;tb.disabled=false},4000);
-      });
-    };
-  }
+  if(!tb)return;
+  if(!(D&&D.yon)){tb.style.display="none";return}
+  tb.style.display="";
+  if(tb.dataset.bagli)return;
+  tb.dataset.bagli="1";
+  function uyarGoster(m){try{TG.showAlert(String(m))}catch(e){try{console.log(m)}catch(_){}}}
+  tb.onclick=function(){
+    tit(); tb.disabled=true; var eski=tb.textContent; tb.textContent="…";
+    post("/api/tara",{}).then(function(v){
+      tb.textContent=(v&&v.ok)?"✅":"⚠️";
+      if(v&&v.mesaj)uyarGoster(v.mesaj);
+      setTimeout(function(){tb.textContent=eski;tb.disabled=false},4000);
+    }).catch(function(){
+      tb.textContent="⚠️";uyarGoster("İstek gönderilemedi.");
+      setTimeout(function(){tb.textContent=eski;tb.disabled=false},4000);
+    });
+  };
 }
 function hotCiz(){
   var kutu=el("hotSerit"); if(!kutu)return;
@@ -3417,7 +3426,15 @@ function radCiz(){
   if(radD){radGoster(radD);return}
   el("govde").innerHTML='<div class="yukleniyor">bildirimler sınıflandırılıyor…</div>';
   post("/api/kapradar",{}).then(function(v){radD=v;radGoster(v)})
-    .catch(function(){el("govde").innerHTML='<div class="bos">Okunamadı.</div>'});
+    .catch(function(e){
+      /* "Okunamadı." tek başına hiçbir şey söylemiyordu. Sunucu hata
+         fırlattıysa mesajını, KAP boş döndüyse sebebini yazıyoruz. */
+      el("govde").innerHTML='<div class="bos"><b>🧠 KAP Radar</b><br><br>'+
+        'Bildirimler okunamadı.<br><span style="color:var(--kr)">'+
+        E(String((e&&e.message)||e||"bilinmeyen hata")).slice(0,200)+'</span>'+
+        '<br><br><span class="altbilgi">Kaynak kap.org.tr — sorun dışarıda da olabilir. '+
+        '📰 KAP sekmesindeki teşhis satırı sebebi söyler.</span></div>';
+    });
 }
 function radTefasSerit(t){
   if(!t)return '<div class="uyari" style="margin-top:0">💵 <b>TEFAS fon akışı</b> henüz ölçülmedi. '+
@@ -3439,7 +3456,25 @@ function radTefasSerit(t){
     '<button class="sir" id="radTefas" style="margin-top:8px">🔄 Tazele</button></div>';
 }
 function radGoster(v){
-  if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Okunamadı.</div>';return}
+  if(!v||!v.ok){
+    /* Sunucu artik hata sebebini gonderiyor; ekrana yaziyoruz. */
+    var t="";
+    if(v&&v.hata)t+='<br><br><span style="color:var(--kr)">'+E(String(v.hata))+'</span>';
+    if(v&&v.sonHata)t+='<br><span class="altbilgi">KAP son hata: '+E(String(v.sonHata))+'</span>';
+    el("govde").innerHTML='<div class="bos"><b>🧠 KAP Radar</b><br><br>Bildirimler okunamadı.'+t+
+      '<br><br><span class="altbilgi">Kaynak kap.org.tr — sorun dışarıda da olabilir.</span></div>';
+    return;
+  }
+  if(!(v.liste||[]).length){
+    var t2="";
+    if(v.sonHata)t2+='<br><br><span style="color:var(--kr)">KAP hatası: '+E(String(v.sonHata))+'</span>';
+    if(v.ardisikHata)t2+='<br><span class="altbilgi">ardışık hata: '+v.ardisikHata+'</span>';
+    t2+=v.sonBasari
+      ? '<br><span class="altbilgi">son başarılı çekim: '+new Date(v.sonBasari*1000).toLocaleString("tr-TR")+'</span>'
+      : '<br><span class="altbilgi">bu worker açıldığından beri hiç başarılı çekim olmadı</span>';
+    el("govde").innerHTML='<div class="bos"><b>🧠 KAP Radar</b><br><br>Bildirim yok.'+t2+'</div>';
+    return;
+  }
   var l=(v.liste||[]).filter(function(x){return !radFiltre||x.kat===radFiltre});
   var say=v.sayim||{};
   var h=radTefasSerit(v.tefas);
@@ -4613,6 +4648,7 @@ return JS({ok:!0,ayar:ayar})}
 /* 🧠 KAP RADAR — aynı bildirimler, ama kategoriye ayrılmış ve önem
    puanına göre sıralanmış hâlde. Üstte TEFAS fon akışı şeridi var. */
 if("/api/kapradar"===$.pathname){
+try{
 const liste=await kapListesiCache(A);
 const fav=await X(A,uid),pf2=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf2)]);
 const sirket=await kapSirketOku(A);
@@ -4631,7 +4667,13 @@ takipte:kodlar.some(k=>izlenen.has(k))}
 const sayim={};for(const x of sonuc)sayim[x.kat]=(sayim[x.kat]||0)+1;
 let tefas=null;try{const h=A.VERI&&await A.VERI.get("tefas");if(h)tefas=JSON.parse(h)}catch(e){}
 return JS({ok:!0,liste:sonuc,sayim:sayim,sirketSayisi:Object.keys(sirket).length,
-kategoriler:KAP_KATEGORI.map(k=>({kod:k.kod,ad:k.ad,ik:k.ik})),tefas:tefas})}
+kategoriler:KAP_KATEGORI.map(k=>({kod:k.kod,ad:k.ad,ik:k.ik})),tefas:tefas,
+sonHata:KAP_SON_HATA||"",ardisikHata:KAP_ARDISIK_HATA||0,sonBasari:KAP_SON_BASARI||0})
+}catch(err){
+/* Sessiz cokme yerine sebebi dondur — ekranda "Okunamadi" yaziyordu ve
+   arkasindaki gercek hata hicbir yere yazilmiyordu. */
+return JS({ok:!1,liste:[],hata:String((err&&err.message)||err).slice(0,200),
+sonHata:KAP_SON_HATA||""},200)}}
 /* 💵 TEFAS — ikinci kaynak. "yenile:1" ile önbelleği atlayıp canlı çeker
    (bağlantıyı test etmek için). Hata varsa ham mesajı ekrana basar. */
 if("/api/tefas"===$.pathname){
