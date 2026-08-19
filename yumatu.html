@@ -7295,7 +7295,7 @@ async function zincirCalistir(kaynak){
    SEKMEDE calisiyordu, sekme yenilenmedigi icin eski kod isbasindaydi.
    Artik her tarama sonunda surum ekrana yaziliyor: alttaki damga
    asagidakiyle ayni degilse calisan kod eskidir, sekmeyi kapatip ac. */
-const YAMA_SURUM="2026-08-18-f · ızgara+kuyruk · kırılım anı · ⚓AVWAP · 1SA/4SA/1G";
+const YAMA_SURUM="2026-08-19-b · AVWAP · asgari hedef %2.7 · KISA/ORTA/UZUN";
 const SUREKLI_BEKLE_MS=2000;
 /* SEANS PENCERESI — surekli mod yalnizca burada tarar.
    Disarida fiyat degismiyor; her 10 saniyede bir Yahoo'yu ve aynalari
@@ -7549,9 +7549,15 @@ function tgKartlar(){
   const rozet=p=>(p>=25?"🔴":p>=12?"🟠":p>=5?"🟡":"⚪");
   /* Kart etiketi: haftalık dilimin kısa adı tarayıcıda "1H" — kullanıcı bunu
      "1 saat" diye okuyor. Bota/uygulamaya giderken "1HAF" yazılıyor. */
-  const TF_ETIKET={"1H":"1HAF","1A":"1AY"};
+  /* Hedefe kalan pay bu yuzdenin altindaysa sinyal uretilmez.
+     Tek degistirilecek yer burasi. */
+  const ASGARI_HEDEF_YUZDE=2.7;
+  const TF_ETIKET={"1SA":"KISA","4SA":"ORTA","1G":"UZUN","1H":"1HAF","1A":"1AY"};
   const tfKisa=t=>TF_ETIKET[t]||(SIN_TF[t]?SIN_TF[t].kisa:t);
   paketSozluk=null;   /* her taramada sözlük yeniden kurulur */
+  /* haftalik: 1HAF zaten taranmiyor (FIBO_TF = 1SA/4SA/1G); liste hep bos
+     kaliyor ve arayuzde olu bir sekme olarak duruyordu. Anahtar korunuyor
+     ki eski istemciler kirilmasin, ama artik doldurulmuyor. */
   const out={tavan:[],potansiyel:[],fibo:[],uzunvade:[],haftalik:[],
              adayKisa:[],adayOrta:[],adayOrtaVade:[],adayUzun:[],adayHafta:[]};
   /* ================== ⏱ YUMATU 1 — DÖRT TARAMA, TEK DİLİM ==================
@@ -7620,6 +7626,14 @@ function tgKartlar(){
       /* CANLI: kırılım, henüz kapanmamış barda oldu. Kart görünür ama
          "teyit bekliyor" damgası taşır — bar kapanışta geri dönebilir. */
       const canli=!!(kay&&kay.tf[g.tf]&&kay.tf[g.tf].acikBar&&x.kacBar===0);
+      /* 🎯 ASGARI HEDEF PAYI
+         BIENY orneği: hedef +%0.1. Boyle bir sinyal alarma degmez —
+         komisyon ve makas bile o payi yer, ustelik listede yer kaplayip
+         gercek firsatlari asagi itiyor. Hedefe kalan mesafe bu esigin
+         altindaysa kart HIC uretilmez; boylece hem listelerden hem
+         bot alarmlarindan ayni anda dusor (ikisi de ayni karttan
+         besleniyor, tek yerde suzmek yeterli). */
+      if(!(hd[1].yuzde>=ASGARI_HEDEF_YUZDE)) return null;
       return tgKartSure({kod:x.kod, fiyat:x.f.fiyat, giris:x.f.tepe,
         zaman:tgSinyalYasi(ts,x.kacBar,canli),
         tf:tfKisa(g.tf), tfKod:g.tf, canli:canli,

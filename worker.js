@@ -10,15 +10,17 @@ function u(e){
    çalışmaya devam etsin diye silinmedi. */
 if(n)return{inline_keyboard:[[{text:"📱 UYGULAMAYI AÇ",web_app:{url:n+"/app"}}]]};
 const t=[];
+/* Dilim adlari KISA / ORTA / UZUN oldu; 1 HAFTA satirlari kaldirildi
+   (o dilim artik hic taranmiyor, liste hep bos geliyordu). */
 t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
-[{text:"📊 1 SAAT · orta trade",callback_data:"potansiyel"}],[{text:"🟨 1 saat adayları (Süper Üyelik)",callback_data:"adayOrta"}],
-[{text:"📐 4 SAAT · orta vade",callback_data:"fibo"}],[{text:"🟨 4 saat adayları (Süper Üyelik)",callback_data:"adayOrtaVade"}],
-[{text:"🗓 1 GÜN · uzun vade",callback_data:"uzunvade"}],[{text:"🟨 1 gün adayları (Süper Üyelik)",callback_data:"adayUzun"}],
-[{text:"📅 1 HAFTA · pozisyon",callback_data:"haftalik"}],[{text:"🟨 1 hafta adayları (Süper Üyelik)",callback_data:"adayHafta"}],
+[{text:"📊 KISA · 1 saat",callback_data:"potansiyel"}],[{text:"🟨 KISA adayları (Süper Üyelik)",callback_data:"adayOrta"}],
+[{text:"📐 ORTA · 4 saat",callback_data:"fibo"}],[{text:"🟨 ORTA adayları (Süper Üyelik)",callback_data:"adayOrtaVade"}],
+[{text:"🗓 UZUN · 1 gün",callback_data:"uzunvade"}],[{text:"🟨 UZUN adayları (Süper Üyelik)",callback_data:"adayUzun"}],
 [{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]);
-return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
+return d(e)&&(t.push([{text:"🔄 ŞİMDİ TARA VE YÜKLE 🔐",callback_data:"elletara"}]),
+t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
-const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>Orta Trade</b> · 1SA — hedefi en uzak olanlar\n📐 <b>Orta Vade</b> · 4SA — bugün taze kıranlar\n🗓 <b>Uzun Vade</b> · 1G — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n🏷️ <code>/surum</code> — yüklü sürümü ve son tarama saatini gösterir\n📃 <code>/sinyal</code> — güncel listeyi <b>mesaj olarak</b> gönderir\n⚡ <code>/canli</code> — sadece bar kapanmadan kırılanlar\n<i>Uygulama açılmıyorsa bu iki komut her zaman çalışır.</i>\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
+const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>KISA</b> · 1 saat — hedefi en uzak olanlar\n📐 <b>ORTA</b> · 4 saat — bugün taze kıranlar\n🗓 <b>UZUN</b> · 1 gün — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n🏷️ <code>/surum</code> — yüklü sürümü ve son tarama saatini gösterir\n📃 <code>/sinyal</code> — güncel listeyi <b>mesaj olarak</b> gönderir\n⚡ <code>/canli</code> — sadece bar kapanmadan kırılanlar\n<i>Uygulama açılmıyorsa bu iki komut her zaman çalışır.</i>\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
 /* ══════════════════════════════════════════════════════════════════════════
    🛡 DAYANIKLILIK KATMANI (sürüm 11.6)
    Altı madde buraya toplandı. HİÇBİRİ mevcut davranışı değiştirmez:
@@ -453,6 +455,44 @@ async function formasyonBul(A,kod,tf){
    FORMASYON_ARALIK'ta bir tetikleniyor — arada gelen istekler sessizce
    yok sayılır. Zamanlanmış (cron) taramalar bundan bağımsız devam eder.
    Kurulum: Cloudflare'de GH_TOKEN adında bir Secret tanımlanmalı. */
+/* ══════════ 🔄 ELLE TARAMA (yalnız yönetici) ══════════
+   Otomatik tarama bazen takiliyor: GitHub Actions'ta cron sarkabiliyor,
+   bir tur ortasinda iptal olabiliyor. Boyle bir anda beklemek yerine
+   Telegram'dan tek dokunusla yeni bir tarama baslatilabilsin.
+   formasyonTetikle repository_dispatch kullaniyor (formasyon is akisi onu
+   dinliyor); fibo-tara.yml ise yalnizca schedule + workflow_dispatch ile
+   tetikleniyor. Bu yuzden burada workflow_dispatch ucu cagriliyor.
+   Varsayilan dal adi bilinmedigi icin once main, olmazsa master denenir. */
+const TARA_BEKLEME=45e3;          /* ard arda basmaya karsi */
+let _taraTetik=0;
+async function taramaTetikle(A){
+  if(!A||!A.GH_TOKEN)return{ok:!1,mesaj:"GH_TOKEN tanımlı değil — Cloudflare'de Secret olarak ekle."};
+  const simdi=Date.now();
+  if(simdi-_taraTetik<TARA_BEKLEME)
+    return{ok:!1,mesaj:"Az önce bir tarama başlatıldı. "+
+      Math.ceil((TARA_BEKLEME-(simdi-_taraTetik))/1000)+" sn sonra tekrar dene."};
+  _taraTetik=simdi;
+  const url="https://api.github.com/repos/matematikneferi-boop/fix-borsa-worker/actions/workflows/fibo-tara.yml/dispatches";
+  const bas={"Authorization":"Bearer "+A.GH_TOKEN,"Accept":"application/vnd.github+json",
+             "User-Agent":"fix-borsa-worker","Content-Type":"application/json"};
+  let sonKod=0,sonGovde="";
+  for(const dal of ["main","master"]){
+    try{
+      const r=await fetch(url,{method:"POST",headers:bas,body:JSON.stringify({ref:dal})});
+      if(r.status===204||r.ok){
+        saglikSet("sonElleTarama",Math.floor(Date.now()/1e3));
+        return{ok:!0,mesaj:"Tarama başlatıldı ("+dal+"). Sonuç ~1 dakikada listelere düşer."};
+      }
+      sonKod=r.status; sonGovde=(await r.text().catch(()=>"")).slice(0,120);
+    }catch(e){sonKod=-1;sonGovde=String(e&&e.message||e).slice(0,120)}
+  }
+  _taraTetik=0;                    /* basarisizsa bekleme uygulanmasin */
+  saglikArtir("elleTaramaHata");
+  return{ok:!1,mesaj:"GitHub reddetti ("+sonKod+"). "+
+    (sonKod===404?"Dosya adı fibo-tara.yml değil ya da token'da 'workflow' yetkisi yok."
+     :sonKod===403?"Token yetkisi yetersiz."
+     :sonGovde)};
+}
 const FORMASYON_ARALIK=18e5; /* 30 dakika */
 let _fTetik=0;
 async function formasyonTetikle(A){
@@ -689,8 +729,8 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-19-a · AVWAP · alarm kuyruğu · absorpsiyon havuzu";
-const BEKLENEN_TARAYICI_SURUM="2026-08-18-f";
+const WORKER_SURUM="2026-08-19-b · elle tara düğmesi · KISA/ORTA/UZUN";
+const BEKLENEN_TARAYICI_SURUM="2026-08-19-b";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
   const kartlar=(L&&L.kartlar)||{};
@@ -1945,14 +1985,14 @@ function tgGeriDugme(){
     if(acik||yolIx>0)TG.BackButton.show();else TG.BackButton.hide();
   }catch(e){}
 }
-var TF={potansiyel:{ad:"1 SAAT",kisa:"1SA",r:"1SA",ik:"📊",renk:"var(--t1s)"},
-        fibo:{ad:"4 SAAT",kisa:"4SA",r:"4SA",ik:"📐",renk:"var(--t4s)"},
-        uzunvade:{ad:"1 GÜN",kisa:"1G",r:"1G",ik:"🗓",renk:"var(--t1g)"},
+var TF={potansiyel:{ad:"KISA",kisa:"KISA",r:"1SA",ik:"📊",renk:"var(--t1s)"},
+        fibo:{ad:"ORTA",kisa:"ORTA",r:"4SA",ik:"📐",renk:"var(--t4s)"},
+        uzunvade:{ad:"UZUN",kisa:"UZUN",r:"1G",ik:"🗓",renk:"var(--t1g)"},
         haftalik:{ad:"1 HAFTA",kisa:"1HAF",r:"1HAF",ik:"📅",renk:"var(--t1h)"},
-        adayOrta:{ad:"1 SAAT adayları",kisa:"1SA",r:"aday",ik:"🟨",renk:"var(--tad)"},
-        adayOrtaVade:{ad:"4 SAAT adayları",kisa:"4SA",r:"aday",ik:"🟨",renk:"var(--tad)"},
-        adayUzun:{ad:"1 GÜN adayları",kisa:"1G",r:"aday",ik:"🟨",renk:"var(--tad)"},
-        adayHafta:{ad:"1 HAFTA adayları",kisa:"1HAF",r:"aday",ik:"🟨",renk:"var(--tad)"}};
+        adayOrta:{ad:"KISA adayları",kisa:"KISA",r:"aday",ik:"🟨",renk:"var(--tad)"},
+        adayOrtaVade:{ad:"ORTA adayları",kisa:"ORTA",r:"aday",ik:"🟨",renk:"var(--tad)"},
+        adayUzun:{ad:"UZUN adayları",kisa:"UZUN",r:"aday",ik:"🟨",renk:"var(--tad)"},
+        adayHafta:{ad:"1 HAFTA adayları",kisa:"1HAF",r:"1HAF",ik:"📅",renk:"var(--tad)"}};
 /* detay()'a gelen "ad" ya bir liste anahtarı (potansiyel/fibo/uzunvade/…)
    ya da doğrudan bir dilim kodu (1SA/4SA/1G/1HAF — kama listesinden) olabilir.
    Grafiğin doğru dilimi Yahoo'dan çekebilmesi için ikisini de tek bir
@@ -2006,7 +2046,7 @@ function onayCiz(){
 }
 function sekCiz(){
   var s=[];
-  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(k){
+  ["potansiyel","fibo","uzunvade"].forEach(function(k){
     var t=TF[k],n=(D.kartlar&&D.kartlar[k]&&D.kartlar[k].length)||0;
     s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
       t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
@@ -2080,7 +2120,7 @@ function ciz(){
    dilim sayacı / üyelik / sabit uyarı metinleri kaldırıldı. */
 function seritCiz(){
   var hepsi=[];
-  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(k){
+  ["potansiyel","fibo","uzunvade"].forEach(function(k){
     (D.kartlar&&D.kartlar[k]||[]).forEach(function(x){
       var kr=kar(x);if(kr!=null)hepsi.push({kod:x.kod,y:kr,tf:TF[k].kisa});
     });
@@ -2121,7 +2161,7 @@ function araBagla(){
 function hotCiz(){
   var kutu=el("hotSerit"); if(!kutu)return;
   var hepsi=[];
-  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
+  ["potansiyel","fibo","uzunvade"].forEach(function(ad){
     (D.kartlar&&D.kartlar[ad]||[]).forEach(function(x){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
@@ -2138,7 +2178,7 @@ function hotCiz(){
   genel.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
   var secilen=genel.slice(0,5);
   var varOlan={}; secilen.forEach(function(x){varOlan[x.kod]=true});
-  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
+  ["potansiyel","fibo","uzunvade"].forEach(function(ad){
     var l=(D.kartlar&&D.kartlar[ad]||[]).slice();
     l.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
     var en=l[0]; if(!en||varOlan[en.kod])return;
@@ -2521,7 +2561,7 @@ function fsBagla(){
    veri göstermemek için. */
 function presetCiz(){
   var hepsi=[];
-  ["potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){
+  ["potansiyel","fibo","uzunvade"].forEach(function(ad){
     (D.kartlar&&D.kartlar[ad]||[]).forEach(function(x){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
@@ -4829,6 +4869,13 @@ await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_w
 text:"🛠 <b>Yönetici paneli</b>\n\nAşağıdaki düğmeye dokun — panel tarayıcıda açılır.\n\n⏳ Bu bağlantı <b>30 dakika</b> geçerli; süresi dolunca yeniden <code>/panel</code> yaz.\n\nAdres:\n<code>"+baglanti+"</code>",
 reply_markup:{inline_keyboard:[[{text:"🛠 Paneli aç",url:baglanti}],[{text:"◀️ Menü",callback_data:"menu"}]]}})
 })()),new Response("ok")):(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"Bu komut yöneticiye özeldir.",reply_markup:u(t.from.id)})),new Response("ok"))
+;if(i&&n.startsWith("/tara"))return q.waitUntil((async()=>{
+if(!d(t.from.id)){await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
+text:"Bu komut yalnızca yöneticiye açık."});return}
+await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"🔄 Tarama isteniyor…"});
+const s2=await taramaTetikle(A);
+await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
+text:(s2.ok?"✅ ":"⚠️ ")+E(s2.mesaj),parse_mode:"HTML",reply_markup:u(t.from.id)})})()),new Response("ok")
 ;if(i&&n.startsWith("/surum"))return q.waitUntil((async()=>{
 /* 🏷️ MOBILDE SURUM KONTROLU
    824 KB'lik yumatu.html'i telefonda acip YAMA_SURUM aramak donduruyor,
@@ -4865,6 +4912,14 @@ const o=a.toUpperCase().replace(/[^A-ZÇĞİÖŞÜ]/g,"");return i&&!a.startsWit
 new Response("ok")):((i||n.startsWith("/start")||n.startsWith("/liste"))&&q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:f,parse_mode:"HTML",reply_markup:u(t.from.id)})),
 new Response("ok"))}if(e.callback_query){const t=e.callback_query,a=t.from.id,n="private"!==t.message.chat.type,i=n?a:t.message.chat.id,r=t.data
 ;if(await B(A,a))return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"Erişimin kapatılmış.",show_alert:!0}),new Response("ok");
+/* 🔄 Yalniz yonetici: Actions takilirsa Telegram'dan yeni tarama baslatir. */
+if("elletara"===r){
+  if(!d(a))return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"Yetkin yok.",show_alert:!0}),new Response("ok");
+  await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"Tarama isteniyor…"});
+  return q.waitUntil((async()=>{const s2=await taramaTetikle(A);
+    await b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:(s2.ok?"✅ ":"⚠️ ")+E(s2.mesaj),
+      parse_mode:"HTML",reply_markup:u(a)})})()),new Response("ok");
+}
 if("onay"===r){await onayVer(A,a);await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id,text:"Onaylandı. İyi çalışmalar."});return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:f,parse_mode:"HTML",reply_markup:u(a)})),new Response("ok")}
 if(!await onayVarMi(A,a))return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id}),q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:ONAY_METIN,parse_mode:"HTML",reply_markup:ONAY_KLAVYE})),new Response("ok");if("bilgi"===r)return await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id}),q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:i,text:BILGI_METIN,parse_mode:"HTML",disable_web_page_preview:!0,reply_markup:{inline_keyboard:[[{text:"◀️ Menü",callback_data:"menu"}]]}})),new Response("ok");if("davet"===r){
 await b(A.BOT_TOKEN,"answerCallbackQuery",{callback_query_id:t.id});const e=(await b(A.BOT_TOKEN,"getMe",{}))?.result?.username||"bot";return q.waitUntil(b(A.BOT_TOKEN,"sendMessage",PY(e,a,i))),new Response("ok")}
