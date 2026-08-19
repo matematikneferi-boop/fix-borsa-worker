@@ -2859,25 +2859,25 @@ function yardimCiz(){
     "Sadece iki şart sağlanıyor. Orta karar bir görüntü; tek başına yeterli değil, diğer bilgilerle birlikte değerlendir.",
     "Örnek: ortalama üstü ve temiz trend var ama raf ince ve endeksin gerisinde → ☁️.");
   h+=ydBlok("Rozetsiz — 0 veya 1 şart",
-    "İki şarttan azı sağlanıyorsa hiç hava durumu rozeti gösterilmez. Bu \"kötü\" demek değil, sadece bağlam açısından net bir sinyal yok demektir.");
+    "İki şarttan azı sağlanıyorsa hiç hava durumu rozeti gösterilmez. Bu “kötü” demek değil, sadece bağlam açısından net bir sinyal yok demektir.");
 
   h+='<div class="ydGrup">🎖️ Tek tek bağlam rozetleri</div>';
   h+=ydBlok("⚓ ortalama üstü / ORTALAMA ALTI",
     "Kırılım anından bu yana o hisseyi alanların ortalama maliyeti hesaplanır (hacimle ağırlıklı). Fiyat bu ortalamanın üstündeyse alanların çoğu kârda demektir, satış baskısı düşüktür. Altındaysa alanlar zarardadır, her toparlanmada satış gelebilir.",
-    "Örnek: 1830'dan kırdı, şimdi 1880'de → \"ortalama üstü\", o kırılımdan alanlar kârda.");
+    "Örnek: 1830'dan kırdı, şimdi 1880'de → “ortalama üstü”, o kırılımdan alanlar kârda.");
   h+=ydBlok("📚 kalın raf (X'x) / ince raf (X'x)",
-    "Kırılan seviyenin hemen altında ne kadar işlem (hacim) birikmiş, ona bakar. 1.5x ve üzeri \"kalın raf\": o seviyede gerçekten çok alım-satım olmuş, kırılınca destek olur — sağlam. 0.5x ve altı \"ince raf\": kimse işlem yapmamış boş bölge, sahte kırılıma açık.",
-    "Örnek: \"kalın raf 2.29x\" → seviyenin altı normalin iki katından fazla dolu, güvenilir.");
+    "Kırılan seviyenin hemen altında ne kadar işlem (hacim) birikmiş, ona bakar. 1.5x ve üzeri “kalın raf”: o seviyede gerçekten çok alım-satım olmuş, kırılınca destek olur — sağlam. 0.5x ve altı “ince raf”: kimse işlem yapmamış boş bölge, sahte kırılıma açık.",
+    "Örnek: “kalın raf 2.29x” → seviyenin altı normalin iki katından fazla dolu, güvenilir.");
   h+=ydBlok("📐 temiz trend (X) / testere (X)",
-    "Son 20 barda fiyatın NET yol aldığı mesafe ile TOPLAM gidip-geldiği mesafenin oranı. 0.45 ve üzeri \"temiz trend\": fiyat düz bir çizgide ilerlemiş. 0.20 ve altı \"testere\": fiyat aynı yerde defalarca gidip gelmiş — kırılımlar burada en çok yanıltır.",
-    "Örnek: \"testere 0.18\" yazan bir hissede kırılım görünse bile fiyat o bölgede sürekli delip geri gelmiş demektir, güvenme.");
+    "Son 20 barda fiyatın NET yol aldığı mesafe ile TOPLAM gidip-geldiği mesafenin oranı. 0.45 ve üzeri “temiz trend”: fiyat düz bir çizgide ilerlemiş. 0.20 ve altı “testere”: fiyat aynı yerde defalarca gidip gelmiş — kırılımlar burada en çok yanıltır.",
+    "Örnek: “testere 0.18” yazan bir hissede kırılım görünse bile fiyat o bölgede sürekli delip geri gelmiş demektir, güvenme.");
   h+=ydBlok("📊 endeksi geçiyor / endeksin gerisinde (%X · βY)",
     "Hisse mi yükseliyor, yoksa tüm BIST100 mü onu taşıyor? β (beta) hissenin endeksle birlikte ne kadar sert oynadığını gösterir. Yüzdelik kısım (alfa) ise endeksin payı çıkarıldıktan sonra geriye kalan, HİSSEYE ÖZGÜ fazla getiridir.",
-    "Örnek: \"+24.72% · β0.21\" → düşük beta (endeksten bağımsız hareket) ve endeksin çok üstünde performans, hisseye özgü gerçek bir güç. \"-11.46% · β-0.49\" ise kırılım olsa da hisse aslında endeksin gerisinde kalıyor demek, uyarı işareti.");
+    "Örnek: “+24.72% · β0.21” → düşük beta (endeksten bağımsız hareket) ve endeksin çok üstünde performans, hisseye özgü gerçek bir güç. “-11.46% · β-0.49” ise kırılım olsa da hisse aslında endeksin gerisinde kalıyor demek, uyarı işareti.");
   h+=ydBlok("🦅 Kartal",
     "Trend çizgisi kırılımı + hacim patlaması + bir momentum göstergesi (RSI/DMI/OBV) aynı anda tetiklendiğinde verilen kozmetik bir rozet. Birden fazla bağımsız sinyalin aynı anda yeşil yanması anlamına gelir.");
   h+=ydBlok("⚡ canlı",
-    "Kırılım şu an oluşan bar üzerinde gerçekleşmiş — bar henüz kapanmadı. Bar kapanana kadar sinyal geri dönebilir (yalanlanabilir), bu yüzden \"canlı\" işaretli sinyallere biraz daha temkinli yaklaş.");
+    "Kırılım şu an oluşan bar üzerinde gerçekleşmiş — bar henüz kapanmadı. Bar kapanana kadar sinyal geri dönebilir (yalanlanabilir), bu yüzden “canlı” işaretli sinyallere biraz daha temkinli yaklaş.");
 
   h+='<div class="ydGrup">📑 Sekmeler ne işe yarar</div>';
   h+=ydBlok("📊 KISA · 1 saat / 📐 ORTA · 4 saat / 🗓 UZUN · 1 gün",
@@ -2893,9 +2893,9 @@ function yardimCiz(){
   h+=ydBlok("💼 Portföy",
     "Gerçek pozisyonlarını (adet/maliyet) girdiğin yer; toplam değer ve kâr/zarar özeti burada hesaplanır.");
   h+=ydBlok("🎛 Presetler",
-    "Hazır filtre kombinasyonları — \"kaliteli\" gibi tek dokunuşla belirli bir kalite eşiğinin üstündeki hisseleri gösteren kısayollar.");
+    "Hazır filtre kombinasyonları — “kaliteli” gibi tek dokunuşla belirli bir kalite eşiğinin üstündeki hisseleri gösteren kısayollar.");
   h+=ydBlok("🌊 Absorpsiyon",
-    "Günlük barlardan order-flow (emir akışı) tespiti: büyük hacmin fiyatı yükseltmeden \"emildiği\" (absorbe edildiği) noktaları arar — genelde büyük oyuncuların sessizce topladığı bölgelerdir.");
+    "Günlük barlardan order-flow (emir akışı) tespiti: büyük hacmin fiyatı yükseltmeden “emildiği” (absorbe edildiği) noktaları arar — genelde büyük oyuncuların sessizce topladığı bölgelerdir.");
   h+=ydBlok("🧠 KAP Radar",
     "Kamuyu Aydınlatma Platformu'ndaki (KAP) önemli şirket bildirimlerini (pay alım/satım, birleşme, bedelli/bedelsiz sermaye artırımı vb.) otomatik tarar ve önem sırasına göre listeler.");
   h+=ydBlok("📰 KAP",
