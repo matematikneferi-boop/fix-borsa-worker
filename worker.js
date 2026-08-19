@@ -465,6 +465,23 @@ async function formasyonBul(A,kod,tf){
    Varsayilan dal adi bilinmedigi icin once main, olmazsa master denenir. */
 const TARA_BEKLEME=45e3;          /* ard arda basmaya karsi */
 let _taraTetik=0;
+/* Token'in KENDISINI asla gostermeden bicimini anlatir: uzunluk, on ek ve
+   gorunmez karakter var mi. "401 Bad credentials"in iki sebebi vardir —
+   token IPTAL edilmistir, ya da yapistirirken bosluk/tirnak kacmistir.
+   Bu ozet ikisini ayirt eder ve hicbir gizli bilgi sizdirmaz. */
+function tokenTeshis(t){
+  const ham=String(t==null?"":t);
+  const kirp=ham.trim().replace(/^["']|["']$/g,"");
+  const notlar=[];
+  if(ham!==kirp)notlar.push("⚠️ başında/sonunda boşluk ya da tırnak var");
+  if(/\s/.test(kirp))notlar.push("⚠️ içinde boşluk/satır sonu var");
+  const onek=kirp.slice(0,4);
+  const bilinen=["ghp_","gho_","ghu_","ghs_","ghr_","gith"];
+  if(!kirp)notlar.push("⚠️ değer boş");
+  else if(!bilinen.some(x=>onek.indexOf(x)===0))notlar.push("⚠️ tanıdık bir GitHub token ön eki değil");
+  return "uzunluk "+kirp.length+" · ön ek "+(onek||"—")+
+         (notlar.length?"\n"+notlar.join("\n"):"\n✅ biçim normal görünüyor");
+}
 async function taramaTetikle(A){
   if(!A||!A.GH_TOKEN)return{ok:!1,mesaj:"GH_TOKEN tanımlı değil — Cloudflare'de Secret olarak ekle."};
   const simdi=Date.now();
@@ -489,7 +506,7 @@ async function taramaTetikle(A){
   _taraTetik=0;                    /* basarisizsa bekleme uygulanmasin */
   saglikArtir("elleTaramaHata");
   return{ok:!1,mesaj:"GitHub reddetti ("+sonKod+").\n\n"+
-    (sonKod===401?"GH_TOKEN geçersiz ya da süresi dolmuş.\n\n1) GitHub → Settings → Developer settings → Personal access tokens → yeni token üret, 'workflow' yetkisi işaretli olsun.\n2) Cloudflare → Worker → Settings → Variables → GH_TOKEN'ı güncelle."
+    (sonKod===401?"GH_TOKEN reddedildi.\n\n🔎 Cloudflare'deki değerin biçimi:\n"+tokenTeshis(A.GH_TOKEN)+"\n\nBiçim normal görünüyorsa token İPTAL EDİLMİŞTİR. Depon herkese açık; GitHub, halka açık depoya sızan tokenları süresi ne olursa olsun otomatik iptal eder. wrangler.toml içinde token geçiyor mu bak.\n\nYeni token: GitHub → Settings → Developer settings → Personal access tokens, 'workflow' yetkisi işaretli.\nSonra Cloudflare → Worker → Settings → Variables → GH_TOKEN."
      :sonKod===404?"fibo-tara.yml bulunamadı ya da token'da 'workflow' yetkisi yok."
      :sonKod===403?"Token yetkisi yetersiz — 'workflow' kapsamı gerekli."
      :String(sonGovde||"").slice(0,120))};
@@ -736,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-19-e · KV yazma limiti düzeltildi";
+const WORKER_SURUM="2026-08-19-f · KV yazma limiti · token teşhisi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-19-b";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
