@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-19-f · KV yazma limiti · token teşhisi";
+const WORKER_SURUM="2026-08-19-g · hata yanıtına CORS · KV hatası isteği düşürmüyor";
 const BEKLENEN_TARAYICI_SURUM="2026-08-19-b";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -4365,7 +4365,14 @@ headers:{"content-type":"text/html; charset=utf-8"}})
    Bot okurken önce bellek, sonra KV, sonra önbelleğe bakar; aradaki
    farkta bile veri tazedir. */
 const SIMDI=Date.now();
-if(e.VERI&&(SIMDI-KVSON>12e4)){KVSON=SIMDI;await e.VERI.put("listeler",JSON.stringify(t))}
+/* KV günlük yazma sınırı dolduğunda put() HATA FIRLATIR ve bu hata bütün
+   /push isteğini düşürüyordu: tarama sonucu önbelleğe bile yazılamıyor,
+   tarayıcı "buluta yüklenemedi" diyordu. Oysa önbellek (caches.default)
+   bedava ve sınırsız — KV yazılamasa da sistem çalışmaya devam edebilir.
+   Bu yüzden KV yazımı artık isteği öldürmüyor, sadece sağlıkta işaretleniyor. */
+if(e.VERI&&(SIMDI-KVSON>12e4)){KVSON=SIMDI;
+  try{await e.VERI.put("listeler",JSON.stringify(t))}
+  catch(kvErr){saglikArtir("kvYazmaHatasi");saglikSet("kvSonHata",String((kvErr&&kvErr.message)||kvErr).slice(0,120))}}
 await caches.default.put(new Request(l),new Response(JSON.stringify(t),{headers:{"Cache-Control":"max-age=86400",
 "content-type":"application/json"}}))}(A,t),/* 3️⃣ ÇAKIŞMA KİLİDİ: işler eskisi gibi PARALEL başlar (davranış aynı),
    ama her biri kendi kilidini alır — bir öncekinin turu bitmeden aynı iş
@@ -5185,5 +5192,17 @@ export default{async fetch(p,A,q){
 try{return await _ANA.fetch(p,A,q)}
 catch(err){
 try{q.waitUntil(hataYaz(A,"fetch",err,p))}catch(e){await hataYaz(A,"fetch",err,p).catch(()=>{})}
-return new Response(JSON.stringify({ok:!1,hata:"sunucu hatası"}),
-  {status:500,headers:{"content-type":"application/json; charset=utf-8"}})}}};
+/* ⚠️ CORS BAŞLIĞI EKSİKTİ — VE BU, HATAYI GİZLİYORDU.
+   Worker içeride patladığında (bugünkü örnek: KV günlük yazma sınırı
+   dolunca put() hata fırlatıyor) buradan CORS'suz bir 500 dönüyordu.
+   Tarayıcı CORS'suz yanıtı OKUYAMAZ; hata mesajını göremez ve olayı
+   "Failed to fetch" diye bildirir. Yani gerçek sebep ("KV put() limit
+   exceeded") tarayıcıya hiç ulaşmıyordu — kullanıcı "worker eski ya da
+   ulaşılamıyor" sanıyordu, oysa worker ayakta ve cevap veriyordu.
+   Artık hata yanıtı da CORS taşıyor ve SEBEBİ içeriyor. */
+const mesaj=String((err&&err.message)||err||"bilinmeyen").slice(0,200);
+return new Response(JSON.stringify({ok:!1,hata:"sunucu hatası",sebep:mesaj}),
+  {status:500,headers:{"content-type":"application/json; charset=utf-8",
+    "Access-Control-Allow-Origin":"*",
+    "Access-Control-Allow-Methods":"POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers":"Content-Type"}})}}};
