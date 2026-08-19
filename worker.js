@@ -1902,6 +1902,7 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit>span{display:inline-block;padding-left:100%;animation:kay 34s linear infinite;will-change:transform}
 .serit b{color:var(--yazi)} .serit .ay{color:#3a4553;margin:0 12px}
 .serit .ay2{color:var(--soluk);font-size:10.5px}
+.serit .ay3{color:#ffb020;font-weight:700}
 .hotSerit{margin:0 0 6px}
 .araSat{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .araGir{flex:0 1 150px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
@@ -1934,6 +1935,9 @@ textarea.gir{min-height:88px;resize:vertical}
 .hotKod{font-weight:700;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hotDil{font-size:8.5px;color:var(--soluk);margin:1px 0}
 .hotYuzde{font-size:9.5px;font-weight:700}
+.hotKilit{font-size:11.5px;color:var(--soluk);line-height:1.5;background:var(--kart);
+  border:1px solid var(--ciz);border-radius:9px;padding:8px 10px}
+.hotKilitLink{color:#ffb020;font-weight:700;white-space:nowrap;cursor:pointer}
 .simSatir{margin-bottom:8px}
 .simSatir label{display:block;font-size:11.5px;color:var(--soluk);margin-bottom:4px}
 .simSatir input{width:100%;box-sizing:border-box;background:var(--kart2);border:1px solid var(--ciz);
@@ -1982,7 +1986,7 @@ textarea.gir{min-height:88px;resize:vertical}
 
 <div class="ust">
   <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><h1 id="baslikYazi">📊 Fix Borsa Sinyal</h1><span id="sekmeAdi" class="sekmeAdi"></span><div class="saat" id="saat"></div></div>
-  <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button><button id="taraBtn" class="araBtn" style="display:none" title="Şimdi tara ve buluta yükle">🔄</button><button id="yardimBtn" class="yardimBtn" title="Rozetler ve sekmeler ne demek?">❓</button></div>
+  <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button><button id="taraBtn" class="araBtn" style="display:none" title="Şimdi tara ve buluta yükle">🔄</button><button id="yardimBtn" class="yardimBtn" title="Rozetler ve sekmeler ne demek?">❓</button><button id="davetBtn" class="yardimBtn" title="Sistemi paylaş, Süper Üyelik kazan">📤</button></div>
   <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
   <div class="sekmeler" id="sekmeler"></div>
@@ -2047,13 +2051,23 @@ function havaEtiket(s){
   if(s===2)return{ik:"☁️",ad:"Bulutlu",sinif:"roz-no",aciklama:"2/4 bağlam şartı sağlanıyor — orta karar, tek başına yeterli değil."};
   return null;
 }
+/* ☀️ Güneş (4/4) katmanı Süper Üyeliğe kilitli — hangi hissenin ☀️ olduğu
+   bilgisi non-super kullanıcıya sızdırılmaz, yerine kilit rozeti gösterilir.
+   ⛅ (3/4) ve ☁️ (2/4) herkese açık kalır. */
+function havaKilitliMi(s){ return s>=4&&!(D&&D.super); }
 function havaRozet(k){                 /* satır altındaki rozet sırasında tam etiket */
-  var e=havaEtiket(havaSartlari(k));
+  var s=havaSartlari(k);
+  if(havaKilitliMi(s))
+    return'<span class="roz roz-gunes" title="☀️ Güneş sinyali — sadece Süper Üyelere açık">🔒 Güneş (Süper Üyelik)</span>';
+  var e=havaEtiket(s);
   if(!e)return"";
   return'<span class="roz '+e.sinif+'" title="'+e.aciklama+'">'+e.ik+" "+e.ad+"</span>";
 }
 function havaIkon(k){                  /* hisse kodunun hemen önünde tek karakterlik özet */
-  var e=havaEtiket(havaSartlari(k));
+  var s=havaSartlari(k);
+  if(havaKilitliMi(s))
+    return'<span class="havaIkon" title="☀️ Güneş sinyali — sadece Süper Üyelere açık">🔒</span>';
+  var e=havaEtiket(s);
   if(!e)return"";
   return'<span class="havaIkon" title="'+e.aciklama+'">'+e.ik+"</span>";
 }
@@ -2096,6 +2110,7 @@ function ekranAdi(){
   if(sekme==="kap")return"📰 KAP Bildirimleri";
   if(sekme==="temettu")return"💰 Temettü Takvimi";
   if(sekme==="yardim")return"❓ Rozetler ve Sekmeler";
+  if(sekme==="alarm")return"🔔 Anlık Alarm";
   if(sekme==="aday")return(TF[adayTf]?TF[adayTf].ad:"Adaylar");
   return TF[sekme]?TF[sekme].ik+" "+TF[sekme].ad:"";
 }
@@ -2174,8 +2189,9 @@ function sekCiz(){
     s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
       t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
   });
-  s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar</button>');
-  s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon</button>');
+  s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar'+(D.super?"":" 🔒")+'</button>');
+  s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon'+(D.super?"":" 🔒")+'</button>');
+  s.push('<button class="sek'+(sekme==="alarm"?" on":"")+'" data-r="nötr" data-s="alarm">🔔 Anlık Alarm'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="rot"?" on":"")+'" data-r="nötr" data-s="rot">🔄 Rotasyon</button>');
   /* 📈 PERFORMANS SEKMESİ KAPALI (kullanıcı kararı 19/08).
      Motor SILINMEDI — /api/performans ve "gecmis" kaydi calismaya devam
@@ -2190,7 +2206,6 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="rad"?" on":"")+'" data-r="nötr" data-s="rad">🧠 KAP Radar</button>');
   s.push('<button class="sek'+(sekme==="kap"?" on":"")+'" data-r="nötr" data-s="kap">📰 KAP</button>');
   s.push('<button class="sek'+(sekme==="temettu"?" on":"")+'" data-r="nötr" data-s="temettu">💰 Temettü</button>');
-  s.push('<button class="sek'+(sekme==="davet"?" on":"")+'" data-r="nötr" data-s="davet">📤 Davet</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="sag"?" on":"")+'" data-r="nötr" data-s="sag">🛡 Sistem</button>');
@@ -2227,6 +2242,7 @@ function ciz(){
   if(sekme==="rot")return rotCiz();
   if(sekme==="perf")return perfCiz();
   if(sekme==="kama")return kamaCiz();
+  if(sekme==="alarm")return alarmCiz();
   if(sekme==="davet")return davetCiz();
   if(sekme==="panel")return panelCiz();
   if(sekme==="fav")return favCiz();
@@ -2243,6 +2259,13 @@ function ciz(){
    davet durumu ve sabit uyarı. Kesintisiz akması için içerik iki kez basılır. */
 /* Kayan yazı artık YALNIZ son sinyalleri, rastgele karışık sırada gösterir —
    dilim sayacı / üyelik / sabit uyarı metinleri kaldırıldı. */
+var PROMO_METINLER=["👑 <b>Süper Üyelik</b>: adaylar + anlık alarm + beklemesiz erişim",
+"🔔 Sinyal oluşmadan <b>önce</b> haberdar ol — 👑 Süper Üye ol",
+"☀️ Güneş sinyalleri sadece <b>Süper Üyelere</b> özel",
+"📤 Arkadaşını davet et, <b>Süper Üyelik</b> kazan",
+"🪜 Kırılmadan önce gör: Aday listeleri <b>Süper Üyelikte</b>",
+"📐 Formasyon taraması <b>Süper Üyelikte</b> açık",
+"⏳ Süper Üyelikte bekleme yok — anında sonuç"];
 function seritCiz(){
   var hepsi=[];
   ["potansiyel","fibo","uzunvade"].forEach(function(k){
@@ -2259,6 +2282,12 @@ function seritCiz(){
   var par=gosterilen.map(function(x){
     return (x.y>=0?"🟢":"🔴")+" <b>"+E(x.kod)+"</b> "+Y(x.y)+' <span class="ay2">'+x.tf+"</span>";
   });
+  /* 👑 SÜPER ÜYELİK TANITIMI — kayan yazının içine rastgele bir konumda,
+     rastgele bir metinle karışır. Zaten Süper Üye olana gösterilmez. */
+  if(!(D&&D.super)&&PROMO_METINLER.length){
+    var promo='<span class="ay3">'+PROMO_METINLER[Math.floor(Math.random()*PROMO_METINLER.length)]+"</span>";
+    par.splice(Math.floor(Math.random()*(par.length+1)),0,promo);
+  }
   var ic=par.join('<span class="ay">◆</span>');
   /* hız: içerik ne kadar uzunsa animasyon o kadar sürsün, aksi halde çok
      sinyal olduğunda şerit okunamayacak kadar hızlı akıyordu. */
@@ -2289,6 +2318,11 @@ function araBagla(){
   if(yb&&!yb.dataset.bagli){
     yb.dataset.bagli="1";
     yb.onclick=function(){tit();sekme="yardim";ciz();window.scrollTo(0,0)};
+  }
+  var db=el("davetBtn");
+  if(db&&!db.dataset.bagli){
+    db.dataset.bagli="1";
+    db.onclick=function(){tit();sekme="davet";ciz();window.scrollTo(0,0)};
   }
 }
 /* 🔄 ELLE TARAMA DÜĞMESİ — yalnız yönetici.
@@ -2341,6 +2375,21 @@ function hotCiz(){
   var secilen=Object.keys(enIyiKod).map(function(k){return enIyiKod[k]});
   secilen.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
   secilen=secilen.slice(0,12);
+
+  /* 🔒 ☀️ Güneş katmanı Süper Üyeliğe kilitli — non-super kullanıcıya
+     hangi hisselerin ☀️ olduğu gösterilmez, sadece kaç tane olduğu ve
+     kilit + davet çağrısı gösterilir. */
+  if(!D.super){
+    var say=secilen.length;
+    var h2='<div class="hotBaslik">🔒 ☀️ Güçlülerin güçlüsü — Süper Üyelik</div>'+
+      '<div class="hotKilit" id="hotKilit">'+
+        (say?'Şu an <b>'+say+' hisse</b> 4 şartı birden sağlıyor, ama hangileri olduğunu görmek Süper Üyelik gerektiriyor.':'Bu bölüm Süper Üyelere özel.')+
+        ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div>';
+    kutu.innerHTML=h2;
+    var hl=el("hotKilitLink");
+    if(hl)hl.onclick=function(){tit();sekme="davet";ciz();window.scrollTo(0,0)};
+    return;
+  }
 
   function kartHtml(x){
     var t=TF[x._ad]||{kisa:x.tf||"",renk:"var(--ciz)"};
@@ -2487,6 +2536,15 @@ function adayCiz(){
    birkaç saniye sonra kendini yeniler. */
 var kamaD=null, kamaTararken=false;
 function kamaCiz(){
+  if(!D.super){
+    el("govde").innerHTML='<div class="kilit"><div class="buyuk">🔒</div>'+
+      "<h2>Süper Üyelik gerekli</h2>"+
+      "<p>Formasyon taraması, klasik grafik formasyonlarını (üçgen, bayrak, omuz-baş-omuz vb.) kırılım oluşmadan tespit eder.</p>"+
+      "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
+      '<button class="dg" id="davetGit">📤 Sistemi paylaş</button></div>';
+    el("davetGit").onclick=function(){tit();sekme="davet";ciz()};
+    return;
+  }
   if(kamaD){kamaGoster();return}
   el("govde").innerHTML='<div class="yukleniyor">formasyonlar yükleniyor…</div>';
   kamaTara();
@@ -2849,8 +2907,8 @@ function yardimCiz(){
   h+='<div class="uyari" style="margin-top:0;text-align:left">Bu sayfa, uygulamadaki her rozetin ve her sekmenin ne anlama geldiğini basitçe anlatır. Hiçbir yerde "al/sat" demez — hepsi karar vermene yardımcı olacak bağlam bilgisidir.</div>';
 
   h+='<div class="ydGrup">☀️ Hava durumu rozeti (yeni)</div>';
-  h+=ydBlok("☀️ Güneş — 4/4 şart",
-    "Aşağıdaki dört bağlam şartının HEPSİ birden sağlanıyor: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend + 📊 endeksi geçiyor. En sağlam görünüm budur; nadir çıkar, çıktığında dikkat çekicidir.",
+  h+=ydBlok("☀️ Güneş — 4/4 şart 🔒 Süper Üyelik",
+    "Aşağıdaki dört bağlam şartının HEPSİ birden sağlanıyor: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend + 📊 endeksi geçiyor. En sağlam görünüm budur; nadir çıkar, çıktığında dikkat çekicidir. Hangi hissenin ☀️ olduğu artık Süper Üyelere özel — Süper Üye değilsen yerine 🔒 rozeti ve kaç hissenin şartı sağladığı görünür, hangileri olduğu görünmez.",
     "Örnek: bir hisse kırılımdan sonra hâlâ alıcıların üstünde, kırdığı seviyenin altı yoğun işlem görmüş, fiyat düzgün bir çizgide gitmiş ve BIST100'den daha güçlü hareket ediyorsa → ☀️ Güneş.");
   h+=ydBlok("⛅ Parçalı bulutlu — 3/4 şart",
     "Dört şarttan üçü sağlanıyor, biri eksik. Hâlâ güçlü bir görüntü ama bir tarafı zayıf — hangi şartın eksik olduğunu satırdaki diğer rozetlerden görebilirsin.",
@@ -2882,10 +2940,12 @@ function yardimCiz(){
   h+='<div class="ydGrup">📑 Sekmeler ne işe yarar</div>';
   h+=ydBlok("📊 KISA · 1 saat / 📐 ORTA · 4 saat / 🗓 UZUN · 1 gün",
     "Aynı tarama mantığı, sadece zaman dilimi farklı. KISA = 1 saatlik mumlarda oluşan kırılımlar (en hızlı, en çok sinyal, en kısa vadeli). ORTA = 4 saatlik mumlar. UZUN = günlük mumlar (en yavaş ama en az yanıltan, pozisyon/uzun vade için).");
-  h+=ydBlok("🟨 Adaylar",
-    "Henüz kırılım OLUŞMAMIŞ ama tetik seviyesine yaklaşmış hisseler. Kırarsa nereye gideceği (hedef) burada önceden görünür — kırılımı beklemeden hazırlıklı olmak için.");
-  h+=ydBlok("📐 Formasyon",
-    "Klasik grafik formasyonlarını (üçgen, bayrak, omuz-baş-omuz vb.) otomatik tarayan liste; kırılım beklemeden formasyon aşamasındaki hisseleri gösterir.");
+  h+=ydBlok("🟨 Adaylar 🔒 Süper Üyelik",
+    "Henüz kırılım OLUŞMAMIŞ ama tetik seviyesine yaklaşmış hisseler. Kırarsa nereye gideceği (hedef) burada önceden görünür — kırılımı beklemeden hazırlıklı olmak için. Süper Üyelik gerektirir.");
+  h+=ydBlok("📐 Formasyon 🔒 Süper Üyelik",
+    "Klasik grafik formasyonlarını (üçgen, bayrak, omuz-baş-omuz vb.) otomatik tarayan liste; kırılım beklemeden formasyon aşamasındaki hisseleri gösterir. Süper Üyelik gerektirir.");
+  h+=ydBlok("🔔 Anlık Alarm 🔒 Süper Üyelik",
+    "Güçlü bir sinyale giren hisse oluştuğu an sana Telegram'da özel mesaj gelir, listeyi kontrol etmene gerek kalmaz. Süper Üyelik gerektirir; açıp kapatmak için bota /alarm yazman yeterli.");
   h+=ydBlok("🔄 Sektör Rotasyonu",
     "Hangi sektörün parada olduğunu, para akışının sektörler arasında nasıl döndüğünü gösterir (Gelişen → Lider → Zayıflayan → Geride sırasıyla saat yönünde döner).");
   h+=ydBlok("⭐ Takip",
@@ -2907,6 +2967,23 @@ function yardimCiz(){
 
   h+='<div class="uyari">⚠️ Buradaki hiçbir rozet veya sekme tek başına yatırım tavsiyesi değildir. Teknik tarama geçmiş veriye bakar, geleceği bilemez.</div>';
   el("govde").innerHTML=h;
+}
+/* 🔔 ANLIK ALARM — açma/kapama Telegram sohbetinde /alarm komutuyla
+   yapılır (bot tarafı, mini-app dışı); burası sadece Süper Üyelik
+   kapısı + nasıl açılacağının anlatımı. */
+function alarmCiz(){
+  if(!D.super){
+    el("govde").innerHTML='<div class="kilit"><div class="buyuk">🔒</div>'+
+      "<h2>Süper Üyelik gerekli</h2>"+
+      "<p>Anlık uyarı, güçlü bir sinyale giren hisse oluştuğu an sana <b>özel mesaj</b> olarak gelir — listeyi açıp kontrol etmene gerek kalmaz.</p>"+
+      "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
+      '<button class="dg" id="davetGit">📤 Sistemi paylaş</button></div>';
+    el("davetGit").onclick=function(){tit();sekme="davet";ciz()};
+    return;
+  }
+  el("govde").innerHTML='<div class="kutu"><h3>🔔 Anlık Alarm</h3>'+
+    '<p class="ydAlt">Süper Üyesin, bu özellik senin için açık. Anlık uyarıyı açıp kapatmak için Telegram sohbetinde bota <code>/alarm</code> yaz — orada tek dokunuşla 🔔 Aç / 🔕 Kapat seçebilirsin.</p>'+
+    '<p class="ydAlt">Açıkken: güçlü bir sinyale giren hisse oluştuğu an, sohbete otomatik mesaj gelir.</p></div>';
 }
 function portfoyBul(kod){
 var k=null,ad=null;
