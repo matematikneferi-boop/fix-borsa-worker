@@ -6971,6 +6971,131 @@ function avwapHesapla(veri, capaTs){
          fark:Math.round((sonFiyat/vwap-1)*10000)/100,   /* yuzde */
          bar:bar, ustunde:sonFiyat>=vwap};
 }
+/* ══════════════════ 📚 HACİM RAFI (kırılan seviyenin altındaki yığın) ═════
+   Kırılan pivotun hemen ALTINDA ne kadar işlem birikmiş? Kalın bir rafın
+   üstünde kırılan pivot, kimsenin işlem yapmadığı ince bir bölgede kırılan
+   pivottan farklıdır: kalın raf, o seviyede gerçekten el değiştirmiş mal
+   demektir — kırılınca destek olur. İnce raf ise sahte kırılıma açıktır.
+   Hacim profili mantığının tek sayıya indirilmiş hâli: seviyenin %BANT
+   altındaki fiyat bölgesinde gerçekleşen hacmin toplam hacme oranı,
+   bölgenin genişlik payına bölünerek normalize edilir.
+   1 = normal · 2 = normalin iki katı kalın raf · 0.3 = boşluk. */
+const RAF_BANT=0.03;              /* seviyenin %3 altı */
+function hacimRafi(r,seviye){
+  if(!r||!r.kap||!r.hac||!(seviye>0)||r.n<40)return null;
+  const alt=seviye*(1-RAF_BANT);
+  let icHacim=0,toplam=0,enD=Infinity,enY=-Infinity;
+  for(let i=0;i<r.n;i++){
+    const h=Number(r.hac[i]); if(!isFinite(h)||h<0)continue;
+    const y=Number(r.yuk?r.yuk[i]:r.kap[i]), d=Number(r.dus?r.dus[i]:r.kap[i]);
+    if(!isFinite(y)||!isFinite(d))continue;
+    toplam+=h; if(d<enD)enD=d; if(y>enY)enY=y;
+    /* barın fiyat aralığı bandı kesiyorsa, kesişen oran kadar hacim sayılır */
+    const kesA=Math.max(d,alt), kesU=Math.min(y,seviye);
+    if(kesU>kesA){ const genis=Math.max(y-d,1e-9); icHacim+=h*((kesU-kesA)/genis); }
+  }
+  if(!(toplam>0)||!(enY>enD))return null;
+  const bandPayi=(seviye-alt)/(enY-enD);        /* bandın toplam aralıktaki payı */
+  if(!(bandPayi>0))return null;
+  const oran=(icHacim/toplam)/bandPayi;
+  if(!isFinite(oran))return null;
+  return Math.round(oran*100)/100;
+}
+
+/* ══════════ 📐 KAUFMAN VERİMLİLİK ORANI (trend mi, testere mi?) ══════════
+   Net yol ÷ katedilen toplam yol. 1'e yakınsa fiyat düz bir çizgide gitmiş
+   (temiz trend); 0'a yakınsa aynı yeri defalarca gidip gelmiş (testere).
+   Testere piyasada pivot kırılımı en çok yanıltan sinyaldir — fiyat seviyeyi
+   deler, geri gelir, tekrar deler. Bu oran onu tek sayıyla ayırır. */
+const ER_BAR=20;
+function verimlilikOrani(r,N){
+  N=N||ER_BAR;
+  if(!r||!r.kap||r.n<N+2)return null;
+  const son=r.n-1, bas=son-N;
+  const net=Math.abs(Number(r.kap[son])-Number(r.kap[bas]));
+  let yol=0;
+  for(let i=bas+1;i<=son;i++){
+    const a=Number(r.kap[i]),b=Number(r.kap[i-1]);
+    if(isFinite(a)&&isFinite(b))yol+=Math.abs(a-b);
+  }
+  if(!(yol>0))return null;
+  return Math.round((net/yol)*100)/100;
+}
+
+/* ═════ 🏷️ KURUMSAL İŞLEM (bedelsiz / sermaye artırımı / bölünme) ═════
+   AKFIS'in −%82.80'i bir sinyal hatası değil, bir BEDELSİZ artefaktıydı:
+   fiyat bölününce eski pivot seviyesi anlamsız kalıyor ama sistem onu
+   hâlâ geçerli sanıyor. Ardışık kapanışlarda 1/2, 1/3, 2/3, 1/4, 1/5, 3/4
+   gibi TEMİZ oranlar arıyoruz — piyasa böyle yuvarlak oranlarla düşmez,
+   ama sermaye işlemleri tam olarak böyle düşürür.
+   Dönen değer: işlemin bar indeksi (yoksa −1). Pivot bu indeksten ÖNCEYSE
+   seviye güvenilmezdir ve sinyal üretilmez. */
+const KURUMSAL_ORANLAR=[1/2,1/3,1/4,1/5,2/3,3/4,1/1.5,1/2.5];
+const KURUMSAL_TOLERANS=0.02;     /* %2 sapma payı */
+const KURUMSAL_GERI=90;           /* son 90 barda ara */
+function kurumsalIslemIx(r){
+  if(!r||!r.kap||r.n<5)return -1;
+  const bas=Math.max(1,r.n-KURUMSAL_GERI);
+  for(let i=r.n-1;i>=bas;i--){
+    const a=Number(r.kap[i]),b=Number(r.kap[i-1]);
+    if(!(a>0)||!(b>0))continue;
+    const o=a/b;
+    if(o>0.85)continue;                       /* normal günlük hareket */
+    for(const hedef of KURUMSAL_ORANLAR){
+      if(Math.abs(o-hedef)/hedef<=KURUMSAL_TOLERANS)return i;
+    }
+  }
+  return -1;
+}
+
+/* ═══════════ 📊 ENDEKSE GÖRE BETA ve GÖRELİ GÜÇ (XU100) ═══════════
+   "Hisse mi yükseliyor, endeks mi taşıyor?" Endeks %2 artarken %2.1 yapan
+   hisse güçlü değildir. Beta, hissenin endeksle birlikte ne kadar oynadığını;
+   göreli güç (alfa) ise endeksin açıkladığı kısım çıkarıldıktan sonra GERİYE
+   NE KALDIĞINI söyler. Alfa artı ise hareket hisseye özgüdür. */
+const BETA_BAR=60, GGUC_BAR=20;
+function getiriDizisi(kap,n,adet){
+  const g=[],bas=Math.max(1,n-adet);
+  for(let i=bas;i<n;i++){
+    const a=Number(kap[i]),b=Number(kap[i-1]);
+    if(a>0&&b>0)g.push(a/b-1); else g.push(0);
+  }
+  return g;
+}
+function betaGorGuc(rHisse,rEndeks){
+  if(!rHisse||!rEndeks||!rHisse.kap||!rEndeks.kap)return null;
+  const n=Math.min(rHisse.n,rEndeks.n);
+  if(n<BETA_BAR+5)return null;
+  const h=getiriDizisi(rHisse.kap,rHisse.n,BETA_BAR);
+  const e=getiriDizisi(rEndeks.kap,rEndeks.n,BETA_BAR);
+  const m=Math.min(h.length,e.length); if(m<20)return null;
+  const hs=h.slice(-m),es=e.slice(-m);
+  const ort=a=>a.reduce((x,y)=>x+y,0)/a.length;
+  const hO=ort(hs),eO=ort(es);
+  let kov=0,vari=0;
+  for(let i=0;i<m;i++){kov+=(hs[i]-hO)*(es[i]-eO);vari+=(es[i]-eO)*(es[i]-eO)}
+  if(!(vari>0))return null;
+  const beta=kov/vari;
+  /* Son GGUC_BAR barın getirileri: hisse − beta × endeks */
+  const hK=rHisse.kap,eK=rEndeks.kap;
+  const hi=hK[rHisse.n-1]/hK[Math.max(0,rHisse.n-1-GGUC_BAR)]-1;
+  const ei=eK[rEndeks.n-1]/eK[Math.max(0,rEndeks.n-1-GGUC_BAR)]-1;
+  if(!isFinite(hi)||!isFinite(ei))return null;
+  return{beta:Math.round(beta*100)/100,
+         gguc:Math.round((hi-beta*ei)*10000)/100};   /* yüzde */
+}
+/* Endeks kaydı tarama başında bir kez çekilir (tek ek ağ isteği). */
+let sinEndeksKayit=null, sinEndeksZaman=0;
+async function endeksKaydiAl(){
+  if(sinEndeksKayit&&Date.now()-sinEndeksZaman<9e5)return sinEndeksKayit;
+  try{
+    const tf=SIN_TF["1G"];
+    const v=await momCek("XU100",tf.aralik,tf.hizli,sinOnbellekMs(tf));
+    const r=sinTfKayit(v,tf);
+    if(r&&r.n>BETA_BAR){sinEndeksKayit=r;sinEndeksZaman=Date.now()}
+  }catch(e){}
+  return sinEndeksKayit;
+}
 const KIRILIM_ANI_MAX=140;    /* tur basina en fazla bu kadar hisseye 5dk serisi cekilir */
 const KIRILIM_ANI_ES=8;       /* es zamanli istek */
 async function kirilimAniNetlestir(kartlar){
@@ -7256,6 +7381,9 @@ async function zincirCalistir(kaynak){
              '</b> · '+(r.acikBar?'son bar <b>AÇIK</b>':'son bar kapalı')+' · '+n+' bar</span>';
       }
     }catch(e){ tani=""; }
+    /* 📊 Endeks (XU100) kaydı — beta ve göreli güç için tek ek istek.
+       15 dakika önbellekli, tur başına bir kez. */
+    try{ await endeksKaydiAl(); }catch(e){}
     /* 2) listeler hazırlanıyor (dilim dilim) */
     yaz2("⏳ 2/3 dilim listeleri hazırlanıyor…");
     if(btn) btn.textContent="⏳ 2/3 listeler…";
@@ -7295,7 +7423,7 @@ async function zincirCalistir(kaynak){
    SEKMEDE calisiyordu, sekme yenilenmedigi icin eski kod isbasindaydi.
    Artik her tarama sonunda surum ekrana yaziliyor: alttaki damga
    asagidakiyle ayni degilse calisan kod eskidir, sekmeyi kapatip ac. */
-const YAMA_SURUM="2026-08-19-b · AVWAP · asgari hedef %2.7 · KISA/ORTA/UZUN";
+const YAMA_SURUM="2026-08-19-c · raf · verimlilik · kurumsal · beta";
 const SUREKLI_BEKLE_MS=2000;
 /* SEANS PENCERESI — surekli mod yalnizca burada tarar.
    Disarida fiyat degismiyor; her 10 saniyede bir Yahoo'yu ve aynalari
@@ -7634,8 +7762,27 @@ function tgKartlar(){
          bot alarmlarindan ayni anda dusor (ikisi de ayni karttan
          besleniyor, tek yerde suzmek yeterli). */
       if(!(hd[1].yuzde>=ASGARI_HEDEF_YUZDE)) return null;
+      /* ── 🏷️ KURUMSAL İŞLEM SÜZGECİ ──
+         Pivot, bir bedelsiz/sermaye artırımından ÖNCE oluştuysa o seviye
+         artık gerçek değildir (fiyat bölünmüş, seviye bölünmemiş). Böyle
+         bir "kırılım" tamamen sahtedir; sinyal hiç üretilmez. */
+      const rTf=kay&&kay.tf[g.tf];
+      let kurumsalIx=-1;
+      try{ kurumsalIx=kurumsalIslemIx(rTf); }catch(e){}
+      if(kurumsalIx>=0 && x.f.tepeIx!=null && x.f.tepeIx<kurumsalIx) return null;
+      /* ── 📚 hacim rafı · 📐 verimlilik · 📊 beta & göreli güç ── */
+      let raf=null, er=null, beta=null, gguc=null;
+      try{ raf=hacimRafi(rTf,x.f.tepe); }catch(e){}
+      try{ er=verimlilikOrani(rTf,ER_BAR); }catch(e){}
+      try{
+        const rG=(kay&&kay.tf["1G"])||rTf;
+        const bg=betaGorGuc(rG,sinEndeksKayit);
+        if(bg){beta=bg.beta;gguc=bg.gguc}
+      }catch(e){}
       return tgKartSure({kod:x.kod, fiyat:x.f.fiyat, giris:x.f.tepe,
         zaman:tgSinyalYasi(ts,x.kacBar,canli),
+        raf:raf, er:er, beta:beta, gguc:gguc,
+        kurumsal:(kurumsalIx>=0&&rTf&&rTf.zam?rTf.zam[kurumsalIx]:null),
         tf:tfKisa(g.tf), tfKod:g.tf, canli:canli,
         guc:(canli?"⚡ <b>CANLI</b> · bar kapanmadı":(x.kacBar===0?"🟢 <b>BUGÜN</b>":"🟡 önceki barlarda"))+(x.bant?"  ·  ✅ likit":""),
         etiket:(canli?"⚡ canlı":(x.kacBar===0?"🟢 bugün":"🟡 önceki"))+(x.bant?" · ✅ likit":""),

@@ -753,8 +753,8 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-19-g · hata yanıtına CORS · KV hatası isteği düşürmüyor";
-const BEKLENEN_TARAYICI_SURUM="2026-08-19-b";
+const WORKER_SURUM="2026-08-19-h · bağlam rozetleri · CORS · KV limiti";
+const BEKLENEN_TARAYICI_SURUM="2026-08-19-c";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
   const kartlar=(L&&L.kartlar)||{};
@@ -1907,6 +1907,11 @@ textarea.gir{min-height:88px;resize:vertical}
 .araGir{flex:0 1 150px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
   border-radius:8px;padding:6px 9px;font-size:13px;font-weight:700;text-transform:uppercase}
 .araGir::placeholder{color:var(--soluk);text-transform:none;font-weight:400}
+.roz{display:inline-block;font-size:10.5px;line-height:1.5;padding:1px 6px;margin:3px 4px 0 0;
+  border-radius:5px;border:1px solid var(--ciz);white-space:nowrap}
+.roz-iy{color:var(--ye);border-color:rgba(47,191,113,.35);background:rgba(47,191,113,.08)}
+.roz-ko{color:var(--kr);border-color:rgba(229,72,77,.35);background:rgba(229,72,77,.08)}
+.rozSat{margin-top:4px}
 .araBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
   padding:6px 11px;font-size:14px;line-height:1.4}
 .hotBaslik{font-size:10px;font-weight:700;color:var(--sar);margin-bottom:3px}
@@ -1983,6 +1988,38 @@ var TG=window.Telegram&&window.Telegram.WebApp;
 try{TG.ready();TG.expand();if(TG.setHeaderColor)TG.setHeaderColor("#0e1116");
     if(TG.setBackgroundColor)TG.setBackgroundColor("#0e1116")}catch(e){}
 function tit(){try{TG.HapticFeedback.impactOccurred("light")}catch(e){}}
+/* ═══════ 🎖️ YENİ ÖLÇÜ ROZETLERİ ═══════
+   Dört ölçü de "iyi/kötü" değil, BAĞLAM taşır. O yüzden rozetler eşiğin
+   iki yanını farklı renkte gösterir ve nötr bölgede hiç görünmez —
+   her kartta rozet olursa rozet anlamını yitirir. */
+function rozRaf(v){          /* hacim rafı: kırılan seviyenin altındaki yığın */
+  if(!(v>0))return "";
+  if(v>=1.5)return '<span class="roz roz-iy">📚 kalın raf '+v+'x</span>';
+  if(v<=0.5)return '<span class="roz roz-ko">📚 ince raf '+v+'x</span>';
+  return "";
+}
+function rozEr(v){           /* verimlilik: trend mi testere mi */
+  if(!(v>0))return "";
+  if(v>=0.45)return '<span class="roz roz-iy">📐 temiz trend '+v+'</span>';
+  if(v<=0.20)return '<span class="roz roz-ko">📐 testere '+v+'</span>';
+  return "";
+}
+function rozGguc(v,b){       /* endekse göre göreli güç (alfa) */
+  if(v==null||!isFinite(v))return "";
+  var bt=(b!=null&&isFinite(b))?' · β'+b:'';
+  if(v>=3)return '<span class="roz roz-iy">📊 endeksi geçiyor +'+v+'%'+bt+'</span>';
+  if(v<=-3)return '<span class="roz roz-ko">📊 endeksin gerisinde '+v+'%'+bt+'</span>';
+  return "";
+}
+function rozAvwap(k){
+  if(!(k.avwap>0)||!(k.avwapBar>=3))return "";
+  return k.avwapUst!==false
+    ? '<span class="roz roz-iy">⚓ ortalama üstü</span>'
+    : '<span class="roz roz-ko">⚓ ortalama altı</span>';
+}
+function rozlerHepsi(k){
+  return rozAvwap(k)+rozRaf(k.raf)+rozEr(k.er)+rozGguc(k.gguc,k.beta);
+}
 var D=null, sekme="potansiyel", sira="pot", adayTf="adayOrta", presetSec="kaliteli", portfoySirala="deger";
 /* ---------- GERİ / İLERİ ----------
    Uygulama tek sayfa olduğu için tarayıcı geçmişi yok; her ekran değişimi
@@ -2316,7 +2353,8 @@ function satirHtml(k,ad){
   return '<div class="satir'+(bg?" bgnSatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'" style="border-left-color:'+t.renk+'">'+
     '<div class="sol"><div class="kod">'+(k.rozet?'<span class="rz">'+k.rozet+"</span>":"")+
     (bg?'<span class="bgn">BUGÜN</span>':"")+E(k.kod)+"</div>"+
-    '<div class="altbilgi">'+E(alt.join(" · "))+"</div></div>"+
+    '<div class="altbilgi">'+E(alt.join(" · "))+"</div>"+
+    (function(){var rz=rozlerHepsi(k);return rz?'<div class="rozSat">'+rz+"</div>":""})()+"</div>"+
     '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
     '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?sag:Y(kr))+"</div></div></div>";
 }
@@ -3097,6 +3135,37 @@ function detay(kod,ad){
            (aUst?"Kırılımdan sonra alanlar kârda — kırılım taşınıyor."
                 :"Kırılımdan sonra alanlar zararda — geri dönüş riski yüksek.")+
            " "+k.avwapBar+" barlık ölçüm.</div>";
+      }
+      /* ── Dört bağlam ölçüsü: raf · verimlilik · beta/alfa ── */
+      if(k.raf>0||k.er>0||k.gguc!=null){
+        h+='<div class="kutu"><h3>🔬 Bağlam</h3>';
+        if(k.raf>0){
+          h+='<div class="sat"><span class="et">📚 Hacim rafı</span><b class="'+
+             (k.raf>=1.5?"ye":(k.raf<=0.5?"kr":""))+'">'+k.raf+'x</b></div>'+
+             '<div class="altbilgi" style="opacity:.7;margin-bottom:6px">'+
+             (k.raf>=1.5?"Kırılan seviyenin altında kalın bir hacim yığını var — gerçek bir direnç aşıldı."
+              :(k.raf<=0.5?"Seviyenin altı boş — kimsenin işlem yapmadığı bir yerden geçildi, sahte kırılıma açık."
+                :"Seviye altındaki hacim normal düzeyde."))+'</div>';
+        }
+        if(k.er>0){
+          h+='<div class="sat"><span class="et">📐 Verimlilik</span><b class="'+
+             (k.er>=0.45?"ye":(k.er<=0.20?"kr":""))+'">'+k.er+'</b></div>'+
+             '<div class="altbilgi" style="opacity:.7;margin-bottom:6px">'+
+             (k.er>=0.45?"Fiyat düz bir çizgide ilerliyor — temiz trend."
+              :(k.er<=0.20?"Fiyat aynı yeri gidip geliyor — testere. Kırılımlar burada en çok yanıltır."
+                :"Trend ile testere arasında."))+'</div>';
+        }
+        if(k.gguc!=null){
+          h+='<div class="sat"><span class="et">📊 Endekse göre</span><b class="'+
+             (k.gguc>=3?"ye":(k.gguc<=-3?"kr":""))+'">'+(k.gguc>0?"+":"")+k.gguc+'%</b></div>'+
+             (k.beta!=null?'<div class="sat"><span class="et">Beta (XU100)</span><b>'+k.beta+'</b></div>':"")+
+             '<div class="altbilgi" style="opacity:.7">'+
+             (k.gguc>=3?"Hareket hisseye özgü — endeksin taşıdığından fazlasını yapıyor."
+              :(k.gguc<=-3?"Endeksin gerisinde kalıyor; yükseliş piyasadan geliyor olabilir."
+                :"Endeksle birlikte hareket ediyor."))+
+             '</div>';
+        }
+        h+="</div>";
       }
       h+="</div>";
       h+='<div class="kutu"><h3>🎯 Hedefler</h3>';
@@ -4116,6 +4185,20 @@ if(e.avwap>0&&e.avwapBar>=3){
   const u=e.avwapUst!==!1;
   a+="⚓ Kırılım ortalaması: <b>"+e.avwap+"</b> · fiyat "+
      (u?"üstünde ✅":"<b>altında</b> ⚠️")+" ("+(e.avwapFark>0?"+":"")+e.avwapFark+"%)\n";
+}
+/* 🎖️ Bağlam rozetleri — yalnız eşiği geçenler yazılır. Her kartta
+   görünürlerse anlamlarını yitirirler; nötr bölgede sessiz kalırlar. */
+{
+  const rz=[];
+  if(e.raf>=1.5)rz.push("📚 kalın raf "+e.raf+"x");
+  else if(e.raf>0&&e.raf<=0.5)rz.push("📚 <b>ince raf</b> "+e.raf+"x");
+  if(e.er>=0.45)rz.push("📐 temiz trend "+e.er);
+  else if(e.er>0&&e.er<=0.20)rz.push("📐 <b>testere</b> "+e.er);
+  if(e.gguc!=null&&isFinite(e.gguc)){
+    if(e.gguc>=3)rz.push("📊 endeksi geçiyor +"+e.gguc+"%");
+    else if(e.gguc<=-3)rz.push("📊 <b>endeksin gerisinde</b> "+e.gguc+"%");
+  }
+  if(rz.length)a+=rz.join("  ·  ")+"\n";
 }
 if(e.zaman&&(a+="⏱ Sinyal: "+e.zaman+(e.tf?"  ·  "+e.tf:"")+"\n"),void 0!==e.giris&&null!==e.giris){a+="🚪 Sinyal fiyatı: <b>"+t(e.giris)+"</b>\n";null!==kar&&(a+=(kar>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(kar>=0?"+":"")+kar.toFixed(2)+"%</b>\n")}
 return null!=e.tetik&&(a+="🔓 Tetik seviyesi: <b>"+t(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(2)+"% kaldı":"")+"\n<i>Bu seviye kırılırsa o dilimin sinyali başlar — giriş fiyatı değildir.</i>\n"),null!=e.hedef1&&(a+="🎯 Direnç: <b>"+t(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  +"+Number(e.hedef1Yuzde).toFixed(1)+"%":"")+"\n"),e.direncler&&e.direncler.length&&(a+=(null!=e.hedef1?"🧱 Direnç: ":"🧱 Direnç: ")+e.direncler.filter(x=>null!=x).map(e=>t(e)).join(" · ")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(a+="🎯 Hedef: <b>"+t(e.hedef)+"</b>",
