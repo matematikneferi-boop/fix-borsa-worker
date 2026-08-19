@@ -1905,8 +1905,8 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit .ay3{color:#ffb020;font-weight:700}
 .hotSerit{margin:0 0 6px}
 .araSat{display:flex;align-items:center;gap:6px;margin-bottom:8px}
-.araGir{flex:0 1 150px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
-  border-radius:8px;padding:6px 9px;font-size:13px;font-weight:700;text-transform:uppercase}
+.araGir{flex:0 1 88px;min-width:0;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
+  border-radius:8px;padding:6px 7px;font-size:13px;font-weight:700;text-transform:uppercase}
 .araGir::placeholder{color:var(--soluk);text-transform:none;font-weight:400}
 .roz{display:inline-block;font-size:10.5px;line-height:1.5;padding:1px 6px;margin:3px 4px 0 0;
   border-radius:5px;border:1px solid var(--ciz);white-space:nowrap}
@@ -1927,6 +1927,7 @@ textarea.gir{min-height:88px;resize:vertical}
 .ydGrup:first-child{margin-top:0}
 .araBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
   padding:6px 11px;font-size:14px;line-height:1.4}
+.araBtn.on{background:#ffb020;border-color:#ffb020;color:#1a1200}
 .hotBaslik{font-size:10px;font-weight:700;color:var(--sar);margin-bottom:3px}
 .hotSira{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
 .hotKart{flex:0 0 54px;background:var(--kart);border:1px solid var(--ciz);
@@ -1986,7 +1987,7 @@ textarea.gir{min-height:88px;resize:vertical}
 
 <div class="ust">
   <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><h1 id="baslikYazi">📊 Fix Borsa Sinyal</h1><span id="sekmeAdi" class="sekmeAdi"></span><div class="saat" id="saat"></div></div>
-  <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button><button id="taraBtn" class="araBtn" style="display:none" title="Şimdi tara ve buluta yükle">🔄</button><button id="yardimBtn" class="yardimBtn" title="Rozetler ve sekmeler ne demek?">❓</button><button id="davetBtn" class="yardimBtn" title="Sistemi paylaş, Süper Üyelik kazan">📤</button></div>
+  <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button><button id="taraBtn" class="araBtn" style="display:none" title="Şimdi tara ve buluta yükle">🔄</button><button id="yardimBtn" class="yardimBtn" title="Rozetler ve sekmeler ne demek?">❓</button><button id="davetBtn" class="yardimBtn" title="Sistemi paylaş, Süper Üyelik kazan">📤</button><button id="onizBtn" class="araBtn" style="display:none" title="Sıradan (süper olmayan) üye gözünden gör">👁️</button></div>
   <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
   <div class="sekmeler" id="sekmeler"></div>
@@ -2075,6 +2076,21 @@ function rozlerHepsi(k){
   return havaRozet(k)+rozAvwap(k)+rozRaf(k.raf)+rozEr(k.er)+rozGguc(k.gguc,k.beta);
 }
 var D=null, sekme="potansiyel", sira="pot", adayTf="adayOrta", presetSec="kaliteli", portfoySirala="deger";
+var ONIZLEME=(function(){try{return localStorage.getItem("onizlemeModu")==="1"}catch(e){return false}})();
+/* 👁️ SIRADAN ÜYE ÖNİZLEMESİ — yalnız yöneticide görünür bir düğme.
+   Gerçek yon/super bayrakları D.yonGercek / D.superGercek'te saklanır;
+   önizleme açıkken D.yon ve D.super sahte olarak false yapılır, böylece
+   tüm ekran (kilit rozetleri, gizli sekmeler, kayan yazı reklamı vb.)
+   sıradan, süper olmayan bir kullanıcının göreceği gibi çizilir. Bu SADECE
+   görünümü etkiler — sunucu tarafı yetki kontrolleri initData'ya bakar,
+   bu sahte bayraktan etkilenmez. */
+function onizUygula(){
+  if(!D)return;
+  if(D.yonGercek===undefined)D.yonGercek=D.yon;
+  if(D.superGercek===undefined)D.superGercek=D.super;
+  if(ONIZLEME){D.yon=false;D.super=false}
+  else{D.yon=D.yonGercek;D.super=D.superGercek}
+}
 /* ---------- GERİ / İLERİ ----------
    Uygulama tek sayfa olduğu için tarayıcı geçmişi yok; her ekran değişimi
    kendi yığınımıza yazılır. Telegram'ın kendi geri düğmesi de buna bağlanır:
@@ -2166,6 +2182,7 @@ function basla(){
     splashKapat();
     if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Doğrulanamadı.<br>Uygulamayı Telegram üzerinden aç.</div>';return}
     D=v;
+    onizUygula();
     if(!D.onay)return onayCiz();
     ciz();
   }).catch(function(){splashKapat();el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
@@ -2218,6 +2235,7 @@ function sekCiz(){
 function ciz(){
   yolYaz();
   taraDugmeCiz();          /* D geldikten sonra yönetici düğmesi belirir */
+  onizDugmeCiz();          /* sıradan üye önizleme düğmesi */
   el("saat").textContent=(D.yon&&D.guncelleme)?("🔐 son tarama "+D.guncelleme):"";
   /* Ana sekme dışında: başlık logosu, arama kutusu, kayan yazı ve "hot"
      şeridi kalkar — üstte sadece 🏠 Ana Menü ve o sekmenin adı kalır,
@@ -2282,11 +2300,19 @@ function seritCiz(){
   var par=gosterilen.map(function(x){
     return (x.y>=0?"🟢":"🔴")+" <b>"+E(x.kod)+"</b> "+Y(x.y)+' <span class="ay2">'+x.tf+"</span>";
   });
-  /* 👑 SÜPER ÜYELİK TANITIMI — kayan yazının içine rastgele bir konumda,
-     rastgele bir metinle karışır. Zaten Süper Üye olana gösterilmez. */
+  /* 👑 SÜPER ÜYELİK TANITIMI — her 3-4 hissede bir araya bir tanıtım
+     metni serpiştirilir (rastgele metin, rastgele 3 ya da 4 aralık).
+     Zaten Süper Üye olana hiç gösterilmez. */
   if(!(D&&D.super)&&PROMO_METINLER.length){
-    var promo='<span class="ay3">'+PROMO_METINLER[Math.floor(Math.random()*PROMO_METINLER.length)]+"</span>";
-    par.splice(Math.floor(Math.random()*(par.length+1)),0,promo);
+    var karisikPar=[],sayac=0,esik=3+Math.floor(Math.random()*2);
+    for(var pi=0;pi<par.length;pi++){
+      karisikPar.push(par[pi]);sayac++;
+      if(sayac>=esik&&pi<par.length-1){
+        karisikPar.push('<span class="ay3">'+PROMO_METINLER[Math.floor(Math.random()*PROMO_METINLER.length)]+"</span>");
+        sayac=0;esik=3+Math.floor(Math.random()*2);
+      }
+    }
+    par=karisikPar;
   }
   var ic=par.join('<span class="ay">◆</span>');
   /* hız: içerik ne kadar uzunsa animasyon o kadar sürsün, aksi halde çok
@@ -2331,6 +2357,24 @@ function araBagla(){
    kullanıcı verisi) henüz null oluyor. D.yon false görülüp düğme gizli
    kalıyor, kilit yüzünden de bir daha hiç denenmiyordu. Artık her çizimde
    ayrıca çağrılıyor; D geldiği anda düğme beliriyor. */
+function onizDugmeCiz(){
+  var ob=el("onizBtn");
+  if(!ob)return;
+  if(!(D&&D.yonGercek)){ob.style.display="none";return}
+  ob.style.display="";
+  ob.classList.toggle("on",!!ONIZLEME);
+  ob.title=ONIZLEME?"Önizleme açık — kendi (yönetici) görünümüne dön":"Sıradan (süper olmayan) üye gözünden gör";
+  if(ob.dataset.bagli)return;
+  ob.dataset.bagli="1";
+  ob.onclick=function(){
+    tit();
+    ONIZLEME=!ONIZLEME;
+    try{localStorage.setItem("onizlemeModu",ONIZLEME?"1":"0")}catch(e){}
+    onizUygula();
+    ciz();
+    window.scrollTo(0,0);
+  };
+}
 function taraDugmeCiz(){
   var tb=el("taraBtn");
   if(!tb)return;
