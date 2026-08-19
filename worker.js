@@ -18,7 +18,7 @@ t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
 [{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]);
 return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
-const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>Orta Trade</b> · 1SA — hedefi en uzak olanlar\n📐 <b>Orta Vade</b> · 4SA — bugün taze kıranlar\n🗓 <b>Uzun Vade</b> · 1G — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n📃 <code>/sinyal</code> — güncel listeyi <b>mesaj olarak</b> gönderir\n⚡ <code>/canli</code> — sadece bar kapanmadan kırılanlar\n<i>Uygulama açılmıyorsa bu iki komut her zaman çalışır.</i>\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
+const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>Orta Trade</b> · 1SA — hedefi en uzak olanlar\n📐 <b>Orta Vade</b> · 4SA — bugün taze kıranlar\n🗓 <b>Uzun Vade</b> · 1G — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n🏷️ <code>/surum</code> — yüklü sürümü ve son tarama saatini gösterir\n📃 <code>/sinyal</code> — güncel listeyi <b>mesaj olarak</b> gönderir\n⚡ <code>/canli</code> — sadece bar kapanmadan kırılanlar\n<i>Uygulama açılmıyorsa bu iki komut her zaman çalışır.</i>\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
 /* ══════════════════════════════════════════════════════════════════════════
    🛡 DAYANIKLILIK KATMANI (sürüm 11.6)
    Altı madde buraya toplandı. HİÇBİRİ mevcut davranışı değiştirmez:
@@ -688,6 +688,9 @@ const alarmTazeEsik=x=>x.canli
    cihazi worker'a hic baglanmiyor. Yani sinyaller MESAJ olarak sorunsuz
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
+/* Yeni surum ciktikca BU IKI SATIR guncellenir. */
+const WORKER_SURUM="2026-08-19-a · AVWAP · alarm kuyruğu · absorpsiyon havuzu";
+const BEKLENEN_TARAYICI_SURUM="2026-08-18-f";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
   const kartlar=(L&&L.kartlar)||{};
@@ -4826,6 +4829,30 @@ await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_w
 text:"🛠 <b>Yönetici paneli</b>\n\nAşağıdaki düğmeye dokun — panel tarayıcıda açılır.\n\n⏳ Bu bağlantı <b>30 dakika</b> geçerli; süresi dolunca yeniden <code>/panel</code> yaz.\n\nAdres:\n<code>"+baglanti+"</code>",
 reply_markup:{inline_keyboard:[[{text:"🛠 Paneli aç",url:baglanti}],[{text:"◀️ Menü",callback_data:"menu"}]]}})
 })()),new Response("ok")):(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"Bu komut yöneticiye özeldir.",reply_markup:u(t.from.id)})),new Response("ok"))
+;if(i&&n.startsWith("/surum"))return q.waitUntil((async()=>{
+/* 🏷️ MOBILDE SURUM KONTROLU
+   824 KB'lik yumatu.html'i telefonda acip YAMA_SURUM aramak donduruyor,
+   GitHub dosya listesindeki tarih ise yanilticidir (depoya baska bir
+   islem gelince "simdi" yazar ama dosya degismemis olabilir).
+   Tek guvenilir kanit: TARAYICININ KENDI BILDIRDIGI surum. Damga her
+   /push turunda pakete konuyor, burada geri okunuyor. Yeni dosya
+   yuklenmediyse burada ESKI surum gorunur — dosya acmaya gerek kalmaz. */
+let m="🏷️ <b>SÜRÜM</b>\n\n";
+try{
+  const L=await g(A);
+  const ts=L&&L.guncelleme?new Date(L.guncelleme):null;
+  const yas=ts?Math.round((Date.now()-ts.getTime())/6e4):null;
+  m+="🖥 <b>Tarayıcı</b> (yumatu.html)\n<code>"+
+     E(String((L&&L.tarayiciSurum)||"— damga yok, ESKİ DOSYA —"))+"</code>\n\n";
+  m+="🕐 Son tarama: "+(ts?tgTarihSaat(Math.floor(ts.getTime()/1e3)):"—")+
+     (yas!=null?" ("+yas+" dk önce)":"")+"\n";
+  m+="📦 Beklenen: <code>"+E(BEKLENEN_TARAYICI_SURUM)+"</code>\n\n";
+  const uygun=String((L&&L.tarayiciSurum)||"").indexOf(BEKLENEN_TARAYICI_SURUM)===0;
+  m+=uygun?"✅ Tarayıcı güncel.":"⚠️ <b>Tarayıcı ESKİ.</b> yumatu.html yüklemesi tutmamış.";
+  m+="\n\n⚙️ <b>Worker</b>\n<code>"+E(WORKER_SURUM)+"</code>";
+}catch(e){m+="Okunamadı."}
+await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:m,parse_mode:"HTML",
+disable_web_page_preview:!0,reply_markup:u(t.from.id)})})()),new Response("ok")
 ;if(i&&(n.startsWith("/sinyal")||n.startsWith("/canli")))return q.waitUntil((async()=>{
 const yalnizCanli=n.startsWith("/canli");
 let metin;
