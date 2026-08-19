@@ -18,7 +18,7 @@ t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
 [{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]);
 return d(e)&&(t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
-const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>Orta Trade</b> · 1SA — hedefi en uzak olanlar\n📐 <b>Orta Vade</b> · 4SA — bugün taze kıranlar\n🗓 <b>Uzun Vade</b> · 1G — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
+const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>Orta Trade</b> · 1SA — hedefi en uzak olanlar\n📐 <b>Orta Vade</b> · 4SA — bugün taze kıranlar\n🗓 <b>Uzun Vade</b> · 1G — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n📃 <code>/sinyal</code> — güncel listeyi <b>mesaj olarak</b> gönderir\n⚡ <code>/canli</code> — sadece bar kapanmadan kırılanlar\n<i>Uygulama açılmıyorsa bu iki komut her zaman çalışır.</i>\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
 /* ══════════════════════════════════════════════════════════════════════════
    🛡 DAYANIKLILIK KATMANI (sürüm 11.6)
    Altı madde buraya toplandı. HİÇBİRİ mevcut davranışı değiştirmez:
@@ -680,6 +680,35 @@ const ALARM_BAR={"15DK":900,"1SA":3600,"4SA":14400,"1G":86400,"1H":604800,"1A":2
 const alarmTazeEsik=x=>x.canli
 ?((ALARM_BAR[String(x.tfKod||"")]||3600)+1200)
 :(ALARM_TAZE[String(x.tfKod||"")]||6*3600);
+/* ---------- 📃 MINI APP ACILMADIGINDA DA SINYAL GORULEBILSIN ----------
+   Bazi operatorler *.workers.dev adresini sifirliyor (ERR_CONNECTION_RESET).
+   O kullanicilar Mini App'i ACAMIYOR — cunku Mini App worker'da barinan bir
+   web sayfasi ve istek hic worker'a varmiyor. Kodla duzeltilemez.
+   AMA bot mesajlari Telegram'in kendi sunucularindan geliyor; kullanicinin
+   cihazi worker'a hic baglanmiyor. Yani sinyaller MESAJ olarak sorunsuz
+   ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
+   /sinyal · /canli komutlari bu boslugu kapatiyor. */
+async function sinyalMetniUret(A,yalnizCanli){
+  const L=await g(A);
+  const kartlar=(L&&L.kartlar)||{};
+  let liste=[];
+  for(const ad of ["potansiyel","fibo"]){
+    for(const x of (kartlar[ad]||[])) if(x&&x.kod) liste.push(x);
+  }
+  /* ayni hisse iki listede olabilir */
+  const gorulen=new Set(); liste=liste.filter(x=>{
+    const a=x.kod+"|"+(x.tfKod||""); if(gorulen.has(a))return false; gorulen.add(a); return true;});
+  if(yalnizCanli) liste=liste.filter(x=>!!x.canli);
+  if(!liste.length) return yalnizCanli
+    ?"⚡ Şu an bar kapanmadan kırılan hisse yok.\n\nBar içinde kırılım oluştuğunda burada görünür."
+    :"Şu an listede sinyal yok.\n\nTarama sürüyor; kırılım oluştuğunda haber vereceğim.";
+  const bas=yalnizCanli
+    ?"⚡ <b>ANLIK KIRILIMLAR</b> · <i>bar kapanmadı</i>\n\n"
+    :"📃 <b>GÜNCEL SİNYAL LİSTESİ</b>\n\n";
+  const n=Math.min(liste.length,6);
+  return bas+liste.slice(0,n).map(x=>j(x)).join("\n")+
+    (liste.length>n?"\n<i>…ve "+(liste.length-n)+" hisse daha.</i>":"");
+}
 async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;
 const yeniListe=yeni&&yeni.kartlar&&yeni.kartlar.potansiyel||[];
 if(!yeniListe.length)return;
@@ -1982,7 +2011,12 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar</button>');
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon</button>');
   s.push('<button class="sek'+(sekme==="rot"?" on":"")+'" data-r="nötr" data-s="rot">🔄 Rotasyon</button>');
-  s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
+  /* 📈 PERFORMANS SEKMESİ KAPALI (kullanıcı kararı 19/08).
+     Motor SILINMEDI — /api/performans ve "gecmis" kaydi calismaya devam
+     ediyor, cunku portfoy grafigi ve gunluk ozetler de ayni kayittan
+     besleniyor; silmek onlari da kirardi. Yalnizca sekme gizlendi.
+     GERI ACMAK ICIN: asagidaki satirin basindaki // isaretini kaldir. */
+  //s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
   s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
@@ -2155,6 +2189,10 @@ function satirHtml(k,ad){
   if(k.canli)alt.push("⚡ canlı");
   if(k.tetik!=null)alt.push("🔓 tetik "+N(k.tetik)+(k.tetikYuzde!=null?" · %"+Number(k.tetikYuzde).toFixed(1)+" kaldı":""));
   else if(k.giris!=null)alt.push("sinyal "+N(k.giris));
+  /* ⚓ Kirilimdan bu yana alanlarin ortalama maliyetine gore konum.
+     Listede tek kelime yeter; ayrinti detay ekraninda. */
+  if(k.avwap>0&&k.avwapBar>=3)
+    alt.push("⚓ "+(k.avwapUst!==false?"ortalama üstü":"ORTALAMA ALTI"));
   if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
   var bg=bugunMu(k);
   return '<div class="satir'+(bg?" bgnSatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'" style="border-left-color:'+t.renk+'">'+
@@ -2918,6 +2956,21 @@ function detay(kod,ad){
       if(kr!=null)h+='<div class="sat"><span class="et">Sinyalden bu yana</span><b class="'+(kr>=0?"ye":"kr")+'">'+Y(kr)+"</b></div>";
       if(k.tetik!=null)h+='<div class="sat"><span class="et">🔓 Tetik seviyesi</span><b>'+N(k.tetik)+
         (k.tetikYuzde!=null?" ("+Number(k.tetikYuzde).toFixed(2)+"% kaldı)":"")+"</b></div>";
+      /* ⚓ KIRILIM ORTALAMASI (capalanmis VWAP)
+         Kirilim anindan bu yana el degistiren her lotun hacimle
+         agirliklandirilmis ortalama fiyati = kirilimi alanlarin maliyeti.
+         Ustunde: alanlar karda, kirilim tasiniyor.
+         Altinda: alanlar zararda, arz baskisi ve geri donus riski. */
+      if(k.avwap>0&&k.avwapBar>=3){
+        var aUst=k.avwapUst!==false;
+        h+='<div class="sat"><span class="et">⚓ Kırılım ortalaması</span><b>'+N(k.avwap)+" ₺</b></div>"+
+           '<div class="sat"><span class="et">Ortalamaya göre</span><b class="'+(aUst?"ye":"kr")+'">'+
+           (aUst?"üstünde":"altında")+" ("+Y(k.avwapFark)+")</b></div>"+
+           '<div class="altbilgi" style="margin-top:5px;opacity:.7">'+
+           (aUst?"Kırılımdan sonra alanlar kârda — kırılım taşınıyor."
+                :"Kırılımdan sonra alanlar zararda — geri dönüş riski yüksek.")+
+           " "+k.avwapBar+" barlık ölçüm.</div>";
+      }
       h+="</div>";
       h+='<div class="kutu"><h3>🎯 Hedefler</h3>';
       if(k.hedef1!=null)h+='<div class="sat"><span class="et">🧱 Direnç</span><b>'+N(k.hedef1)+
@@ -3589,6 +3642,25 @@ function perfCiz(){
       "birkaç gün içinde burası dolacak.</div>";
     el("govde").innerHTML=h;pdBagla();return;
   }
+  
+  /* 🔧 ÖLÇÜM SÜZGEÇLERİ — yalnız yöneticide görünür.
+     Elenen kayıt sayısı her zaman yazılır: rakamın neden değiştiğini
+     görmeden eşik oynatmak körlemesine ayar yapmaktır. */
+  if(v&&v.yonetici&&v.ayar){
+    h+='<div class="kutu"><h3>🔧 Ölçüm süzgeçleri</h3>'+
+      '<div class="altbilgi" style="margin-bottom:9px">Bunlar sinyalleri değil, <b>ölçümü</b> etkiler.</div>'+
+      '<div class="sat"><span class="et">Aykırı eşiği (%)<br>'+
+      '<i style="opacity:.6;font-size:11px">bedelsiz/sermaye artırımı artefaktını eler · 0 = kapalı</i></span>'+
+      '<input id="pfAykiri" type="number" step="5" min="0" max="500" value="'+E(String(v.ayar.aykiri))+'" '+
+      'style="width:72px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>'+
+      '<div class="sat"><span class="et">Olgunluk (gün)<br>'+
+      '<i style="opacity:.6;font-size:11px">bu yaştan genç sinyal ölçüme girmez · 0 = kapalı</i></span>'+
+      '<input id="pfOlgun" type="number" step="1" min="0" max="30" value="'+E(String(v.ayar.olgunluk))+'" '+
+      'style="width:72px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>'+
+      '<button class="dg" id="pfKaydet" style="margin-top:8px">💾 Kaydet ve yeniden ölç</button>'+
+      '<div class="altbilgi" style="margin-top:8px">Elenen: <b>'+((v&&v.elenenTaze)||0)+'</b> taze · '+
+      '<b>'+((v&&v.elenenAykiri)||0)+'</b> aykırı</div></div>';
+  }
   if(g){
     h+='<div class="kutu"><h3>📊 Genel · '+E(DONEM.filter(function(x){return x[0]===perfDonem})[0][1])+"</h3>"+
       '<div class="ikili"><div><div class="buyukN '+(g.isabet>=50?"ye":"kr")+'">'+g.isabet.toFixed(0)+
@@ -3642,6 +3714,13 @@ function pdBagla(){
   [].forEach.call(document.querySelectorAll("[data-pd]"),function(b){
     b.onclick=function(){tit();perfDonem=b.dataset.pd;perfCiz();window.scrollTo(0,0)};
   });
+  var pk=el("pfKaydet");
+  if(pk)pk.onclick=function(){
+    tit();pk.disabled=true;pk.textContent="…";
+    post("/api/perfAyar",{aykiri:Number(el("pfAykiri").value),olgunluk:Number(el("pfOlgun").value)})
+      .then(function(){ perfD=null; perfCiz(); })
+      .catch(function(){ pk.disabled=false; pk.textContent="💾 Kaydet ve yeniden ölç"; });
+  };
   simBagla();
 }
 var simSonuc=null;
@@ -4503,6 +4582,30 @@ const bos=()=>({n:0,kaz:0,top:0,zirve:0,eniyi:null,enkotu:null,hedefN:0,hedefTut
 const kapat=o=>o.n?{n:o.n,isabet:100*o.kaz/o.n,ort:o.top/o.n,zirve:o.zirve/o.n,
 eniyi:o.eniyi,enkotu:o.enkotu,on10k:Math.round(10000*(1+(o.top/o.n)/100)),
 hedefN:o.hedefN,hedefTut:o.hedefTut,direncN:o.direncN,direncDon:o.direncDon}:null;
+/* ════════ ÖLÇÜM SÜZGEÇLERİ (18/08 · iki gerçek ölçüm hatası) ════════
+   1) SERMAYE ARTIRIMI / BEDELSİZ. Kayıttaki giriş fiyatı (g) ham bir
+      sayıdır; bedelsiz sonrası fiyat bölününce getiri -%80'lere düşer.
+      AKFIS -82.80% bir sinyal hatası değil, bir BEDELSIZ artefaktıdır.
+      Böyle bir kayıt hem ortalamayı hem isabeti bozar.
+   2) OLGUNLAŞMAMIŞ SİNYAL. Kayıt, sinyal doğduğu an yazılır ve o anda
+      fiyat pivotun hemen üstündedir; getiri ~0'dır. Beş dakika önce
+      doğmuş bir sinyalin "isabet etti mi" sorusuna cevabı yoktur —
+      yazı tura atmakla aynıdır. Tarama sıklığı arttıkça bu taze
+      kayıtların payı büyür ve isabet oranını mekanik olarak 50'ye
+      çeker. Ölçüme girmesi için sinyalin en az OLGUNLUK gün yaşaması
+      beklenir.
+   Her iki eşik de panelden ayarlanabilir; 0 = süzgeç kapalı. */
+const PERF_VARSAYILAN={aykiri:60,olgunluk:1};
+const perfAyarOku=async()=>{
+  try{const c=await A.VERI.get("perfAyar");
+    if(c){const j=JSON.parse(c);
+      const a=Number(j.aykiri),o=Number(j.olgunluk);
+      return{aykiri:(a>=0&&a<=500)?a:PERF_VARSAYILAN.aykiri,
+             olgunluk:(o>=0&&o<=30)?o:PERF_VARSAYILAN.olgunluk}}}catch(e){}
+  return PERF_VARSAYILAN;
+};
+const PA=await perfAyarOku();
+let elenenAykiri=0, elenenTaze=0;
 const olc=gunSay=>{
 const kutu={},genel=bos();TFL.forEach(t=>kutu[t]=bos());
 const gunler=new Set();let seri=[];
@@ -4514,6 +4617,10 @@ for(const key of Object.keys(kay)){const rec=kay[key];
 if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
 const tf=DUZELT(rec.t||String(key).split("@")[1]||""),kd=rec.k||String(key).split("@")[0];
 const y2=100*(rec.s/rec.g-1),zr=rec.max>0?100*(rec.max/rec.g-1):y2;
+/* taze sinyal: henüz hüküm verilebilecek yaşta değil */
+if(PA.olgunluk>0&&f<PA.olgunluk){elenenTaze++;continue}
+/* aykırı: bedelsiz/sermaye artırımı artefaktı */
+if(PA.aykiri>0&&Math.abs(y2)>PA.aykiri){elenenAykiri++;continue}
 /* hedefe değdi mi: sinyalden sonraki zirve, o sinyalin hedef fiyatına ulaştı mı.
    dirençten döndü mü: zirve, kayıtlı direnç (hedef1) seviyesinin altında kaldı —
    yani fiyat o seviyeyi kıramadan geri çekildi. Bu alanlar yalnız o bilgi
@@ -4539,8 +4646,16 @@ seri.sort((a2,b2)=>a2.gun<b2.gun?-1:1);
 return{gunSay:gunSay,detaySinir:detaySinir,gunSayisi:gunler.size,
 dilimler:TFL.map(t=>({tf:t,ist:kapat(kutu[t])})),genel:kapat(genel),uzunGenel:uzunGenel,
 seri:seri.slice(-30)}};
-return JS({ok:!0,donem:{h1:olc(7),a1:olc(30),a3:olc(90),y1:olc(365)},
-guncelleme:G2.guncelleme||null})}
+const cikti=JS({ok:!0,donem:{h1:olc(7),a1:olc(30),a3:olc(90),y1:olc(365)},
+ayar:PA,elenenAykiri:elenenAykiri,elenenTaze:elenenTaze,yonetici:!!YON,
+guncelleme:G2.guncelleme||null});return cikti}
+/* 📈 Ölçüm süzgeçlerini kaydet — yalnız yönetici. */
+if("/api/perfAyar"===$.pathname){
+if(!YON)return JS({ok:!1,hata:"yetki yok"},403);
+let a=Number(gov.aykiri),o=Number(gov.olgunluk);
+if(!(a>=0&&a<=500))a=60; if(!(o>=0&&o<=30))o=1;
+if(A.VERI)await A.VERI.put("perfAyar",JSON.stringify({aykiri:a,olgunluk:o})).catch(()=>{});
+return JS({ok:!0,ayar:{aykiri:a,olgunluk:o}})}
 if("/api/simulasyon"===$.pathname){
 /* ================== 🧮 10.000 ₺ ZİNCİRLEME SİMÜLASYON ==================
    "Bugün ne olurdu" gibi tek seferlik ortalama getiri çarpımı YANLIŞTIR —
@@ -4711,6 +4826,12 @@ await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_w
 text:"🛠 <b>Yönetici paneli</b>\n\nAşağıdaki düğmeye dokun — panel tarayıcıda açılır.\n\n⏳ Bu bağlantı <b>30 dakika</b> geçerli; süresi dolunca yeniden <code>/panel</code> yaz.\n\nAdres:\n<code>"+baglanti+"</code>",
 reply_markup:{inline_keyboard:[[{text:"🛠 Paneli aç",url:baglanti}],[{text:"◀️ Menü",callback_data:"menu"}]]}})
 })()),new Response("ok")):(q.waitUntil(b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"Bu komut yöneticiye özeldir.",reply_markup:u(t.from.id)})),new Response("ok"))
+;if(i&&(n.startsWith("/sinyal")||n.startsWith("/canli")))return q.waitUntil((async()=>{
+const yalnizCanli=n.startsWith("/canli");
+let metin;
+try{metin=await sinyalMetniUret(A,yalnizCanli)}catch(e){metin="Liste şu an okunamadı, birazdan tekrar dene."}
+await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:metin,parse_mode:"HTML",
+disable_web_page_preview:!0,reply_markup:u(t.from.id)})})()),new Response("ok")
 ;if(i&&n.startsWith("/davet"))return q.waitUntil((async()=>{const e=(await b(A.BOT_TOKEN,"getMe",{}))?.result?.username||"bot";await b(A.BOT_TOKEN,"sendMessage",PY(e,t.from.id,t.chat.id))})()),new Response("ok")
 const o=a.toUpperCase().replace(/[^A-ZÇĞİÖŞÜ]/g,"");return i&&!a.startsWith("/")&&o.length>=3&&o.length<=6&&o.length===a.trim().length?(q.waitUntil((async()=>{const e=await g(A)
 ;await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",disable_web_page_preview:!0,text:P(e,o),reply_markup:u(t.from.id)})})()),
