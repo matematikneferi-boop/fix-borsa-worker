@@ -488,10 +488,11 @@ async function taramaTetikle(A){
   }
   _taraTetik=0;                    /* basarisizsa bekleme uygulanmasin */
   saglikArtir("elleTaramaHata");
-  return{ok:!1,mesaj:"GitHub reddetti ("+sonKod+"). "+
-    (sonKod===404?"Dosya adı fibo-tara.yml değil ya da token'da 'workflow' yetkisi yok."
-     :sonKod===403?"Token yetkisi yetersiz."
-     :sonGovde)};
+  return{ok:!1,mesaj:"GitHub reddetti ("+sonKod+").\n\n"+
+    (sonKod===401?"GH_TOKEN geçersiz ya da süresi dolmuş.\n\n1) GitHub → Settings → Developer settings → Personal access tokens → yeni token üret, 'workflow' yetkisi işaretli olsun.\n2) Cloudflare → Worker → Settings → Variables → GH_TOKEN'ı güncelle."
+     :sonKod===404?"fibo-tara.yml bulunamadı ya da token'da 'workflow' yetkisi yok."
+     :sonKod===403?"Token yetkisi yetersiz — 'workflow' kapsamı gerekli."
+     :String(sonGovde||"").slice(0,120))};
 }
 const FORMASYON_ARALIK=18e5; /* 30 dakika */
 let _fTetik=0;
@@ -639,8 +640,14 @@ async function alarmParcaOku(e){
     if(isFinite(v)&&v>=ALARM_PARCA_TABAN)return Math.min(ALARM_PARCA_TAVAN,v)}catch(_){}
   return 300;                       /* ilk tur icin iyimser baslangic */
 }
+let _alarmParcaBellek=null;
 async function alarmParcaYaz(e,v){
   const y=Math.max(ALARM_PARCA_TABAN,Math.min(ALARM_PARCA_TAVAN,Math.floor(v)));
+  /* KV YAZMA BÜTÇESİ: ücretsiz planda günde 1000 yazma var. Bu değer her
+     turda yeniden yazılıyordu (~600/gün) ve neredeyse hiç değişmiyordu.
+     Artık yalnızca GERÇEKTEN değiştiğinde yazılıyor. */
+  if(_alarmParcaBellek===y)return;
+  _alarmParcaBellek=y;
   try{await e.VERI.put("alarmParcaOgrenilen",String(y))}catch(_){}
 }
 const ALARM_KUYRUK_TTL=3600;
@@ -661,9 +668,9 @@ async function alarmKuyrukBosalt(e){
   if(!e.VERI||!e.BOT_TOKEN)return;
   let kuyruk=null;
   try{const h=await e.VERI.get("alarmKuyruk");if(!h)return;kuyruk=JSON.parse(h)}catch(_){}
-  if(!kuyruk||!Array.isArray(kuyruk.isler)||!kuyruk.isler.length){
-    await e.VERI.delete("alarmKuyruk").catch(()=>{});return;
-  }
+  /* Kuyruk zaten boşsa silme çağrısı da bir KV YAZIMIDIR ve her turda
+     tekrarlanıyordu. Boşsa hiç dokunma — anahtar TTL ile kendiliğinden düşer. */
+  if(!kuyruk||!Array.isArray(kuyruk.isler)||!kuyruk.isler.length)return;
   const is=kuyruk.isler[0];
   /* 30 dakikadan eski alarm gonderilmez — geciken sinyal yanlis sinyaldir. */
   if(!is||!Array.isArray(is.alicilar)||Date.now()-Number(is.ts||0)>18e5){
@@ -729,7 +736,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-19-d · tara düğmesi düzeltildi · KAP teşhis";
+const WORKER_SURUM="2026-08-19-e · KV yazma limiti düzeltildi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-19-b";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -935,6 +942,8 @@ const ABS_DILIM_TABAN=8, ABS_DILIM_TAVAN=120;
 const ABS_SURE_TAVAN_MS=1e4;          /* bir turda absorpsiyona ayrilan azami sure */
 const ABS_ES=6;                       /* es zamanli Yahoo cagrisi */
 const ABS_BIRIKIM_TTL=7200;
+const ABS_YAZMA_ARALIK=6e5;      /* KV'ye en fazla 10 dakikada bir yaz */
+let _absBirikimBellek=null, _absBirikimYazma=0;
 
 async function absDilimOku(A){
   const sabit=Number(A&&A.ABS_DILIM);
@@ -943,9 +952,12 @@ async function absDilimOku(A){
     if(isFinite(v)&&v>=ABS_DILIM_TABAN)return Math.min(ABS_DILIM_TAVAN,v)}catch(_){}
   return 32;
 }
+let _absDilimBellek=null;
 async function absDilimYaz(A,v){
-  try{await A.VERI.put("absDilimOgrenilen",
-    String(Math.max(ABS_DILIM_TABAN,Math.min(ABS_DILIM_TAVAN,Math.floor(v)))))}catch(_){}
+  const y=Math.max(ABS_DILIM_TABAN,Math.min(ABS_DILIM_TAVAN,Math.floor(v)));
+  if(_absDilimBellek===y)return;          /* değişmediyse KV'ye dokunma */
+  _absDilimBellek=y;
+  try{await A.VERI.put("absDilimOgrenilen",String(y))}catch(_){}
 }
 /* Taranacak evren: sinyal listelerindeki hisseler + favori/portfoy +
    havuzun tamami (sektor.json tum BIST'i kapsiyor). */
@@ -1033,8 +1045,8 @@ async function absDilimTara(A,ekKodlar){
   const ayar=await absAyarAl(A);
   const evren=await absEvren(A,ekKodlar);
   if(!evren.length)return;
-  let bir={ts:0,imlec:0,ayar:null,sonuc:{}};
-  try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)||bir}catch(_){}
+  let bir=_absBirikimBellek||{ts:0,imlec:0,ayar:null,sonuc:{}};
+  if(!_absBirikimBellek){try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)||bir}catch(_){}}
   if(!bir.sonuc||typeof bir.sonuc!=="object")bir.sonuc={};
   /* Olcumler esikten BAGIMSIZ oldugu icin esik degisince artik sifirlama
      YOK — birikim aynen kullanilir, suzgec gosterimde uygulanir. */
@@ -1075,7 +1087,21 @@ async function absDilimTara(A,ekKodlar){
   /* Bayat olcumleri at: 2 saatten eski sonuc listede kalmasin. */
   const kes=Date.now()-2*ABS_CACHE_MS;
   for(const k of Object.keys(bir.sonuc))if(Number(bir.sonuc[k].ts||0)<kes)delete bir.sonuc[k];
-  await A.VERI.put("absBirikim",JSON.stringify(bir),{expirationTtl:ABS_BIRIKIM_TTL}).catch(()=>{});
+  /* ⚠️ GÜNLÜK KV YAZMA SINIRI — BUGÜN PATLADI.
+     Bu satır her /push turunda (yaklaşık 50 saniyede bir) çalışıyordu:
+     tek başına günde ~600 yazma. Diğer yazıcılarla birlikte toplam 2000'i
+     aştı ve ücretsiz plandaki 1000 sınırı dolunca KV'ye HİÇBİR ŞEY
+     yazılamaz oldu — KAP önbelleği, alarm hafızası, absorpsiyon, hepsi
+     aynı anda sustu. "KV put() limit exceeded" hatasının kaynağı budur.
+     Çözüm: birikim BELLEKTE tutulur, KV'ye en fazla 10 dakikada bir
+     yazılır. Worker yeniden başlarsa en fazla 10 dakikalık ölçüm
+     tazelenir — kimse fark etmez, ama yazma 600'den ~50'ye iner. */
+  _absBirikimBellek=bir;
+  const simdiMs=Date.now();
+  if(simdiMs-_absBirikimYazma>=ABS_YAZMA_ARALIK){
+    _absBirikimYazma=simdiMs;
+    await A.VERI.put("absBirikim",JSON.stringify(bir),{expirationTtl:ABS_BIRIKIM_TTL}).catch(()=>{});
+  }
   saglikArtir("absTarama");
 }
 async function absorpsiyonTara(A,ekKodlar){
@@ -1089,11 +1115,12 @@ async function absorpsiyonTara(A,ekKodlar){
   const anahtar="absorpsiyon_v3:"+ayar.hacimEsik+":"+ayar.darlikEsik;
   /* Birikim bossa (ilk acilis, esik degisimi) kullaniciyi bos ekranla
      birakmamak icin hemen bir dilim tara; sonrasi arka planda ilerler. */
-  let bir=null;
-  try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)}catch(_){}
+  let bir=_absBirikimBellek;
+  if(!bir){try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)}catch(_){}}
   if((!bir||!bir.sonuc||!Object.keys(bir.sonuc).length)&&await absCalisiyorMu(A)){
     await absDilimTara(A,ekKodlar).catch(()=>{});
-    try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)}catch(_){}
+    bir=_absBirikimBellek;
+    if(!bir){try{const h=await A.VERI.get("absBirikim");if(h)bir=JSON.parse(h)}catch(_){}}
   }
   const sonuc=(bir&&bir.sonuc)||{};
   const tumu=Object.keys(sonuc).map(k=>sonuc[k]);
@@ -1118,7 +1145,8 @@ async function absorpsiyonTara(A,ekKodlar){
     calisiyor:await absCalisiyorMu(A),
     kaynak:(bir&&bir.kaynak)||"",
     liste:gecen.slice(0,60),ayar:ayar};
-  if(A.VERI)await A.VERI.put(anahtar,JSON.stringify(paket),{expirationTtl:3600}).catch(()=>{});
+  /* Paket zaten birikimden anlık üretiliyor; ayrıca KV'ye yazmak
+     her açılışta bir yazma daha demekti ve hiçbir işe yaramıyordu. */
   saglikArtir("absTarama");
   return paket;
 }
