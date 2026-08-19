@@ -1911,7 +1911,19 @@ textarea.gir{min-height:88px;resize:vertical}
   border-radius:5px;border:1px solid var(--ciz);white-space:nowrap}
 .roz-iy{color:var(--ye);border-color:rgba(47,191,113,.35);background:rgba(47,191,113,.08)}
 .roz-ko{color:var(--kr);border-color:rgba(229,72,77,.35);background:rgba(229,72,77,.08)}
+.roz-no{color:var(--soluk);border-color:rgba(139,148,158,.35);background:rgba(139,148,158,.08)}
+.roz-gunes{color:#ffb020;border-color:rgba(255,176,32,.5);background:rgba(255,176,32,.12);font-weight:700}
 .rozSat{margin-top:4px}
+.havaIkon{font-size:13px;margin-right:2px}
+.yardimBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
+  padding:6px 9px;font-size:14px;line-height:1.4}
+.ydBlok{background:var(--kart);border:1px solid var(--ciz);border-radius:12px;padding:12px;margin-bottom:10px}
+.ydBaslik{font-weight:800;font-size:14.5px;margin-bottom:4px}
+.ydAlt{color:var(--soluk);font-size:12.5px;line-height:1.55;margin-bottom:2px}
+.ydOr{margin-top:6px;font-size:12.5px;line-height:1.5;background:var(--kart2);border-radius:8px;padding:7px 9px}
+.ydGrup{font-size:11px;font-weight:800;color:var(--sar);text-transform:uppercase;letter-spacing:.4px;
+  margin:14px 0 6px}
+.ydGrup:first-child{margin-top:0}
 .araBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
   padding:6px 11px;font-size:14px;line-height:1.4}
 .hotBaslik{font-size:10px;font-weight:700;color:var(--sar);margin-bottom:3px}
@@ -1970,7 +1982,7 @@ textarea.gir{min-height:88px;resize:vertical}
 
 <div class="ust">
   <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><h1 id="baslikYazi">📊 Fix Borsa Sinyal</h1><span id="sekmeAdi" class="sekmeAdi"></span><div class="saat" id="saat"></div></div>
-  <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button><button id="taraBtn" class="araBtn" style="display:none" title="Şimdi tara ve buluta yükle">🔄</button></div>
+  <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button><button id="taraBtn" class="araBtn" style="display:none" title="Şimdi tara ve buluta yükle">🔄</button><button id="yardimBtn" class="yardimBtn" title="Rozetler ve sekmeler ne demek?">❓</button></div>
   <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
   <div class="sekmeler" id="sekmeler"></div>
@@ -2017,8 +2029,36 @@ function rozAvwap(k){
     ? '<span class="roz roz-iy">⚓ ortalama üstü</span>'
     : '<span class="roz roz-ko">⚓ ortalama altı</span>';
 }
+/* ═══════ ☀️ HAVA DURUMU ROZETİ — 4 bağlam şartından kaçı sağlanıyor? ═══════
+   Şartlar: ⚓ ortalama üstü · 📚 kalın raf (≥1.5x) · 📐 temiz trend (≥0.45)
+   · 📊 endeksi geçiyor (alfa ≥ +3%). Hiçbiri tek başına "al" demiyor,
+   ama dördü birden aynı hissede yeşilse tesadüf olma ihtimali düşük. */
+function havaSartlari(k){
+  var s=0;
+  if(k.avwap>0&&k.avwapBar>=3&&k.avwapUst!==false)s++;
+  if(k.raf!=null&&isFinite(k.raf)&&k.raf>=1.5)s++;
+  if(k.er!=null&&isFinite(k.er)&&k.er>=0.45)s++;
+  if(k.gguc!=null&&isFinite(k.gguc)&&k.gguc>=3)s++;
+  return s;
+}
+function havaEtiket(s){
+  if(s>=4)return{ik:"☀️",ad:"Güneş",sinif:"roz-gunes",aciklama:"4/4 şart birden sağlanıyor: ortalama üstü + kalın raf + temiz trend + endeksi geçiyor."};
+  if(s===3)return{ik:"⛅",ad:"Parçalı bulutlu",sinif:"roz-iy",aciklama:"3/4 bağlam şartı sağlanıyor — güçlü ama eksik bir tarafı var."};
+  if(s===2)return{ik:"☁️",ad:"Bulutlu",sinif:"roz-no",aciklama:"2/4 bağlam şartı sağlanıyor — orta karar, tek başına yeterli değil."};
+  return null;
+}
+function havaRozet(k){                 /* satır altındaki rozet sırasında tam etiket */
+  var e=havaEtiket(havaSartlari(k));
+  if(!e)return"";
+  return'<span class="roz '+e.sinif+'" title="'+e.aciklama+'">'+e.ik+" "+e.ad+"</span>";
+}
+function havaIkon(k){                  /* hisse kodunun hemen önünde tek karakterlik özet */
+  var e=havaEtiket(havaSartlari(k));
+  if(!e)return"";
+  return'<span class="havaIkon" title="'+e.aciklama+'">'+e.ik+"</span>";
+}
 function rozlerHepsi(k){
-  return rozAvwap(k)+rozRaf(k.raf)+rozEr(k.er)+rozGguc(k.gguc,k.beta);
+  return havaRozet(k)+rozAvwap(k)+rozRaf(k.raf)+rozEr(k.er)+rozGguc(k.gguc,k.beta);
 }
 var D=null, sekme="potansiyel", sira="pot", adayTf="adayOrta", presetSec="kaliteli", portfoySirala="deger";
 /* ---------- GERİ / İLERİ ----------
@@ -2055,6 +2095,7 @@ function ekranAdi(){
   if(sekme==="preset")return"🎛 Hazır filtreler";
   if(sekme==="kap")return"📰 KAP Bildirimleri";
   if(sekme==="temettu")return"💰 Temettü Takvimi";
+  if(sekme==="yardim")return"❓ Rozetler ve Sekmeler";
   if(sekme==="aday")return(TF[adayTf]?TF[adayTf].ad:"Adaylar");
   return TF[sekme]?TF[sekme].ik+" "+TF[sekme].ad:"";
 }
@@ -2193,6 +2234,7 @@ function ciz(){
   if(sekme==="preset")return presetCiz();
   if(sekme==="kap")return kapCiz();
   if(sekme==="temettu")return temettuCiz();
+  if(sekme==="yardim")return yardimCiz();
   if(sekme==="aday")return adayCiz();
   listeCiz(sekme);
 }
@@ -2243,6 +2285,11 @@ function araBagla(){
   /* 🔄 ELLE TARAMA — yalnız yönetici. Otomatik tarama takıldığında
      beklemeden yeni tur başlatır. Düğme diğer kullanıcılarda hiç
      görünmez (D.yon sunucudan geliyor, istemcide uydurulamaz). */
+  var yb=el("yardimBtn");
+  if(yb&&!yb.dataset.bagli){
+    yb.dataset.bagli="1";
+    yb.onclick=function(){tit();sekme="yardim";ciz();window.scrollTo(0,0)};
+  }
 }
 /* 🔄 ELLE TARAMA DÜĞMESİ — yalnız yönetici.
    HATALIYDI: bu blok araBagla() içindeydi. araBagla, g.dataset.bagli
@@ -2280,37 +2327,36 @@ function hotCiz(){
   });
   if(!hepsi.length){kutu.innerHTML="";return}
 
+  /* ☀️ GÜÇLÜLERİN GÜÇLÜSÜ — artık genel kalite sıralaması değil, 4 bağlam
+     şartını (ortalama üstü + kalın raf + temiz trend + endeksi geçiyor)
+     BİRDEN sağlayan hisseler. Böylece bu şerit yalnız ☀️ rozetli olanları
+     gösterir; şartları tam sağlayan hisse yoksa şerit boş kalır. */
   var enIyiKod={};
   hepsi.forEach(function(x){
     if(!x.kod)return;
+    if(havaSartlari(x)<4)return;
     var mv=enIyiKod[x.kod];
     if(!mv||(x.kalite||0)>(mv.kalite||0))enIyiKod[x.kod]=x;
   });
-  var genel=Object.keys(enIyiKod).map(function(k){return enIyiKod[k]});
-  genel.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
-  var secilen=genel.slice(0,5);
-  var varOlan={}; secilen.forEach(function(x){varOlan[x.kod]=true});
-  ["potansiyel","fibo","uzunvade"].forEach(function(ad){
-    var l=(D.kartlar&&D.kartlar[ad]||[]).slice();
-    l.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
-    var en=l[0]; if(!en||varOlan[en.kod])return;
-    var y=Object.assign({},en);y._ad=ad;secilen.push(y);varOlan[en.kod]=true;
-  });
+  var secilen=Object.keys(enIyiKod).map(function(k){return enIyiKod[k]});
+  secilen.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
+  secilen=secilen.slice(0,12);
 
   function kartHtml(x){
     var t=TF[x._ad]||{kisa:x.tf||"",renk:"var(--ciz)"};
     var kr=kar(x);
-    return '<div class="hotKart'+(bugunMu(x)?" bgnKart":"")+'" data-kod="'+E(x.kod)+'" data-l="'+x._ad+'" style="border-left-color:'+t.renk+'">'+
-      '<div class="hotKod">'+E(x.kod)+'</div>'+
+    return '<div class="hotKart'+(bugunMu(x)?" bgnKart":"")+'" data-kod="'+E(x.kod)+'" data-l="'+x._ad+'" style="border-left-color:#ffb020">'+
+      '<div class="hotKod">☀️ '+E(x.kod)+'</div>'+
       '<div class="hotDil">'+t.kisa+'</div>'+
       '<div class="hotYuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+'</div>'+
     '</div>';
   }
 
-  var h='';
+  var h='<div class="hotBaslik">☀️ Güçlülerin güçlüsü — 4/4 şart birden</div>';
   if(secilen.length)
-    h+='<div class="hotBaslik">🔥 Güçlüler</div><div class="hotSira">'+
-       secilen.map(kartHtml).join("")+"</div>";
+    h+='<div class="hotSira">'+secilen.map(kartHtml).join("")+"</div>";
+  else
+    h+='<div class="hotAltYazi" style="font-size:11px;color:var(--soluk)">Şu an 4 şartı birden sağlayan hisse yok — bu normaldir, nadir görülür.</div>';
   kutu.innerHTML=h;
   satirBagla();
 }
@@ -2351,7 +2397,7 @@ function satirHtml(k,ad){
   if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
   var bg=bugunMu(k);
   return '<div class="satir'+(bg?" bgnSatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'" style="border-left-color:'+t.renk+'">'+
-    '<div class="sol"><div class="kod">'+(k.rozet?'<span class="rz">'+k.rozet+"</span>":"")+
+    '<div class="sol"><div class="kod">'+havaIkon(k)+(k.rozet?'<span class="rz">'+k.rozet+"</span>":"")+
     (bg?'<span class="bgn">BUGÜN</span>':"")+E(k.kod)+"</div>"+
     '<div class="altbilgi">'+E(alt.join(" · "))+"</div>"+
     (function(){var rz=rozlerHepsi(k);return rz?'<div class="rozSat">'+rz+"</div>":""})()+"</div>"+
@@ -2789,6 +2835,78 @@ function temettuCiz(){
       };
     });
   });
+}
+/* ═══════════ ❓ YARDIM SAYFASI — rozetler ve sekmeler tek tek ═══════════
+   Amaç: hiçbir teknik terimi bilmeyen biri bile okuyunca anlasın. Her
+   blokta ne olduğu + neden önemli olduğu + somut bir örnek var. */
+function ydBlok(baslik,aciklama,ornek){
+  return '<div class="ydBlok"><div class="ydBaslik">'+baslik+'</div>'+
+    '<div class="ydAlt">'+aciklama+'</div>'+
+    (ornek?'<div class="ydOr">'+ornek+'</div>':"")+'</div>';
+}
+function yardimCiz(){
+  var h='';
+  h+='<div class="uyari" style="margin-top:0;text-align:left">Bu sayfa, uygulamadaki her rozetin ve her sekmenin ne anlama geldiğini basitçe anlatır. Hiçbir yerde "al/sat" demez — hepsi karar vermene yardımcı olacak bağlam bilgisidir.</div>';
+
+  h+='<div class="ydGrup">☀️ Hava durumu rozeti (yeni)</div>';
+  h+=ydBlok("☀️ Güneş — 4/4 şart",
+    "Aşağıdaki dört bağlam şartının HEPSİ birden sağlanıyor: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend + 📊 endeksi geçiyor. En sağlam görünüm budur; nadir çıkar, çıktığında dikkat çekicidir.",
+    "Örnek: bir hisse kırılımdan sonra hâlâ alıcıların üstünde, kırdığı seviyenin altı yoğun işlem görmüş, fiyat düzgün bir çizgide gitmiş ve BIST100'den daha güçlü hareket ediyorsa → ☀️ Güneş.");
+  h+=ydBlok("⛅ Parçalı bulutlu — 3/4 şart",
+    "Dört şarttan üçü sağlanıyor, biri eksik. Hâlâ güçlü bir görüntü ama bir tarafı zayıf — hangi şartın eksik olduğunu satırdaki diğer rozetlerden görebilirsin.",
+    "Örnek: her şey tamam ama endeksin gerisinde kalmış (📊 şartı yok) → ⛅.");
+  h+=ydBlok("☁️ Bulutlu — 2/4 şart",
+    "Sadece iki şart sağlanıyor. Orta karar bir görüntü; tek başına yeterli değil, diğer bilgilerle birlikte değerlendir.",
+    "Örnek: ortalama üstü ve temiz trend var ama raf ince ve endeksin gerisinde → ☁️.");
+  h+=ydBlok("Rozetsiz — 0 veya 1 şart",
+    "İki şarttan azı sağlanıyorsa hiç hava durumu rozeti gösterilmez. Bu \"kötü\" demek değil, sadece bağlam açısından net bir sinyal yok demektir.");
+
+  h+='<div class="ydGrup">🎖️ Tek tek bağlam rozetleri</div>';
+  h+=ydBlok("⚓ ortalama üstü / ORTALAMA ALTI",
+    "Kırılım anından bu yana o hisseyi alanların ortalama maliyeti hesaplanır (hacimle ağırlıklı). Fiyat bu ortalamanın üstündeyse alanların çoğu kârda demektir, satış baskısı düşüktür. Altındaysa alanlar zarardadır, her toparlanmada satış gelebilir.",
+    "Örnek: 1830'dan kırdı, şimdi 1880'de → \"ortalama üstü\", o kırılımdan alanlar kârda.");
+  h+=ydBlok("📚 kalın raf (X'x) / ince raf (X'x)",
+    "Kırılan seviyenin hemen altında ne kadar işlem (hacim) birikmiş, ona bakar. 1.5x ve üzeri \"kalın raf\": o seviyede gerçekten çok alım-satım olmuş, kırılınca destek olur — sağlam. 0.5x ve altı \"ince raf\": kimse işlem yapmamış boş bölge, sahte kırılıma açık.",
+    "Örnek: \"kalın raf 2.29x\" → seviyenin altı normalin iki katından fazla dolu, güvenilir.");
+  h+=ydBlok("📐 temiz trend (X) / testere (X)",
+    "Son 20 barda fiyatın NET yol aldığı mesafe ile TOPLAM gidip-geldiği mesafenin oranı. 0.45 ve üzeri \"temiz trend\": fiyat düz bir çizgide ilerlemiş. 0.20 ve altı \"testere\": fiyat aynı yerde defalarca gidip gelmiş — kırılımlar burada en çok yanıltır.",
+    "Örnek: \"testere 0.18\" yazan bir hissede kırılım görünse bile fiyat o bölgede sürekli delip geri gelmiş demektir, güvenme.");
+  h+=ydBlok("📊 endeksi geçiyor / endeksin gerisinde (%X · βY)",
+    "Hisse mi yükseliyor, yoksa tüm BIST100 mü onu taşıyor? β (beta) hissenin endeksle birlikte ne kadar sert oynadığını gösterir. Yüzdelik kısım (alfa) ise endeksin payı çıkarıldıktan sonra geriye kalan, HİSSEYE ÖZGÜ fazla getiridir.",
+    "Örnek: \"+24.72% · β0.21\" → düşük beta (endeksten bağımsız hareket) ve endeksin çok üstünde performans, hisseye özgü gerçek bir güç. \"-11.46% · β-0.49\" ise kırılım olsa da hisse aslında endeksin gerisinde kalıyor demek, uyarı işareti.");
+  h+=ydBlok("🦅 Kartal",
+    "Trend çizgisi kırılımı + hacim patlaması + bir momentum göstergesi (RSI/DMI/OBV) aynı anda tetiklendiğinde verilen kozmetik bir rozet. Birden fazla bağımsız sinyalin aynı anda yeşil yanması anlamına gelir.");
+  h+=ydBlok("⚡ canlı",
+    "Kırılım şu an oluşan bar üzerinde gerçekleşmiş — bar henüz kapanmadı. Bar kapanana kadar sinyal geri dönebilir (yalanlanabilir), bu yüzden \"canlı\" işaretli sinyallere biraz daha temkinli yaklaş.");
+
+  h+='<div class="ydGrup">📑 Sekmeler ne işe yarar</div>';
+  h+=ydBlok("📊 KISA · 1 saat / 📐 ORTA · 4 saat / 🗓 UZUN · 1 gün",
+    "Aynı tarama mantığı, sadece zaman dilimi farklı. KISA = 1 saatlik mumlarda oluşan kırılımlar (en hızlı, en çok sinyal, en kısa vadeli). ORTA = 4 saatlik mumlar. UZUN = günlük mumlar (en yavaş ama en az yanıltan, pozisyon/uzun vade için).");
+  h+=ydBlok("🟨 Adaylar",
+    "Henüz kırılım OLUŞMAMIŞ ama tetik seviyesine yaklaşmış hisseler. Kırarsa nereye gideceği (hedef) burada önceden görünür — kırılımı beklemeden hazırlıklı olmak için.");
+  h+=ydBlok("📐 Formasyon",
+    "Klasik grafik formasyonlarını (üçgen, bayrak, omuz-baş-omuz vb.) otomatik tarayan liste; kırılım beklemeden formasyon aşamasındaki hisseleri gösterir.");
+  h+=ydBlok("🔄 Sektör Rotasyonu",
+    "Hangi sektörün parada olduğunu, para akışının sektörler arasında nasıl döndüğünü gösterir (Gelişen → Lider → Zayıflayan → Geride sırasıyla saat yönünde döner).");
+  h+=ydBlok("⭐ Takip",
+    "Kendi seçtiğin hisseler; anlık kâr/zarar durumlarını buradan tek ekranda görürsün.");
+  h+=ydBlok("💼 Portföy",
+    "Gerçek pozisyonlarını (adet/maliyet) girdiğin yer; toplam değer ve kâr/zarar özeti burada hesaplanır.");
+  h+=ydBlok("🎛 Presetler",
+    "Hazır filtre kombinasyonları — \"kaliteli\" gibi tek dokunuşla belirli bir kalite eşiğinin üstündeki hisseleri gösteren kısayollar.");
+  h+=ydBlok("🌊 Absorpsiyon",
+    "Günlük barlardan order-flow (emir akışı) tespiti: büyük hacmin fiyatı yükseltmeden \"emildiği\" (absorbe edildiği) noktaları arar — genelde büyük oyuncuların sessizce topladığı bölgelerdir.");
+  h+=ydBlok("🧠 KAP Radar",
+    "Kamuyu Aydınlatma Platformu'ndaki (KAP) önemli şirket bildirimlerini (pay alım/satım, birleşme, bedelli/bedelsiz sermaye artırımı vb.) otomatik tarar ve önem sırasına göre listeler.");
+  h+=ydBlok("📰 KAP",
+    "Ham KAP bildirim akışı; KAP Radar'daki önem filtrelemesi olmadan tüm bildirimleri kronolojik gösterir.");
+  h+=ydBlok("💰 Temettü Takvimi",
+    "Kâr payı (temettü) dağıtım kararı açıklanan ve ödeme tarihi ileride olan hisseleri listeler.");
+  h+=ydBlok("📤 Davet",
+    "Uygulamayı başkalarına davet ederek Süper Üyelik süresi kazanma bölümü.");
+
+  h+='<div class="uyari">⚠️ Buradaki hiçbir rozet veya sekme tek başına yatırım tavsiyesi değildir. Teknik tarama geçmiş veriye bakar, geleceği bilemez.</div>';
+  el("govde").innerHTML=h;
 }
 function portfoyBul(kod){
 var k=null,ad=null;
