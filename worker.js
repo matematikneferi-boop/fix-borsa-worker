@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-h · Bugün süzgeci";
+const WORKER_SURUM="2026-08-20-k · temel analiz · çoklu veri kaynağı";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -795,6 +795,9 @@ const uygun=yeniListe.filter(x=>x&&x.kod
 /* Hedefe kalan pay %2.7'nin altındaki sinyaller LİSTEDE durur ama
    BİLDİRİM GÖNDERMEZ: liste dolu kalsın, mesaj değerli kalsın. */
 &&!x.zayifHedef
+/* 🔇 Bilanço açıklamasına 2 gün kala bildirim gönderilmez: o hareket
+   teknik kırılım değil, olay riskidir. Kart listede kalır. */
+&&!x.bilancoSessiz
 &&!/İZLEMEDE/.test(String(x.guc||"")));
 /* DUZELTME: "bilinen" seti gunde bir sifirlaniyor, ama hafta sonu piyasa
    kapaliyken bile takvim gunu degisiyor -- Cuma'nin sinyali Cumartesi/
@@ -2063,6 +2066,16 @@ function rozEr(v){           /* verimlilik: trend mi testere mi */
   if(v<=0.20)return '<span class="roz roz-ko">📐 testere '+v+'</span>';
   return "";
 }
+/* 🏭 Sektöre göre: hisse kendi sektörünün neresinde? Endeks rozetinden
+   keskindir — bankacılık toptan yükselirken sıradan bir banka hissesi
+   "endeksi geçiyor" görünür ama sektöründe geride kalabilir. */
+function rozSektor(k){
+  if(k.sektorGuc==null||!isFinite(k.sektorGuc))return "";
+  var v=Number(k.sektorGuc);
+  if(v>=0.5)return '<span class="roz roz-iy">🏭 sektörünü geçiyor +'+v.toFixed(2)+'</span>';
+  if(v<=-0.5)return '<span class="roz roz-ko">🏭 sektöründe geride '+v.toFixed(2)+'</span>';
+  return "";
+}
 function rozGguc(v,b){       /* endekse göre göreli güç (alfa) */
   if(v==null||!isFinite(v))return "";
   var bt=(b!=null&&isFinite(b))?' · β'+b:'';
@@ -2121,8 +2134,21 @@ function havaIkon(k){                  /* hisse kodunun hemen önünde tek karak
   if(!e)return"";
   return'<span class="havaIkon" title="'+e.aciklama+'">'+e.ik+"</span>";
 }
+/* 📋 Temel taraf: yalnız uçlar gösterilir — her kartta rozet olursa
+   rozet anlamını yitirir. */
+function rozTemel(k){
+  var t=k.temel; if(!t)return "";
+  var r="";
+  if(t.fskorOlculen>=5){
+    var o=t.fskor/t.fskorOlculen;
+    if(o>=0.75)r+='<span class="roz roz-iy">📊 F-Skor '+t.fskor+'/'+t.fskorOlculen+'</span>';
+    else if(o<=0.35)r+='<span class="roz roz-ko">📊 F-Skor '+t.fskor+'/'+t.fskorOlculen+'</span>';
+  }
+  if(k.bilancoSessiz)r+='<span class="roz roz-ko">📅 bilanço yakın · bildirim yok</span>';
+  return r;
+}
 function rozlerHepsi(k){
-  return havaRozet(k)+rozAvwap(k)+rozRaf(k.raf)+rozEr(k.er)+rozGguc(k.gguc,k.beta);
+  return havaRozet(k)+rozAvwap(k)+rozRaf(k.raf)+rozEr(k.er)+rozSektor(k)+rozGguc(k.gguc,k.beta)+rozTemel(k);
 }
 /* Varsayılan sıralama "kar": liste açılır açılmaz en çok kazandıran sinyal
    en üstte. Kullanıcı istediğinde 🎯 Hedefe kalan / 🕐 En yeni'ye geçebilir. */
@@ -2175,6 +2201,7 @@ function ekranAdi(){
   if(sekme==="portfoy")return"💼 Portföyüm";
   if(sekme==="preset")return"🎛 Hazır filtreler";
   if(sekme==="backtest")return"📊 Backtest";
+  if(sekme==="temel")return"📋 Temel Analiz";
   if(sekme==="kap")return"📰 KAP Bildirimleri";
   if(sekme==="temettu")return"💰 Temettü Takvimi";
   if(sekme==="yardim")return"❓ Rozetler ve Sekmeler";
@@ -2275,6 +2302,10 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
   s.push('<button class="sek'+(sekme==="rad"?" on":"")+'" data-r="nötr" data-s="rad">🧠 KAP Radar</button>');
+  /* 📋 Temel Analiz — HERKESE AÇIK ve üst sıralarda: sinyalin arkasında
+     şirket olup olmadığını görmek kilitlenecek bir ayrıcalık değil,
+     sistemin ciddiyetinin göstergesidir. */
+  s.push('<button class="sek'+(sekme==="temel"?" on":"")+'" data-r="nötr" data-s="temel">📋 Temel Analiz</button>');
   s.push('<button class="sek'+(sekme==="kap"?" on":"")+'" data-r="nötr" data-s="kap">📰 KAP</button>');
   s.push('<button class="sek'+(sekme==="temettu"?" on":"")+'" data-r="nötr" data-s="temettu">💰 Temettü</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
@@ -2321,6 +2352,7 @@ function ciz(){
   if(sekme==="portfoy")return portfoyCiz();
   if(sekme==="preset")return presetCiz();
   if(sekme==="backtest")return backtestCiz();
+  if(sekme==="temel")return temelCiz();
   if(sekme==="kap")return kapCiz();
   if(sekme==="temettu")return temettuCiz();
   if(sekme==="yardim")return yardimCiz();
@@ -3106,6 +3138,96 @@ function backtestGoster(v){
 
   el("govde").innerHTML=h;
 }
+/* ═══════════════ 📋 TEMEL ANALİZ SAYFASI ═══════════════
+   Sinyal listelerindeki hisselerin temel verisi tek ekranda. Veri
+   kaynağı haftalık temel.json; bu sayfa yalnızca okur ve sıralar.
+   Sinyal üretimine, alarma ve taramaya hiçbir etkisi yoktur. */
+var temelSira="skor";
+function temelRozet(t){
+  var r="";
+  if(t.fskorOlculen>=5){
+    var o=t.fskor/t.fskorOlculen;
+    r+='<span class="roz '+(o>=0.75?"roz-iy":(o<=0.35?"roz-ko":""))+'">📊 F-Skor '+
+       t.fskor+'/'+t.fskorOlculen+'</span>';
+  }
+  if(t.fkP!=null)r+='<span class="roz '+(t.fkP>=70?"roz-iy":(t.fkP<=30?"roz-ko":""))+
+    '">💰 sektörde ucuzluk %'+t.fkP+'</span>';
+  if(t.netBorcFavok!=null)r+='<span class="roz '+(t.netBorcFavok<=2?"roz-iy":
+    (t.netBorcFavok>=4?"roz-ko":""))+'">🏦 net borç/FAVÖK '+t.netBorcFavok+'</span>';
+  if(t.bilancoGun!=null&&t.bilancoGun>=0&&t.bilancoGun<=7)
+    r+='<span class="roz roz-ko">📅 bilanço '+(t.bilancoGun===0?"BUGÜN":t.bilancoGun+" gün")+'</span>';
+  return r;
+}
+function temelCiz(){
+  var hepsi=[],gorulen={};
+  ["potansiyel","fibo","uzunvade"].forEach(function(ad){
+    ((D.kartlar&&D.kartlar[ad])||[]).forEach(function(k){
+      if(!k||!k.kod||!k.temel||gorulen[k.kod])return;
+      gorulen[k.kod]=1;
+      hepsi.push({kod:k.kod,fiyat:k.fiyat,kar:kar(k),liste:ad,t:k.temel});
+    });
+  });
+  if(!hepsi.length){
+    el("govde").innerHTML='<div class="bos"><b>📋 Temel Analiz</b><br><br>'+
+      'Henüz temel veri yüklenmedi.<br>'+
+      '<span class="altbilgi">Veri haftada bir güncellenir. Sinyal listesi boşsa '+
+      'burası da boş görünür.</span></div>';
+    return;
+  }
+  var sirala={skor:function(a,b){return(b.t.skor==null?-1:b.t.skor)-(a.t.skor==null?-1:a.t.skor)},
+    fskor:function(a,b){return(b.t.fskor||0)-(a.t.fskor||0)},
+    ucuz:function(a,b){return(b.t.fkP==null?-1:b.t.fkP)-(a.t.fkP==null?-1:a.t.fkP)},
+    buyume:function(a,b){return(b.t.buyumeCiro==null?-999:b.t.buyumeCiro)-(a.t.buyumeCiro==null?-999:a.t.buyumeCiro)}};
+  hepsi.sort(sirala[temelSira]||sirala.skor);
+
+  var h='<div class="sirala">'+
+    [["skor","🎯 Uyum skoru"],["fskor","📊 F-Skor"],["ucuz","💰 Ucuzluk"],["buyume","📈 Büyüme"]]
+    .map(function(o){return '<button class="sir'+(temelSira===o[0]?" on":"")+
+      '" data-tsir="'+o[0]+'">'+o[1]+'</button>'}).join("")+'</div>';
+
+  h+='<div class="btAc" style="margin:2px 2px 10px">Sinyal listelerindeki hisselerin '+
+     'şirket tarafı. <b>Uyum skoru</b>, kırılımın arkasında sağlam bir şirket olup '+
+     'olmadığını 100 üzerinden özetler — sinyal üretmez, sinyali <i>etiketler</i>.</div>';
+
+  hepsi.forEach(function(x){
+    var t=x.t, sk=t.skor;
+    h+='<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+x.liste+'" '+
+       'style="border-left-color:'+(sk==null?"var(--ciz)":(sk>=65?"#2FBF71":(sk<=35?"#E5484D":"#E8A33D")))+'">'+
+       '<div class="sol"><div class="kod">'+E(x.kod)+
+         (t.sektor?' <span class="btN">'+E(t.sektor)+'</span>':"")+'</div>'+
+       '<div class="altbilgi">'+
+         (t.fk!=null?"F/K "+t.fk.toFixed(1):"F/K —")+
+         (t.pddd!=null?" · PD/DD "+t.pddd.toFixed(2):"")+
+         (t.ozsermayeKarliligi!=null?" · ROE %"+t.ozsermayeKarliligi:"")+
+         (t.netMarj!=null?" · marj %"+t.netMarj:"")+
+       '</div>'+
+       '<div class="altbilgi">'+
+         (t.enflasyonUyari
+           ? '<span style="color:var(--sar)">⚠️ enflasyon muhasebesi geçişi — büyüme kıyaslanamaz</span>'
+           : ((t.buyumeCiro!=null?"ciro "+Y(t.buyumeCiro):"")+
+              (t.buyumeKar!=null?" · kâr "+Y(t.buyumeKar):"")||"büyüme verisi yok"))+
+       '</div>'+
+       '<div class="rozSat">'+temelRozet(t)+'</div></div>'+
+       '<div class="sag"><div class="fiyat">'+(sk==null?"—":sk)+'</div>'+
+       '<div class="yuzde '+(x.kar==null?"so":(x.kar>=0?"ye":"kr"))+'">'+
+         (x.kar==null?"":Y(x.kar))+'</div></div></div>';
+  });
+
+  h+='<div class="btAc" style="margin:12px 2px 24px">'+
+     '<b>F-Skor</b> (Piotroski): kârlılık, borç, likidite ve verimlilikten 9 ölçüt. '+
+     'Eksik veri varsa o ölçüt sayılmaz — "7/9" ile "7/7" farklıdır.<br>'+
+     '<b>Ucuzluk</b>: F/K\'nın kendi sektöründeki persantili. %80 = sektörünün en ucuz beşte biri.<br>'+
+     '<b>⚠️ Enflasyon uyarısı</b>: BIST şirketleri 31.12.2023\'ten beri enflasyona göre '+
+     'düzeltilmiş rapor veriyor. Düzeltilmiş ile düzeltilmemiş dönemi kıyaslamak yanlış '+
+     'sonuç verir; öyle durumlarda büyüme hiç gösterilmez.<br>'+
+     'Temel veri haftada bir güncellenir ve <b>sinyal üretmez</b>.</div>';
+
+  el("govde").innerHTML=h;
+  satirBagla();
+  [].forEach.call(document.querySelectorAll("#govde [data-tsir]"),function(b){
+    b.onclick=function(){tit();temelSira=b.getAttribute("data-tsir");temelCiz();window.scrollTo(0,0)};
+  });
+}
 function kapCiz(){
   el("govde").innerHTML='<div class="yukleniyor">yükleniyor…</div>';
   post("/api/kap",{}).then(function(v){
@@ -3641,6 +3763,43 @@ function detay(kod,ad){
              (k.er>=0.45?"Fiyat düz bir çizgide ilerliyor — temiz trend."
               :(k.er<=0.20?"Fiyat aynı yeri gidip geliyor — testere. Kırılımlar burada en çok yanıltır."
                 :"Trend ile testere arasında."))+'</div>';
+        }
+        if(k.temel){
+          var T2=k.temel;
+          h+='<div class="sat"><span class="et">📊 F-Skor (Piotroski)</span><b class="'+
+             (T2.fskorOlculen>=5?(T2.fskor/T2.fskorOlculen>=0.75?"ye":(T2.fskor/T2.fskorOlculen<=0.35?"kr":"")):"")+
+             '">'+T2.fskor+' / '+T2.fskorOlculen+'</b></div>';
+          if(T2.fk!=null)h+='<div class="sat"><span class="et">F/K</span><b>'+T2.fk.toFixed(1)+
+            (T2.fkP!=null?' <span class="btN">(sektörde ucuzluk %'+T2.fkP+')</span>':"")+'</b></div>';
+          if(T2.pddd!=null)h+='<div class="sat"><span class="et">PD/DD</span><b>'+T2.pddd.toFixed(2)+'</b></div>';
+          if(T2.ozsermayeKarliligi!=null)h+='<div class="sat"><span class="et">Özsermaye kârlılığı</span><b>%'+T2.ozsermayeKarliligi+'</b></div>';
+          if(T2.netBorcFavok!=null)h+='<div class="sat"><span class="et">Net borç / FAVÖK</span><b class="'+
+            (T2.netBorcFavok<=2?"ye":(T2.netBorcFavok>=4?"kr":""))+'">'+T2.netBorcFavok+'</b></div>';
+          if(T2.enflasyonUyari)
+            h+='<div class="altbilgi" style="color:var(--sar);margin:4px 0">⚠️ Enflasyon muhasebesi geçişi nedeniyle büyüme kıyaslanamıyor.</div>';
+          else if(T2.buyumeCiro!=null)
+            h+='<div class="sat"><span class="et">Ciro büyümesi (yıllık)</span><b class="'+(T2.buyumeCiro>=0?"ye":"kr")+'">'+Y(T2.buyumeCiro)+'</b></div>';
+          if(T2.bilancoTarihi)h+='<div class="sat"><span class="et">📅 Bilanço tarihi</span><b class="'+
+            (k.bilancoSessiz?"kr":"")+'">'+E(T2.bilancoTarihi)+
+            (T2.bilancoGun!=null?' <span class="btN">('+(T2.bilancoGun===0?"bugün":T2.bilancoGun+" gün")+')</span>':"")+'</b></div>';
+          if(k.bilancoSessiz)h+='<div class="altbilgi" style="color:var(--kr);margin-top:4px">Bilanço açıklamasına 2 günden az kaldı — bu sinyal için bildirim gönderilmiyor. Bilanço hareketi teknik seviyelerden bağımsızdır.</div>';
+          if(T2.skor!=null)h+='<div class="sat"><span class="et">🎯 Temel uyum skoru</span><b class="'+
+            (T2.skor>=65?"ye":(T2.skor<=35?"kr":""))+'">'+T2.skor+' / 100</b></div>';
+        }
+        if(k.sektorGuc!=null&&isFinite(k.sektorGuc)){
+          var sg=Number(k.sektorGuc), sr=Number(k.sektorRs);
+          h+='<div class="sat"><span class="et">🏭 Sektör</span><b>'+E(String(k.sektor||"—"))+
+             ' <span class="btN">('+(k.sektorUye||0)+' hisse)</span></b></div>'+
+             '<div class="sat"><span class="et">Sektörüne göre</span><b class="'+
+             (sg>=0.5?"ye":(sg<=-0.5?"kr":""))+'">'+(sg>0?"+":"")+sg.toFixed(2)+'</b></div>'+
+             (isFinite(sr)?'<div class="sat"><span class="et">Sektör piyasaya göre</span><b class="'+
+               (sr>=0?"ye":"kr")+'">'+(sr>0?"+":"")+sr.toFixed(2)+'</b></div>':"")+
+             '<div class="altbilgi" style="margin-top:5px;opacity:.7">'+
+             (sg>=0.5?"Hisse kendi sektörünün önünde — hareket hisseye özgü."
+              :(sg<=-0.5?"Sektörü yükseliyor ama hisse geride kalıyor; yükseliş hisseden değil sektörden geliyor olabilir."
+                :"Hisse sektörüyle birlikte hareket ediyor."))+
+             (isFinite(sr)?(sr>=0?" Sektörün kendisi de piyasanın önünde.":" Sektörün kendisi piyasanın gerisinde."):"")+
+             '</div>';
         }
         if(k.gguc!=null){
           h+='<div class="sat"><span class="et">📊 Endekse göre</span><b class="'+
@@ -4797,21 +4956,218 @@ async function hatalariOku(A){
    ile üretiliyor) tüm BIST'i kapsar. Öncelik sırası:
      1) elle düzeltme (KV: sektorEk)  2) sektor.json  3) gömülü harita  4) Diğer
    sektor.json okunamazsa sistem eskisi gibi çalışmaya devam eder. */
-const SEKTOR_URL="https://raw.githubusercontent.com/matematikneferi-boop/fix-borsa-worker/main/sektor.json";
+/* ═══════════ 🏭 SEKTÖRE GÖRE GÖRELİ GÜÇ ═══════════
+   "Hisse mi yükseliyor, sektörü mü taşıyor?" Endekse göre göreli güçten
+   daha keskindir: bankacılık %6 yükselirken %6.2 yapan bir banka hissesi
+   endeksi geçiyor görünür ama KENDİ SEKTÖRÜNDE sıradandır.
+
+   VERİ ZATEN VAR — ne yeni ağ isteği, ne tarayıcı değişikliği:
+     · RRG kaydı (tarayıcının kendi tgRotasyon çıktısı) her hisse için
+       RS-Ratio (o) taşıyor: 60 barlık göreli seriden z-normalize edilmiş,
+       100 merkezli değer.
+     · sektor.json hangi hissenin hangi sektörde olduğunu söylüyor.
+   İkisi birleşince:
+     sektorGuc = hissenin RS-Ratio'su − kendi sektörünün ortalaması
+     sektorRs  = sektörün ortalaması − 100  (sektör piyasayı yeniyor mu)
+   İki ayrı soru ayrı ayrı cevaplanır: hisse sektörünün neresinde,
+   sektör piyasanın neresinde.
+   YAPIYA DOKUNMAZ: yalnızca okur ve karta alan ekler. */
+const SEKTOR_ASGARI_UYE=3;
+async function sektorGucEkle(A,paket){
+  try{
+    const R2=paket&&paket.rrg&&paket.rrg.hisse;
+    if(!R2||!paket.kartlar)return;
+    const sk=await sektorlariGetir(A);
+    const harita=(sk&&sk.sektor&&typeof sk.sektor==="object")?sk.sektor:
+                 ((sk&&typeof sk==="object")?sk:null);
+    if(!harita)return;
+    const kova={};
+    for(const kod of Object.keys(R2)){
+      const sekt=harita[kod]; if(!sekt)continue;
+      const o=Number(R2[kod]&&R2[kod].o); if(!isFinite(o))continue;
+      (kova[sekt]=kova[sekt]||[]).push(o);
+    }
+    const sektOrt={};
+    for(const sekt of Object.keys(kova)){
+      const a=kova[sekt];
+      if(a.length<SEKTOR_ASGARI_UYE)continue;
+      sektOrt[sekt]={ort:a.reduce((x,y2)=>x+y2,0)/a.length,n:a.length};
+    }
+    for(const ad of Object.keys(paket.kartlar)){
+      const l=paket.kartlar[ad]; if(!Array.isArray(l))continue;
+      for(const k of l){
+        if(!k||!k.kod)continue;
+        const sekt=harita[k.kod]; if(!sekt)continue;
+        const so=sektOrt[sekt]; if(!so)continue;
+        const o=Number(R2[k.kod]&&R2[k.kod].o); if(!isFinite(o))continue;
+        k.sektor=sekt; k.sektorUye=so.n;
+        k.sektorGuc=Math.round((o-so.ort)*100)/100;
+        k.sektorRs=Math.round((so.ort-100)*100)/100;
+      }
+    }
+  }catch(e){}
+}
+/* ═══════════════ 📋 TEMEL ANALİZ KATMANI ═══════════════
+   Kaynak: depodaki temel.json — haftalık bir Actions işi Yahoo'dan çekip
+   yazıyor. Burada YALNIZCA OKUNUR. Tarama akışı, /push yolu, alarm ve
+   tarayıcı bu katmanın varlığından habersizdir; dosya hiç yoksa ya da
+   bozuksa her şey eskisi gibi çalışmaya devam eder.
+
+   ⚠️ TMS 29: Python tarafı, enflasyon düzeltmesi geçişini kapsayan
+   karşılaştırmalarda büyüme oranı ÜRETMİYOR (None) ve bayrak açıyor.
+   Burada da o bayrak varsa büyüme hiç gösterilmez — yanlış sayı
+   göstermektense hiç göstermemek doğrudur. */
+const TEMEL_URLLER=[
+  "https://raw.githubusercontent.com/matematikneferi-boop/fix-borsa-worker/main/temel.json",
+  "https://raw.githubusercontent.com/matematikneferi-boop/Hisse-havuzu/main/temel.json"
+];
+const TEMEL_TTL=6*3600;
+let _temelBellek=null,_temelZaman=0;
+async function temelGetir(A){
+  if(_temelBellek&&Date.now()-_temelZaman<TEMEL_TTL*1000)return _temelBellek;
+  try{const c=A.VERI&&await A.VERI.get("temelVeri");
+    if(c){const j=JSON.parse(c);
+      if(j&&j.ts&&Date.now()-j.ts<TEMEL_TTL*1000&&j.paket){
+        _temelBellek=j.paket;_temelZaman=Date.now();return _temelBellek}}}catch(e){}
+  for(const url of TEMEL_URLLER){
+    try{
+      const r=await fetch(url+"?_="+Math.floor(Date.now()/216e5),{cf:{cacheTtl:21600}});
+      if(!r.ok)continue;
+      const j=await r.json();
+      if(j&&j.hisse&&typeof j.hisse==="object"&&Object.keys(j.hisse).length){
+        _temelBellek=j;_temelZaman=Date.now();
+        try{await A.VERI.put("temelVeri",JSON.stringify({ts:Date.now(),paket:j}),
+          {expirationTtl:TEMEL_TTL*2})}catch(e){}
+        return j;
+      }
+    }catch(e){}
+  }
+  return _temelBellek;
+}
+
+/* Bilanço açıklamasına kaç gün kaldı? Negatif = geçmiş. */
+function bilancoGunFark(tarihMetin){
+  if(!tarihMetin)return null;
+  const t=Date.parse(String(tarihMetin)+"T00:00:00Z");
+  if(!isFinite(t))return null;
+  const bugun=Date.parse(new Date(Date.now()+108e5).toISOString().slice(0,10)+"T00:00:00Z");
+  return Math.round((t-bugun)/864e5);
+}
+/* Bilanço penceresi: açıklamaya 2 gün kala ve açıklama gününde sinyal
+   BİLDİRİMİ gönderilmez. Bu teknik analiz değil, olay riskidir —
+   bilanço fiyatı teknik seviyelerden bağımsız uçurur ya da çakar.
+   Kart LİSTEDE kalır, yalnızca alarm susar. */
+const BILANCO_PENCERE=2;
+function bilancoYakinMi(gun){ return gun!=null&&gun>=0&&gun<=BILANCO_PENCERE; }
+
+/* Sektöre göre persantil: F/K 12 tek başına anlamsızdır, "kendi
+   sektöründe en ucuz %15" anlamlıdır. Düşük daha iyi olan ölçütlerde
+   (F/K, PD/DD, net borç) persantil TERSİNE çevrilir — her zaman
+   "yüksek = iyi" okunsun diye. */
+function persantil(dizi,deger,tersMi){
+  if(!dizi.length||deger==null||!isFinite(deger))return null;
+  let alt=0;
+  for(const v of dizi)if(v<deger)alt++;
+  let p=Math.round(100*alt/dizi.length);
+  if(tersMi)p=100-p;
+  return Math.max(0,Math.min(100,p));
+}
+
+/* Temel + teknik uyum skoru (0-100). Kırılımın ARKASINDA şirket var mı?
+   F-Skoru 7+ bir hissedeki pivot kırılımı ile F-Skoru 2'deki aynı sinyal
+   değildir. NOT: bu skor sinyal ÜRETMEZ, yalnızca etiketler. */
+function temelSkor(t){
+  if(!t)return null;
+  let puan=0,agirlik=0;
+  if(t.fskorOlculen>=5){ puan+=45*(t.fskor/t.fskorOlculen); agirlik+=45; }
+  if(t.fkP!=null){ puan+=20*(t.fkP/100); agirlik+=20; }
+  if(t.roa!=null){ puan+=15*(t.roa>0?Math.min(1,t.roa/20):0); agirlik+=15; }
+  if(t.netMarj!=null){ puan+=10*(t.netMarj>0?Math.min(1,t.netMarj/25):0); agirlik+=10; }
+  if(t.buyumeCiro!=null){ puan+=10*Math.max(0,Math.min(1,t.buyumeCiro/50)); agirlik+=10; }
+  if(agirlik<45)return null;                /* yeterli veri yok */
+  return Math.round(100*puan/agirlik);
+}
+
+async function temelEkle(A,paket){
+  try{
+    if(!paket||!paket.kartlar)return;
+    const T=await temelGetir(A);
+    if(!T||!T.hisse)return;
+    const sk=await sektorlariGetir(A);
+    const harita=(sk&&sk.sektor&&typeof sk.sektor==="object")?sk.sektor:
+                 ((sk&&typeof sk==="object")?sk:null);
+    /* Sektör bazlı değer dağılımları — persantil için */
+    const kova={};
+    if(harita){
+      for(const kod of Object.keys(T.hisse)){
+        const sekt=harita[kod]; if(!sekt)continue;
+        const t=T.hisse[kod]; if(!t)continue;
+        const k=(kova[sekt]=kova[sekt]||{fk:[],pddd:[],roa:[]});
+        if(t.fk>0)k.fk.push(t.fk);
+        if(t.pddd>0)k.pddd.push(t.pddd);
+        if(t.roa!=null)k.roa.push(t.roa);
+      }
+    }
+    for(const ad of Object.keys(paket.kartlar)){
+      const l=paket.kartlar[ad]; if(!Array.isArray(l))continue;
+      for(const k of l){
+        if(!k||!k.kod)continue;
+        const t=T.hisse[k.kod]; if(!t)continue;
+        const sekt=harita?harita[k.kod]:null;
+        const kv=(sekt&&kova[sekt])||null;
+        const yeter=kv&&kv.fk.length>=5;
+        const tt={
+          fskor:t.fskor, fskorOlculen:t.fskorOlculen, roa:t.roa,
+          fk:t.fk, pddd:t.pddd, netMarj:t.netMarj,
+          ozsermayeKarliligi:t.ozsermayeKarliligi,
+          netBorcFavok:t.netBorcFavok, temettuVerimi:t.temettuVerimi,
+          buyumeCiro:t.enflasyonKarsilastirilamaz?null:t.buyumeCiro,
+          buyumeKar:t.enflasyonKarsilastirilamaz?null:t.buyumeKar,
+          enflasyonUyari:!!t.enflasyonKarsilastirilamaz,
+          sektor:sekt||null,
+          fkP:yeter?persantil(kv.fk,t.fk,!0):null,
+          pdddP:(kv&&kv.pddd.length>=5)?persantil(kv.pddd,t.pddd,!0):null,
+          roaP:(kv&&kv.roa.length>=5)?persantil(kv.roa,t.roa,!1):null,
+          bilancoTarihi:t.bilancoTarihi||null,
+          bilancoGun:bilancoGunFark(t.bilancoTarihi)
+        };
+        tt.skor=temelSkor(tt);
+        k.temel=tt;
+        /* 🔇 Bilanço penceresi — yalnız BİLDİRİM susar, kart listede kalır. */
+        if(bilancoYakinMi(tt.bilancoGun))k.bilancoSessiz=!0;
+      }
+    }
+  }catch(e){}
+}
+/* ⚠️ sektor.json bu depoda OLMAYABİLİR — havuz.json ayrı bir depoda
+   (Hisse-havuzu) duruyor ve sektor.json da oraya yazılıyor olabilir.
+   Tek adrese bağlı kalmak sektör özelliklerinin sessizce ölmesi demekti.
+   Sırayla denenir; ilk çalışan kullanılır ve hangisinin tuttuğu kaydedilir. */
+const SEKTOR_URLLER=[
+  "https://raw.githubusercontent.com/matematikneferi-boop/fix-borsa-worker/main/sektor.json",
+  "https://raw.githubusercontent.com/matematikneferi-boop/Hisse-havuzu/main/sektor.json"
+];
+let SEKTOR_SON_KAYNAK="";
 let _sBellek=null,_sZaman=0;
 async function sektorlariGetir(A){
   const simdi=Date.now();
   if(_sBellek&&simdi-_sZaman<216e5)return _sBellek;   /* 6 saat */
   if(A&&A.VERI){const c=await A.VERI.get("sektorJson");
     if(c){try{_sBellek=JSON.parse(c);_sZaman=simdi;return _sBellek}catch(e){}}}
-  try{
-    const r=await fetch(SEKTOR_URL+"?_="+Math.floor(simdi/216e5),{cf:{cacheTtl:21600}});
-    if(!r.ok)return _sBellek||null;
-    const j=await r.json();
-    _sBellek=j;_sZaman=simdi;
-    if(A&&A.VERI)await A.VERI.put("sektorJson",JSON.stringify(j),{expirationTtl:86400});
-    return j;
-  }catch(e){return _sBellek||null}
+  for(const url of SEKTOR_URLLER){
+    try{
+      const r=await fetch(url+"?_="+Math.floor(simdi/216e5),{cf:{cacheTtl:21600}});
+      if(!r.ok)continue;
+      const j=await r.json();
+      /* Boş ya da alakasız bir dosyayı kabul etme; sıradakini dene. */
+      const harita=(j&&j.sektor&&typeof j.sektor==="object")?j.sektor:j;
+      if(!harita||typeof harita!=="object"||Object.keys(harita).length<20)continue;
+      _sBellek=j;_sZaman=simdi;SEKTOR_SON_KAYNAK=url;
+      if(A&&A.VERI)await A.VERI.put("sektorJson",JSON.stringify(j),{expirationTtl:86400});
+      return j;
+    }catch(e){}
+  }
+  return _sBellek||null;
 }
 async function sektorEkAl(e){
 if(!e._sektorEk){
@@ -4928,7 +5284,14 @@ headers:{"content-type":"text/html; charset=utf-8"}})
    sistemi durdururdu. Sadece YANLIŞ anahtar denemeleri sayılıyor. */
 {const kk=await kapiKontrol(A,$,p,!1);if(!kk.ok)return e({ok:!1,hata:429===kk.kod?kk.mesaj:"Şifre yanlış"},kk.kod)}
 ;const t=await p.json().catch(()=>null);if(!t||"object"!=typeof t)return e({ok:!1,hata:"Paket okunamadı"},400);t.guncelleme=(new Date).toISOString()
-;const eskiListe=await g(A).catch(()=>null);await async function(e,t){o=t,oTS=Date.now();
+;const eskiListe=await g(A).catch(()=>null)
+/* 🏭 Sektör göreli gücünü kartlara işle — kaydedilmeden ÖNCE, böylece
+   hem Mini App hem bot mesajı aynı veriyi görür. Hata olursa sessizce
+   atlanır; tarama akışı hiçbir koşulda durmaz. */
+;await sektorGucEkle(A,t).catch(()=>{})
+/* 📋 Temel analiz katmanı — hata olursa sessizce atlanır, akış durmaz. */
+;await temelEkle(A,t).catch(()=>{})
+;await async function(e,t){o=t,oTS=Date.now();
 /* KV YAZMA KORUMASI: sürekli mod (10 sn'de bir tarama) KV'nin günlük
    ücretsiz yazma sınırını (1000) yakabilir. Önbellek HER ZAMAN tazelenir
    (bedava ve hızlı); kalıcı KV yazımı en fazla 2 dakikada bir yapılır.
