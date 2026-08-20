@@ -7097,6 +7097,33 @@ async function endeksKaydiAl(){
   return sinEndeksKayit;
 }
 let sinSuzgecOzet="";
+/* ═══════ 📉 LİSTEDEN DÜŞENLER — "sinyal kayboldu" şeffaflığı ═══════
+   Bir sinyal listede görünüp bir süre sonra sessizce kaybolabiliyordu.
+   İki gerçek sebebi var ve ikisi de meşru:
+     ① FİYAT SEVİYENİN ALTINA DÖNDÜ. Kırılım geçersizleşir; kart üretilmez.
+        Bu en sık sebep ve en önemlisi — kırılım başarısız olmuştur.
+     ② TAZELİK PENCERESİ DOLDU. 4SA'da 3, 1G'de 5 bar sonra kart düşer;
+        eski kırılım artık "yeni sinyal" değildir. (1SA'da pencere yok.)
+   Sorun sebeplerin kendisi değil, GÖRÜNMEZ olmalarıydı: kullanıcı
+   sinyalin buharlaştığını görüyor, sebebini bilmiyor, güveni sarsılıyor.
+   Artık her tarama bir öncekiyle karşılaştırılıyor ve düşen her hisse
+   sebebiyle birlikte kaydedilip pakete ekleniyor. Tarayıcı döngü hâlinde
+   tek sekmede çalıştığı için bu hafıza turlar arasında korunur —
+   KV yazımı ya da ek istek gerektirmez. */
+let sinOncekiKartlar={};          /* {liste: {kod: kart}} — bir önceki tur */
+let sinDusenler=[];               /* bugün düşenler */
+let sinDusenGun="";
+function dusenSebep(kay,tf,pencere){
+  try{
+    const r=kay&&kay.tf[tf];
+    if(!r) return "veri gelmedi";
+    const f=fiboHedefler(r,FIBO_DERINLIK,FIBO_SAPMA);
+    if(!f) return "seviye hesaplanamadı";
+    if(f.tepe!=null && r.kap[r.n-1]<=f.tepe) return "fiyat kırılan seviyenin altına döndü";
+    if(pencere!=null) return "tazelik penceresi doldu ("+pencere+" bar)";
+    return "kırılım koşulu bozuldu";
+  }catch(e){ return "hesaplanamadı"; }
+}
 const KIRILIM_ANI_MAX=140;    /* tur basina en fazla bu kadar hisseye 5dk serisi cekilir */
 const KIRILIM_ANI_ES=8;       /* es zamanli istek */
 async function kirilimAniNetlestir(kartlar){
@@ -7191,6 +7218,31 @@ async function bulutaYukle(){
     /* 🏷️ SURUM DAMGASI PAKETE — mobilde 824 KB'lik dosyayi acip
        YAMA_SURUM aramak isyor. Damga her turda worker'a gidiyor;
        Telegram'da /surum yazarak tek dokunusla gorulebiliyor. */
+    /* 📉 Bir önceki turla karşılaştır: hangi hisse hangi listeden düştü? */
+    try{
+      const bugunAd=sinBarEtiket(Math.floor(Date.now()/1000),{aralik:"1d",grup:1});
+      if(sinDusenGun!==bugunAd){ sinDusenGun=bugunAd; sinDusenler=[]; }
+      const kayHar=new Map(); for(const kk of (sinSonVeri||[])) if(kk&&kk.kod) kayHar.set(kk.kod,kk);
+      const TFAD={potansiyel:ORTA_TF, fibo:ORTAVADE_TF, uzunvade:UZUN_TF};
+      for(const ad of Object.keys(TFAD)){
+        const simdi={}; for(const c of (out[ad]||[])) if(c&&c.kod) simdi[c.kod]=c;
+        const once=sinOncekiKartlar[ad]||{};
+        for(const kod of Object.keys(once)){
+          if(simdi[kod]) continue;                       /* hâlâ listede */
+          if(sinDusenler.some(z=>z.kod===kod&&z.liste===ad)) continue;
+          const eski=once[kod];
+          sinDusenler.push({kod:kod, liste:ad, tf:eski.tf||"",
+            sinyalFiyat:eski.giris!=null?eski.giris:null,
+            sonFiyat:eski.fiyat!=null?eski.fiyat:null,
+            kar:(eski.giris>0&&eski.fiyat>0)?Math.round((eski.fiyat/eski.giris-1)*10000)/100:null,
+            sebep:dusenSebep(kayHar.get(kod),TFAD[ad],TAZE_BAR[TFAD[ad]]),
+            saat:tgTarihSaatSimdi?tgTarihSaatSimdi():""});
+        }
+        sinOncekiKartlar[ad]=simdi;
+      }
+      if(sinDusenler.length>120) sinDusenler=sinDusenler.slice(-120);
+      paket.dusenler=sinDusenler.slice().reverse();
+    }catch(e){ }
     paket.tarayiciSurum=YAMA_SURUM;
     try{ sinSuzgecOzet="🧪 süzgeç · hedefi dar "+suz.zayifHedef+
       " (listede, bildirim yok) · hedefsiz "+suz.hedefsiz+
@@ -7428,7 +7480,7 @@ async function zincirCalistir(kaynak){
    SEKMEDE calisiyordu, sekme yenilenmedigi icin eski kod isbasindaydi.
    Artik her tarama sonunda surum ekrana yaziliyor: alttaki damga
    asagidakiyle ayni degilse calisan kod eskidir, sekmeyi kapatip ac. */
-const YAMA_SURUM="2026-08-20-d · liste dolu · bildirim seçici";
+const YAMA_SURUM="2026-08-20-e · düşenler defteri";
 const SUREKLI_BEKLE_MS=2000;
 /* SEANS PENCERESI — surekli mod yalnizca burada tarar.
    Disarida fiyat degismiyor; her 10 saniyede bir Yahoo'yu ve aynalari

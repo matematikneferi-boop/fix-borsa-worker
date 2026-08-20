@@ -753,8 +753,8 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-f · liste dolu · bildirim seçici";
-const BEKLENEN_TARAYICI_SURUM="2026-08-20-d";
+const WORKER_SURUM="2026-08-20-g · düşenler şeffaflığı";
+const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
   const kartlar=(L&&L.kartlar)||{};
@@ -1927,6 +1927,13 @@ textarea.gir{min-height:88px;resize:vertical}
 .btKr{background:#ff5a5f}
 .btAlt{font-size:10.5px;color:var(--soluk);line-height:1.5}
 .btAc{font-size:10.5px;color:var(--soluk);line-height:1.5;opacity:.8;margin:-2px 0 6px}
+.dusBas{font-size:13px;font-weight:700;margin-bottom:3px}
+.dusAc{font-size:10.5px;color:var(--soluk);line-height:1.5;margin-bottom:8px}
+.dusSat{padding:7px 0;border-bottom:1px solid var(--ciz)}
+.dusSat:last-child{border-bottom:0}
+.dusUst{display:flex;align-items:baseline;gap:8px;font-size:13px}
+.dusUst .btN{flex:1}
+.dusAlt{font-size:10.5px;color:var(--soluk);margin-top:2px;line-height:1.5}
 .serYe{color:#25d366}
 .serKr{color:#ff5a5f}
 .serY{font-weight:800}
@@ -2620,15 +2627,39 @@ function formasyonRozetUygula(){
     uygula();
   }).catch(function(){});
 }
+/* 📉 LİSTEDEN DÜŞENLER — sinyal sessizce kaybolmasın.
+   Kullanıcı bir sinyali görüp sonra bulamayınca sisteme güvenini
+   kaybediyordu. Düşen her hisse, SEBEBİYLE ve son durumuyla burada
+   duruyor. Kaybolmuyor, açıklanıyor. */
+function dusenlerCiz(ad){
+  var ds=((D&&D.dusenler)||[]).filter(function(x){return x.liste===ad});
+  if(!ds.length)return "";
+  var h='<div class="dusBas">📉 Bugün listeden düşenler ('+ds.length+')</div>'+
+        '<div class="dusAc">Sinyal kayboldu sanma — sebebi burada yazıyor. '+
+        'Bir kırılım geçersizleşebilir; bunu gizlemiyoruz.</div>';
+  ds.slice(0,25).forEach(function(x){
+    var kr=(x.kar==null)?null:Number(x.kar);
+    h+='<div class="dusSat">'+
+       '<div class="dusUst"><b>'+E(x.kod)+'</b>'+
+       '<span class="btN">'+E(x.tf||"")+(x.saat?" · "+E(x.saat):"")+'</span>'+
+       (kr==null?"":'<span class="'+(kr>=0?"ye":"kr")+'"><b>'+Y(kr)+'</b></span>')+
+       '</div><div class="dusAlt">'+E(x.sebep||"")+
+       (x.sinyalFiyat!=null?' · sinyal '+N(x.sinyalFiyat):"")+
+       (x.sonFiyat!=null?' → '+N(x.sonFiyat):"")+'</div></div>';
+  });
+  return '<div class="kutu" style="margin-top:12px">'+h+'</div>';
+}
 function listeCiz(ad){
   var l=dizil(ad), t=TF[ad];
   if(!l.length){
     el("govde").innerHTML='<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>Şu an bu dilimde sinyal yok.<br>'+
-      'Bu dilimde henüz pivot kırılımı oluşmadı. Bar kapanışlarında liste yenilenir.</div>';
+      'Bu dilimde henüz pivot kırılımı oluşmadı. Bar kapanışlarında liste yenilenir.</div>'+
+      dusenlerCiz(ad);
     return;
   }
   el("govde").innerHTML=sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
-    '<div class="uyari">⚠️ Yatırım tavsiyesi değildir. Teknik tarama geleceği bilmez.</div>';
+    '<div class="uyari">⚠️ Yatırım tavsiyesi değildir. Teknik tarama geleceği bilmez.</div>'+
+    dusenlerCiz(ad);
   sirBagla();satirBagla();
 }
 function adayCiz(){
