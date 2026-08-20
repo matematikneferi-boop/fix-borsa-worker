@@ -1,0 +1,65 @@
+name: Temel Analiz Verisi
+
+# Temel veri ÇEYREKTE BİR değişir; ama bilanço sezonunda dağınık gelir.
+# Bu yüzden haftada bir çalışır (Pazar 04:00 TR) — hem taze kalır hem
+# Actions dakikasını yakmaz. Elle de tetiklenebilir.
+on:
+  schedule:
+    - cron: "0 1 * * 0"        # UTC 01:00 = TR 04:00, Pazar
+  workflow_dispatch:
+
+permissions:
+  contents: write              # temel.json'u depoya yazabilmek için
+
+concurrency:
+  group: temel-analiz
+  cancel-in-progress: false    # yarıda kesilirse eksik dosya yazılmasın
+
+jobs:
+  temel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Depoyu al
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Temel veriyi çek
+        run: python temel-cek.py
+
+      - name: Dosyayı doğrula
+        # Bozuk ya da boş bir temel.json'u depoya yazmaktansa işi kırmızı
+        # yakmak doğrudur: worker eski dosyayı okumaya devam eder.
+        run: |
+          python - <<'PY'
+          import json,sys
+          j=json.load(open("temel.json",encoding="utf-8"))
+          n=len(j.get("hisse") or {})
+          print("temel.json  ·", n, "hisse ·", j.get("guncelleme"))
+          if n < 50:
+              print("✗ Çok az kayıt — yazma iptal.")
+              sys.exit(1)
+          import os
+          if os.path.exists("sektor.json"):
+              sj=json.load(open("sektor.json",encoding="utf-8"))
+              print("sektor.json ·", len(sj.get("sektor") or {}), "hisse")
+          else:
+              print("! sektor.json üretilmedi")
+          print("✅ doğrulandı")
+          PY
+
+      - name: Depoya yaz
+        run: |
+          git config user.name  "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add temel.json sektor.json 2>/dev/null || git add temel.json
+          if git diff --staged --quiet; then
+            echo "Değişiklik yok."
+          else
+            git commit -m "temel.json + sektor.json güncellendi"
+            git push
+          fi
