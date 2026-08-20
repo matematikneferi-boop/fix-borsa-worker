@@ -1,15 +1,14 @@
 name: Temel Analiz Verisi
 
-# Temel veri ÇEYREKTE BİR değişir; ama bilanço sezonunda dağınık gelir.
-# Bu yüzden haftada bir çalışır (Pazar 04:00 TR) — hem taze kalır hem
-# Actions dakikasını yakmaz. Elle de tetiklenebilir.
+# Temel veri ÇEYREKTE BİR değişir; bilanço sezonunda dağınık gelir.
+# Haftada bir çalışır (Pazar 04:00 TR) — taze kalır, Actions dakikası yakmaz.
 on:
   schedule:
     - cron: "0 1 * * 0"        # UTC 01:00 = TR 04:00, Pazar
   workflow_dispatch:
 
 permissions:
-  contents: write              # temel.json'u depoya yazabilmek için
+  contents: write              # temel.json / sektor.json yazabilmek için
 
 concurrency:
   group: temel-analiz
@@ -28,38 +27,72 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Çıkış kodu ne olursa olsun devam et; teşhis adımı sebebi yazsın.
+      # Eskiden burada patlayıp hiçbir açıklama bırakmadan kırmızı yanıyordu.
       - name: Temel veriyi çek
+        id: cek
+        continue-on-error: true
         run: python temel-cek.py
 
-      - name: Dosyayı doğrula
-        # Bozuk ya da boş bir temel.json'u depoya yazmaktansa işi kırmızı
-        # yakmak doğrudur: worker eski dosyayı okumaya devam eder.
+      - name: Sonucu değerlendir
+        id: kontrol
         run: |
           python - <<'PY'
-          import json,sys
-          j=json.load(open("temel.json",encoding="utf-8"))
-          n=len(j.get("hisse") or {})
-          print("temel.json  ·", n, "hisse ·", j.get("guncelleme"))
-          if n < 50:
-              print("✗ Çok az kayıt — yazma iptal.")
+          import json, os, sys
+
+          def oku(dosya, anahtar):
+              if not os.path.exists(dosya):
+                  return 0, None
+              try:
+                  j = json.load(open(dosya, encoding="utf-8"))
+              except Exception as e:
+                  print("HATA " + dosya + ": " + str(e))
+                  return 0, None
+              h = j.get(anahtar) or {}
+              return (len(h) if isinstance(h, dict) else 0), j.get("guncelleme")
+
+          nt, gt = oku("temel.json", "hisse")
+          ns, gs = oku("sektor.json", "sektor")
+          print("temel.json  : " + str(nt) + " hisse · " + str(gt))
+          print("sektor.json : " + str(ns) + " hisse · " + str(gs))
+
+          # 50'nin altındaysa yazmaya degmez: worker eski dosyayi okumaya
+          # devam etsin; yarim veriyle ustune yazmak daha kotudur.
+          if nt < 50:
+              print("")
+              print("Yeterli kayit yok. En olasi sebepler:")
+              print("  1) Yahoo cerez/crumb reddi - logda 'Yahoo oturumu' satiri var mi?")
+              print("  2) Yahoo, GitHub Actions IP araligini engelliyor olabilir.")
+              print("  3) havuz.json okunamadi - logun ilk satirina bak.")
               sys.exit(1)
-          import os
-          if os.path.exists("sektor.json"):
-              sj=json.load(open("sektor.json",encoding="utf-8"))
-              print("sektor.json ·", len(sj.get("sektor") or {}), "hisse")
-          else:
-              print("! sektor.json üretilmedi")
-          print("✅ doğrulandı")
+          print("")
+          print("dogrulandi")
           PY
 
       - name: Depoya yaz
+        if: steps.kontrol.outcome == 'success'
         run: |
           git config user.name  "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add temel.json sektor.json 2>/dev/null || git add temel.json
+          git add temel.json
+          if [ -f sektor.json ]; then git add sektor.json; fi
           if git diff --staged --quiet; then
-            echo "Değişiklik yok."
+            echo "Degisiklik yok."
           else
-            git commit -m "temel.json + sektor.json güncellendi"
+            git commit -m "temel.json + sektor.json guncellendi"
             git push
+            echo "depoya yazildi"
           fi
+
+      # Dosyalar depoya girmese bile indirilebilsin: elle inceleyip
+      # nerede tikandigini gorebilirsin.
+      - name: Ciktilari sakla
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temel-cikti
+          path: |
+            temel.json
+            sektor.json
+          if-no-files-found: ignore
+          retention-days: 7
