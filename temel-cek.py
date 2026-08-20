@@ -399,7 +399,27 @@ def main():
            f"· {int(time.time()-t0)} sn")
 
     # sektor.json — worker'ın beklediği biçim: {"sektor": {KOD: "Ad"}, ...}
-    if len(sektorler) >= 50:
+    #
+    # ⚠️ ÜSTÜNE YAZMA KORUMASI
+    # Depoda zaten bir sektor.yml / sektor-cek.py var. O iş kendi sektör
+    # haritasını üretiyorsa (muhtemelen BIST'e özgü, daha doğru adlarla),
+    # buradan gelen Yahoo kaynaklı genel harita onu EZMEMELİ. Bu yüzden
+    # mevcut dosya bizimki kadar ya da daha zenginse dokunulmaz.
+    # Yahoo haritası yalnızca BOŞLUĞU doldurur, yerini almaz.
+    mevcut = 0
+    try:
+        if os.path.exists(SEKTOR_CIKTI):
+            with open(SEKTOR_CIKTI, encoding="utf-8") as f:
+                mj = json.load(f)
+            mh = mj.get("sektor") if isinstance(mj.get("sektor"), dict) else mj
+            mevcut = len(mh) if isinstance(mh, dict) else 0
+    except Exception:
+        mevcut = 0
+
+    if mevcut >= len(sektorler) and mevcut > 0:
+        gunluk(f"↷ sektor.json korundu — mevcut dosyada {mevcut} kayıt var "
+               f"(bizimki {len(sektorler)}). Üstüne yazılmadı.")
+    elif len(sektorler) >= 50:
         dagilim = {}
         for v in sektorler.values():
             dagilim[v] = dagilim.get(v, 0) + 1
