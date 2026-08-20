@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-k · temel analiz · çoklu veri kaynağı";
+const WORKER_SURUM="2026-08-20-l · temel analiz · kesme işareti düzeltildi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -3216,8 +3216,8 @@ function temelCiz(){
   h+='<div class="btAc" style="margin:12px 2px 24px">'+
      '<b>F-Skor</b> (Piotroski): kârlılık, borç, likidite ve verimlilikten 9 ölçüt. '+
      'Eksik veri varsa o ölçüt sayılmaz — "7/9" ile "7/7" farklıdır.<br>'+
-     '<b>Ucuzluk</b>: F/K\'nın kendi sektöründeki persantili. %80 = sektörünün en ucuz beşte biri.<br>'+
-     '<b>⚠️ Enflasyon uyarısı</b>: BIST şirketleri 31.12.2023\'ten beri enflasyona göre '+
+     '<b>Ucuzluk</b>: F/K&#39;nın kendi sektöründeki persantili. %80 = sektörünün en ucuz beşte biri.<br>'+
+     '<b>⚠️ Enflasyon uyarısı</b>: BIST şirketleri 31.12.2023&#39;ten beri enflasyona göre '+
      'düzeltilmiş rapor veriyor. Düzeltilmiş ile düzeltilmemiş dönemi kıyaslamak yanlış '+
      'sonuç verir; öyle durumlarda büyüme hiç gösterilmez.<br>'+
      'Temel veri haftada bir güncellenir ve <b>sinyal üretmez</b>.</div>';
