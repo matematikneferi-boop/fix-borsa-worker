@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-19-h · bağlam rozetleri · CORS · KV limiti";
+const WORKER_SURUM="2026-08-20-a · alarm 3 dilim · Güneş 3 şart";
 const BEKLENEN_TARAYICI_SURUM="2026-08-19-c";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -777,7 +777,13 @@ async function sinyalMetniUret(A,yalnizCanli){
     (liste.length>n?"\n<i>…ve "+(liste.length-n)+" hisse daha.</i>":"");
 }
 async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;
-const yeniListe=yeni&&yeni.kartlar&&yeni.kartlar.potansiyel||[];
+/* ⚠️ ALARM SADECE "potansiyel" LİSTESİNİ OKUYORDU — yani yalnızca KISA.
+   ORTA (fibo) ve UZUN (uzunvade) listelerine düşen sinyaller uygulamada
+   görünüyor ama HİÇ bildirim göndermiyordu. Üç liste de alarma girer.
+   Mükerrer gitmez: alarmAnahtar zaten kod|dilim|canlı olduğu için aynı
+   hisse iki dilimde kırdıysa iki ayrı sinyaldir ve öyle sayılır. */
+const K=(yeni&&yeni.kartlar)||{};
+const yeniListe=[].concat(K.potansiyel||[],K.fibo||[],K.uzunvade||[]);
 if(!yeniListe.length)return;
 const gecmis=await alarmGecmisi(e),bilinen=new Set(gecmis.kodlar||[]);
 /* ALARM SADECE GERÇEKTEN GÜÇLÜ OLANLARA:
@@ -2009,15 +2015,18 @@ function tit(){try{TG.HapticFeedback.impactOccurred("light")}catch(e){}}
    Dört ölçü de "iyi/kötü" değil, BAĞLAM taşır. O yüzden rozetler eşiğin
    iki yanını farklı renkte gösterir ve nötr bölgede hiç görünmez —
    her kartta rozet olursa rozet anlamını yitirir. */
+/* Rozet ve Güneş sistemi AYNI eşikleri kullanır; ikisi ayrışırsa kullanıcı
+   "rozet var ama şart sayılmamış" durumuyla karşılaşır. Tek yerden yönetilir. */
+var RAF_ESIK=1.25, ER_ESIK=0.38;
 function rozRaf(v){          /* hacim rafı: kırılan seviyenin altındaki yığın */
   if(!(v>0))return "";
-  if(v>=1.5)return '<span class="roz roz-iy">📚 kalın raf '+v+'x</span>';
+  if(v>=RAF_ESIK)return '<span class="roz roz-iy">📚 kalın raf '+v+'x</span>';
   if(v<=0.5)return '<span class="roz roz-ko">📚 ince raf '+v+'x</span>';
   return "";
 }
 function rozEr(v){           /* verimlilik: trend mi testere mi */
   if(!(v>0))return "";
-  if(v>=0.45)return '<span class="roz roz-iy">📐 temiz trend '+v+'</span>';
+  if(v>=ER_ESIK)return '<span class="roz roz-iy">📐 temiz trend '+v+'</span>';
   if(v<=0.20)return '<span class="roz roz-ko">📐 testere '+v+'</span>';
   return "";
 }
@@ -2038,23 +2047,30 @@ function rozAvwap(k){
    Şartlar: ⚓ ortalama üstü · 📚 kalın raf (≥1.5x) · 📐 temiz trend (≥0.45)
    · 📊 endeksi geçiyor (alfa ≥ +3%). Hiçbiri tek başına "al" demiyor,
    ama dördü birden aynı hissede yeşilse tesadüf olma ihtimali düşük. */
+/* ☀️ ÜÇ ŞART — endeks ölçüsü SİSTEMDEN ÇIKARILDI.
+   Sebebi: göreli güç eşiği (+%3) pratikte neredeyse her kırılım yapmış
+   hissede sağlanıyordu; betası düşük hisselerde endeksin açıkladığı kısım
+   sıfıra yaklaşıyor ve "alfa" hissenin kendi getirisine eşitleniyordu.
+   Yani dördüncü şart bir ayrım yapmıyor, sadece diğer üçünü seyreltiyordu.
+   Rozet olarak duruyor (bilgi değerli), ama Güneş'e sayılmıyor.
+   Eşikler de gevşetildi: 1.5x raf ve 0.45 verimlilik aynı anda çok
+   nadir tutuyordu — 4/4 pratikte hiç çıkmıyordu. */
 function havaSartlari(k){
   var s=0;
   if(k.avwap>0&&k.avwapBar>=3&&k.avwapUst!==false)s++;
-  if(k.raf!=null&&isFinite(k.raf)&&k.raf>=1.5)s++;
-  if(k.er!=null&&isFinite(k.er)&&k.er>=0.45)s++;
-  if(k.gguc!=null&&isFinite(k.gguc)&&k.gguc>=3)s++;
+  if(k.raf!=null&&isFinite(k.raf)&&k.raf>=RAF_ESIK)s++;
+  if(k.er!=null&&isFinite(k.er)&&k.er>=ER_ESIK)s++;
   return s;
 }
 function havaEtiket(s){
-  if(s>=4)return{ik:"☀️",ad:"Güneş",sinif:"roz-gunes",aciklama:"4/4 şart birden sağlanıyor: ortalama üstü + kalın raf + temiz trend + endeksi geçiyor."};
-  if(s===3)return{ik:"⛅",ad:"Parçalı bulutlu",sinif:"roz-iy",aciklama:"3/4 bağlam şartı sağlanıyor — güçlü ama eksik bir tarafı var."};
-  if(s===2)return{ik:"☁️",ad:"Bulutlu",sinif:"roz-no",aciklama:"2/4 bağlam şartı sağlanıyor — orta karar, tek başına yeterli değil."};
+  if(s>=3)return{ik:"☀️",ad:"Güneş",sinif:"roz-gunes",aciklama:"3/3 şart birden sağlanıyor: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend."};
+  if(s===2)return{ik:"⛅",ad:"Parçalı bulutlu",sinif:"roz-iy",aciklama:"3 bağlam şartından 2'si sağlanıyor — güçlü ama eksik bir tarafı var."};
+  if(s===1)return{ik:"☁️",ad:"Bulutlu",sinif:"roz-no",aciklama:"3 şarttan yalnızca 1'i sağlanıyor — zayıf görünüm."};
   return null;
 }
-/* ☀️ Güneş (4/4) katmanı Süper Üyeliğe kilitli — hangi hissenin ☀️ olduğu
+/* ☀️ Güneş (3/3) katmanı Süper Üyeliğe kilitli — hangi hissenin ☀️ olduğu
    bilgisi non-super kullanıcıya sızdırılmaz, yerine kilit rozeti gösterilir.
-   ⛅ (3/4) ve ☁️ (2/4) herkese açık kalır. */
+   ⛅ (2/3) ve ☁️ (1/3) herkese açık kalır. */
 function havaKilitliMi(s){ return s>=4&&!(D&&D.super); }
 function havaRozet(k){                 /* satır altındaki rozet sırasında tam etiket */
   var s=havaSartlari(k);
@@ -2406,7 +2422,7 @@ function hotCiz(){
   if(!hepsi.length){kutu.innerHTML="";return}
 
   /* ☀️ GÜÇLÜLERİN GÜÇLÜSÜ — artık genel kalite sıralaması değil, 4 bağlam
-     şartını (ortalama üstü + kalın raf + temiz trend + endeksi geçiyor)
+     şartını (ortalama üstü + kalın raf + temiz trend)
      BİRDEN sağlayan hisseler. Böylece bu şerit yalnız ☀️ rozetli olanları
      gösterir; şartları tam sağlayan hisse yoksa şerit boş kalır. */
   var enIyiKod={};
@@ -2445,7 +2461,7 @@ function hotCiz(){
     '</div>';
   }
 
-  var h='<div class="hotBaslik">☀️ Güçlülerin güçlüsü — 4/4 şart birden</div>';
+  var h='<div class="hotBaslik">☀️ Güçlülerin güçlüsü — 3/3 şart birden</div>';
   if(secilen.length)
     h+='<div class="hotSira">'+secilen.map(kartHtml).join("")+"</div>";
   else
@@ -2951,13 +2967,13 @@ function yardimCiz(){
   h+='<div class="uyari" style="margin-top:0;text-align:left">Bu sayfa, uygulamadaki her rozetin ve her sekmenin ne anlama geldiğini basitçe anlatır. Hiçbir yerde "al/sat" demez — hepsi karar vermene yardımcı olacak bağlam bilgisidir.</div>';
 
   h+='<div class="ydGrup">☀️ Hava durumu rozeti (yeni)</div>';
-  h+=ydBlok("☀️ Güneş — 4/4 şart 🔒 Süper Üyelik",
-    "Aşağıdaki dört bağlam şartının HEPSİ birden sağlanıyor: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend + 📊 endeksi geçiyor. En sağlam görünüm budur; nadir çıkar, çıktığında dikkat çekicidir. Hangi hissenin ☀️ olduğu artık Süper Üyelere özel — Süper Üye değilsen yerine 🔒 rozeti ve kaç hissenin şartı sağladığı görünür, hangileri olduğu görünmez.",
-    "Örnek: bir hisse kırılımdan sonra hâlâ alıcıların üstünde, kırdığı seviyenin altı yoğun işlem görmüş, fiyat düzgün bir çizgide gitmiş ve BIST100'den daha güçlü hareket ediyorsa → ☀️ Güneş.");
-  h+=ydBlok("⛅ Parçalı bulutlu — 3/4 şart",
+  h+=ydBlok("☀️ Güneş — 3/3 şart 🔒 Süper Üyelik",
+    "Üç bağlam şartının HEPSİ birden sağlanıyor: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend. En sağlam görünüm budur. Endeks ölçüsü bilerek dışarıda bırakıldı — kırılım yapmış neredeyse her hissede sağlandığı için ayrım yapmıyor, sadece sistemi seyreltiyordu. Hangi hissenin ☀️ olduğu Süper Üyelere özel; Süper Üye değilsen yerine 🔒 rozeti ve kaç hissenin şartı sağladığı görünür, hangileri olduğu görünmez.",
+    "Örnek: bir hisse kırılımdan sonra hâlâ alıcıların ortalamasının üstünde, kırdığı seviyenin altı yoğun işlem görmüş ve fiyat düzgün bir çizgide gidiyorsa → ☀️ Güneş.");
+  h+=ydBlok("⛅ Parçalı bulutlu — 3'te 2 şart",
     "Dört şarttan üçü sağlanıyor, biri eksik. Hâlâ güçlü bir görüntü ama bir tarafı zayıf — hangi şartın eksik olduğunu satırdaki diğer rozetlerden görebilirsin.",
     "Örnek: her şey tamam ama endeksin gerisinde kalmış (📊 şartı yok) → ⛅.");
-  h+=ydBlok("☁️ Bulutlu — 2/4 şart",
+  h+=ydBlok("☁️ Bulutlu — 3'te 1 şart",
     "Sadece iki şart sağlanıyor. Orta karar bir görüntü; tek başına yeterli değil, diğer bilgilerle birlikte değerlendir.",
     "Örnek: ortalama üstü ve temiz trend var ama raf ince ve endeksin gerisinde → ☁️.");
   h+=ydBlok("Rozetsiz — 0 veya 1 şart",
