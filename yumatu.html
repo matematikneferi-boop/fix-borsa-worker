@@ -7096,6 +7096,7 @@ async function endeksKaydiAl(){
   }catch(e){}
   return sinEndeksKayit;
 }
+let sinSuzgecOzet="";
 const KIRILIM_ANI_MAX=140;    /* tur basina en fazla bu kadar hisseye 5dk serisi cekilir */
 const KIRILIM_ANI_ES=8;       /* es zamanli istek */
 async function kirilimAniNetlestir(kartlar){
@@ -7191,6 +7192,9 @@ async function bulutaYukle(){
        YAMA_SURUM aramak isyor. Damga her turda worker'a gidiyor;
        Telegram'da /surum yazarak tek dokunusla gorulebiliyor. */
     paket.tarayiciSurum=YAMA_SURUM;
+    try{ sinSuzgecOzet="🧪 süzgeç · hedefi dar "+suz.zayifHedef+
+      " (listede, bildirim yok) · hedefsiz "+suz.hedefsiz+
+      " · bedelsiz "+suz.kurumsal+" · tam sinyal "+suz.uretilen; }catch(e){}
     paket.potansiyel=tgPotansiyelMesaj();
     paket.fibo=tgFiboMesaj();
     paket.uzunvade=tgUzunMesaj();
@@ -7401,7 +7405,8 @@ async function zincirCalistir(kaynak){
     const t=new Date();
     const saat=String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0");
     if(yuklendi) yaz2("✅ tarandı ve BULUTA YÜKLENDİ — "+saat+(kaynak==="oto"?" (otomatik)":"")+
-      tani+'<br><span class="alt">🏷️ sürüm: '+esc(YAMA_SURUM)+'</span>',"--in");
+      tani+(sinSuzgecOzet?'<br><span class="alt">'+esc(sinSuzgecOzet)+'</span>':"")+
+      '<br><span class="alt">🏷️ sürüm: '+esc(YAMA_SURUM)+'</span>',"--in");
     else yaz2("⚠️ tarama bitti ama <b>BULUTA YÜKLENEMEDİ</b> — "+saat+
       "<br>Sebebi hemen aşağıdaki <b>☁️ Bot bulut bağlantısı</b> bölümünde yazıyor.","--out");
   }catch(e){
@@ -7423,7 +7428,7 @@ async function zincirCalistir(kaynak){
    SEKMEDE calisiyordu, sekme yenilenmedigi icin eski kod isbasindaydi.
    Artik her tarama sonunda surum ekrana yaziliyor: alttaki damga
    asagidakiyle ayni degilse calisan kod eskidir, sekmeyi kapatip ac. */
-const YAMA_SURUM="2026-08-19-c · raf · verimlilik · kurumsal · beta";
+const YAMA_SURUM="2026-08-20-d · liste dolu · bildirim seçici";
 const SUREKLI_BEKLE_MS=2000;
 /* SEANS PENCERESI — surekli mod yalnizca burada tarar.
    Disarida fiyat degismiyor; her 10 saniyede bir Yahoo'yu ve aynalari
@@ -7680,6 +7685,9 @@ function tgKartlar(){
   /* Hedefe kalan pay bu yuzdenin altindaysa sinyal uretilmez.
      Tek degistirilecek yer burasi. */
   const ASGARI_HEDEF_YUZDE=2.7;
+  /* Hangi kural kaç kart düşürdü? Tarama sonunda durum satırına yazılır;
+     "liste neden inceldi" sorusu bir daha tahminle cevaplanmasın. */
+  const suz={hedefsiz:0, kurumsal:0, zayifHedef:0, uretilen:0};
   const TF_ETIKET={"1SA":"KISA","4SA":"ORTA","1G":"UZUN","1H":"1HAF","1A":"1AY"};
   const tfKisa=t=>TF_ETIKET[t]||(SIN_TF[t]?SIN_TF[t].kisa:t);
   paketSozluk=null;   /* her taramada sözlük yeniden kurulur */
@@ -7742,7 +7750,7 @@ function tgKartlar(){
     const tfListe=SIN_SIRA.filter(t=>temiz.some(x=>x.tf[t]));
     let S=[]; try{ S=fiboKirilimTara(temiz,tfListe); }catch(e){}
     const kartYap=(g,x)=>{
-      const hd=x.f.boga; if(!hd||hd.length<2) return null;
+      const hd=x.f.boga; if(!hd||hd.length<2){suz.hedefsiz++; return null;}
       /* SİNYAL ANI: kart artık "kaç bar önce" demekle yetinmiyor, gerçek
          zaman damgası da gidiyor — kalan süre bundan hesaplanıyor. */
       let ts=null, atrY=null;
@@ -7761,7 +7769,13 @@ function tgKartlar(){
          altindaysa kart HIC uretilmez; boylece hem listelerden hem
          bot alarmlarindan ayni anda dusor (ikisi de ayni karttan
          besleniyor, tek yerde suzmek yeterli). */
-      if(!(hd[1].yuzde>=ASGARI_HEDEF_YUZDE)) return null;
+      /* ⚠️ ESKİDEN BURADA KART ÖLDÜRÜLÜYORDU — liste aşırı inceliyordu.
+         Hedefi dar olan sinyal işe yaramaz DEĞİL, sadece BİLDİRİME
+         değmez. O yüzden artık listede duruyor, yalnızca "zayıfHedef"
+         damgası taşıyor; bot alarmı bu damgayı görüp atlıyor.
+         Liste dolu kalır, bildirim seçici kalır. */
+      const zayifHedef = !(hd[1].yuzde>=ASGARI_HEDEF_YUZDE);
+      if(zayifHedef)suz.zayifHedef++; else suz.uretilen++;
       /* ── 🏷️ KURUMSAL İŞLEM SÜZGECİ ──
          Pivot, bir bedelsiz/sermaye artırımından ÖNCE oluştuysa o seviye
          artık gerçek değildir (fiyat bölünmüş, seviye bölünmemiş). Böyle
@@ -7769,7 +7783,7 @@ function tgKartlar(){
       const rTf=kay&&kay.tf[g.tf];
       let kurumsalIx=-1;
       try{ kurumsalIx=kurumsalIslemIx(rTf); }catch(e){}
-      if(kurumsalIx>=0 && x.f.tepeIx!=null && x.f.tepeIx<kurumsalIx) return null;
+      if(kurumsalIx>=0 && x.f.tepeIx!=null && x.f.tepeIx<kurumsalIx){suz.kurumsal++; return null;}
       /* ── 📚 hacim rafı · 📐 verimlilik · 📊 beta & göreli güç ── */
       let raf=null, er=null, beta=null, gguc=null;
       try{ raf=hacimRafi(rTf,x.f.tepe); }catch(e){}
@@ -7781,6 +7795,7 @@ function tgKartlar(){
       }catch(e){}
       return tgKartSure({kod:x.kod, fiyat:x.f.fiyat, giris:x.f.tepe,
         zaman:tgSinyalYasi(ts,x.kacBar,canli),
+        zayifHedef:zayifHedef,
         raf:raf, er:er, beta:beta, gguc:gguc,
         kurumsal:(kurumsalIx>=0&&rTf&&rTf.zam?rTf.zam[kurumsalIx]:null),
         tf:tfKisa(g.tf), tfKod:g.tf, canli:canli,
