@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-c · backtest · buğulu kod · renkli şerit";
+const WORKER_SURUM="2026-08-20-d · buğulu fiyat · şerit sızıntısı kapalı";
 const BEKLENEN_TARAYICI_SURUM="2026-08-19-c";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2332,6 +2332,9 @@ function seritCiz(){
   var hepsi=[];
   ["potansiyel","fibo","uzunvade"].forEach(function(k){
     (D.kartlar&&D.kartlar[k]||[]).forEach(function(x){
+      /* Kayan yazı kilidi delik bırakıyordu: buğuladığımız hisse burada
+         adıyla ve yüzdesiyle akıyordu. Kilitli olanlar şeride girmez. */
+      if(buguluMu(x))return;
       var kr=kar(x);if(kr!=null)hepsi.push({kod:x.kod,y:kr,tf:TF[k].kisa});
     });
   });
@@ -2533,7 +2536,9 @@ function satirHtml(k,ad){
   /* CANLI: kırılım oluşan barda — bar kapanınca geri dönebilir. */
   if(k.canli)alt.push("⚡ canlı");
   if(k.tetik!=null)alt.push("🔓 tetik "+N(k.tetik)+(k.tetikYuzde!=null?" · %"+Number(k.tetikYuzde).toFixed(1)+" kaldı":""));
-  else if(k.giris!=null)alt.push("sinyal "+N(k.giris));
+  /* Giriş fiyatı da bir ipucudur: "sinyal 138.70" ile hisse bulunabilir.
+     Kilitliyken sayı yerine kilit yazılır. */
+  else if(k.giris!=null)alt.push(buguluMu(k)?"sinyal 🔒":("sinyal "+N(k.giris)));
   /* ⚓ Kirilimdan bu yana alanlarin ortalama maliyetine gore konum.
      Listede tek kelime yeter; ayrinti detay ekraninda. */
   if(k.avwap>0&&k.avwapBar>=3)
@@ -2547,7 +2552,7 @@ function satirHtml(k,ad){
     (bg?'<span class="bgn">BUGÜN</span>':"")+kodHtml(k)+"</div>"+
     '<div class="altbilgi">'+E(alt.join(" · "))+"</div>"+
     (function(){var rz=rozlerHepsi(k);return rz?'<div class="rozSat">'+rz+"</div>":""})()+"</div>"+
-    '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
+    '<div class="sag"><div class="fiyat'+(kilitli?" buguluKod":"")+'">'+N(k.fiyat)+" ₺</div>"+
     '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?sag:Y(kr))+"</div></div></div>";
 }
 /* ══════ 🔒 BUĞULU KOD ══════
