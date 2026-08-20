@@ -2460,7 +2460,7 @@ function hotCiz(){
   satirBagla();
 }
 function sirCiz(akt){
-  var o=[["pot","🎯 Hedefe kalan"],["kar","💰 Kâr/Zarar"],["yeni","🕐 En yeni"],["gunes","☀️ Güneş"]];
+  var o=[["pot","🎯 Hedefe kalan"],["kar","💰 Kâr/Zarar"],["yeni","🕐 En yeni"]];
   return '<div class="sirala">'+o.map(function(x){
     return '<button class="sir'+(akt===x[0]?" on":"")+'" data-sr="'+x[0]+'">'+x[1]+"</button>";
   }).join("")+"</div>";
@@ -2477,11 +2477,6 @@ function dizil(ad){
   var c=l.slice();
   if(sira==="kar")c.sort(function(a,b){return(kar(b)==null?-9999:kar(b))-(kar(a)==null?-9999:kar(a))});
   else if(sira==="yeni")c.sort(function(a,b){return(b.sinyalTs||0)-(a.sinyalTs||0)});
-  else if(sira==="gunes")c.sort(function(a,b){
-    var d=havaSartlari(b)-havaSartlari(a);   /* önce 4/4 Güneş, sonra 3/4, 2/4... */
-    if(d)return d;
-    return(kar(b)==null?-9999:kar(b))-(kar(a)==null?-9999:kar(a));  /* eşitlikte kâr/zarara göre */
-  });
   return c;
 }
 function satirHtml(k,ad){
@@ -2936,7 +2931,7 @@ function temettuCiz(){
   post("/api/temettu",{}).then(function(v){
     var liste=(v&&v.liste)||[],gercek=!!(v&&v.gercekTarih);
     if(!liste.length){
-      el("govde").innerHTML='<div class="bos"><b>💰 Temettü Takvimi</b><br><br>Şu an ödeme tarihi ileride olan bir kâr payı duyurusu yok.<br>BIST\'te temettü duyuruları çoğunlukla Mart–Temmuz genel kurul sezonunda çıkar; sezon dışında liste boş görünmesi normaldir. Yeni bir duyuru çıktığında burada listelenir.</div>'+
+      el("govde").innerHTML='<div class="bos"><b>💰 Temettü Takvimi</b><br><br>Şu an ödeme tarihi ileride olan bir kâr payı duyurusu yok.<br>BIST\\'te temettü duyuruları çoğunlukla Mart–Temmuz genel kurul sezonunda çıkar; sezon dışında liste boş görünmesi normaldir. Yeni bir duyuru çıktığında burada listelenir.</div>'+
         (v&&v.tani?'<div class="uyari" style="text-align:left;white-space:pre-wrap">TANI (sadece admin):\\n'+E(v.tani.join("\\n"))+'</div>':"");
       return;
     }
