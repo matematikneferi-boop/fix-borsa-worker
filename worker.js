@@ -753,8 +753,8 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-e · backtest yeniden yazıldı";
-const BEKLENEN_TARAYICI_SURUM="2026-08-19-c";
+const WORKER_SURUM="2026-08-20-f · liste dolu · bildirim seçici";
+const BEKLENEN_TARAYICI_SURUM="2026-08-20-d";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
   const kartlar=(L&&L.kartlar)||{};
@@ -792,6 +792,9 @@ const gecmis=await alarmGecmisi(e),bilinen=new Set(gecmis.kodlar||[]);
    yığın yerine 3-4 gerçek sinyal gelmesi mesajın değerini korur. */
 const uygun=yeniListe.filter(x=>x&&x.kod
 &&!(null!=x.potansiyel&&Number(x.potansiyel)<=0)
+/* Hedefe kalan pay %2.7'nin altındaki sinyaller LİSTEDE durur ama
+   BİLDİRİM GÖNDERMEZ: liste dolu kalsın, mesaj değerli kalsın. */
+&&!x.zayifHedef
 &&!/İZLEMEDE/.test(String(x.guc||"")));
 /* DUZELTME: "bilinen" seti gunde bir sifirlaniyor, ama hafta sonu piyasa
    kapaliyken bile takvim gunu degisiyor -- Cuma'nin sinyali Cumartesi/
@@ -2544,6 +2547,7 @@ function satirHtml(k,ad){
      Listede tek kelime yeter; ayrinti detay ekraninda. */
   if(k.avwap>0&&k.avwapBar>=3)
     alt.push("⚓ "+(k.avwapUst!==false?"ortalama üstü":"ORTALAMA ALTI"));
+  if(k.zayifHedef)alt.push("🎯 hedef dar");
   if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
   var bg=bugunMu(k);
   var kilitli=buguluMu(k);
@@ -2620,7 +2624,7 @@ function listeCiz(ad){
   var l=dizil(ad), t=TF[ad];
   if(!l.length){
     el("govde").innerHTML='<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>Şu an bu dilimde sinyal yok.<br>'+
-      'Zayıf sinyalle liste doldurulmuyor — iki şartı birden sağlayan hisse çıkmadığında liste boş kalır.</div>';
+      'Bu dilimde henüz pivot kırılımı oluşmadı. Bar kapanışlarında liste yenilenir.</div>';
     return;
   }
   el("govde").innerHTML=sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
