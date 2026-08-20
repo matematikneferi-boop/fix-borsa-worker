@@ -27,6 +27,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 from datetime import datetime, timezone, timedelta
 
 # ⚠️ havuz.json BU DEPODA DEĞİL — ayrı bir depoda duruyor ve tara.py de
@@ -72,6 +73,42 @@ BASLIK = {
     "Accept": "application/json",
 }
 
+# ═══════════ 🔑 YAHOO ÇEREZ + CRUMB ═══════════
+# Yahoo, quoteSummary ucunu kimliksiz isteklere KAPATTI: önce çerez almak,
+# sonra o çerezle bir "crumb" (tek kullanımlık anahtar) istemek ve her
+# çağrıya eklemek gerekiyor. Tarayıcıdan çalışır ama GitHub Actions gibi
+# veri merkezi IP'lerinden 401 "Invalid Cookie" döner.
+# İlk sürüm bunu bilmediği için 432 hissenin hepsi boş döndü ve iş
+# kırmızı yandı. Artık oturum bir kez kurulur, 401 gelirse yenilenir.
+_cerez_yonetici = urllib.request.HTTPCookieProcessor()
+_acici = urllib.request.build_opener(_cerez_yonetici)
+_crumb = None
+
+
+def oturum_kur():
+    """Çerez al, sonra crumb iste. Başarısızsa None döner; çağrılar
+    yine de denenir (Yahoo bazı bölgelerde crumb istemiyor)."""
+    global _crumb
+    _crumb = None
+    for tohum in ("https://fc.yahoo.com",
+                  "https://finance.yahoo.com/quote/THYAO.IS"):
+        try:
+            _acici.open(urllib.request.Request(tohum, headers=BASLIK), timeout=20).read(2048)
+        except Exception:
+            pass
+    try:
+        istek = urllib.request.Request(
+            "https://query2.finance.yahoo.com/v1/test/getcrumb", headers=BASLIK)
+        with _acici.open(istek, timeout=20) as c:
+            k = c.read().decode("utf-8").strip()
+        if k and len(k) < 40 and "<" not in k:
+            _crumb = k
+            gunluk(f"🔑 Yahoo oturumu kuruldu (crumb alındı).")
+            return True
+    except Exception as e:
+        gunluk(f"! crumb alınamadı ({e}) — crumbsuz denenecek.")
+    return False
+
 
 def gunluk(*a):
     print(*a, flush=True)
@@ -101,22 +138,30 @@ def tarih(v):
 
 
 def cek(sembol, deneme=3):
-    url = ("https://query2.finance.yahoo.com/v10/finance/quoteSummary/"
-           f"{sembol}?modules={MODULLER}")
     for i in range(deneme):
-        try:
-            istek = urllib.request.Request(url, headers=BASLIK)
-            with urllib.request.urlopen(istek, timeout=25) as c:
-                veri = json.loads(c.read().decode("utf-8"))
-            sonuc = (veri.get("quoteSummary") or {}).get("result") or []
-            return sonuc[0] if sonuc else None
-        except urllib.error.HTTPError as e:
-            if e.code in (429, 503):
-                time.sleep(4 * (i + 1))
-                continue
-            return None
-        except Exception:
-            time.sleep(2 * (i + 1))
+        for alan in ("query2", "query1"):        # biri kapalıysa diğeri
+            url = (f"https://{alan}.finance.yahoo.com/v10/finance/quoteSummary/"
+                   f"{sembol}?modules={MODULLER}")
+            if _crumb:
+                url += "&crumb=" + urllib.parse.quote(_crumb)
+            try:
+                istek = urllib.request.Request(url, headers=BASLIK)
+                with _acici.open(istek, timeout=25) as c:
+                    veri = json.loads(c.read().decode("utf-8"))
+                sonuc = (veri.get("quoteSummary") or {}).get("result") or []
+                if sonuc:
+                    return sonuc[0]
+            except urllib.error.HTTPError as e:
+                if e.code == 401:
+                    # Crumb düşmüş: oturumu yenile ve bu turu tekrarla.
+                    oturum_kur()
+                    continue
+                if e.code in (429, 503):
+                    time.sleep(4 * (i + 1))
+                    continue
+            except Exception:
+                pass
+        time.sleep(1.5 * (i + 1))
     return None
 
 
@@ -362,6 +407,7 @@ def havuzu_oku():
 
 
 def main():
+    oturum_kur()
     kodlar = havuzu_oku()
     if not kodlar:
         gunluk("✗ Havuz okunamadı (havuz.json / sektor.json bulunamadı).")
@@ -380,6 +426,12 @@ def main():
             basarili += 1
         else:
             bos += 1
+        # İlk 15 hissenin hepsi boşsa devam etmenin anlamı yok: kimlik ya da
+        # ağ sorunu vardır. 4 dakika bekleyip kırmızı yanmaktansa hemen söyle.
+        if i == 15 and basarili == 0:
+            gunluk("✗ İlk 15 hissenin hiçbiri okunamadı — Yahoo erişimi engelli "
+                   "görünüyor (çerez/crumb ya da IP engeli). İş durduruluyor.")
+            return 2
         if i % 25 == 0:
             gunluk(f"  {i}/{len(kodlar)} · dolu {basarili} · boş {bos} "
                    f"· {int(time.time()-t0)} sn")
