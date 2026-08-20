@@ -1914,12 +1914,6 @@ textarea.gir{min-height:88px;resize:vertical}
 .roz-ko{color:var(--kr);border-color:rgba(229,72,77,.35);background:rgba(229,72,77,.08)}
 .roz-no{color:var(--soluk);border-color:rgba(139,148,158,.35);background:rgba(139,148,158,.08)}
 .roz-gunes{color:#ffb020;border-color:rgba(255,176,32,.5);background:rgba(255,176,32,.12);font-weight:700}
-.gunesGizli{position:relative}
-.gunesGizli .gizliMetin{filter:blur(5px);-webkit-filter:blur(5px);user-select:none;-webkit-user-select:none}
-.gunesGizli::after{content:"☀️ Süper Üyelik";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  background:rgba(255,176,32,.16);border:1px solid rgba(255,176,32,.55);color:#ffb020;font-weight:800;
-  font-size:11px;padding:4px 10px;border-radius:20px;pointer-events:none;white-space:nowrap;letter-spacing:.2px;
-  box-shadow:0 0 14px rgba(255,176,32,.25)}
 .rozSat{margin-top:4px}
 .havaIkon{font-size:13px;margin-right:2px}
 .yardimBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
@@ -2495,34 +2489,13 @@ function satirHtml(k,ad){
     alt.push("⚓ "+(k.avwapUst!==false?"ortalama üstü":"ORTALAMA ALTI"));
   if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
   var bg=bugunMu(k);
-  /* ☀️ GÜNEŞ (4/4) + Süper Üye değil → satır tamamen gizlenmez, tersine
-     BUĞULU (blur) gösterilir: kart, rozet, fiyat hep orada ama kod/sayılar
-     okunmaz. "Bir yerde güçlü bir sinyal var ama göremiyorum" hissi merakı
-     arttırır. Tıklanınca detay açılmaz, Süper Üyelik daveti gösterilir. */
-  var kilitliGunes=havaKilitliMi(havaSartlari(k));
-  var kodIc=(bg?'<span class="bgn">BUGÜN</span>':"")+E(k.kod);
-  var altIc=E(alt.join(" · "));
-  var fiyatIc=N(k.fiyat)+" ₺";
-  var yuzdeIc=(kr==null?sag:Y(kr));
-  if(kilitliGunes){
-    kodIc='<span class="gizliMetin">'+kodIc+"</span>";
-    altIc='<span class="gizliMetin">'+altIc+"</span>";
-    fiyatIc='<span class="gizliMetin">'+fiyatIc+"</span>";
-    yuzdeIc='<span class="gizliMetin">'+yuzdeIc+"</span>";
-  }
-  return '<div class="satir'+(bg?" bgnSatir":"")+(kilitliGunes?" gunesGizli":"")+'"'+
-    (kilitliGunes?' data-guneskilit="1"':' data-kod="'+E(k.kod)+'"')+' data-l="'+ad+'" style="border-left-color:'+t.renk+'">'+
+  return '<div class="satir'+(bg?" bgnSatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'" style="border-left-color:'+t.renk+'">'+
     '<div class="sol"><div class="kod">'+havaIkon(k)+(k.rozet?'<span class="rz">'+k.rozet+"</span>":"")+
-    kodIc+"</div>"+
-    '<div class="altbilgi">'+altIc+"</div>"+
+    (bg?'<span class="bgn">BUGÜN</span>':"")+E(k.kod)+"</div>"+
+    '<div class="altbilgi">'+E(alt.join(" · "))+"</div>"+
     (function(){var rz=rozlerHepsi(k);return rz?'<div class="rozSat">'+rz+"</div>":""})()+"</div>"+
-    '<div class="sag"><div class="fiyat">'+fiyatIc+'</div>'+
-    '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+yuzdeIc+"</div></div></div>";
-}
-function gunesUyar(){
-  var m="☀️ Güneş sinyali\n\nBu hisse 4/4 bağlam şartını birden sağlıyor — en sağlam görünüm, nadir çıkar.\n\nHangisi olduğunu görmek için Süper Üye ol.";
-  try{TG.showAlert(m,function(){tit();sekme="davet";ciz();window.scrollTo(0,0)})}
-  catch(e){tit();sekme="davet";ciz();window.scrollTo(0,0)}
+    '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
+    '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?sag:Y(kr))+"</div></div></div>";
 }
 function satirBagla(){
   [].forEach.call(document.querySelectorAll("[data-kod]"),function(b){
@@ -2531,9 +2504,6 @@ function satirBagla(){
       if(b.dataset.form)formasyonDetay(b.dataset.kod,b.dataset.l);
       else detay(b.dataset.kod,b.dataset.l);
     };
-  });
-  [].forEach.call(document.querySelectorAll("[data-guneskilit]"),function(b){
-    b.onclick=function(){tit();gunesUyar()};
   });
   formasyonRozetUygula();
 }
