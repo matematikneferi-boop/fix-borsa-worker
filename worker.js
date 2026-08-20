@@ -3001,7 +3001,7 @@ function backtestGoster(v){
          '<div class="btAlt">birikimli <b class="'+(r2.bir>=0?"ye":"kr")+'">'+Y(r2.bir)+'</b>'+
            (r2.sin.length?' · '+r2.sin.map(function(z){
               return E(z.kod||z.k||"")+" "+(z.y!=null?Y(z.y):"");
-            }).join(" · ")):"")+'</div>'+
+            }).join(" · "):"")+'</div>'+
          '</div>';
     }
     h+='</div>';
