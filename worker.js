@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-l · temel analiz · kesme işareti düzeltildi";
+const WORKER_SURUM="2026-08-20-m · temel veri teşhisi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2285,6 +2285,11 @@ function sekCiz(){
     s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
       t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
   });
+  /* 📋 Temel Analiz — KISA/ORTA/UZUN'un hemen ardında, dördüncü sırada.
+     Sekme şeridi yatay kaydırmalı; arkalara koyunca kimse bulamıyor.
+     Sinyalin arkasında şirket var mı sorusu, listeye bakmakla aynı
+     sıklıkta sorulan bir sorudur — o yüzden görünür yerde. */
+  s.push('<button class="sek'+(sekme==="temel"?" on":"")+'" data-r="nötr" data-s="temel">📋 Temel</button>');
   s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="alarm"?" on":"")+'" data-r="nötr" data-s="alarm">🔔 Anlık Alarm'+(D.super?"":" 🔒")+'</button>');
@@ -2305,7 +2310,6 @@ function sekCiz(){
   /* 📋 Temel Analiz — HERKESE AÇIK ve üst sıralarda: sinyalin arkasında
      şirket olup olmadığını görmek kilitlenecek bir ayrıcalık değil,
      sistemin ciddiyetinin göstergesidir. */
-  s.push('<button class="sek'+(sekme==="temel"?" on":"")+'" data-r="nötr" data-s="temel">📋 Temel Analiz</button>');
   s.push('<button class="sek'+(sekme==="kap"?" on":"")+'" data-r="nötr" data-s="kap">📰 KAP</button>');
   s.push('<button class="sek'+(sekme==="temettu"?" on":"")+'" data-r="nötr" data-s="temettu">💰 Temettü</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
@@ -3168,10 +3172,25 @@ function temelCiz(){
     });
   });
   if(!hepsi.length){
-    el("govde").innerHTML='<div class="bos"><b>📋 Temel Analiz</b><br><br>'+
-      'Henüz temel veri yüklenmedi.<br>'+
-      '<span class="altbilgi">Veri haftada bir güncellenir. Sinyal listesi boşsa '+
-      'burası da boş görünür.</span></div>';
+    /* İki bambaşka sebep vardı ve ikisine de aynı belirsiz cümle yazılıyordu.
+       Artık sunucu temelDurum ile kesin bilgiyi gönderiyor: dosya var mı,
+       kaç hisse, ne zaman güncellendi, hangi adresler denendi. */
+    var td=(D&&D.temelDurum)||{}, h2='<div class="bos"><b>📋 Temel Analiz</b><br><br>';
+    if(!td["var"]){
+      h2+='<b style="color:var(--kr)">temel.json bulunamadı.</b><br><br>'+
+          '<span class="altbilgi">Veri dosyası henüz üretilmemiş.<br><br>'+
+          'GitHub → Actions → <b>Temel Analiz Verisi</b> → Run workflow.<br>'+
+          'Yaklaşık 5 dakika sürer; sonra bir tarama turu içinde burası dolar.'+
+          '<br><br>Denenen adresler:<br>'+
+          ((td.adresler||[]).map(function(u){return '<code>'+E(u)+'</code>'}).join('<br>')||'—')+
+          '</span>';
+    } else {
+      h2+='Temel veri <b>yüklü</b> — '+td.hisse+' hisse'+
+          (td.guncelleme?' · '+E(String(td.guncelleme)):'')+'.<br><br>'+
+          'Ama şu an sinyal listelerindeki hisseler bu dosyada yok.<br>'+
+          '<span class="altbilgi">Sinyal çıktığında burası dolar.</span>';
+    }
+    el("govde").innerHTML=h2+'</div>';
     return;
   }
   var sirala={skor:function(a,b){return(b.t.skor==null?-1:b.t.skor)-(a.t.skor==null?-1:a.t.skor)},
@@ -5088,6 +5107,19 @@ function temelSkor(t){
   return Math.round(100*puan/agirlik);
 }
 
+/* 📋 Temel veri NEDEN yok? "Henüz yüklenmedi" hiçbir şey söylemiyordu.
+   Bu fonksiyon kesin durumu döndürür: dosya var mı, kaç hisse, ne zaman
+   güncellendi, hangi adresten geldi. Kullanıcı tahmin etmesin. */
+async function temelDurumAl(A){
+  try{
+    const T=await temelGetir(A);
+    if(T&&T.hisse&&Object.keys(T.hisse).length){
+      return{var:!0,hisse:Object.keys(T.hisse).length,
+             guncelleme:T.guncelleme||null,dolu:T.dolu||null,toplam:T.toplam||null};
+    }
+  }catch(e){}
+  return{var:!1,adresler:TEMEL_URLLER};
+}
 async function temelEkle(A,paket){
   try{
     if(!paket||!paket.kartlar)return;
@@ -5411,6 +5443,7 @@ const YON=d(uid),KOD=v=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").sli
 if("/api/veri"===$.pathname){
 const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid),portfoy=await XP(A,uid),portfoyGecmis=await XPG(A,uid),portfoyGunluk=await XPGUNLUK(A,uid);
 const un=BUN||await botAd(A).catch(()=>null)||"bot";
+const temelDurum=await temelDurumAl(A).catch(()=>({var:!1}));
 const kart={};
 if(L2&&L2.kartlar)for(const k of Object.keys(L2.kartlar)){
 if("sira"===k){kart.sira=L2.kartlar.sira;continue}
