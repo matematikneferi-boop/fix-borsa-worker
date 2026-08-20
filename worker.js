@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-a · alarm 3 dilim · Güneş 3 şart";
+const WORKER_SURUM="2026-08-20-c · backtest · buğulu kod · renkli şerit";
 const BEKLENEN_TARAYICI_SURUM="2026-08-19-c";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1909,6 +1909,28 @@ textarea.gir{min-height:88px;resize:vertical}
 .serit b{color:var(--yazi)} .serit .ay{color:#3a4553;margin:0 12px}
 .serit .ay2{color:var(--soluk);font-size:10.5px}
 .serit .ay3{color:#ffb020;font-weight:700}
+.ozIki{display:flex;gap:9px;margin:4px 0 10px}
+.ozKart{flex:1;background:var(--kart);border:1px solid var(--ciz);border-radius:10px;padding:11px 8px;text-align:center}
+.ozBuyuk{font-size:23px;font-weight:800;line-height:1.15}
+.ozAlt{font-size:11px;color:var(--soluk);margin-top:2px}
+.btGun{padding:9px 0;border-bottom:1px solid var(--ciz)}
+.btGun:last-child{border-bottom:0}
+.btUst{display:flex;align-items:baseline;gap:8px;font-size:13px}
+.btUst b:first-child{font-family:ui-monospace,monospace}
+.btN{color:var(--soluk);font-size:11px;flex:1}
+.btBar{height:5px;background:var(--ciz);border-radius:3px;overflow:hidden;margin:5px 0 4px}
+.btDolgu{height:100%}
+.btYe{background:#25d366}
+.btKr{background:#ff5a5f}
+.btAlt{font-size:10.5px;color:var(--soluk);line-height:1.5}
+.serYe{color:#25d366}
+.serKr{color:#ff5a5f}
+.serY{font-weight:800}
+/* 🔒 Buğulu kod: yüzde görünür, hisse adı okunmaz. Süper Üyelik kancası. */
+.buguluKod{filter:blur(6px);-webkit-filter:blur(6px);user-select:none;
+  pointer-events:none;letter-spacing:1px}
+.buguluKilit{margin-left:6px;font-size:11px;opacity:.9}
+.buguluSatir{position:relative}
 .hotSerit{margin:0 0 6px}
 .araSat{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .araGir{flex:0 1 88px;min-width:0;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
@@ -2091,7 +2113,9 @@ function havaIkon(k){                  /* hisse kodunun hemen önünde tek karak
 function rozlerHepsi(k){
   return havaRozet(k)+rozAvwap(k)+rozRaf(k.raf)+rozEr(k.er)+rozGguc(k.gguc,k.beta);
 }
-var D=null, sekme="potansiyel", sira="pot", adayTf="adayOrta", presetSec="kaliteli", portfoySirala="deger";
+/* Varsayılan sıralama "kar": liste açılır açılmaz en çok kazandıran sinyal
+   en üstte. Kullanıcı istediğinde 🎯 Hedefe kalan / 🕐 En yeni'ye geçebilir. */
+var D=null, sekme="potansiyel", sira="kar", adayTf="adayOrta", presetSec="kaliteli", portfoySirala="deger";
 var ONIZLEME=(function(){try{return localStorage.getItem("onizlemeModu")==="1"}catch(e){return false}})();
 /* 👁️ SIRADAN ÜYE ÖNİZLEMESİ — yalnız yöneticide görünür bir düğme.
    Gerçek yon/super bayrakları D.yonGercek / D.superGercek'te saklanır;
@@ -2139,6 +2163,7 @@ function ekranAdi(){
   if(sekme==="fav")return"⭐ Takip listem";
   if(sekme==="portfoy")return"💼 Portföyüm";
   if(sekme==="preset")return"🎛 Hazır filtreler";
+  if(sekme==="backtest")return"📊 Backtest";
   if(sekme==="kap")return"📰 KAP Bildirimleri";
   if(sekme==="temettu")return"💰 Temettü Takvimi";
   if(sekme==="yardim")return"❓ Rozetler ve Sekmeler";
@@ -2232,6 +2257,8 @@ function sekCiz(){
      besleniyor; silmek onlari da kirardi. Yalnizca sekme gizlendi.
      GERI ACMAK ICIN: asagidaki satirin basindaki // isaretini kaldir. */
   //s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
+  /* 📊 Backtest — yalnız yönetici. Üyeye açmak istersen d(uid) şartını kaldır. */
+  if(D&&D.yon)s.push('<button class="sek'+(sekme==="backtest"?" on":"")+'" data-r="nötr" data-s="backtest">📊 Backtest 🔐</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
   s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
@@ -2244,7 +2271,7 @@ function sekCiz(){
   if(D.yon)s.push('<button class="sek'+(sekme==="sag"?" on":"")+'" data-r="nötr" data-s="sag">🛡 Sistem</button>');
   el("sekmeler").innerHTML=s.join("");
   [].forEach.call(el("sekmeler").children,function(b){
-    b.onclick=function(){tit();sekme=b.dataset.s;sira="pot";ciz();window.scrollTo(0,0)};
+    b.onclick=function(){tit();sekme=b.dataset.s;sira="kar";ciz();window.scrollTo(0,0)};
     b.oncontextmenu=function(e2){e2.preventDefault()};
   });
 }
@@ -2282,6 +2309,7 @@ function ciz(){
   if(sekme==="fav")return favCiz();
   if(sekme==="portfoy")return portfoyCiz();
   if(sekme==="preset")return presetCiz();
+  if(sekme==="backtest")return backtestCiz();
   if(sekme==="kap")return kapCiz();
   if(sekme==="temettu")return temettuCiz();
   if(sekme==="yardim")return yardimCiz();
@@ -2313,8 +2341,13 @@ function seritCiz(){
     var j=Math.floor(Math.random()*(i+1)),t=hepsi[i];hepsi[i]=hepsi[j];hepsi[j]=t;
   }
   var gosterilen=hepsi.slice(0,20);
+  /* Kayan yazıda yön RENKLE okunsun: yükseliş yeşil, düşüş kırmızı.
+     Emoji tek başına küçük ekranda ayırt edilmiyordu; kod ve yüzde
+     birlikte renkleniyor, yüzde ayrıca kalın. */
   var par=gosterilen.map(function(x){
-    return (x.y>=0?"🟢":"🔴")+" <b>"+E(x.kod)+"</b> "+Y(x.y)+' <span class="ay2">'+x.tf+"</span>";
+    var sn=x.y>=0?"serYe":"serKr";
+    return '<span class="'+sn+'">'+(x.y>=0?"▲":"▼")+" <b>"+E(x.kod)+"</b> "+
+           '<b class="serY">'+Y(x.y)+'</b></span> <span class="ay2">'+x.tf+"</span>";
   });
   /* 👑 SÜPER ÜYELİK TANITIMI — her 3-4 hissede bir araya bir tanıtım
      metni serpiştirilir (rastgele metin, rastgele 3 ya da 4 aralık).
@@ -2428,7 +2461,9 @@ function hotCiz(){
   var enIyiKod={};
   hepsi.forEach(function(x){
     if(!x.kod)return;
-    if(havaSartlari(x)<4)return;
+    /* HATALIYDI: sistem 3 şarta indirildiğinde bu eşik 4'te kalmıştı,
+       yani ☀️ şeridi HİÇBİR ZAMAN dolmuyordu. */
+    if(havaSartlari(x)<3)return;
     var mv=enIyiKod[x.kod];
     if(!mv||(x.kalite||0)>(mv.kalite||0))enIyiKod[x.kod]=x;
   });
@@ -2465,12 +2500,12 @@ function hotCiz(){
   if(secilen.length)
     h+='<div class="hotSira">'+secilen.map(kartHtml).join("")+"</div>";
   else
-    h+='<div class="hotAltYazi" style="font-size:11px;color:var(--soluk)">Şu an 4 şartı birden sağlayan hisse yok — bu normaldir, nadir görülür.</div>';
+    h+='<div class="hotAltYazi" style="font-size:11px;color:var(--soluk)">Şu an 3 şartı birden sağlayan hisse yok — bu normaldir, nadir görülür.</div>';
   kutu.innerHTML=h;
   satirBagla();
 }
 function sirCiz(akt){
-  var o=[["pot","🎯 Hedefe kalan"],["kar","💰 Kâr/Zarar"],["yeni","🕐 En yeni"]];
+  var o=[["kar","💰 Kâr/Zarar"],["pot","🎯 Hedefe kalan"],["yeni","🕐 En yeni"]];
   return '<div class="sirala">'+o.map(function(x){
     return '<button class="sir'+(akt===x[0]?" on":"")+'" data-sr="'+x[0]+'">'+x[1]+"</button>";
   }).join("")+"</div>";
@@ -2505,18 +2540,41 @@ function satirHtml(k,ad){
     alt.push("⚓ "+(k.avwapUst!==false?"ortalama üstü":"ORTALAMA ALTI"));
   if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
   var bg=bugunMu(k);
-  return '<div class="satir'+(bg?" bgnSatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'" style="border-left-color:'+t.renk+'">'+
+  var kilitli=buguluMu(k);
+  return '<div class="satir'+(bg?" bgnSatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'"'+
+    (kilitli?' data-kilit="1"':"")+' style="border-left-color:'+t.renk+'">'+
     '<div class="sol"><div class="kod">'+havaIkon(k)+(k.rozet?'<span class="rz">'+k.rozet+"</span>":"")+
-    (bg?'<span class="bgn">BUGÜN</span>':"")+E(k.kod)+"</div>"+
+    (bg?'<span class="bgn">BUGÜN</span>':"")+kodHtml(k)+"</div>"+
     '<div class="altbilgi">'+E(alt.join(" · "))+"</div>"+
     (function(){var rz=rozlerHepsi(k);return rz?'<div class="rozSat">'+rz+"</div>":""})()+"</div>"+
     '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
     '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?sag:Y(kr))+"</div></div></div>";
 }
+/* ══════ 🔒 BUĞULU KOD ══════
+   Bugün sinyal vermiş VE yüzde 5'ten fazla kazandırmış hisselerin ADI
+   Süper Üye olmayana buğulu gösterilir. Yüzde açıkta kalır — "sistem
+   bunu buldu, ama hangisi olduğu Süper Üyelere özel" mesajı.
+   Kilit yalnız GÖRSEL değil: satır tıklaması detay yerine davet
+   ekranına gider, yoksa kod detay ekranından okunabilirdi. */
+var BUGULU_ESIK=5;
+function buguluMu(k){
+  if(D&&D.super)return false;
+  if(!bugunMu(k))return false;
+  var kr=kar(k);
+  return kr!=null&&kr>=BUGULU_ESIK;
+}
+function kodHtml(k){
+  if(!buguluMu(k))return E(k.kod);
+  return '<span class="buguluKod">'+E(k.kod)+'</span>'+
+         '<span class="buguluKilit">🔒</span>';
+}
 function satirBagla(){
   [].forEach.call(document.querySelectorAll("[data-kod]"),function(b){
     b.onclick=function(){
       tit();
+      /* Buğulu satır: kod detay ekranından okunabilirdi, o yüzden
+         tıklama detaya değil davet ekranına gider. */
+      if(b.dataset.kilit){sekme="davet";ciz();window.scrollTo(0,0);return}
       if(b.dataset.form)formasyonDetay(b.dataset.kod,b.dataset.l);
       else detay(b.dataset.kod,b.dataset.l);
     };
@@ -2874,6 +2932,91 @@ function bindPresetChips(){
    sayfasına götürür (bu bot bildirimi yorumlamaz/tavsiye vermez, sadece
    gösterir). Arka planda otomatik push'tan (kapKontrolVeGonder) tamamen
    ayrı bir uç nokta (/api/kap) — sekme her açıldığında taze veri çeker. */
+/* ═══════════ 📊 BACKTEST — KURULUŞTAN BUGÜNE GÜN GÜN ═══════════
+   YENİ HİÇBİR KAYIT TUTULMAZ. Kaynak, zaten var olan "gecmis" verisi;
+   bu sayfa yalnızca okur ve toplar. Yapıya dokunmamasının sebebi budur:
+   kayıt motoru, /push akışı ve alarm yolu hiç bilmiyor bile.
+   Günlük getiri = o gün açılan sinyallerin ortalama getirisi.
+   Birikimli = her günün ortalaması bileşik olarak çarpılır; yani
+   "her gün o günün sinyallerine eşit dağılmış olsaydın" senaryosu. */
+var btD=null;
+function backtestCiz(){
+  if(btD){backtestGoster(btD);return}
+  el("govde").innerHTML='<div class="yukleniyor">geçmiş okunuyor…</div>';
+  post("/api/performans",{}).then(function(v){btD=v;backtestGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Geçmiş okunamadı.</div>'});
+}
+function backtestGoster(v){
+  if(!v||!v.ok||!v.kurulus){el("govde").innerHTML='<div class="bos">Geçmiş verisi yok.</div>';return}
+  var K=v.kurulus, ist=K.ist&&K.ist.genel, seri=(K.ist&&K.ist.seri)||[];
+  var h='';
+
+  /* ── Üst özet ── */
+  if(ist){
+    var b10=Math.round(10000*(1+ist.ort/100));
+    h+='<div class="kutu"><h3>🏁 '+E(K.tarih)+' — bugün</h3>'+
+       '<div class="ozIki">'+
+         '<div class="ozKart"><div class="ozBuyuk '+(ist.ort>=0?"ye":"kr")+'">'+Y(ist.ort)+'</div>'+
+           '<div class="ozAlt">ortalama getiri</div></div>'+
+         '<div class="ozKart"><div class="ozBuyuk">'+Math.round(ist.isabet)+'%</div>'+
+           '<div class="ozAlt">isabet</div></div>'+
+       '</div>'+
+       '<div class="sat"><span class="et">Ölçülen sinyal</span><b>'+ist.n+'</b></div>'+
+       '<div class="sat"><span class="et">İşlem günü</span><b>'+seri.length+'</b></div>'+
+       '<div class="sat"><span class="et">Sinyalden sonraki zirve (ort.)</span><b class="ye">'+Y(ist.zirve)+'</b></div>'+
+       (ist.eniyi?'<div class="sat"><span class="et">En iyi</span><b class="ye">'+E(ist.eniyi.kod||"")+" "+Y(ist.eniyi.y)+'</b></div>':"")+
+       (ist.enkotu?'<div class="sat"><span class="et">En kötü</span><b class="kr">'+E(ist.enkotu.kod||"")+" "+Y(ist.enkotu.y)+'</b></div>':"")+
+       (ist.hedefN?'<div class="sat"><span class="et">Hedefe değen</span><b>'+ist.hedefTut+"/"+ist.hedefN+
+         " (%"+Math.round(100*ist.hedefTut/Math.max(1,ist.hedefN))+')</b></div>':"")+
+       '<div class="sat"><span class="et">10.000 ₺ ne olurdu</span><b class="'+(b10>=10000?"ye":"kr")+'">'+
+         b10.toLocaleString("tr-TR")+' ₺</b></div>'+
+       '<div class="altbilgi" style="margin-top:7px;opacity:.7">Sinyal başına eşit tutar varsayımı. '+
+       'Komisyon, makas ve vergi dahil değildir.</div>'+
+       '</div>';
+  }
+
+  /* ── Gün gün döküm + birikimli eğri ── */
+  if(seri.length){
+    var bir=1, satirlar=[];
+    for(var i=0;i<seri.length;i++){
+      var g=seri[i];
+      bir*=(1+(Number(g.ort)||0)/100);
+      satirlar.push({gun:g.gun,ort:Number(g.ort)||0,n:g.n||0,bir:(bir-1)*100,
+                     sin:(g.sin||[]).slice(0,6)});
+    }
+    var enB=1;
+    for(var q=0;q<satirlar.length;q++)enB=Math.max(enB,Math.abs(satirlar[q].ort));
+
+    h+='<div class="kutu"><h3>📅 Gün gün</h3>'+
+       '<div class="altbilgi" style="margin-bottom:8px;opacity:.7">'+
+       'Birikimli sütun, her gün o günün sinyallerine girilmiş olsaydı ne olurdu sorusunun cevabı.</div>';
+    for(var j=satirlar.length-1;j>=0;j--){
+      var r2=satirlar[j];
+      var gen=Math.round(Math.abs(r2.ort)/enB*100);
+      h+='<div class="btGun">'+
+         '<div class="btUst"><b>'+E(r2.gun)+'</b>'+
+           '<span class="btN">'+r2.n+' sinyal</span>'+
+           '<span class="'+(r2.ort>=0?"ye":"kr")+'"><b>'+Y(r2.ort)+'</b></span></div>'+
+         '<div class="btBar"><div class="btDolgu '+(r2.ort>=0?"btYe":"btKr")+'" style="width:'+gen+'%"></div></div>'+
+         '<div class="btAlt">birikimli <b class="'+(r2.bir>=0?"ye":"kr")+'">'+Y(r2.bir)+'</b>'+
+           (r2.sin.length?' · '+r2.sin.map(function(z){
+              return E(z.kod||z.k||"")+" "+(z.y!=null?Y(z.y):"");
+            }).join(" · ")):"")+'</div>'+
+         '</div>';
+    }
+    h+='</div>';
+  } else {
+    h+='<div class="bos">Kuruluştan bu yana günlük kayıt bulunamadı.</div>';
+  }
+
+  h+='<div class="altbilgi" style="margin:10px 2px 20px;opacity:.6">'+
+     'Ölçüm süzgeçleri: '+(v.ayar?('aykırı |%'+v.ayar.aykiri+'| üstü ve '+v.ayar.olgunluk+
+     ' günden genç sinyaller sayıma girmez'):'varsayılan')+
+     (v.elenenAykiri?' · elenen aykırı: '+v.elenenAykiri:'')+
+     (v.elenenTaze?' · elenen taze: '+v.elenenTaze:'')+'</div>';
+
+  el("govde").innerHTML=h;
+}
 function kapCiz(){
   el("govde").innerHTML='<div class="yukleniyor">yükleniyor…</div>';
   post("/api/kap",{}).then(function(v){
@@ -4412,7 +4555,7 @@ function anaMenu(){
   tit();
   var K=el("katman");
   if(K&&K.classList.contains("ac")){K.classList.remove("ac");K.classList.remove("genis");K.innerHTML=""}
-  sekme="potansiyel";sira="pot";adayTf="adayOrta";
+  sekme="potansiyel";sira="kar";adayTf="adayOrta";
   fDilim="hepsi";fTip="hepsi";fDurum="hepsi";fMesafe="hepsi";fMesafeManuel=null;
   tgGeriDugme();
   ciz();
@@ -5163,8 +5306,15 @@ if(n2)uzunGenel={n:n2,ort:top2/n2,gun:g2,on10k:Math.round(10000*(1+(top2/n2)/100
 seri.sort((a2,b2)=>a2.gun<b2.gun?-1:1);
 return{gunSay:gunSay,detaySinir:detaySinir,gunSayisi:gunler.size,
 dilimler:TFL.map(t=>({tf:t,ist:kapat(kutu[t])})),genel:kapat(genel),uzunGenel:uzunGenel,
-seri:seri.slice(-30)}};
+/* Backtest sayfası günlük dökümü buradan okuyor; 30 gün kuruluştan
+   bu yanayı kapsamayabilir, 200'e çıkarıldı. Ölçüm mantığı aynı. */
+seri:seri.slice(-200)}};
+/* 🏁 SİSTEMİN KURULUŞ TARİHİ. Backtest sayfası bu günden bugüne kadar
+   olan HER GÜNÜ tek tek gösterir. Tek değiştirilecek yer burasıdır. */
+const KURULUS="2026-08-12";
+const kurulusGun=Math.max(1,Math.round((new Date(bg)-new Date(KURULUS))/864e5));
 const cikti=JS({ok:!0,donem:{h1:olc(7),a1:olc(30),a3:olc(90),y1:olc(365)},
+kurulus:{tarih:KURULUS,gun:kurulusGun,ist:olc(kurulusGun)},
 ayar:PA,elenenAykiri:elenenAykiri,elenenTaze:elenenTaze,yonetici:!!YON,
 guncelleme:G2.guncelleme||null});return cikti}
 /* 📈 Ölçüm süzgeçlerini kaydet — yalnız yönetici. */
