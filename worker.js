@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-g · düşenler şeffaflığı";
+const WORKER_SURUM="2026-08-20-h · Bugün süzgeci";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1713,7 +1713,7 @@ let T=null,x=0;async function E(e,t){if(!t&&T&&Date.now()-x<6e4)return T;if(!e.V
 return!d(t)&&(await N(e)).includes(String(t))}function M(e){return new Request("https://kisit.local/u/"+e)}function M60(e){return new Request("https://kisit60.local/u/"+e)}async function D(e){try{return await caches.default.delete(M(e)),!0}catch(e){return!1}}
 /* TR gününe göre "bugün mü" — bot mesajlarındaki 🆕 işareti için. */
 const BUGUN_MU=e=>{if(!e||!e.sinyalTs)return!1;const g=v=>Math.floor((Number(v)+10800)/86400);return g(e.sinyalTs)===g(Date.now()/1e3)};
-function I(e){return void 0!==e.kar&&null!==e.kar?Number(e.kar):e.giris>0&&e.fiyat>0?100*(Number(e.fiyat)/Number(e.giris)-1):null}const A={pot:"🎯 Hedefe kalan",kar:"💰 Kâr/Zarar",yeni:"🕐 En yeni"}
+function I(e){return void 0!==e.kar&&null!==e.kar?Number(e.kar):e.giris>0&&e.fiyat>0?100*(Number(e.fiyat)/Number(e.giris)-1):null}const A={pot:"🎯 Hedefe kalan",kar:"💰 Kâr/Zarar",yeni:"📅 Bugün"}
 ;function z(e,t,a){const n=e.kartlar&&e.kartlar[t]||[],i=n.length,r=[...Array(i).keys()];if("pot"===a)return r;const s=e.kartlar&&e.kartlar.sira&&e.kartlar.sira[t]&&e.kartlar.sira[t][a]
 ;return Array.isArray(s)&&s.length===i?s:"kar"===a?r.sort((e,t)=>(I(n[t])??-9999)-(I(n[e])??-9999)):r.sort((e,t)=>(n[t].sinyalTs||0)-(n[e].sinyalTs||0))}function U(e,t,a,n,i,r,YON){
 const s=t.kartlar[a],l=Math.max(1,Math.ceil(r.length/8));let o=e+"\n";if(t.guncelleme&&YON){const e=new Date(t.guncelleme)
@@ -2519,7 +2519,7 @@ function hotCiz(){
   satirBagla();
 }
 function sirCiz(akt){
-  var o=[["kar","💰 Kâr/Zarar"],["pot","🎯 Hedefe kalan"],["yeni","🕐 En yeni"]];
+  var o=[["kar","💰 Kâr/Zarar"],["pot","🎯 Hedefe kalan"],["yeni","📅 Bugün"]];
   return '<div class="sirala">'+o.map(function(x){
     return '<button class="sir'+(akt===x[0]?" on":"")+'" data-sr="'+x[0]+'">'+x[1]+"</button>";
   }).join("")+"</div>";
@@ -2531,11 +2531,19 @@ function sirBagla(){
 }
 function dizil(ad){
   var l=(D.kartlar&&D.kartlar[ad])||[];
+  /* 📅 BUGÜN: eskiden "En yeni" idi ve yalnızca zamana göre sıralıyordu —
+     dünkü sinyaller de listede kalıyordu. Artık bir SÜZGEÇ: sadece bugün
+     oluşan sinyaller, en çok kazandırandan en aza doğru. "Bugün ne oldu?"
+     sorusunun tek ekranda cevabı. */
+  if(sira==="yeni"){
+    return l.filter(bugunMu).sort(function(a,b){
+      return(kar(b)==null?-9999:kar(b))-(kar(a)==null?-9999:kar(a));
+    });
+  }
   var ix=(D.kartlar&&D.kartlar.sira&&D.kartlar.sira[ad]&&D.kartlar.sira[ad][sira])||null;
   if(ix&&ix.length===l.length)return ix.map(function(i){return l[i]});
   var c=l.slice();
   if(sira==="kar")c.sort(function(a,b){return(kar(b)==null?-9999:kar(b))-(kar(a)==null?-9999:kar(a))});
-  else if(sira==="yeni")c.sort(function(a,b){return(b.sinyalTs||0)-(a.sinyalTs||0)});
   return c;
 }
 function satirHtml(k,ad){
@@ -2652,9 +2660,11 @@ function dusenlerCiz(ad){
 function listeCiz(ad){
   var l=dizil(ad), t=TF[ad];
   if(!l.length){
-    el("govde").innerHTML='<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>Şu an bu dilimde sinyal yok.<br>'+
-      'Bu dilimde henüz pivot kırılımı oluşmadı. Bar kapanışlarında liste yenilenir.</div>'+
-      dusenlerCiz(ad);
+    el("govde").innerHTML='<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>'+
+      (sira==="yeni"
+        ? 'Bugün bu dilimde henüz sinyal çıkmadı.<br>Önceki günlerin sinyalleri için 💰 ya da 🎯 sekmesine geç.'
+        : 'Şu an bu dilimde sinyal yok.<br>Bu dilimde henüz pivot kırılımı oluşmadı. Bar kapanışlarında liste yenilenir.')+
+      '</div>'+dusenlerCiz(ad);
     return;
   }
   el("govde").innerHTML=sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
