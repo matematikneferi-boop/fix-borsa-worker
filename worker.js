@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-d · buğulu fiyat · şerit sızıntısı kapalı";
+const WORKER_SURUM="2026-08-20-e · backtest yeniden yazıldı";
 const BEKLENEN_TARAYICI_SURUM="2026-08-19-c";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1923,6 +1923,7 @@ textarea.gir{min-height:88px;resize:vertical}
 .btYe{background:#25d366}
 .btKr{background:#ff5a5f}
 .btAlt{font-size:10.5px;color:var(--soluk);line-height:1.5}
+.btAc{font-size:10.5px;color:var(--soluk);line-height:1.5;opacity:.8;margin:-2px 0 6px}
 .serYe{color:#25d366}
 .serKr{color:#ff5a5f}
 .serY{font-weight:800}
@@ -2948,77 +2949,115 @@ var btD=null;
 function backtestCiz(){
   if(btD){backtestGoster(btD);return}
   el("govde").innerHTML='<div class="yukleniyor">geçmiş okunuyor…</div>';
-  post("/api/performans",{}).then(function(v){btD=v;backtestGoster(v)})
+  post("/api/backtest",{}).then(function(v){btD=v;backtestGoster(v)})
     .catch(function(){el("govde").innerHTML='<div class="bos">Geçmiş okunamadı.</div>'});
 }
+function btSat(et,dg,sn,ac){
+  return '<div class="sat"><span class="et">'+et+'</span><b'+(sn?' class="'+sn+'"':"")+'>'+dg+'</b></div>'+
+         (ac?'<div class="btAc">'+ac+'</div>':"");
+}
 function backtestGoster(v){
-  if(!v||!v.ok||!v.kurulus){el("govde").innerHTML='<div class="bos">Geçmiş verisi yok.</div>';return}
-  var K=v.kurulus, ist=K.ist&&K.ist.genel, seri=(K.ist&&K.ist.seri)||[];
-  var h='';
+  if(!v||!v.ok||!v.genel){el("govde").innerHTML='<div class="bos">Kuruluştan bu yana ölçülebilir kayıt yok.</div>';return}
+  var G=v.genel, yon=!!v.yonetici, h='';
 
-  /* ── Üst özet ── */
-  if(ist){
-    var b10=Math.round(10000*(1+ist.ort/100));
-    h+='<div class="kutu"><h3>🏁 '+E(K.tarih)+' — bugün</h3>'+
-       '<div class="ozIki">'+
-         '<div class="ozKart"><div class="ozBuyuk '+(ist.ort>=0?"ye":"kr")+'">'+Y(ist.ort)+'</div>'+
-           '<div class="ozAlt">ortalama getiri</div></div>'+
-         '<div class="ozKart"><div class="ozBuyuk">'+Math.round(ist.isabet)+'%</div>'+
-           '<div class="ozAlt">isabet</div></div>'+
-       '</div>'+
-       '<div class="sat"><span class="et">Ölçülen sinyal</span><b>'+ist.n+'</b></div>'+
-       '<div class="sat"><span class="et">İşlem günü</span><b>'+seri.length+'</b></div>'+
-       '<div class="sat"><span class="et">Sinyalden sonraki zirve (ort.)</span><b class="ye">'+Y(ist.zirve)+'</b></div>'+
-       (ist.eniyi?'<div class="sat"><span class="et">En iyi</span><b class="ye">'+E(ist.eniyi.kod||"")+" "+Y(ist.eniyi.y)+'</b></div>':"")+
-       (ist.enkotu?'<div class="sat"><span class="et">En kötü</span><b class="kr">'+E(ist.enkotu.kod||"")+" "+Y(ist.enkotu.y)+'</b></div>':"")+
-       (ist.hedefN?'<div class="sat"><span class="et">Hedefe değen</span><b>'+ist.hedefTut+"/"+ist.hedefN+
-         " (%"+Math.round(100*ist.hedefTut/Math.max(1,ist.hedefN))+')</b></div>':"")+
-       '<div class="sat"><span class="et">10.000 ₺ ne olurdu</span><b class="'+(b10>=10000?"ye":"kr")+'">'+
-         b10.toLocaleString("tr-TR")+' ₺</b></div>'+
-       '<div class="altbilgi" style="margin-top:7px;opacity:.7">Sinyal başına eşit tutar varsayımı. '+
-       'Komisyon, makas ve vergi dahil değildir.</div>'+
-       '</div>';
-  }
+  /* ── 1. ÖZET: bir tarayıcının tek dürüst sayısı beklentidir ── */
+  h+='<div class="kutu"><h3>🏁 '+E(v.kurulus)+' → '+E(v.bugun)+'</h3>'+
+     '<div class="ozIki">'+
+       '<div class="ozKart"><div class="ozBuyuk '+(G.beklenti>=0?"ye":"kr")+'">'+Y(G.beklenti)+'</div>'+
+         '<div class="ozAlt">sinyal başına beklenti</div></div>'+
+       '<div class="ozKart"><div class="ozBuyuk">'+G.isabet.toFixed(1)+'%</div>'+
+         '<div class="ozAlt">isabet</div></div>'+
+     '</div>'+
+     '<div class="btAc" style="margin:-2px 0 9px">Beklenti = isabet×ortalama kazanç + ıskalama×ortalama kayıp. '+
+     'Her sinyalin matematiksel karşılığı. Artıysa sistem uzun vadede kazandırır.</div>';
 
-  /* ── Gün gün döküm + birikimli eğri ── */
-  if(seri.length){
-    var bir=1, satirlar=[];
-    for(var i=0;i<seri.length;i++){
-      var g=seri[i];
-      bir*=(1+(Number(g.ort)||0)/100);
-      satirlar.push({gun:g.gun,ort:Number(g.ort)||0,n:g.n||0,bir:(bir-1)*100,
-                     sin:(g.sin||[]).slice(0,6)});
-    }
-    var enB=1;
-    for(var q=0;q<satirlar.length;q++)enB=Math.max(enB,Math.abs(satirlar[q].ort));
+  h+=btSat("Ölçülen sinyal",G.n+" <span class='btN'>("+G.hisse+" farklı hisse)</span>","", 
+       "Aynı hisse aynı gün birden fazla dilimde kırdıysa tek sinyal sayıldı.");
+  h+=btSat("Ortalama getiri",Y(G.ort),G.ort>=0?"ye":"kr");
+  h+=btSat("Medyan getiri",Y(G.medyan),G.medyan>=0?"ye":"kr",
+       "Ortalamayı birkaç uç sinyal şişirebilir; medyan tipik sonucu gösterir.");
+  h+=btSat("Ortalama kazanç",Y(G.ortKazanc),"ye");
+  h+=btSat("Ortalama kayıp",Y(G.ortKayip),"kr");
+  h+=btSat("Kâr faktörü",G.karFaktoru==null?"—":G.karFaktoru.toFixed(2),
+       G.karFaktoru>=1?"ye":"kr",
+       "Toplam kazanç ÷ toplam kayıp. 1'in altı zarar eden sistem demektir.");
+  h+=btSat("Sinyalden sonraki zirve",Y(G.ortZirve),"ye");
+  h+=btSat("Zirveden geri veriş",Y(-G.geriVeris),"kr",
+       "Sinyaller en iyi noktasından ortalama bu kadar geri geldi. Yüksekse kâr alma kuralı gerekir.");
+  h+=btSat("Ortalama tutma süresi",G.ortYas.toFixed(1)+" gün","",
+       "Getiriler o günden BUGÜNE ölçülür; eski sinyallerin süresi daha uzundur.");
+  if(G.enIyi)h+=btSat("En iyi",E(G.enIyi.kod)+" "+Y(G.enIyi.getiri)+" <span class='btN'>"+G.enIyi.tf+"</span>","ye");
+  if(G.enKotu)h+=btSat("En kötü",E(G.enKotu.kod)+" "+Y(G.enKotu.getiri)+" <span class='btN'>"+G.enKotu.tf+"</span>","kr");
+  /* 🔐 Hedefe değen — yalnız yönetici. */
+  if(yon&&G.hedefN)
+    h+=btSat("🔐 Hedefe değen",G.hedefTut+"/"+G.hedefN+" (%"+Math.round(100*G.hedefTut/G.hedefN)+")","");
+  h+='</div>';
 
-    h+='<div class="kutu"><h3>📅 Gün gün</h3>'+
-       '<div class="altbilgi" style="margin-bottom:8px;opacity:.7">'+
-       'Birikimli sütun, her gün o günün sinyallerine girilmiş olsaydı ne olurdu sorusunun cevabı.</div>';
-    for(var j=satirlar.length-1;j>=0;j--){
-      var r2=satirlar[j];
-      var gen=Math.round(Math.abs(r2.ort)/enB*100);
-      h+='<div class="btGun">'+
-         '<div class="btUst"><b>'+E(r2.gun)+'</b>'+
-           '<span class="btN">'+r2.n+' sinyal</span>'+
-           '<span class="'+(r2.ort>=0?"ye":"kr")+'"><b>'+Y(r2.ort)+'</b></span></div>'+
-         '<div class="btBar"><div class="btDolgu '+(r2.ort>=0?"btYe":"btKr")+'" style="width:'+gen+'%"></div></div>'+
-         '<div class="btAlt">birikimli <b class="'+(r2.bir>=0?"ye":"kr")+'">'+Y(r2.bir)+'</b>'+
-           (r2.sin.length?' · '+r2.sin.map(function(z){
-              return E(z.kod||z.k||"")+" "+(z.y!=null?Y(z.y):"");
-            }).join(" · "):"")+'</div>'+
-         '</div>';
-    }
+  /* ── 2. DAĞILIM: ortalama tek başına yalan söyleyebilir ── */
+  if(v.dagilim&&v.dagilim.length){
+    var enB=1; v.dagilim.forEach(function(d){enB=Math.max(enB,d.n)});
+    h+='<div class="kutu"><h3>📊 Getiri dağılımı</h3>'+
+       '<div class="btAc" style="margin-bottom:8px">Ortalama tek bir sayıdır; '+
+       'gerçekte sinyaller nereye düştü?</div>';
+    v.dagilim.forEach(function(d){
+      var art=d.ad.indexOf("+")===0||d.ad.indexOf("0 /")===0;
+      h+='<div class="btGun" style="padding:6px 0">'+
+         '<div class="btUst"><b style="font-family:inherit">'+E(d.ad)+'</b>'+
+         '<span class="btN" style="flex:1"></span><span>'+d.n+'</span></div>'+
+         '<div class="btBar"><div class="btDolgu '+(art?"btYe":"btKr")+'" style="width:'+
+           Math.round(d.n/enB*100)+'%"></div></div></div>';
+    });
     h+='</div>';
-  } else {
-    h+='<div class="bos">Kuruluştan bu yana günlük kayıt bulunamadı.</div>';
   }
 
-  h+='<div class="altbilgi" style="margin:10px 2px 20px;opacity:.6">'+
-     'Ölçüm süzgeçleri: '+(v.ayar?('aykırı |%'+v.ayar.aykiri+'| üstü ve '+v.ayar.olgunluk+
-     ' günden genç sinyaller sayıma girmez'):'varsayılan')+
-     (v.elenenAykiri?' · elenen aykırı: '+v.elenenAykiri:'')+
-     (v.elenenTaze?' · elenen taze: '+v.elenenTaze:'')+'</div>';
+  /* ── 3. DİLİM TABLOSU: hangi vade gerçekten çalışıyor ── */
+  if(v.dilimler&&v.dilimler.length){
+    h+='<div class="kutu"><h3>⏱ Dilim karşılaştırması</h3>';
+    v.dilimler.forEach(function(d){
+      var i2=d.ist;
+      h+='<div class="btGun">'+
+         '<div class="btUst"><b style="font-family:inherit">'+E(d.tf)+'</b>'+
+         '<span class="btN">'+i2.n+' sinyal · isabet %'+i2.isabet.toFixed(0)+'</span>'+
+         '<span class="'+(i2.beklenti>=0?"ye":"kr")+'"><b>'+Y(i2.beklenti)+'</b></span></div>'+
+         '<div class="btAlt">ortalama '+Y(i2.ort)+' · kâr faktörü '+
+           (i2.karFaktoru==null?"—":i2.karFaktoru.toFixed(2))+
+           ' · zirve '+Y(i2.ortZirve)+'</div></div>';
+    });
+    h+='<div class="btAc" style="margin-top:7px">Sağdaki sayı beklentidir. '+
+       'Bir dilim sürekli eksideyse o dilimi kapatmayı düşün.</div></div>';
+  }
+
+  /* ── 4. GÜN GÜN ── */
+  if(v.gunler&&v.gunler.length){
+    var enN=1; v.gunler.forEach(function(g){enN=Math.max(enN,Math.abs(g.ort))});
+    h+='<div class="kutu"><h3>📅 Gün gün</h3>'+
+       '<div class="btAc" style="margin-bottom:8px">Her satır, O GÜN açılan sinyallerin '+
+       'BUGÜNE kadarki durumudur. Eski günler daha uzun süre tutulmuş sayılır; '+
+       'bu yüzden günler birbiriyle doğrudan kıyaslanamaz.</div>';
+    v.gunler.forEach(function(g){
+      h+='<div class="btGun">'+
+         '<div class="btUst"><b>'+E(g.gun)+'</b>'+
+           '<span class="btN">'+g.n+' sinyal · isabet %'+g.isabet.toFixed(0)+
+             ' · '+g.yas+' gün</span>'+
+           '<span class="'+(g.ort>=0?"ye":"kr")+'"><b>'+Y(g.ort)+'</b></span></div>'+
+         '<div class="btBar"><div class="btDolgu '+(g.ort>=0?"btYe":"btKr")+'" style="width:'+
+           Math.round(Math.abs(g.ort)/enN*100)+'%"></div></div>'+
+         '<div class="btAlt">zirve '+Y(g.zirve)+
+           (yon&&g.hedefN?' · 🔐 hedefe değen '+g.hedefTut+'/'+g.hedefN:'')+
+           (g.eniyi?' · en iyi '+E(g.eniyi.kod)+" "+Y(g.eniyi.getiri):'')+
+           (g.enkotu?' · en kötü '+E(g.enkotu.kod)+" "+Y(g.enkotu.getiri):'')+
+         '</div></div>';
+    });
+    h+='</div>';
+  }
+
+  h+='<div class="btAc" style="margin:10px 2px 24px">'+
+     'Ham kayıt '+v.hamSayi+' · aynı gün aynı hisse tekilleştirildi'+
+     (v.elenenAykiri?' · aykırı elenen '+v.elenenAykiri+' (bedelsiz/sermaye artırımı)':'')+
+     (v.elenenTaze?' · '+v.ayar.olgunluk+' günden genç elenen '+v.elenenTaze:'')+
+     '.<br>Komisyon, makas ve vergi dahil değildir. Portföy eğrisi verilmez: '+
+     'günde onlarca sinyal üreten bir tarayıcıda tüm sinyallere aynı anda '+
+     'girmek mümkün olmadığı için böyle bir eğri gerçeği yansıtmaz.</div>';
 
   el("govde").innerHTML=h;
 }
@@ -5322,6 +5361,134 @@ const cikti=JS({ok:!0,donem:{h1:olc(7),a1:olc(30),a3:olc(90),y1:olc(365)},
 kurulus:{tarih:KURULUS,gun:kurulusGun,ist:olc(kurulusGun)},
 ayar:PA,elenenAykiri:elenenAykiri,elenenTaze:elenenTaze,yonetici:!!YON,
 guncelleme:G2.guncelleme||null});return cikti}
+/* ═══════════════════ 📊 BACKTEST — DÜRÜST ÖLÇÜM ═══════════════════
+   İLK SÜRÜM ÜÇ AYRI YERDE YANLIŞTI, HEPSİ BURADA DÜZELTİLDİ:
+
+   1) BİRİKİMLİ EĞRİ UYDURMAYDI. Günlük ortalamalar bileşik çarpılıyordu;
+      yani 279 sinyalin hepsine tam sermayeyle girildiği varsayılıyordu.
+      Kaldırıldı. Sinyal tarayıcısının doğru ölçüsü portföy eğrisi değil,
+      SİNYAL BAŞINA BEKLENTİ'dir (expectancy).
+
+   2) AYNI HİSSE DEFALARCA SAYILIYORDU. Kayıt anahtarı kod@dilim olduğu
+      için BJKAS üç dilimde kırdıysa üç sinyal görünüyordu. Artık gün
+      içinde hisse başına TEK kayıt sayılır (en iyi zirveli olan);
+      dilim kırılımı ayrıca verilir ama genel toplamı şişirmez.
+
+   3) GÜNLÜK YÜZDELER KIYASLANAMAZDI. Kayıttaki "s" güncel fiyattır;
+      yani 7 gün önceki sinyalin getirisi 7 günlük, dünkünün 1 günlük.
+      Bunları aynı grafikte yan yana koymak elmayla armut toplamaktı.
+      Artık her gün için TUTMA SÜRESİ de veriliyor ve günlük getiri
+      "o günden bugüne" diye açıkça etiketleniyor.
+
+   Eklenen gerçek ölçüler: beklenti, kâr faktörü, ortalama kazanç/kayıp,
+   medyan, getiri dağılımı, en kötü seri (drawdown yerine sinyal bazlı),
+   zirveden geri veriş, dilim tablosu. */
+if("/api/backtest"===$.pathname){
+const G3=await y(A),GD3=G3.gunler||{};
+const bugun3=new Date(Date.now()+108e5).toISOString().slice(0,10);
+const KURULUS3="2026-08-12";
+const gunFark=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
+const DZ=t=>({"15D":"15DK","1S":"1SA","4S":"4SA","1H":"1HAF"})[t]||t||"?";
+
+/* Süzgeçler — performans sayfasıyla aynı mantık, aynı gerekçe. */
+let ayar3={aykiri:60,olgunluk:1};
+try{const c=await A.VERI.get("perfAyar");if(c){const j=JSON.parse(c);
+  const a2=Number(j.aykiri),o2=Number(j.olgunluk);
+  if(a2>=0&&a2<=500)ayar3.aykiri=a2; if(o2>=0&&o2<=30)ayar3.olgunluk=o2}}catch(e){}
+
+const gunler=[],hepsi=[];
+let elenenAyk=0,elenenTaze=0,hamSayi=0;
+
+for(const gun of Object.keys(GD3).sort()){
+  if(gun<KURULUS3||gun>bugun3)continue;
+  const yas=gunFark(gun,bugun3);
+  const kay=GD3[gun].kayitlar||{};
+  /* ── Hisse başına TEK kayıt: aynı gün farklı dilimlerde kıran hisse
+        bir kez sayılır. Seçim ölçütü: en yüksek zirve (en bilgi verici). */
+  const teklestir={};
+  for(const key of Object.keys(kay)){
+    const rec=kay[key];
+    if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
+    hamSayi++;
+    const kod=rec.k||String(key).split("@")[0];
+    const getiri=100*(rec.s/rec.g-1);
+    if(ayar3.olgunluk>0&&yas<ayar3.olgunluk){elenenTaze++;continue}
+    if(ayar3.aykiri>0&&Math.abs(getiri)>ayar3.aykiri){elenenAyk++;continue}
+    const zirve=rec.max>0?100*(rec.max/rec.g-1):getiri;
+    const kt={kod:kod,tf:DZ(rec.t||String(key).split("@")[1]),
+      getiri:getiri,zirve:zirve,yas:yas,gun:gun,
+      hedefVar:!!(rec.h>0),hedefTut:!!(rec.h>0&&rec.max>0&&rec.max>=rec.h),
+      direncVar:!!(rec.h1>0),direncTut:!!(rec.h1>0&&rec.max>0&&rec.max>=rec.h1)};
+    const v=teklestir[kod];
+    if(!v||kt.zirve>v.zirve)teklestir[kod]=kt;
+  }
+  const liste=Object.keys(teklestir).map(k2=>teklestir[k2]);
+  if(!liste.length)continue;
+  for(const x of liste)hepsi.push(x);
+  const kaz=liste.filter(x=>x.getiri>0).length;
+  gunler.push({gun:gun,yas:yas,n:liste.length,
+    isabet:100*kaz/liste.length,
+    ort:liste.reduce((a2,b2)=>a2+b2.getiri,0)/liste.length,
+    zirve:liste.reduce((a2,b2)=>a2+b2.zirve,0)/liste.length,
+    hedefN:liste.filter(x=>x.hedefVar).length,
+    hedefTut:liste.filter(x=>x.hedefTut).length,
+    eniyi:liste.slice().sort((a2,b2)=>b2.getiri-a2.getiri)[0],
+    enkotu:liste.slice().sort((a2,b2)=>a2.getiri-b2.getiri)[0]});
+}
+
+const ozet=(liste)=>{
+  if(!liste.length)return null;
+  const g=liste.map(x=>x.getiri).sort((a2,b2)=>a2-b2);
+  const kazl=liste.filter(x=>x.getiri>0),kayl=liste.filter(x=>x.getiri<=0);
+  const ortl=a2=>a2.length?a2.reduce((x,y2)=>x+y2,0)/a2.length:0;
+  const ortKaz=ortl(kazl.map(x=>x.getiri)),ortKay=ortl(kayl.map(x=>x.getiri));
+  const isb=kazl.length/liste.length;
+  const topKaz=kazl.reduce((a2,b2)=>a2+b2.getiri,0);
+  const topKay=Math.abs(kayl.reduce((a2,b2)=>a2+b2.getiri,0));
+  const med=g.length%2?g[(g.length-1)/2]:(g[g.length/2-1]+g[g.length/2])/2;
+  const hedefli=liste.filter(x=>x.hedefVar);
+  return{
+    n:liste.length,
+    hisse:new Set(liste.map(x=>x.kod)).size,
+    isabet:100*isb,
+    ort:ortl(liste.map(x=>x.getiri)),
+    medyan:med,
+    ortKazanc:ortKaz, ortKayip:ortKay,
+    /* BEKLENTİ: sinyal başına ortalama sonuç. Bir tarayıcının tek
+       dürüst özet sayısı budur — kaç kazandığın değil, her denemenin
+       matematiksel karşılığı. */
+    beklenti:isb*ortKaz+(1-isb)*ortKay,
+    /* KÂR FAKTÖRÜ: toplam kazanç / toplam kayıp. 1'in altı = zarar eden
+       sistem. 1.5 üstü genelde sağlıklı sayılır. */
+    karFaktoru:topKay>0?topKaz/topKay:null,
+    ortZirve:ortl(liste.map(x=>x.zirve)),
+    /* ZİRVEDEN GERİ VERİŞ: sinyal en iyi noktasından ne kadar geri geldi.
+       Yüksekse "kâr alma kuralı yok" demektir. */
+    geriVeris:ortl(liste.map(x=>x.zirve-x.getiri)),
+    enIyi:liste.slice().sort((a2,b2)=>b2.getiri-a2.getiri)[0],
+    enKotu:liste.slice().sort((a2,b2)=>a2.getiri-b2.getiri)[0],
+    hedefN:hedefli.length, hedefTut:hedefli.filter(x=>x.hedefTut).length,
+    ortYas:ortl(liste.map(x=>x.yas))
+  };
+};
+
+/* Getiri dağılımı — ortalama tek başına yalan söyleyebilir. */
+const kovalar=[{ad:"-10% altı",alt:-1e9,ust:-10},{ad:"-10 / -5",alt:-10,ust:-5},
+{ad:"-5 / 0",alt:-5,ust:0},{ad:"0 / +5",alt:0,ust:5},{ad:"+5 / +10",alt:5,ust:10},
+{ad:"+10 / +20",alt:10,ust:20},{ad:"+20% üstü",alt:20,ust:1e9}];
+const dagilim=kovalar.map(k2=>({ad:k2.ad,
+  n:hepsi.filter(x=>x.getiri>k2.alt&&x.getiri<=k2.ust).length}));
+
+/* Dilim tablosu — hangi vade gerçekten çalışıyor? */
+const dilimAd=["1SA","4SA","1G","1HAF","15DK"];
+const dilimler=dilimAd.map(t=>({tf:t,ist:ozet(hepsi.filter(x=>x.tf===t))}))
+  .filter(x=>x.ist&&x.ist.n>0);
+
+return JS({ok:!0,kurulus:KURULUS3,bugun:bugun3,
+genel:ozet(hepsi),dagilim:dagilim,dilimler:dilimler,
+gunler:gunler.reverse(),
+hamSayi:hamSayi,elenenAykiri:elenenAyk,elenenTaze:elenenTaze,
+ayar:ayar3,yonetici:!!YON})}
 /* 📈 Ölçüm süzgeçlerini kaydet — yalnız yönetici. */
 if("/api/perfAyar"===$.pathname){
 if(!YON)return JS({ok:!1,hata:"yetki yok"},403);
