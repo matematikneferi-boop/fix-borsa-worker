@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-p · temel veri okuma anında";
+const WORKER_SURUM="2026-08-21-a · temel analiz: tüm havuz · süzgeç · şirket karnesi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1930,6 +1930,12 @@ textarea.gir{min-height:88px;resize:vertical}
 .btKr{background:#ff5a5f}
 .btAlt{font-size:10.5px;color:var(--soluk);line-height:1.5}
 .btAc{font-size:10.5px;color:var(--soluk);line-height:1.5;opacity:.8;margin:-2px 0 6px}
+.tSuz{display:flex;gap:8px;margin:6px 0}
+.tGir{flex:1;min-width:0;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
+  border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit}
+.tEt{flex:1;font-size:11px;color:var(--soluk);display:flex;flex-direction:column;gap:3px}
+.tEt b{color:var(--yazi);font-size:12px}
+.tEt input[type=range]{width:100%;accent-color:var(--in)}
 .dusBas{font-size:13px;font-weight:700;margin-bottom:3px}
 .dusAc{font-size:10.5px;color:var(--soluk);line-height:1.5;margin-bottom:8px}
 .dusSat{padding:7px 0;border-bottom:1px solid var(--ciz)}
@@ -3146,130 +3152,269 @@ function backtestGoster(v){
    Sinyal listelerindeki hisselerin temel verisi tek ekranda. Veri
    kaynağı haftalık temel.json; bu sayfa yalnızca okur ve sıralar.
    Sinyal üretimine, alarma ve taramaya hiçbir etkisi yoktur. */
-var temelSira="skor";
-function temelRozet(t){
-  var r="";
-  if(t.fskorOlculen>=5){
-    var o=t.fskor/t.fskorOlculen;
-    r+='<span class="roz '+(o>=0.75?"roz-iy":(o<=0.35?"roz-ko":""))+'">📊 F-Skor '+
-       t.fskor+'/'+t.fskorOlculen+'</span>';
-  }
-  if(t.fkP!=null)r+='<span class="roz '+(t.fkP>=70?"roz-iy":(t.fkP<=30?"roz-ko":""))+
-    '">💰 sektörde ucuzluk %'+t.fkP+'</span>';
-  if(t.netBorcFavok!=null)r+='<span class="roz '+(t.netBorcFavok<=2?"roz-iy":
-    (t.netBorcFavok>=4?"roz-ko":""))+'">🏦 net borç/FAVÖK '+t.netBorcFavok+'</span>';
-  if(t.bilancoGun!=null&&t.bilancoGun>=0&&t.bilancoGun<=7)
-    r+='<span class="roz roz-ko">📅 bilanço '+(t.bilancoGun===0?"BUGÜN":t.bilancoGun+" gün")+'</span>';
-  return r;
-}
-function temelCiz(){
-  var hepsi=[],gorulen={};
-  ["potansiyel","fibo","uzunvade"].forEach(function(ad){
-    ((D.kartlar&&D.kartlar[ad])||[]).forEach(function(k){
-      if(!k||!k.kod||!k.temel||gorulen[k.kod])return;
-      gorulen[k.kod]=1;
-      hepsi.push({kod:k.kod,fiyat:k.fiyat,kar:kar(k),liste:ad,t:k.temel});
-    });
-  });
-  if(!hepsi.length){
-    /* İki bambaşka sebep vardı ve ikisine de aynı belirsiz cümle yazılıyordu.
-       Artık sunucu temelDurum ile kesin bilgiyi gönderiyor: dosya var mı,
-       kaç hisse, ne zaman güncellendi, hangi adresler denendi. */
-    var td=(D&&D.temelDurum)||{}, h2='<div class="bos"><b>📋 Temel Analiz</b><br><br>';
-    if(!td["var"]){
-      h2+='<button class="dg" id="temelYenile" style="margin:0 0 14px">🔄 Veriyi şimdi yenile</button><br>'+
-          '<b style="color:var(--kr)">temel.json okunamadı.</b><br><br>'+
-          (td.hata?'<span class="altbilgi" style="color:var(--kr)">'+E(String(td.hata))+'</span><br><br>':"")+
-          '<span class="altbilgi">Veri dosyası henüz üretilmemiş.<br><br>'+
-          'GitHub → Actions → <b>Temel Analiz Verisi</b> → Run workflow.<br>'+
-          'Yaklaşık 5 dakika sürer; sonra bir tarama turu içinde burası dolar.'+
-          '<br><br>Denenen adresler:<br>'+
-          ((td.adresler||[]).map(function(u){return '<code>'+E(u)+'</code>'}).join('<br>')||'—')+
-          '</span>';
-    } else {
-      h2+='Temel veri <b>yüklü</b> — '+td.hisse+' hisse'+
-          (td.guncelleme?' · '+E(String(td.guncelleme)):'')+'.<br><br>'+
-          'Ama şu an sinyal listelerindeki hisseler bu dosyada yok.<br>'+
-          '<span class="altbilgi">Sinyal çıktığında burası dolar.</span>';
-    }
-    el("govde").innerHTML=h2+'</div>';
-    var ty=el("temelYenile");
-    if(ty)ty.onclick=function(){
-      tit();ty.disabled=true;ty.textContent="yenileniyor…";
-      post("/api/temelYenile",{}).then(function(v){
-        if(v&&v.ok){ btD=null; D.temelDurum={"var":!0,hisse:v.temel,guncelleme:v.guncelleme};
-          ty.textContent="✅ "+v.temel+" hisse · "+v.sektor+" sektör";
-          setTimeout(function(){temelCiz()},900);
-        } else {
-          ty.textContent="⚠️ hâlâ bulunamadı";ty.disabled=false;
-        }
-        if(v&&v.rapor&&v.rapor.length){
-          var rh='<div class="kutu" style="margin-top:12px;text-align:left"><h3>🔎 Adres denemesi</h3>';
-          v.rapor.forEach(function(x){
-            rh+='<div class="btGun"><div class="btUst"><b style="font-family:inherit">HTTP '+
-                (x.kod||"—")+'</b><span class="btN" style="flex:1">'+
-                (x.kayit?x.kayit+" kayıt":(x.hata?E(x.hata):"boş"))+'</span></div>'+
-                '<div class="btAlt" style="word-break:break-all">'+E(x.url)+'</div></div>';
-          });
-          el("govde").insertAdjacentHTML("beforeend",rh+'</div>');
-        }
-      }).catch(function(){ty.textContent="⚠️ istek gitmedi";ty.disabled=false});
-    };
-    return;
-  }
-  var sirala={skor:function(a,b){return(b.t.skor==null?-1:b.t.skor)-(a.t.skor==null?-1:a.t.skor)},
-    fskor:function(a,b){return(b.t.fskor||0)-(a.t.fskor||0)},
-    ucuz:function(a,b){return(b.t.fkP==null?-1:b.t.fkP)-(a.t.fkP==null?-1:a.t.fkP)},
-    buyume:function(a,b){return(b.t.buyumeCiro==null?-999:b.t.buyumeCiro)-(a.t.buyumeCiro==null?-999:a.t.buyumeCiro)}};
-  hepsi.sort(sirala[temelSira]||sirala.skor);
+/* ═══════════════ 📋 TEMEL ANALİZ ═══════════════
+   Havuzun TAMAMI (432 hisse), sektöre göre persantillerle. Süzgeç ve
+   sıralama istemcide çalışır — veri bir kez çekilir, her dokunuşta
+   sunucuya gidilmez. Kendi detay ekranı vardır: hisseye tıklayınca
+   sinyal kartı değil, ŞİRKET karnesi açılır. */
+var temelD=null, temelSira="skor", temelSekt="", temelAra="";
+var temelMinF=0, temelMinUcuz=0, temelSadeceSinyal=false, temelKarli=false;
 
-  var h='<div class="sirala">'+
-    [["skor","🎯 Uyum skoru"],["fskor","📊 F-Skor"],["ucuz","💰 Ucuzluk"],["buyume","📈 Büyüme"]]
+function tYuzde(v,ek){ return (v==null||!isFinite(v))?"—":((v>0?"+":"")+v.toFixed(1)+(ek||"%")); }
+function tSayi(v,b){ return (v==null||!isFinite(v))?"—":v.toFixed(b==null?2:b); }
+
+function temelCiz(){
+  if(temelD){temelGoster();return}
+  el("govde").innerHTML='<div class="yukleniyor">temel veri okunuyor…</div>';
+  post("/api/temelListe",{}).then(function(v){
+    if(!v||!v.ok){
+      el("govde").innerHTML='<div class="bos"><b>📋 Temel Analiz</b><br><br>'+
+        '<b style="color:var(--kr)">'+E(String((v&&v.hata)||"okunamadı"))+'</b><br><br>'+
+        '<span class="altbilgi">GitHub → Actions → <b>Temel Analiz Verisi</b> → Run workflow.</span></div>';
+      return;
+    }
+    temelD=v; temelGoster();
+  }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
+}
+
+function temelSuz(){
+  var l=(temelD.liste||[]).slice();
+  if(temelSekt)l=l.filter(function(x){return x.sektor===temelSekt});
+  if(temelAra)l=l.filter(function(x){return x.kod.indexOf(temelAra)===0});
+  if(temelMinF>0)l=l.filter(function(x){
+    return x.fskorOlculen>=5 && (x.fskor/x.fskorOlculen)*9>=temelMinF;});
+  if(temelMinUcuz>0)l=l.filter(function(x){return x.fkP!=null&&x.fkP>=temelMinUcuz});
+  if(temelSadeceSinyal)l=l.filter(function(x){return !!x.sinyal});
+  if(temelKarli)l=l.filter(function(x){return x.roa!=null&&x.roa>0&&x.netMarj!=null&&x.netMarj>0});
+  var s={
+    skor:function(a,b){return(b.skor==null?-1:b.skor)-(a.skor==null?-1:a.skor)},
+    fskor:function(a,b){
+      var oa=a.fskorOlculen?a.fskor/a.fskorOlculen:-1, ob=b.fskorOlculen?b.fskor/b.fskorOlculen:-1;
+      return ob-oa;},
+    ucuz:function(a,b){return(b.fkP==null?-1:b.fkP)-(a.fkP==null?-1:a.fkP)},
+    buyume:function(a,b){return(b.buyumeCiro==null?-9999:b.buyumeCiro)-(a.buyumeCiro==null?-9999:a.buyumeCiro)},
+    roe:function(a,b){return(b.roe==null?-9999:b.roe)-(a.roe==null?-9999:a.roe)},
+    borc:function(a,b){return(a.netBorcFavok==null?9999:a.netBorcFavok)-(b.netBorcFavok==null?9999:b.netBorcFavok)}
+  };
+  l.sort(s[temelSira]||s.skor);
+  return l;
+}
+
+function temelGoster(){
+  var v=temelD, l=temelSuz(), h='';
+
+  /* ── Sıralama ── */
+  h+='<div class="sirala">'+
+    [["skor","🎯 Uyum"],["fskor","📊 F-Skor"],["ucuz","💰 Ucuzluk"],
+     ["buyume","📈 Büyüme"],["roe","🏆 ROE"],["borc","🏦 Az borç"]]
     .map(function(o){return '<button class="sir'+(temelSira===o[0]?" on":"")+
       '" data-tsir="'+o[0]+'">'+o[1]+'</button>'}).join("")+'</div>';
 
-  h+='<div class="btAc" style="margin:2px 2px 10px">Sinyal listelerindeki hisselerin '+
-     'şirket tarafı. <b>Uyum skoru</b>, kırılımın arkasında sağlam bir şirket olup '+
-     'olmadığını 100 üzerinden özetler — sinyal üretmez, sinyali <i>etiketler</i>.</div>';
+  /* ── Süzgeçler ── */
+  h+='<div class="tSuz">'+
+     '<input id="tAra" class="tGir" placeholder="Hisse ara" maxlength="6" '+
+       'autocomplete="off" autocapitalize="characters" value="'+E(temelAra)+'">'+
+     '<select id="tSekt" class="tGir"><option value="">Tüm sektörler</option>'+
+       (v.sektorler||[]).map(function(s2){return '<option value="'+E(s2.ad)+'"'+
+         (temelSekt===s2.ad?" selected":"")+'>'+E(s2.ad)+' ('+s2.n+')</option>'}).join("")+
+     '</select></div>'+
+     '<div class="tSuz">'+
+     '<label class="tEt">F-Skor ≥ <b id="tFv">'+temelMinF+'</b>'+
+       '<input id="tF" type="range" min="0" max="9" step="1" value="'+temelMinF+'"></label>'+
+     '<label class="tEt">Ucuzluk ≥ <b id="tUv">'+temelMinUcuz+'</b>%'+
+       '<input id="tU" type="range" min="0" max="90" step="10" value="'+temelMinUcuz+'"></label>'+
+     '</div>'+
+     '<div class="sirala">'+
+     '<button class="sir'+(temelSadeceSinyal?" on":"")+'" data-tflt="sinyal">⚡ Sinyali olanlar</button>'+
+     '<button class="sir'+(temelKarli?" on":"")+'" data-tflt="karli">✅ Kâr eden</button>'+
+     '<button class="sir" data-tflt="sifirla">↺ Sıfırla</button>'+
+     '</div>';
 
-  hepsi.forEach(function(x){
-    var t=x.t, sk=t.skor;
-    h+='<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+x.liste+'" '+
-       'style="border-left-color:'+(sk==null?"var(--ciz)":(sk>=65?"#2FBF71":(sk<=35?"#E5484D":"#E8A33D")))+'">'+
-       '<div class="sol"><div class="kod">'+E(x.kod)+
-         (t.sektor?' <span class="btN">'+E(t.sektor)+'</span>':"")+'</div>'+
-       '<div class="altbilgi">'+
-         (t.fk!=null?"F/K "+t.fk.toFixed(1):"F/K —")+
-         (t.pddd!=null?" · PD/DD "+t.pddd.toFixed(2):"")+
-         (t.ozsermayeKarliligi!=null?" · ROE %"+t.ozsermayeKarliligi:"")+
-         (t.netMarj!=null?" · marj %"+t.netMarj:"")+
+  h+='<div class="btAc" style="margin:6px 2px 10px">'+
+     '<b>'+l.length+'</b> / '+(v.toplam||0)+' hisse'+
+     (v.guncelleme?' · veri '+E(String(v.guncelleme).slice(0,10)):'')+
+     '. <b>Uyum skoru</b> şirketin sağlamlığını 100 üzerinden özetler; '+
+     'sinyal üretmez, sinyali etiketler.'+
+     (v.kilitSayi?' <span style="color:var(--sar)">🔒 En sağlam '+v.kilitSayi+
+       ' şirketin adı Süper Üyelere açık.</span>':'')+
+     '</div>';
+
+  if(!l.length){
+    h+='<div class="bos">Bu süzgeçlere uyan hisse yok.<br>'+
+       '<span class="altbilgi">↺ Sıfırla ile süzgeçleri kaldır.</span></div>';
+  }
+
+  l.slice(0,150).forEach(function(x){
+    var sk=x.skor, kil=!!x.kilit;
+    var oran=x.fskorOlculen?x.fskor/x.fskorOlculen:null;
+    h+='<div class="satir" data-tkod="'+E(x.kod)+'"'+(kil?' data-tkilit="1"':'')+
+       ' style="border-left-color:'+(sk==null?"var(--ciz)":(sk>=65?"#2FBF71":(sk<=35?"#E5484D":"#E8A33D")))+'">'+
+       '<div class="sol"><div class="kod">'+
+         (kil?'<span class="buguluKod">'+E(x.kod)+'</span><span class="buguluKilit">🔒</span>'
+             :E(x.kod))+
+         (x.sektor?' <span class="btN">'+E(x.sektor)+'</span>':"")+
+         (x.sinyal?' <span class="roz roz-iy" style="margin:0 0 0 5px">⚡</span>':"")+
        '</div>'+
+       '<div class="altbilgi">F/K '+tSayi(x.fk,1)+' · PD/DD '+tSayi(x.pddd)+
+         ' · ROE '+tYuzde(x.roe)+' · marj '+tYuzde(x.netMarj)+'</div>'+
        '<div class="altbilgi">'+
-         (t.enflasyonUyari
-           ? '<span style="color:var(--sar)">⚠️ enflasyon muhasebesi geçişi — büyüme kıyaslanamaz</span>'
-           : ((t.buyumeCiro!=null?"ciro "+Y(t.buyumeCiro):"")+
-              (t.buyumeKar!=null?" · kâr "+Y(t.buyumeKar):"")||"büyüme verisi yok"))+
+         (x.enflasyonUyari?'<span style="color:var(--sar)">⚠️ enflasyon geçişi — büyüme kıyaslanamaz</span>'
+           :('ciro '+tYuzde(x.buyumeCiro)+' · kâr '+tYuzde(x.buyumeKar)))+
        '</div>'+
-       '<div class="rozSat">'+temelRozet(t)+'</div></div>'+
+       '<div class="rozSat">'+
+         (oran!=null?'<span class="roz '+(oran>=.75?"roz-iy":(oran<=.35?"roz-ko":""))+
+           '">📊 '+x.fskor+'/'+x.fskorOlculen+'</span>':"")+
+         (x.fkP!=null?'<span class="roz '+(x.fkP>=70?"roz-iy":(x.fkP<=30?"roz-ko":""))+
+           '">💰 %'+x.fkP+'</span>':"")+
+         (x.netBorcFavok!=null?'<span class="roz '+(x.netBorcFavok<=2?"roz-iy":
+           (x.netBorcFavok>=4?"roz-ko":""))+'">🏦 '+x.netBorcFavok+'</span>':"")+
+         (x.bilancoGun!=null&&x.bilancoGun>=0&&x.bilancoGun<=7?
+           '<span class="roz roz-ko">📅 bilanço '+(x.bilancoGun===0?"bugün":x.bilancoGun+"g")+'</span>':"")+
+       '</div></div>'+
        '<div class="sag"><div class="fiyat">'+(sk==null?"—":sk)+'</div>'+
-       '<div class="yuzde '+(x.kar==null?"so":(x.kar>=0?"ye":"kr"))+'">'+
-         (x.kar==null?"":Y(x.kar))+'</div></div></div>';
+       '<div class="yuzde so">skor</div></div></div>';
   });
+
+  if(l.length>150)h+='<div class="btAc" style="margin:8px 2px">İlk 150 gösteriliyor — '+
+    'süzgeçle daralt.</div>';
 
   h+='<div class="btAc" style="margin:12px 2px 24px">'+
      '<b>F-Skor</b> (Piotroski): kârlılık, borç, likidite ve verimlilikten 9 ölçüt. '+
-     'Eksik veri varsa o ölçüt sayılmaz — "7/9" ile "7/7" farklıdır.<br>'+
+     'Eksik veri varsa o ölçüt sayılmaz — <b>7/9</b> ile <b>7/7</b> farklıdır.<br>'+
      '<b>Ucuzluk</b>: F/K&#39;nın kendi sektöründeki persantili. %80 = sektörünün en ucuz beşte biri.<br>'+
-     '<b>⚠️ Enflasyon uyarısı</b>: BIST şirketleri 31.12.2023&#39;ten beri enflasyona göre '+
-     'düzeltilmiş rapor veriyor. Düzeltilmiş ile düzeltilmemiş dönemi kıyaslamak yanlış '+
-     'sonuç verir; öyle durumlarda büyüme hiç gösterilmez.<br>'+
-     'Temel veri haftada bir güncellenir ve <b>sinyal üretmez</b>.</div>';
+     '<b>⚠️ Enflasyon</b>: BIST şirketleri 31.12.2023&#39;ten beri enflasyona göre düzeltilmiş '+
+     'rapor veriyor; düzeltilmiş ile düzeltilmemiş dönem kıyaslanamaz, öyle durumlarda '+
+     'büyüme hiç gösterilmez.<br>Temel veri haftada bir güncellenir ve <b>sinyal üretmez</b>.</div>';
 
   el("govde").innerHTML=h;
-  satirBagla();
+  temelBagla();
+}
+
+function temelBagla(){
   [].forEach.call(document.querySelectorAll("#govde [data-tsir]"),function(b){
-    b.onclick=function(){tit();temelSira=b.getAttribute("data-tsir");temelCiz();window.scrollTo(0,0)};
+    b.onclick=function(){tit();temelSira=b.getAttribute("data-tsir");temelGoster();window.scrollTo(0,0)};
   });
+  [].forEach.call(document.querySelectorAll("#govde [data-tflt]"),function(b){
+    b.onclick=function(){
+      tit();var k=b.getAttribute("data-tflt");
+      if(k==="sinyal")temelSadeceSinyal=!temelSadeceSinyal;
+      else if(k==="karli")temelKarli=!temelKarli;
+      else{temelSadeceSinyal=false;temelKarli=false;temelSekt="";temelAra="";
+           temelMinF=0;temelMinUcuz=0;temelSira="skor"}
+      temelGoster();window.scrollTo(0,0);
+    };
+  });
+  var a=el("tAra");
+  if(a)a.oninput=function(){temelAra=(a.value||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    var k=a.selectionStart; temelGoster();
+    var y=el("tAra"); if(y){y.focus();try{y.setSelectionRange(k,k)}catch(e){}}};
+  var s2=el("tSekt");
+  if(s2)s2.onchange=function(){tit();temelSekt=s2.value;temelGoster();window.scrollTo(0,0)};
+  var f=el("tF");
+  if(f)f.oninput=function(){temelMinF=Number(f.value)||0;
+    var v2=el("tFv"); if(v2)v2.textContent=temelMinF; temelGoster();};
+  var u=el("tU");
+  if(u)u.oninput=function(){temelMinUcuz=Number(u.value)||0;
+    var v3=el("tUv"); if(v3)v3.textContent=temelMinUcuz; temelGoster();};
+  [].forEach.call(document.querySelectorAll("#govde [data-tkod]"),function(b){
+    b.onclick=function(){
+      tit();
+      /* Kilitli satır kodu ele vermesin: davete gider. */
+      if(b.dataset.tkilit){sekme="davet";ciz();window.scrollTo(0,0);return}
+      temelDetay(b.getAttribute("data-tkod"));
+    };
+  });
+}
+
+/* ═══ ŞİRKET KARNESİ — sinyal kartı değil, temel detay ═══ */
+function temelDetay(kod){
+  var x=null,l=(temelD&&temelD.liste)||[];
+  for(var i=0;i<l.length;i++)if(l[i].kod===kod){x=l[i];break}
+  if(!x)return;
+  var K=el("katman"); if(!K)return;
+  var oran=x.fskorOlculen?x.fskor/x.fskorOlculen:null;
+  var h='<div class="kapat"><b>📋 '+E(x.kod)+(x.sektor?' · '+E(x.sektor):'')+
+        '</b><button id="tkapat">✕ Kapat</button></div>';
+
+  h+='<div class="kutu"><div class="ozIki">'+
+     '<div class="ozKart"><div class="ozBuyuk '+(x.skor==null?"":(x.skor>=65?"ye":(x.skor<=35?"kr":"")))+
+       '">'+(x.skor==null?"—":x.skor)+'</div><div class="ozAlt">uyum skoru</div></div>'+
+     '<div class="ozKart"><div class="ozBuyuk">'+(oran==null?"—":x.fskor+"/"+x.fskorOlculen)+
+       '</div><div class="ozAlt">F-Skor</div></div></div>';
+  if(x.sinyal)h+='<div class="sat"><span class="et">⚡ Açık sinyal</span><b class="ye">'+
+    E(x.sinyal.join(" · "))+'</b></div>';
+  h+='</div>';
+
+  /* F-Skor dökümü — hangi ölçüt geçti, hangisi ölçülemedi */
+  if(x.fskorDetay){
+    var adlar={netKarPozitif:"Net kâr pozitif",roaPozitif:"Aktif kârlılığı pozitif",
+      nakitAkisiPozitif:"Faaliyet nakit akışı pozitif",
+      kazancKalitesi:"Nakit akışı net kârdan büyük (kazanç kalitesi)",
+      borcAzaldi:"Uzun vadeli borç oranı azaldı",cariOranArtti:"Cari oran arttı",
+      seyreltmeYok:"Hisse sayısı artmadı (seyreltme yok)",
+      marjArtti:"Brüt kâr marjı arttı",devirHiziArtti:"Aktif devir hızı arttı"};
+    h+='<div class="kutu"><h3>📊 F-Skor dökümü</h3>';
+    for(var k2 in adlar){
+      if(!Object.prototype.hasOwnProperty.call(adlar,k2))continue;
+      var d2=x.fskorDetay[k2];
+      h+='<div class="oz '+(d2===true?"v":(d2===false?"y":""))+'">'+
+         '<span class="tik">'+(d2===true?"✓":(d2===false?"✗":"—"))+'</span>'+
+         '<span>'+adlar[k2]+(d2==null?' <span class="btN">veri yok</span>':'')+'</span></div>';
+    }
+    h+='<div class="btAc" style="margin-top:7px">Veri olmayan ölçüt sayılmaz. '+
+       'Bu yüzden skor "kaç ölçütten kaç" biçiminde verilir.</div></div>';
+  }
+
+  h+='<div class="kutu"><h3>💰 Değerleme</h3>'+
+     '<div class="sat"><span class="et">F/K</span><b>'+tSayi(x.fk,1)+
+       (x.fkP!=null?' <span class="btN">sektörde ucuzluk %'+x.fkP+'</span>':'')+'</b></div>'+
+     '<div class="sat"><span class="et">PD/DD</span><b>'+tSayi(x.pddd)+
+       (x.pdddP!=null?' <span class="btN">%'+x.pdddP+'</span>':'')+'</b></div>'+
+     (x.pd?'<div class="sat"><span class="et">Piyasa değeri</span><b>'+
+       (x.pd/1e9).toFixed(2)+' milyar ₺</b></div>':'')+
+     (x.temettu!=null?'<div class="sat"><span class="et">Temettü verimi</span><b>'+
+       tYuzde(x.temettu)+'</b></div>':'')+
+     '</div>';
+
+  h+='<div class="kutu"><h3>🏆 Kârlılık</h3>'+
+     '<div class="sat"><span class="et">Özsermaye kârlılığı (ROE)</span><b class="'+
+       (x.roe>0?"ye":"kr")+'">'+tYuzde(x.roe)+'</b></div>'+
+     '<div class="sat"><span class="et">Net kâr marjı</span><b class="'+
+       (x.netMarj>0?"ye":"kr")+'">'+tYuzde(x.netMarj)+
+       (x.marjP!=null?' <span class="btN">sektörde %'+x.marjP+'</span>':'')+'</b></div>'+
+     '<div class="sat"><span class="et">Aktif kârlılığı (ROA)</span><b class="'+
+       (x.roa>0?"ye":"kr")+'">'+tYuzde(x.roa)+'</b></div>'+
+     '</div>';
+
+  h+='<div class="kutu"><h3>📈 Büyüme ve borç</h3>';
+  if(x.enflasyonUyari){
+    h+='<div class="altbilgi" style="color:var(--sar)">⚠️ Karşılaştırma dönemi enflasyon '+
+       'muhasebesi geçişini kapsıyor. Düzeltilmiş bir dönemi düzeltilmemişle kıyaslamak '+
+       'yanlış sonuç verir; bu yüzden büyüme oranı gösterilmiyor.</div>';
+  } else {
+    h+='<div class="sat"><span class="et">Ciro büyümesi (yıllık)</span><b class="'+
+       (x.buyumeCiro>=0?"ye":"kr")+'">'+tYuzde(x.buyumeCiro)+'</b></div>'+
+       '<div class="sat"><span class="et">Net kâr büyümesi</span><b class="'+
+       (x.buyumeKar>=0?"ye":"kr")+'">'+tYuzde(x.buyumeKar)+'</b></div>';
+  }
+  h+='<div class="sat"><span class="et">Net borç / FAVÖK</span><b class="'+
+     (x.netBorcFavok==null?"":(x.netBorcFavok<=2?"ye":(x.netBorcFavok>=4?"kr":"")))+'">'+
+     tSayi(x.netBorcFavok)+'</b></div>'+
+     '<div class="btAc" style="margin-top:6px">2&#39;nin altı rahat, 4&#39;ün üstü '+
+     'baskı demektir. Eksi değer net nakit fazlasıdır.</div>';
+  if(x.bilancoTarihi)h+='<div class="sat"><span class="et">📅 Bilanço tarihi</span><b class="'+
+    (x.bilancoGun!=null&&x.bilancoGun>=0&&x.bilancoGun<=2?"kr":"")+'">'+E(x.bilancoTarihi)+
+    (x.bilancoGun!=null?' <span class="btN">('+(x.bilancoGun===0?"bugün":x.bilancoGun+" gün")+')</span>':'')+
+    '</b></div>';
+  h+='</div>';
+
+  h+='<div class="btAc" style="margin:10px 2px 20px">Temel veri haftada bir güncellenir '+
+     've <b>sinyal üretmez</b>. Yatırım tavsiyesi değildir.</div>';
+
+  K.innerHTML=h; K.classList.add("ac"); window.scrollTo(0,0);
+  var kp=el("tkapat");
+  if(kp)kp.onclick=function(){tit();K.classList.remove("ac");K.innerHTML=""};
+  try{tgGeriDugme()}catch(e){}
 }
 function kapCiz(){
   el("govde").innerHTML='<div class="yukleniyor">yükleniyor…</div>';
@@ -5729,6 +5874,71 @@ return JS({ok:!!(T&&T.hisse&&Object.keys(T.hisse).length),
  temel:(T&&T.hisse)?Object.keys(T.hisse).length:0,
  sektor:(sh&&typeof sh==="object")?Object.keys(sh).length:0,
  guncelleme:(T&&T.guncelleme)||null,rapor:rapor})}
+/* ═══════ 📋 TEMEL ANALİZ — TÜM HAVUZ ═══════
+   Sayfa yalnızca sinyal listesindeki hisseleri gösteriyordu; oysa
+   temel.json 432 hissenin tamamını taşıyor. Bu uç havuzun tamamını,
+   sektöre göre persantilleri hesaplanmış hâlde döndürür. Sekme
+   açıldığında BİR KEZ çağrılır; süzgeç ve sıralama istemcide çalışır. */
+if("/api/temelListe"===$.pathname){
+const T=await temelGetir(A);
+if(!T||!T.hisse||!Object.keys(T.hisse).length)
+  return JS({ok:!1,hata:"temel.json okunamadı"});
+const sk=await sektorlariGetir(A);
+const harita=(sk&&sk.sektor&&typeof sk.sektor==="object")?sk.sektor:((sk&&typeof sk==="object")?sk:{});
+const L3=await g(A).catch(()=>null);
+/* Hangi hisseler şu an sinyal veriyor — "sinyali olanlar" süzgeci için */
+const sinyalli={};
+if(L3&&L3.kartlar)for(const ad of ["potansiyel","fibo","uzunvade"])
+  for(const c of (L3.kartlar[ad]||[]))if(c&&c.kod)sinyalli[c.kod]=(sinyalli[c.kod]||[]).concat([c.tf||ad]);
+/* Sektör dağılımları — persantil için */
+const kova={};
+for(const kod of Object.keys(T.hisse)){
+  const s2=harita[kod]; if(!s2)continue;
+  const t=T.hisse[kod]; if(!t)continue;
+  const k=(kova[s2]=kova[s2]||{fk:[],pddd:[],roa:[],marj:[]});
+  if(t.fk>0)k.fk.push(t.fk);
+  if(t.pddd>0)k.pddd.push(t.pddd);
+  if(t.roa!=null)k.roa.push(t.roa);
+  if(t.netMarj!=null)k.marj.push(t.netMarj);
+}
+const sup=await suparUyeMi(A,uid);
+const liste=[];
+for(const kod of Object.keys(T.hisse)){
+  const t=T.hisse[kod]; if(!t)continue;
+  const s2=harita[kod]||null, kv=(s2&&kova[s2])||null;
+  const yeter=n=>kv&&kv[n]&&kv[n].length>=5;
+  const kayit={
+    kod:kod, sektor:s2,
+    fskor:t.fskor, fskorOlculen:t.fskorOlculen, fskorDetay:t.fskorDetay||null,
+    fk:t.fk, pddd:t.pddd, roa:t.roa, netMarj:t.netMarj,
+    roe:t.ozsermayeKarliligi, netBorcFavok:t.netBorcFavok,
+    temettu:t.temettuVerimi, pd:t.pd,
+    buyumeCiro:t.enflasyonKarsilastirilamaz?null:t.buyumeCiro,
+    buyumeKar:t.enflasyonKarsilastirilamaz?null:t.buyumeKar,
+    enflasyonUyari:!!t.enflasyonKarsilastirilamaz,
+    bilancoTarihi:t.bilancoTarihi||null,
+    bilancoGun:bilancoGunFark(t.bilancoTarihi),
+    fkP:yeter("fk")?persantil(kv.fk,t.fk,!0):null,
+    pdddP:yeter("pddd")?persantil(kv.pddd,t.pddd,!0):null,
+    roaP:yeter("roa")?persantil(kv.roa,t.roa,!1):null,
+    marjP:yeter("marj")?persantil(kv.marj,t.netMarj,!1):null,
+    sinyal:sinyalli[kod]||null
+  };
+  kayit.skor=temelSkor(kayit);
+  liste.push(kayit);
+}
+liste.sort((a,b)=>(b.skor==null?-1:b.skor)-(a.skor==null?-1:a.skor));
+/* 🔒 Süper Üyelik kancası: en yüksek skorlu ilk 20 şirketin ADI
+   süper üye olmayana kapalı. Puan, sektör ve bütün oranlar açık —
+   "sistem bunları buldu, hangileri olduğu üyelere özel". */
+const KILIT=20;
+if(!sup&&!YON)for(let i=0;i<Math.min(KILIT,liste.length);i++)liste[i].kilit=!0;
+const sekSay={};
+for(const x of liste)if(x.sektor)sekSay[x.sektor]=(sekSay[x.sektor]||0)+1;
+return JS({ok:!0,guncelleme:T.guncelleme||null,toplam:liste.length,
+ super:!!sup||!!YON,kilitSayi:(!sup&&!YON)?Math.min(KILIT,liste.length):0,
+ sektorler:Object.keys(sekSay).sort().map(s2=>({ad:s2,n:sekSay[s2]})),
+ liste:liste})}
 if("/api/tara"===$.pathname){
 if(!YON)return JS({ok:!1,mesaj:"Yetkin yok."},403);
 const s2=await taramaTetikle(A);
