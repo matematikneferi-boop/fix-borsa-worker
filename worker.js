@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-o · önbellek + adres raporu";
+const WORKER_SURUM="2026-08-20-p · temel veri okuma anında";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -5478,16 +5478,28 @@ const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0
 const un=BUN||await botAd(A).catch(()=>null)||"bot";
 const temelDurum=await temelDurumAl(A).catch(()=>({var:!1}));
 const kart={};
+/* ⏱️ ZENGİNLEŞTİRME ARTIK OKUMA ANINDA.
+   Temel veri ve sektör gücü yalnızca /push sırasında kartlara işleniyordu.
+   Sonuç: temel.json bir taramadan SONRA oluşursa, o günün kartlarında
+   hiç görünmüyordu — kullanıcı "veri yüklü ama liste boş" tuhaflığıyla
+   karşılaşıyordu. Temel veri haftada bir, kartlar dakikada bir değişir;
+   doğru yer okuma anıdır. Maliyeti bellekten bir okuma. */
 if(L2&&L2.kartlar)for(const k of Object.keys(L2.kartlar)){
 if("sira"===k){kart.sira=L2.kartlar.sira;continue}
 if(k.indexOf("aday")===0&&!sup)continue;
 kart[k]=L2.kartlar[k]}
+/* Kartlar hazır — şimdi temel veriyi ve sektör gücünü üstlerine işle.
+   Hata olursa sessizce atlanır; liste her koşulda döner. */
+{ const zeng={kartlar:kart,rrg:(L2&&L2.rrg)||null};
+  await sektorGucEkle(A,zeng).catch(()=>{});
+  await temelEkle(A,zeng).catch(()=>{}); }
 let gun=null;
 /* Son tarama saati YALNIZ yöneticiye gösterilir. */
 if(YON&&L2&&L2.guncelleme){const dt=new Date(L2.guncelleme);gun=String((dt.getUTCHours()+3)%24).padStart(2,"0")+":"+String(dt.getUTCMinutes()).padStart(2,"0")}
 const onayli=await onayVarMi(A,uid);
 const portfoySektor={};for(const kod of Object.keys(portfoy))portfoySektor[kod]=await sektorAl(A,kod);
-return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,portfoy:portfoy,portfoyGecmis:portfoyGecmis,portfoyGunluk:portfoyGunluk,portfoySektor:portfoySektor,kartlar:kart,guncelleme:gun,link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN})}
+return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,portfoy:portfoy,portfoyGecmis:portfoyGecmis,portfoyGunluk:portfoyGunluk,portfoySektor:portfoySektor,kartlar:kart,guncelleme:gun,temelDurum:temelDurum,dusenler:(L2&&L2.dusenler)||[],
+link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN})}
 if("/api/hisse"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 const L2=await g(A),kart=Z(L2,kod),z=L2&&L2.sozluk&&L2.sozluk[kod],fav=(await X(A,uid)).includes(kod),poz=(await XP(A,uid))[kod]||null;
