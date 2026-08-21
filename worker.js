@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-m · temel veri teşhisi";
+const WORKER_SURUM="2026-08-20-n · önbellek zehirlenmesi düzeltildi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -3177,7 +3177,9 @@ function temelCiz(){
        kaç hisse, ne zaman güncellendi, hangi adresler denendi. */
     var td=(D&&D.temelDurum)||{}, h2='<div class="bos"><b>📋 Temel Analiz</b><br><br>';
     if(!td["var"]){
-      h2+='<b style="color:var(--kr)">temel.json bulunamadı.</b><br><br>'+
+      h2+='<button class="dg" id="temelYenile" style="margin:0 0 14px">🔄 Veriyi şimdi yenile</button><br>'+
+          '<b style="color:var(--kr)">temel.json okunamadı.</b><br><br>'+
+          (td.hata?'<span class="altbilgi" style="color:var(--kr)">'+E(String(td.hata))+'</span><br><br>':"")+
           '<span class="altbilgi">Veri dosyası henüz üretilmemiş.<br><br>'+
           'GitHub → Actions → <b>Temel Analiz Verisi</b> → Run workflow.<br>'+
           'Yaklaşık 5 dakika sürer; sonra bir tarama turu içinde burası dolar.'+
@@ -3191,6 +3193,18 @@ function temelCiz(){
           '<span class="altbilgi">Sinyal çıktığında burası dolar.</span>';
     }
     el("govde").innerHTML=h2+'</div>';
+    var ty=el("temelYenile");
+    if(ty)ty.onclick=function(){
+      tit();ty.disabled=true;ty.textContent="yenileniyor…";
+      post("/api/temelYenile",{}).then(function(v){
+        if(v&&v.ok){ btD=null; D.temelDurum={"var":!0,hisse:v.temel,guncelleme:v.guncelleme};
+          ty.textContent="✅ "+v.temel+" hisse · "+v.sektor+" sektör";
+          setTimeout(function(){temelCiz()},900);
+        } else {
+          ty.textContent="⚠️ hâlâ bulunamadı";ty.disabled=false;
+        }
+      }).catch(function(){ty.textContent="⚠️ istek gitmedi";ty.disabled=false});
+    };
     return;
   }
   var sirala={skor:function(a,b){return(b.t.skor==null?-1:b.t.skor)-(a.t.skor==null?-1:a.t.skor)},
