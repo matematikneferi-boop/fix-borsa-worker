@@ -753,7 +753,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-20-n · önbellek zehirlenmesi düzeltildi";
+const WORKER_SURUM="2026-08-20-o · önbellek + adres raporu";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -3203,6 +3203,16 @@ function temelCiz(){
         } else {
           ty.textContent="⚠️ hâlâ bulunamadı";ty.disabled=false;
         }
+        if(v&&v.rapor&&v.rapor.length){
+          var rh='<div class="kutu" style="margin-top:12px;text-align:left"><h3>🔎 Adres denemesi</h3>';
+          v.rapor.forEach(function(x){
+            rh+='<div class="btGun"><div class="btUst"><b style="font-family:inherit">HTTP '+
+                (x.kod||"—")+'</b><span class="btN" style="flex:1">'+
+                (x.kayit?x.kayit+" kayıt":(x.hata?E(x.hata):"boş"))+'</span></div>'+
+                '<div class="btAlt" style="word-break:break-all">'+E(x.url)+'</div></div>';
+          });
+          el("govde").insertAdjacentHTML("beforeend",rh+'</div>');
+        }
       }).catch(function(){ty.textContent="⚠️ istek gitmedi";ty.disabled=false});
     };
     return;
@@ -5064,7 +5074,13 @@ async function temelGetir(A){
         _temelBellek=j.paket;_temelZaman=Date.now();return _temelBellek}}}catch(e){}
   for(const url of TEMEL_URLLER){
     try{
-      const r=await fetch(url+"?_="+Math.floor(Date.now()/216e5),{cf:{cacheTtl:21600}});
+      /* ⚠️ ÖNBELLEK ZEHİRLENMESİ — DOSYA OLUŞTU AMA GÖRÜNMÜYORDU.
+         Dosya henüz yokken yapılan istek 404 döndü; cacheTtl:21600
+         yüzünden Cloudflare o 404'ü 6 SAAT sakladı. Actions işi yeşil
+         yanıp temel.json'u yazdıktan sonra bile worker eski 404'ü okudu.
+         Artık başarısız yanıt kısa süre tutulur, damga 10 dk'da değişir. */
+      const r=await fetch(url+"?_="+Math.floor(Date.now()/6e5),
+        {cf:{cacheTtl:300,cacheEverything:!1}});
       if(!r.ok)continue;
       const j=await r.json();
       if(j&&j.hisse&&typeof j.hisse==="object"&&Object.keys(j.hisse).length){
@@ -5131,8 +5147,9 @@ async function temelDurumAl(A){
       return{var:!0,hisse:Object.keys(T.hisse).length,
              guncelleme:T.guncelleme||null,dolu:T.dolu||null,toplam:T.toplam||null};
     }
-  }catch(e){}
-  return{var:!1,adresler:TEMEL_URLLER};
+  }catch(e){ return{var:!1,adresler:TEMEL_URLLER.slice(),
+      hata:String((e&&e.message)||e).slice(0,140)}; }
+  return{var:!1,adresler:TEMEL_URLLER.slice(),hata:"dosya boş ya da okunamadı"};
 }
 async function temelEkle(A,paket){
   try{
@@ -5202,7 +5219,9 @@ async function sektorlariGetir(A){
     if(c){try{_sBellek=JSON.parse(c);_sZaman=simdi;return _sBellek}catch(e){}}}
   for(const url of SEKTOR_URLLER){
     try{
-      const r=await fetch(url+"?_="+Math.floor(simdi/216e5),{cf:{cacheTtl:21600}});
+      /* Aynı önbellek tuzağı: dosya sonradan oluşursa 404 saklanmasın. */
+      const r=await fetch(url+"?_="+Math.floor(simdi/6e5),
+        {cf:{cacheTtl:300,cacheEverything:!1}});
       if(!r.ok)continue;
       const j=await r.json();
       /* Boş ya da alakasız bir dosyayı kabul etme; sıradakini dene. */
@@ -5668,6 +5687,36 @@ ayar:YON?(paket.ayar||await absAyarAl(A)):null})}
    önbellek anahtarına düştüğü için bir sonraki istekte anında yeni
    eşiklerle taranır, 30 dakika beklemeye gerek yok. */
 /* 🔄 Elle tarama — yalnız yönetici. */
+/* ═══ 🔄 TEMEL VERİYİ ELLE YENİLE — yalnız yönetici ═══
+   Cloudflare önbelleği bir kez 404 sakladığında saatlerce eski cevabı
+   veriyor. Bu uç belleği ve KV'yi temizler, HER ADRESİ tek tek dener ve
+   HTTP kodunu geri bildirir. "Bulunamadı" demek yetmiyordu; hangi adres
+   ne dedi, ekranda görünsün. */
+if("/api/temelYenile"===$.pathname){
+if(!YON)return JS({ok:!1,mesaj:"Yetkin yok."},403);
+_temelBellek=null;_temelZaman=0;_sBellek=null;_sZaman=0;
+try{await A.VERI.delete("temelVeri")}catch(e){}
+try{await A.VERI.delete("sektorJson")}catch(e){}
+const rapor=[];
+for(const url of TEMEL_URLLER){
+  const satir={url:url,kod:0,kayit:0,hata:null};
+  try{
+    const r=await fetch(url+"?_="+Date.now(),{cf:{cacheTtl:0,cacheEverything:!1}});
+    satir.kod=r.status;
+    if(r.ok){
+      const j=await r.json();
+      satir.kayit=(j&&j.hisse&&typeof j.hisse==="object")?Object.keys(j.hisse).length:0;
+    }
+  }catch(e){ satir.hata=String((e&&e.message)||e).slice(0,90); }
+  rapor.push(satir);
+}
+const T=await temelGetir(A).catch(()=>null);
+const S=await sektorlariGetir(A).catch(()=>null);
+const sh=(S&&S.sektor&&typeof S.sektor==="object")?S.sektor:(S||{});
+return JS({ok:!!(T&&T.hisse&&Object.keys(T.hisse).length),
+ temel:(T&&T.hisse)?Object.keys(T.hisse).length:0,
+ sektor:(sh&&typeof sh==="object")?Object.keys(sh).length:0,
+ guncelleme:(T&&T.guncelleme)||null,rapor:rapor})}
 if("/api/tara"===$.pathname){
 if(!YON)return JS({ok:!1,mesaj:"Yetkin yok."},403);
 const s2=await taramaTetikle(A);
