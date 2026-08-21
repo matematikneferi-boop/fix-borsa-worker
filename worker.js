@@ -2207,6 +2207,7 @@ function ekranAdi(){
   if(sekme==="portfoy")return"💼 Portföyüm";
   if(sekme==="preset")return"🎛 Hazır filtreler";
   if(sekme==="backtest")return"📊 Backtest";
+  if(sekme==="mc")return"🎲 Monte Carlo";
   if(sekme==="temel")return"📋 Temel Analiz";
   if(sekme==="kap")return"📰 KAP Bildirimleri";
   if(sekme==="temettu")return"💰 Temettü Takvimi";
@@ -2308,6 +2309,7 @@ function sekCiz(){
   //s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
   /* 📊 Backtest — yalnız yönetici. Üyeye açmak istersen d(uid) şartını kaldır. */
   if(D&&D.yon)s.push('<button class="sek'+(sekme==="backtest"?" on":"")+'" data-r="nötr" data-s="backtest">📊 Backtest 🔐</button>');
+  if(D&&D.yon)s.push('<button class="sek'+(sekme==="mc"?" on":"")+'" data-r="nötr" data-s="mc">🎲 Monte Carlo 🔐</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
   s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
@@ -2362,6 +2364,7 @@ function ciz(){
   if(sekme==="portfoy")return portfoyCiz();
   if(sekme==="preset")return presetCiz();
   if(sekme==="backtest")return backtestCiz();
+  if(sekme==="mc")return mcCiz();
   if(sekme==="temel")return temelCiz();
   if(sekme==="kap")return kapCiz();
   if(sekme==="temettu")return temettuCiz();
@@ -3032,7 +3035,7 @@ function bindPresetChips(){
    Günlük getiri = o gün açılan sinyallerin ortalama getirisi.
    Birikimli = her günün ortalaması bileşik olarak çarpılır; yani
    "her gün o günün sinyallerine eşit dağılmış olsaydın" senaryosu. */
-var btD=null;
+var btD=null;var mcD=null;
 function backtestCiz(){
   if(btD){backtestGoster(btD);return}
   el("govde").innerHTML='<div class="yukleniyor">geçmiş okunuyor…</div>';
@@ -3147,6 +3150,43 @@ function backtestGoster(v){
      'girmek mümkün olmadığı için böyle bir eğri gerçeği yansıtmaz.</div>';
 
   el("govde").innerHTML=h;
+}
+/* ═══════════════ 🎲 MONTE CARLO SAYFASI (yalnız yönetici) ═══════════════
+   Geçmiş günlük getiri dağılımından rastgele (bootstrap) örnekleme ile
+   önümüzdeki 30 gün için olasılıksal bir sonuç aralığı üretir. backtestCiz
+   ile aynı önbellek/çizim kalıbını izler. */
+function mcCiz(){
+  if(mcD){mcGoster(mcD);return}
+  el("govde").innerHTML='<div class="yukleniyor">senaryolar hesaplanıyor…</div>';
+  post("/api/montecarlo",{}).then(function(v){mcD=v;mcGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Hesaplanamadı.</div>'});
+}
+function mcGoster(v){
+  if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Hesaplanamadı.</div>';return}
+  if(!v.yeterli){
+    el("govde").innerHTML='<div class="bos">Henüz yeterli geçmiş yok (en az 10 günlük kayıt gerekli, şu an '+v.gunSayisi+').<br>Sistem birikmeye devam ettikçe burası dolacak.</div>';
+    return;
+  }
+  var h='<div class="kutu"><h3>🎲 '+v.ufukGun+' gün ileri, '+v.trials.toLocaleString('tr-TR')+' senaryo</h3>'+
+    '<div class="btAc" style="margin:-2px 0 9px">Geçmiş '+v.gunSayisi+' günün günlük ortalama getirisinden '+
+    'rastgele (yerine koyarak) çekiliş yapılıp '+v.ufukGun+' günlük zincirleme bir yol kuruldu; '+
+    'bu '+v.trials.toLocaleString('tr-TR')+' kez tekrarlandı. Aşağıdaki sayılar bu senaryoların yüzdelik dilimleridir.</div>'+
+    '<div class="ozIki"><div class="ozKart"><div class="ozBuyuk">'+v.gunSayisi+'</div>'+
+    '<div class="ozAlt">geçmiş gün sayısı</div></div>'+
+    '<div class="ozKart"><div class="ozBuyuk '+(v.pozitifOran>=50?"ye":"kr")+'">%'+v.pozitifOran.toFixed(0)+'</div>'+
+    '<div class="ozAlt">pozitif getiri olasılığı</div></div></div></div>';
+  h+='<div class="kutu"><h3>📈 Olası sonuç aralığı</h3>';
+  h+=btSat("🔴 Kötü senaryo (%5)",Y(v.p5),v.p5>=0?"ye":"kr");
+  h+=btSat("🟠 Alt çeyrek (%25)",Y(v.p25),v.p25>=0?"ye":"kr");
+  h+=btSat("⚪ Medyan",Y(v.p50),v.p50>=0?"ye":"kr");
+  h+=btSat("🟢 Üst çeyrek (%75)",Y(v.p75),v.p75>=0?"ye":"kr");
+  h+=btSat("🟢 İyi senaryo (%95)",Y(v.p95),v.p95>=0?"ye":"kr");
+  h+='</div>';
+  h+='<div class="btAc" style="margin:10px 2px 24px">⚠️ Bu bir tahmin değil, geçmiş dağılımın olasılıksal '+
+     'yansımasıdır. Gelecek geçmişe benzemeyebilir. Komisyon ve vergi dahil değildir. Yatırım tavsiyesi değildir.</div>';
+  el("govde").innerHTML=h+'<button class="dg" id="mcYenile" style="margin:0 2px">🔄 Yeniden çalıştır</button>';
+  var btn=el("mcYenile");
+  if(btn)btn.onclick=function(){mcD=null;mcCiz()};
 }
 /* ═══════════════ 📋 TEMEL ANALİZ SAYFASI ═══════════════
    Sinyal listelerindeki hisselerin temel verisi tek ekranda. Veri
@@ -6215,6 +6255,40 @@ genel:ozet(hepsi),dagilim:dagilim,dilimler:dilimler,
 gunler:gunler.reverse(),
 hamSayi:hamSayi,elenenAykiri:elenenAyk,elenenTaze:elenenTaze,
 ayar:ayar3,yonetici:!!YON})}
+if("/api/montecarlo"===$.pathname){
+/* ================== 🎲 MONTE CARLO BOOTSTRAP SİMÜLASYONU ==================
+   Yalnız yönetici. Geçmiş günlerin (hisse bazlı tekilleştirilmiş) günlük
+   ortalama getirilerinden rastgele (yerine koyarak) çekiliş yapıp GUNSAYI
+   günlük zincirleme bir "yol" üretir; bunu TRIALS kez tekrarlayıp sonuç
+   dağılımının yüzdelik dilimlerini döner. /api/backtest'teki hepsi/teklestir
+   mantığıyla aynı veri kaynağını kullanır, farkı rastgele örneklemedir. */
+if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+const GM=await y(A),GDM=GM.gunler||{},bugunM=new Date(Date.now()+108e5).toISOString().slice(0,10);
+const gunlukOrt=[];
+for(const gun of Object.keys(GDM).sort()){
+if(gun>bugunM)continue;
+const kay=GDM[gun].kayitlar||{},teklestir={};
+for(const key of Object.keys(kay)){
+const rec=kay[key];
+if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
+const kod=rec.k||String(key).split("@")[0],getiri=100*(rec.s/rec.g-1);
+if(Math.abs(getiri)>60)continue;
+const v=teklestir[kod];
+if(void 0===v||getiri>v)teklestir[kod]=getiri}
+const liste=Object.values(teklestir);
+if(liste.length)gunlukOrt.push(liste.reduce((a2,b2)=>a2+b2,0)/liste.length)}
+if(gunlukOrt.length<10)
+return JS({ok:!0,yeterli:!1,gunSayisi:gunlukOrt.length,yonetici:!0});
+const TRIALS=2000,GUNSAYI=30,sonuclar=[];
+for(let s2=0;s2<TRIALS;s2++){let bakiye=1;
+for(let g2=0;g2<GUNSAYI;g2++){const ort=gunlukOrt[Math.floor(Math.random()*gunlukOrt.length)];bakiye*=1+ort/100}
+sonuclar.push(bakiye)}
+sonuclar.sort((a2,b2)=>a2-b2);
+const pct=p=>sonuclar[Math.min(sonuclar.length-1,Math.max(0,Math.floor(p*sonuclar.length)))];
+const pozOran=100*sonuclar.filter(x=>x>1).length/sonuclar.length;
+return JS({ok:!0,yeterli:!0,yonetici:!0,gunSayisi:gunlukOrt.length,trials:TRIALS,ufukGun:GUNSAYI,
+p5:100*(pct(.05)-1),p25:100*(pct(.25)-1),p50:100*(pct(.5)-1),p75:100*(pct(.75)-1),p95:100*(pct(.95)-1),
+pozitifOran:pozOran})}
 /* 📈 Ölçüm süzgeçlerini kaydet — yalnız yönetici. */
 if("/api/perfAyar"===$.pathname){
 if(!YON)return JS({ok:!1,hata:"yetki yok"},403);
