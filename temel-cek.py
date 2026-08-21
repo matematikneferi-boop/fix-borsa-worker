@@ -28,7 +28,7 @@ import time
 import urllib.request
 import urllib.error
 import urllib.parse
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta   # noqa: F401
 
 # ⚠️ havuz.json BU DEPODA DEĞİL — ayrı bir depoda duruyor ve tara.py de
 # oradan okuyor. Aynı kaynağı kullanıyoruz ki iki iş aynı hisse listesini
@@ -138,6 +138,14 @@ def tarih(v):
 
 
 def cek(sembol, deneme=3):
+    if YF_VAR:
+        h = cek_yf(sembol)
+        if h:
+            return h
+    # ASIL YOL: crumb istemeyen timeseries ucu, gerekirse ayna üzerinden
+    h = cek_timeseries(sembol)
+    if h:
+        return h
     for i in range(deneme):
         for alan in ("query2", "query1"):        # biri kapalıysa diğeri
             url = (f"https://{alan}.finance.yahoo.com/v10/finance/quoteSummary/"
@@ -163,6 +171,298 @@ def cek(sembol, deneme=3):
                 pass
         time.sleep(1.5 * (i + 1))
     return None
+
+
+# ═══════════ 📦 YFINANCE YOLU (öncelikli) ═══════════
+# Yahoo'nun çerez/crumb kimlik zinciri sık değişiyor ve elle takip etmek
+# kırılgan. yfinance bu işi kendi yapıyor ve sürekli bakımda. Varsa onu
+# kullanıyoruz; yoksa aşağıdaki ham HTTP yoluna düşülüyor. İki yol da
+# AYNI sözlük biçimini üretir, böylece isle()/fskor_hesapla() hiç değişmez
+# ve daha önce test edilmiş mantık aynen çalışır.
+try:
+    import yfinance as _yf
+    YF_VAR = True
+except Exception:
+    YF_VAR = False
+
+
+def _df_satir(df, *adlar):
+    """DataFrame'den satır çeker. yfinance etiketleri sürümle değişebiliyor,
+    bu yüzden birkaç ad denenir ve harf duyarsız eşleşme yapılır."""
+    if df is None or getattr(df, "empty", True):
+        return None
+    try:
+        indeks = {str(x).strip().lower(): x for x in df.index}
+    except Exception:
+        return None
+    for ad in adlar:
+        a = ad.strip().lower()
+        if a in indeks:
+            return df.loc[indeks[a]]
+    return None
+
+
+def _sutun_deger(satir, i):
+    if satir is None:
+        return None
+    try:
+        v = satir.iloc[i]
+    except Exception:
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f == f else None
+
+
+def _tablo_cevir(df, esleme, adet=2):
+    """yfinance DataFrame'ini Yahoo'nun camelCase sözlük listesine çevirir."""
+    if df is None or getattr(df, "empty", True):
+        return []
+    cikti = []
+    try:
+        sutun_sayisi = min(adet, len(df.columns))
+    except Exception:
+        return []
+    for i in range(sutun_sayisi):
+        kayit = {}
+        for hedef, adaylar in esleme.items():
+            v = _sutun_deger(_df_satir(df, *adaylar), i)
+            if v is not None:
+                kayit[hedef] = v
+        try:
+            kayit["endDate"] = int(df.columns[i].timestamp())
+        except Exception:
+            pass
+        if kayit:
+            cikti.append(kayit)
+    return cikti
+
+
+GT_ESLEME = {"netIncome": ("Net Income", "Net Income Common Stockholders",
+                           "NetIncome", "Net Income From Continuing Operation Net Minority Interest"),
+             "totalRevenue": ("Total Revenue", "Operating Revenue", "TotalRevenue"),
+             "grossProfit": ("Gross Profit", "GrossProfit")}
+BS_ESLEME = {"totalAssets": ("Total Assets", "TotalAssets"),
+             "longTermDebt": ("Long Term Debt", "LongTermDebt",
+                              "Long Term Debt And Capital Lease Obligation"),
+             "totalCurrentAssets": ("Current Assets", "Total Current Assets"),
+             "totalCurrentLiabilities": ("Current Liabilities", "Total Current Liabilities"),
+             "commonStock": ("Common Stock", "Share Issued", "Ordinary Shares Number")}
+NK_ESLEME = {"totalCashFromOperatingActivities":
+             ("Operating Cash Flow", "Total Cash From Operating Activities",
+              "Cash Flow From Continuing Operating Activities")}
+
+
+def cek_yf(sembol):
+    """yfinance ile çek ve ham HTTP yolunun ürettiği biçime çevir."""
+    try:
+        t = _yf.Ticker(sembol)
+        bilgi = {}
+        try:
+            bilgi = t.info or {}
+        except Exception:
+            bilgi = {}
+        if not bilgi:
+            return None
+
+        ham = {
+            "assetProfile": {"sector": bilgi.get("sector") or ""},
+            "defaultKeyStatistics": {
+                "trailingPE": bilgi.get("trailingPE"),
+                "forwardPE": bilgi.get("forwardPE"),
+                "priceToBook": bilgi.get("priceToBook"),
+                "enterpriseValue": bilgi.get("enterpriseValue"),
+            },
+            "summaryDetail": {
+                "trailingPE": bilgi.get("trailingPE"),
+                "marketCap": bilgi.get("marketCap"),
+                "dividendYield": bilgi.get("dividendYield"),
+            },
+            "financialData": {
+                "returnOnEquity": bilgi.get("returnOnEquity"),
+                "profitMargins": bilgi.get("profitMargins"),
+                "totalCash": bilgi.get("totalCash"),
+                "totalDebt": bilgi.get("totalDebt"),
+                "ebitda": bilgi.get("ebitda"),
+            },
+            "incomeStatementHistory": {
+                "incomeStatementHistory": _tablo_cevir(
+                    getattr(t, "income_stmt", None), GT_ESLEME, 2)},
+            "incomeStatementHistoryQuarterly": {
+                "incomeStatementHistory": _tablo_cevir(
+                    getattr(t, "quarterly_income_stmt", None), GT_ESLEME, 6)},
+            "balanceSheetHistory": {
+                "balanceSheetStatements": _tablo_cevir(
+                    getattr(t, "balance_sheet", None), BS_ESLEME, 2)},
+            "cashflowStatementHistory": {
+                "cashflowStatements": _tablo_cevir(
+                    getattr(t, "cashflow", None), NK_ESLEME, 2)},
+            "calendarEvents": {},
+        }
+        # Bilanço tarihi
+        try:
+            tak = t.calendar
+            gun = None
+            if isinstance(tak, dict):
+                v = tak.get("Earnings Date")
+                gun = (v[0] if isinstance(v, (list, tuple)) and v else v)
+            if gun is not None:
+                ham["calendarEvents"] = {"earnings": {
+                    "earningsDate": [int(time.mktime(gun.timetuple()))]}}
+        except Exception:
+            pass
+        return ham
+    except Exception:
+        return None
+
+
+# ═══════ 🛰️ FUNDAMENTALS-TIMESERIES + AYNA (asıl yol) ═══════
+# quoteSummary ucu artık çerez+crumb istiyor ve veri merkezi IP'lerinden
+# 401 dönüyor. AMA Yahoo'nun "fundamentals-timeseries" ucu crumb İSTEMİYOR
+# — yfinance de finansal tabloları oradan çekiyor.
+# Üstelik doğrudan erişim engellenirse, tarayıcının zaten kullandığı ve
+# ÇALIŞTIĞI BİLİNEN vekil listesinden geçiyoruz (yumatu.html'deki
+# MOM_AYNALAR ile aynı vekiller). Vekil, Yahoo'ya kendi IP'sinden gider;
+# GitHub Actions IP engeli devre dışı kalır.
+AYNALAR = [
+    lambda u: u,                                                   # önce doğrudan
+    lambda u: "https://api.allorigins.win/raw?url=" + urllib.parse.quote(u, safe=""),
+    lambda u: "https://api.codetabs.com/v1/proxy?quest=" + urllib.parse.quote(u, safe=""),
+    lambda u: "https://cors.x2u.in/" + u,
+]
+AYNA_ADI = ["doğrudan", "allorigins", "codetabs", "x2u"]
+_ayna = 0                     # çalışan aynayı hatırla, her seferinde baştan deneme
+
+TS_YILLIK = ["annualNetIncome", "annualTotalRevenue", "annualGrossProfit",
+             "annualTotalAssets", "annualLongTermDebt",
+             "annualCurrentAssets", "annualCurrentLiabilities",
+             "annualOrdinarySharesNumber", "annualOperatingCashFlow",
+             "annualStockholdersEquity", "annualEBITDA", "annualTotalDebt",
+             "annualCashAndCashEquivalents"]
+TS_CEYREK = ["quarterlyTotalRevenue", "quarterlyNetIncome"]
+TS_DEGER = ["quarterlyPeRatio", "quarterlyPbRatio", "quarterlyMarketCap"]
+
+
+def _ac(url, zaman=25):
+    """Aynaları sırayla dener; çalışanı hatırlar."""
+    global _ayna
+    sira = list(range(len(AYNALAR)))
+    sira = sira[_ayna:] + sira[:_ayna]          # en son çalışandan başla
+    for i in sira:
+        try:
+            istek = urllib.request.Request(AYNALAR[i](url), headers=BASLIK)
+            with _acici.open(istek, timeout=zaman) as c:
+                ham = c.read().decode("utf-8", "replace")
+            j = json.loads(ham)
+            if i != _ayna:
+                gunluk(f"   ↪ ayna değişti: {AYNA_ADI[i]}")
+                _ayna = i
+            return j
+        except Exception:
+            continue
+    return None
+
+
+def cek_ts(sembol):
+    """fundamentals-timeseries — crumb gerektirmez."""
+    simdi = int(time.time())
+    p1 = simdi - 5 * 365 * 86400
+    kok = ("https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/"
+           f"finance/timeseries/{sembol}?symbol={sembol}"
+           f"&period1={p1}&period2={simdi}&merge=false")
+    cikti = {}
+    for kume in (TS_YILLIK, TS_CEYREK, TS_DEGER):
+        j = _ac(kok + "&type=" + ",".join(kume))
+        if not j:
+            continue
+        for satir in ((j.get("timeseries") or {}).get("result") or []):
+            tur = (satir.get("meta") or {}).get("type")
+            tur = tur[0] if isinstance(tur, list) and tur else tur
+            if not tur or tur not in satir:
+                continue
+            noktalar = []
+            for n in satir[tur]:
+                if not n:
+                    continue
+                v = sayi((n.get("reportedValue") or {}).get("raw"))
+                t = n.get("asOfDate")
+                if v is None or not t:
+                    continue
+                try:
+                    ts = int(datetime.strptime(str(t)[:10], "%Y-%m-%d")
+                             .replace(tzinfo=timezone.utc).timestamp())
+                except Exception:
+                    continue
+                noktalar.append((ts, v))
+            if noktalar:
+                noktalar.sort(key=lambda x: -x[0])       # en yeni önce
+                cikti[tur] = noktalar
+    return cikti
+
+
+def _ts_tablo(ts, onek, esleme, adet):
+    """timeseries çıktısını Yahoo'nun sözlük listesi biçimine çevirir."""
+    tarihler = []
+    for hedef, ad in esleme.items():
+        for t, _ in ts.get(onek + ad, []):
+            if t not in tarihler:
+                tarihler.append(t)
+    tarihler.sort(reverse=True)
+    cikti = []
+    for t in tarihler[:adet]:
+        kayit = {"endDate": t}
+        for hedef, ad in esleme.items():
+            for tt, v in ts.get(onek + ad, []):
+                if tt == t:
+                    kayit[hedef] = v
+                    break
+        if len(kayit) > 1:
+            cikti.append(kayit)
+    return cikti
+
+
+def cek_timeseries(sembol):
+    ts = cek_ts(sembol)
+    if not ts:
+        return None
+    gt = _ts_tablo(ts, "annual", {"netIncome": "NetIncome",
+                                  "totalRevenue": "TotalRevenue",
+                                  "grossProfit": "GrossProfit"}, 2)
+    bs = _ts_tablo(ts, "annual", {"totalAssets": "TotalAssets",
+                                  "longTermDebt": "LongTermDebt",
+                                  "totalCurrentAssets": "CurrentAssets",
+                                  "totalCurrentLiabilities": "CurrentLiabilities",
+                                  "commonStock": "OrdinarySharesNumber"}, 2)
+    nk = _ts_tablo(ts, "annual", {"totalCashFromOperatingActivities":
+                                  "OperatingCashFlow"}, 2)
+    gtq = _ts_tablo(ts, "quarterly", {"totalRevenue": "TotalRevenue",
+                                      "netIncome": "NetIncome"}, 6)
+    if not gt and not bs and not gtq:
+        return None
+    ilk = lambda ad: (ts.get(ad) or [(None, None)])[0][1]
+    ozk = ilk("annualStockholdersEquity")
+    nki = ilk("annualNetIncome")
+    ciro = ilk("annualTotalRevenue")
+    return {
+        "assetProfile": {},
+        "defaultKeyStatistics": {"trailingPE": ilk("quarterlyPeRatio"),
+                                 "priceToBook": ilk("quarterlyPbRatio")},
+        "summaryDetail": {"trailingPE": ilk("quarterlyPeRatio"),
+                          "marketCap": ilk("quarterlyMarketCap")},
+        "financialData": {
+            "returnOnEquity": (nki / ozk) if (nki is not None and ozk) else None,
+            "profitMargins": (nki / ciro) if (nki is not None and ciro) else None,
+            "totalCash": ilk("annualCashAndCashEquivalents"),
+            "totalDebt": ilk("annualTotalDebt"),
+            "ebitda": ilk("annualEBITDA")},
+        "incomeStatementHistory": {"incomeStatementHistory": gt},
+        "incomeStatementHistoryQuarterly": {"incomeStatementHistory": gtq},
+        "balanceSheetHistory": {"balanceSheetStatements": bs},
+        "cashflowStatementHistory": {"cashflowStatements": nk},
+        "calendarEvents": {},
+    }
 
 
 def kalem(rapor, *adlar):
@@ -279,9 +579,28 @@ def buyume_hesapla(gt_ceyrek):
     }
 
 
-def sektor_al(ham):
+def sektor_ara(sembol):
+    """assetProfile crumb istiyor; arama ucu istemiyor ve sektörü veriyor.
+    Aynalar üzerinden geçtiği için IP engelinden de etkilenmez."""
+    j = _ac("https://query1.finance.yahoo.com/v1/finance/search"
+            f"?q={urllib.parse.quote(sembol)}&quotesCount=4&newsCount=0", 20)
+    if not j:
+        return None
+    for q in (j.get("quotes") or []):
+        if str(q.get("symbol", "")).upper() != sembol.upper():
+            continue
+        for alan in ("sector", "sectorDisp", "industry", "industryDisp"):
+            v = (q.get(alan) or "").strip()
+            if v:
+                return v
+    return None
+
+
+def sektor_al(ham, sembol=None):
     ap = (ham or {}).get("assetProfile") or {}
     ad = (ap.get("sector") or "").strip()
+    if not ad and sembol:
+        ad = (sektor_ara(sembol) or "").strip()
     if not ad:
         return None
     return SEKTOR_TR.get(ad, ad)
@@ -407,7 +726,9 @@ def havuzu_oku():
 
 
 def main():
-    oturum_kur()
+    gunluk("📦 Veri yolu: " + ("yfinance" if YF_VAR else "ham HTTP (yfinance kurulu değil)"))
+    if not YF_VAR:
+        oturum_kur()
     kodlar = havuzu_oku()
     if not kodlar:
         gunluk("✗ Havuz okunamadı (havuz.json / sektor.json bulunamadı).")
@@ -417,7 +738,7 @@ def main():
     t0 = time.time()
     for i, kod in enumerate(kodlar, 1):
         ham = cek(kod + ".IS")
-        sekt = sektor_al(ham)
+        sekt = sektor_al(ham, kod + ".IS")
         if sekt:
             sektorler[kod] = sekt
         kayit = isle(kod, ham)
@@ -435,7 +756,7 @@ def main():
         if i % 25 == 0:
             gunluk(f"  {i}/{len(kodlar)} · dolu {basarili} · boş {bos} "
                    f"· {int(time.time()-t0)} sn")
-        time.sleep(0.35)          # Yahoo'yu dövme
+        time.sleep(0.15 if YF_VAR else 0.35)   # yfinance kendi hız denetimini yapıyor
 
     paket = {
         "guncelleme": datetime.now(timezone.utc).astimezone(
