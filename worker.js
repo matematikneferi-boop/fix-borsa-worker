@@ -18,7 +18,7 @@ t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
 [{text:"🗓 UZUN · 1 gün",callback_data:"uzunvade"}],[{text:"🟨 UZUN adayları (Süper Üyelik)",callback_data:"adayUzun"}],
 [{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]);
 return d(e)&&(t.push([{text:"🔄 ŞİMDİ TARA VE YÜKLE 🔐",callback_data:"elletara"}]),
-t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
+t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),t.push([{text:"🎲 Monte Carlo (deneme) 🔐",callback_data:"mc"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
 const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>KISA</b> · 1 saat — hedefi en uzak olanlar\n📐 <b>ORTA</b> · 4 saat — bugün taze kıranlar\n🗓 <b>UZUN</b> · 1 gün — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n🏷️ <code>/surum</code> — yüklü sürümü ve son tarama saatini gösterir\n📃 <code>/sinyal</code> — güncel listeyi <b>mesaj olarak</b> gönderir\n⚡ <code>/canli</code> — sadece bar kapanmadan kırılanlar\n<i>Uygulama açılmıyorsa bu iki komut her zaman çalışır.</i>\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
 /* ══════════════════════════════════════════════════════════════════════════
@@ -6550,6 +6550,45 @@ if(!t.length)return"⭐ <b>TAKİP LİSTEM</b>\n\nListen boş.\n\nBir hissenin de
 ;let a="⭐ <b>TAKİP LİSTEM</b>\n<i>"+t.length+" hisse</i>\n\n",n=0,i=0;for(const r of t){const t=Z(e,r);if(!t){a+="▫️ <b>"+r+"</b> — güncel listede yok\n";continue}const s=I(t);null!==s&&(n+=s,i++),
 a+=(null===s?"▫️":s>=0?"🟢":"🔴")+" <b>"+r+"</b>  "+Number(t.fiyat).toFixed(2)+" ₺"+(null===s?"":"  ·  <b>"+(s>=0?"+":"")+s.toFixed(2)+"%</b>")+(void 0!==t.potansiyel&&null!==t.potansiyel?"  ·  hedefe +"+Number(t.potansiyel).toFixed(1)+"%":"")+"\n"
 }if(i){const e=n/i;a+="\n"+(e>=0?"🟢":"🔴")+" <b>Ortalama: "+(e>=0?"+":"")+e.toFixed(2)+"%</b>"}return a+="\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>",a}(l,e),e.length?FAVKB(e):u(a),!1)})()),new Response("ok")
+;if("mc"===r){if(!d(a))return new Response("ok");return q.waitUntil((async()=>{let metin;try{
+const G5=await y(A),GD5=G5.gunler||{},bugun5=new Date(Date.now()+108e5).toISOString().slice(0,10);
+const gunlukOrt=[];
+for(const gun of Object.keys(GD5).sort()){
+if(gun>bugun5)continue;
+const kay=GD5[gun].kayitlar||{},teklestir={};
+for(const key of Object.keys(kay)){
+const rec=kay[key];
+if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
+const kod=rec.k||String(key).split("@")[0],getiri=100*(rec.s/rec.g-1);
+if(Math.abs(getiri)>60)continue;
+const v=teklestir[kod];
+if(void 0===v||getiri>v)teklestir[kod]=getiri}
+const liste=Object.values(teklestir);
+if(liste.length)gunlukOrt.push(liste.reduce((a2,b2)=>a2+b2,0)/liste.length)}
+if(gunlukOrt.length<10){
+metin="🎲 <b>MONTE CARLO SİMÜLASYONU</b> 🔐\n<i>Yalnız yönetici görür · deneme aşamasında</i>\n\nHenüz yeterli geçmiş yok (en az 10 günlük kayıt gerekli, şu an <b>"+gunlukOrt.length+"</b>). Sistem birikmeye devam ettikçe burası dolacak."
+}else{
+const TRIALS=2000,GUNSAYI=30,sonuclar=[];
+for(let s2=0;s2<TRIALS;s2++){let bakiye=1;
+for(let g2=0;g2<GUNSAYI;g2++){const ort=gunlukOrt[Math.floor(Math.random()*gunlukOrt.length)];bakiye*=1+ort/100}
+sonuclar.push(bakiye)}
+sonuclar.sort((a2,b2)=>a2-b2);
+const pct=p=>sonuclar[Math.min(sonuclar.length-1,Math.max(0,Math.floor(p*sonuclar.length)))];
+const yz=v=>(v>=0?"+":"")+v.toFixed(1)+"%";
+const p5=100*(pct(.05)-1),p25=100*(pct(.25)-1),p50=100*(pct(.5)-1),p75=100*(pct(.75)-1),p95=100*(pct(.95)-1);
+const pozOran=100*sonuclar.filter(x=>x>1).length/sonuclar.length;
+metin="🎲 <b>MONTE CARLO SİMÜLASYONU</b> 🔐\n<i>Yalnız yönetici görür · deneme aşamasında</i>\n\n"+
+"📅 Önümüzdeki <b>"+GUNSAYI+" gün</b> için, geçmiş <b>"+gunlukOrt.length+"</b> günün günlük ortalama getiri dağılımından "+TRIALS.toLocaleString("tr-TR")+" rastgele senaryo (bootstrap) üretildi.\n\n"+
+"🔴 Kötü senaryo (%5): <b>"+yz(p5)+"</b>\n"+
+"🟠 Alt çeyrek (%25): <b>"+yz(p25)+"</b>\n"+
+"⚪ Medyan: <b>"+yz(p50)+"</b>\n"+
+"🟢 Üst çeyrek (%75): <b>"+yz(p75)+"</b>\n"+
+"🟢 İyi senaryo (%95): <b>"+yz(p95)+"</b>\n\n"+
+"📈 Pozitif getiri olasılığı: <b>%"+pozOran.toFixed(0)+"</b>\n\n"+
+"<i>ℹ️ Yöntem: geçmiş günlerin gerçekleşmiş ortalama getirileri bir torbaya konup rastgele (yerine koyarak) çekiliyor; her deneme "+GUNSAYI+" günlük zincirleme bir yol oluşturuyor. "+TRIALS.toLocaleString("tr-TR")+" denemenin sonuç dağılımı yukarıdaki yüzdelik dilimlerdir.</i>\n"+
+"<i>⚠️ Bu bir tahmin değil, geçmiş dağılımın olasılıksal yansımasıdır. Gelecek geçmişe benzemeyebilir. Yatırım tavsiyesi değildir.</i>"}
+}catch(e){metin="🎲 Monte Carlo şu an hesaplanamadı, birazdan tekrar dene."}
+await V(A,t,i,n,metin,{inline_keyboard:[[{text:"🔄 Yeniden çalıştır",callback_data:"mc"}],[{text:"◀️ Menü",callback_data:"menu"}]]},!0)})()),new Response("ok")}
 if("ilk3"===r){const e=l&&l.kartlar&&l.kartlar.ilk3&&l.kartlar.ilk3.length
 ;return q.waitUntil(V(A,t,i,n,e?function(e,YON){const t=e.kartlar&&e.kartlar.ilk3||[],a=e=>Number(e).toFixed(2),n=["🥇","🥈","🥉"];let i="🏅 <b>BU TARAMANIN İLK 3'Ü</b>\n";if(e.guncelleme&&YON){
 const t=new Date(e.guncelleme);i+="<i>"+String((t.getUTCHours()+3)%24).padStart(2,"0")+":"+String(t.getUTCMinutes()).padStart(2,"0")+" taramasından</i>\n"}return i+="\n",t.forEach((e,t)=>{
