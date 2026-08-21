@@ -18,20 +18,18 @@ t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
 [{text:"🗓 UZUN · 1 gün",callback_data:"uzunvade"}],[{text:"🟨 UZUN adayları (Süper Üyelik)",callback_data:"adayUzun"}],
 [{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]);
 return d(e)&&(t.push([{text:"🔄 ŞİMDİ TARA VE YÜKLE 🔐",callback_data:"elletara"}]),
-t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),t.push([{text:"🎲 Monte Carlo (deneme) 🔐",callback_data:"mc"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
+t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
 const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>KISA</b> · 1 saat — hedefi en uzak olanlar\n📐 <b>ORTA</b> · 4 saat — bugün taze kıranlar\n🗓 <b>UZUN</b> · 1 gün — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n🏷️ <code>/surum</code> — yüklü sürümü ve son tarama saatini gösterir\n📃 <code>/sinyal</code> — güncel listeyi <b>mesaj olarak</b> gönderir\n⚡ <code>/canli</code> — sadece bar kapanmadan kırılanlar\n<i>Uygulama açılmıyorsa bu iki komut her zaman çalışır.</i>\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
 /* ══════════════════════════════════════════════════════════════════════════
    🛡 DAYANIKLILIK KATMANI (sürüm 11.6)
-   Altı madde buraya toplandı. HİÇBİRİ mevcut davranışı değiştirmez:
+   Dört madde buraya toplandı. HİÇBİRİ mevcut davranışı değiştirmez:
    her parça "yoksa serbest bırak" (fail-open) mantığıyla yazıldı, yani
    binding tanımlamazsan / KV yoksa sistem eskisi gibi çalışmaya devam eder.
      1) Cloudflare yerel Rate Limiting binding sarmalayıcısı
      2) Telegram gönderim kovası + 429 retry_after bekleme
      3) KV tabanlı çakışma kilidi (aynı arka plan işi üst üste başlamasın)
      4) Panel anahtarı kaba-kuvvet koruması
-     5) KAP çekiminde zaman aşımı + tekrar deneme + sağlık kaydı
-     6) KAP çoklu bildirim (fon/pay işlemi) tespiti
    Hepsinin çıktısı 🛡 Sistem sekmesinde görünür — kör nokta kalmasın.
    ══════════════════════════════════════════════════════════════════════ */
 
@@ -839,12 +837,9 @@ if(kanal){
 await alarmKuyrugaKoy(e,metin,kullanicilar);
 await alarmKuyrukBosalt(e);}
 /* ══════════════════════════════════════════════════════════════════════════
-   🧩 İKİNCİ PAKET (sürüm 11.7) — beş yeni katman
+   🧩 İKİNCİ PAKET (sürüm 11.7)
      A) Absorpsiyon / order-flow tespiti (günlük barlardan)
      B) İmzalı, süresi dolan yönetici panel anahtarı + kademeli hız sınırı
-     C) KAP bildirimlerini kategoriye ayırma + önem puanı
-     D) TEFAS fon akışı (ikinci kaynak — çapraz doğrulama)
-     E) KAP'tan kendi kendine büyüyen şirket adı haritası
    Hepsi eklenti: hiçbiri mevcut bir akışın içine girmiyor, hepsi kendi uç
    noktasından çağrılıyor, hata durumunda sessizce boş dönüyor.
    ══════════════════════════════════════════════════════════════════════ */
@@ -1216,478 +1211,6 @@ async function panelTokenGecerli(A,token){
   }catch(e){return!1}
 }
 
-/* ---------- C) 🧠 KAP BİLDİRİM SINIFLANDIRMA ----------
-   alperaydyn/KAP_Notifications projesindeki fikir: bildirimi sadece iletme,
-   NE OLDUĞUNU anla ve önemliyse öne çıkar. Orada makine öğrenmesi var;
-   burada kural tabanlı sözlük kullanıyorum — sebebi: Worker'da model
-   çalıştıramayız, kurallar şeffaftır (neden bu kategoriye girdiğini
-   görebilirsin) ve KAP konu başlıkları zaten standart kalıplarla yazılır.
-   ÖNEM PUANI: fiyata etki potansiyeline göre elle verilmiş ağırlık. */
-const KAP_KATEGORI=[
-  {kod:"geri",  ad:"Pay Geri Alım",      ik:"🔁", onem:90, rx:/GERI ALIM|GERI ALINAN PAY|PAY GERI/},
-  {kod:"pay",   ad:"Pay Alım / Satım",   ik:"🔀", onem:85, rx:/PAY ALIM|PAY SATIS|PAY SAHIPLIGI|ORTAKLIK YAPISI|SERMAYEDE PAY/},
-  {kod:"birles",ad:"Birleşme / Devralma",ik:"🤝", onem:95, rx:/BIRLESME|DEVRALMA|BOLUNME|SATIN ALINMASI|HISSE DEVRI/},
-  {kod:"serm",  ad:"Sermaye Artırımı",   ik:"📈", onem:80, rx:/SERMAYE ARTIRIM|BEDELLI|BEDELSIZ|TAHSISLI|RUCHAN/},
-  {kod:"temet", ad:"Temettü",            ik:"💰", onem:75, rx:/KAR PAYI|TEMETTU/},
-  {kod:"ihale", ad:"Sözleşme / İhale",   ik:"📝", onem:70, rx:/IHALE|SOZLESME|SIPARIS|ANLASMA|PROTOKOL|IS ALIMI/},
-  {kod:"yatir", ad:"Yatırım / Kapasite", ik:"🏭", onem:65, rx:/YATIRIM|KAPASITE|TESIS|FABRIKA|URETIM ARTIS|LISANS/},
-  {kod:"finans",ad:"Finansal Rapor",     ik:"📊", onem:60, rx:/FINANSAL RAPOR|FAALIYET RAPORU|BILANCO|KAR ZARAR|BAGIMSIZ DENETIM/},
-  {kod:"dava",  ad:"Dava / Ceza",        ik:"⚖️", onem:70, rx:/DAVA|CEZA|SORUSTURMA|ICRA|IFLAS|KONKORDATO|TEDBIR/},
-  {kod:"yonet", ad:"Yönetim Değişikliği",ik:"👤", onem:50, rx:/YONETIM KURULU|GENEL MUDUR|ISTIFA|ATAMA|IMZA YETKI/},
-  {kod:"genel", ad:"Genel Kurul",        ik:"🏛", onem:45, rx:/GENEL KURUL|ESAS SOZLESME|TADIL/},
-  {kod:"diger", ad:"Diğer",              ik:"📄", onem:25, rx:/./}
-];
-function kapSinifla(konu){
-  const t=trSad(konu||"");
-  for(const k of KAP_KATEGORI)if(k.rx.test(t))
-    return{kod:k.kod,ad:k.ad,ik:k.ik,onem:k.onem};
-  const s2=KAP_KATEGORI[KAP_KATEGORI.length-1];
-  return{kod:s2.kod,ad:s2.ad,ik:s2.ik,onem:s2.onem};
-}
-/* Önem puanını bağlamla düzelt: piyasa kapalıyken gelen bildirim daha
-   çok dikkat çeker, aynı hisseye gün içinde çoklu bildirim gelmişse önem artar. */
-function kapOnemDuzelt(temel,d2,fonSayisi){
-  let p=temel;
-  const sa=Number(String(d2.publishDate||"").slice(11,13));
-  if(sa>=18||sa<9)p+=8;                       /* seans dışı bildirim */
-  if(fonSayisi>=2)p+=10;                      /* aynı hisseye çoklu bildirim */
-  if(fonSayisi>=4)p+=8;
-  return Math.max(0,Math.min(100,Math.round(p)));
-}
-
-/* ---------- E) 🏷 ŞİRKET ADI HARİTASI ----------
-   pykap'ta hazır paketlenmiş bir BIST şirket listesi var. Onu kopyalamak
-   yerine haritayı KAP akışından KENDİMİZ büyütüyoruz: her bildirimde
-   hisse kodu ve şirket ünvanı zaten geliyor. Böylece kimsenin verisine
-   bağımlı olmuyoruz ve liste hep güncel kalıyor.
-   KV YAZMA KORUMASI: en fazla 10 dakikada bir ve sadece YENİ kod
-   bulunduğunda yazılır. */
-let SIRKET_SON_YAZIM=0;
-async function kapSirketGuncelle(A,liste){
-  try{
-    if(!A||!A.VERI||!liste||!liste.length)return;
-    if(Date.now()-SIRKET_SON_YAZIM<6e5)return;
-    const ham=await A.VERI.get("kapSirket");
-    let m={};try{m=ham?JSON.parse(ham):{}}catch(e){m={}}
-    let yeni=0;
-    for(const d2 of liste){
-      const unvan=String(d2.companyTitle||d2.companyName||"").trim();
-      if(!unvan||!d2.relatedStocks)continue;
-      for(const kh of String(d2.relatedStocks).split(",")){
-        const kod=kh.trim().toUpperCase();
-        if(kod&&!m[kod]){m[kod]=unvan.slice(0,60);yeni++}
-      }
-    }
-    if(!yeni)return;
-    SIRKET_SON_YAZIM=Date.now();
-    await A.VERI.put("kapSirket",JSON.stringify(m));
-    saglikSet("sirketSayisi",Object.keys(m).length);
-  }catch(e){}
-}
-async function kapSirketOku(A){
-  try{const h=A.VERI&&await A.VERI.get("kapSirket");return h?JSON.parse(h):{}}catch(e){return{}}
-}
-
-/* ---------- D) 💵 TEFAS FON AKIŞI (İKİNCİ KAYNAK) ----------
-   AMAÇ: KAP "kim pay aldı" der ama sadece eşik aşılınca. TEFAS ise hisse
-   fonlarının toplam büyüklüğünü günlük verir — yani paranın borsaya
-   girip girmediğini bağımsız bir kaynaktan görürsün.
-
-   ⚠️ DÜRÜST OLMAM GEREKEN İKİ ŞEY:
-   1) TEFAS fonların HANGİ HİSSEYİ aldığını AÇIKLAMIYOR. Sadece kategori
-      dağılımı ve fon büyüklüğü var. Yani "şu hisseyi fonlar topluyor"
-      diyemez; "hisse fonlarına para giriyor/çıkıyor" diyebilir.
-   2) Bu uç noktayı buradan test edemedim (geliştirme ortamının ağ erişimi
-      kısıtlı). Çalışmazsa sekmede kırmızı uyarı ve ham hata mesajı
-      görünür — sessizce yanlış veri GÖSTERMEZ. */
-const TEFAS_URL="https://www.tefas.gov.tr/api/DB/BindComparisonFundReturns";
-const TEFAS_CACHE_MS=216e5; /* 6 saat */
-function tefasTarih(gunOnce){
-  const d2=new Date(Date.now()+108e5-(gunOnce||0)*864e5);
-  const ik2=n2=>String(n2).padStart(2,"0");
-  return ik2(d2.getUTCDate())+"."+ik2(d2.getUTCMonth()+1)+"."+d2.getUTCFullYear();
-}
-async function tefasCek(){
-  const govde=new URLSearchParams({
-    calismatipi:"2",fontip:"YAT",sfontur:"",kurucukod:"",fongrup:"HSA",
-    bastarih:tefasTarih(7),bittarih:tefasTarih(0),
-    fonturkod:"",fonunvantip:"",strperiod:"1,1,1,1,1,1,1",islemdurum:"1"
-  }).toString();
-  const iptal=new AbortController();
-  const zt=setTimeout(()=>{try{iptal.abort()}catch(e){}},9e3);
-  try{
-    const r=await fetch(TEFAS_URL,{method:"POST",signal:iptal.signal,
-      headers:{"Content-Type":"application/x-www-form-urlencoded; charset=UTF-8",
-        "User-Agent":YF_UA,"Referer":"https://www.tefas.gov.tr/FonKarsilastirma.aspx",
-        "X-Requested-With":"XMLHttpRequest"},body:govde});
-    clearTimeout(zt);
-    if(!r.ok)return{ok:!1,hata:"HTTP "+r.status};
-    const j=await r.json().catch(()=>null);
-    const dizi=j&&(j.data||j.Data);
-    if(!Array.isArray(dizi))return{ok:!1,hata:"beklenmeyen yanıt biçimi"};
-    return{ok:!0,dizi:dizi};
-  }catch(e){clearTimeout(zt);return{ok:!1,hata:String((e&&e.message)||e).slice(0,140)}}
-}
-async function tefasOzet(A,zorla){
-  if(!zorla&&A.VERI){
-    const c=await A.VERI.get("tefas");
-    if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<TEFAS_CACHE_MS)return j}catch(e){}}
-  }
-  const r=await tefasCek();
-  if(!r.ok){saglikArtir("tefasHata");saglikSet("sonTefasHata",r.hata);return{ts:Date.now(),ok:!1,hata:r.hata}}
-  /* Alan adları TEFAS tarafında değişebiliyor — birden çok isim deniyoruz. */
-  const say=(o,adlar)=>{for(const a2 of adlar){const v=o&&o[a2];if(null!=v&&""!==v&&!isNaN(Number(v)))return Number(v)}return null};
-  let toplamDeger=0,toplamKisi=0,fonSayisi=0,getiriTop=0,getiriSay=0;
-  for(const f of r.dizi){
-    const dg=say(f,["PORTFOYBUYUKLUK","PortfoyBuyukluk","TOPLAMDEGER","FONTOPLAMDEGER"]);
-    const ks=say(f,["KISISAYISI","KisiSayisi","YATIRIMCISAYISI"]);
-    const gt=say(f,["GETIRIORANI","GetiriOrani","GETIRI"]);
-    if(null!=dg)toplamDeger+=dg;
-    if(null!=ks)toplamKisi+=ks;
-    if(null!=gt){getiriTop+=gt;getiriSay++}
-    fonSayisi++;
-  }
-  const paket={ts:Date.now(),ok:!0,fonSayisi:fonSayisi,toplamDeger:toplamDeger,
-    toplamKisi:toplamKisi,ortGetiri:getiriSay?Math.round(100*getiriTop/getiriSay)/100:null};
-  /* Bir önceki ölçümle karşılaştır: asıl bilgi DEĞİŞİM. */
-  if(A.VERI){
-    try{
-      const eskiHam=await A.VERI.get("tefasOnceki");
-      if(eskiHam){const e2=JSON.parse(eskiHam);
-        if(e2.toplamDeger>0)paket.degerDegisim=Math.round(1e4*(paket.toplamDeger/e2.toplamDeger-1))/100;
-        if(e2.toplamKisi>0)paket.kisiDegisim=Math.round(1e4*(paket.toplamKisi/e2.toplamKisi-1))/100;
-        paket.oncekiTs=e2.ts;
-      }
-      /* Günde bir kez referans noktasını güncelle (KV yazma dostu). */
-      if(!eskiHam||Date.now()-JSON.parse(eskiHam).ts>828e5)
-        await A.VERI.put("tefasOnceki",JSON.stringify({ts:Date.now(),toplamDeger:paket.toplamDeger,toplamKisi:paket.toplamKisi}));
-      await A.VERI.put("tefas",JSON.stringify(paket));
-    }catch(e){}
-  }
-  saglikArtir("tefasCagri");
-  return paket;
-}
-
-/* ============ 📰 KAP ANLIK BİLDİRİM ============
-   kap.org.tr resmi/belgeli bir dış geliştirici API'si sunmuyor, ama sitenin
-   kendi Next.js uygulamasının kullandığı uç nokta kimlik doğrulama istemiyor
-   ve herkese açık veridir (KAP'ın kendi mevzuat amacı zaten "kamuya açıklama").
-   KIRILGAN: KAP bu uç noktayı habersiz değiştirebilir/kapatabilir — bu yüzden
-   her adım try/catch içinde, hata durumunda sessizce vazgeçer, botun geri
-   kalanını asla etkilemez. */
-const KAP_API="https://www.kap.org.tr/tr/api/disclosure/members/byCriteria";
-const KAP_POLL_MS=175000;
-/* 5️⃣ KAP ÇEKİMİ — ZAMAN AŞIMI + TEKRAR DENEME + SAĞLIK KAYDI
-   pykap / kap-tr-sdk gibi olgun istemcilerin yaptığı üç şeyi ekledik:
-   (a) istek asılı kalmasın diye zaman aşımı, (b) tek seferlik ağ hatasında
-   pes etmeyip bir kez daha deneme, (c) "en son ne zaman veri gelebildi"
-   kaydı. Eskiden KAP sessizce boş dönünce KAP sekmesi boş kalıyordu ve
-   sebebini anlamanın yolu yoktu; artık 🛡 Sistem sekmesinde görünüyor.
-   İmza aynı: kapBildirimleriGetir(gunSayisi) — tüm eski çağrılar çalışır.
-   İsteğe bağlı ikinci parametre: {konular:[...]} → KAP subjectList filtresi. */
-const KAP_ZAMAN_ASIMI_MS=9e3;
-async function kapSaglikYaz(A,alan,deger){
-  try{
-    if(!A||!A.VERI)return;
-    const ham=await A.VERI.get("kapSaglik");
-    let v={};try{v=ham?JSON.parse(ham):{}}catch(e){v={}}
-    v[alan]=deger;v.yazim=Math.floor(Date.now()/1e3);
-    await A.VERI.put("kapSaglik",JSON.stringify(v));
-  }catch(e){}
-}
-let KAP_SON_BASARI=0,KAP_ARDISIK_HATA=0,KAP_SON_HATA="";
-async function kapBildirimleriGetir(gunSayisi,secenek){
-  const simdi=new Date(Date.now()+108e5),bas=new Date(simdi.getTime()-gunSayisi*864e5),
-        fmt=d=>d.toISOString().slice(0,10),
-        govde=JSON.stringify({fromDate:fmt(bas),toDate:fmt(simdi),mkkMemberOidList:[],
-          subjectList:(secenek&&secenek.konular)||[]});
-  for(let deneme=0;deneme<2;deneme++){
-    const iptal=new AbortController();
-    const zamanlayici=setTimeout(()=>{try{iptal.abort()}catch(e){}},KAP_ZAMAN_ASIMI_MS);
-    try{
-      const r=await fetch(KAP_API,{method:"POST",signal:iptal.signal,
-        headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},
-        body:govde});
-      clearTimeout(zamanlayici);
-      if(!r.ok){
-        KAP_SON_HATA="HTTP "+r.status;
-        if(r.status>=500&&0===deneme){await gecikmeli(600);continue}
-        KAP_ARDISIK_HATA++;saglikArtir("kapHata");
-        kapSaglikYaz(ORTAM,"sonHata",KAP_SON_HATA);return[];
-      }
-      const j=await r.json().catch(()=>null);
-      if(!Array.isArray(j)){
-        KAP_SON_HATA="beklenmeyen yanıt (JSON dizi değil)";KAP_ARDISIK_HATA++;saglikArtir("kapHata");
-        kapSaglikYaz(ORTAM,"sonHata",KAP_SON_HATA);return[];
-      }
-      KAP_SON_BASARI=Math.floor(Date.now()/1e3);KAP_ARDISIK_HATA=0;KAP_SON_HATA="";
-      saglikArtir("kapCagri");saglikSet("sonKapBasari",KAP_SON_BASARI);
-      return j;
-    }catch(err){
-      clearTimeout(zamanlayici);
-      KAP_SON_HATA=String((err&&err.message)||err||"?").slice(0,120);
-      if(0===deneme){await gecikmeli(600);continue}
-      KAP_ARDISIK_HATA++;saglikArtir("kapHata");
-      kapSaglikYaz(ORTAM,"sonHata",KAP_SON_HATA);
-      return[];
-    }
-  }
-  return[];
-}
-
-/* 6️⃣ ÇOKLU BİLDİRİM (FON / PAY İŞLEMİ) TESPİTİ
-   kap-notifier'ın mantığı: bildirimi sadece iletme — SAY ve tekrarı yakala.
-   Aynı hisse için gün içinde birden fazla "pay alım/satım, geri alım,
-   ortaklık yapısı" bildirimi çıkması kurumsal/fon hareketinin en ucuz
-   göstergesidir. Burada sadece SAYIYORUZ ve 🛡 Sistem sekmesinde
-   gösteriyoruz — kimseye ekstra mesaj gitmiyor, yani spam riski yok. */
-const FON_KONU_RX=/(PAY ALIM|PAY SATIS|PAY GERI ALIM|GERI ALIM|ORTAKLIK YAPISI|PAY SAHIPLIGI|SERMAYEDE PAY|ONEMLI NITELIKTE|BIRLESME|DEVRALMA|BEDELLI|TAHSISLI)/;
-async function kapFonIzle(A,yeniBildirimler){
-  try{
-    if(!A||!A.VERI||!yeniBildirimler||!yeniBildirimler.length)return;
-    const bugun=onayDonemi();
-    const ham=await A.VERI.get("kapFon");
-    let v={};try{v=ham?JSON.parse(ham):{}}catch(e){v={}}
-    if(v.gun!==bugun)v={gun:bugun,hisseler:{}};
-    v.hisseler=v.hisseler||{};
-    let degisti=!1;
-    for(const d of yeniBildirimler){
-      if(!d||!d.relatedStocks||!d.subject)continue;
-      if(!FON_KONU_RX.test(trSad(d.subject)))continue;
-      for(const kodHam of String(d.relatedStocks).split(",")){
-        const kod=kodHam.trim().toUpperCase();if(!kod)continue;
-        const h=v.hisseler[kod]||(v.hisseler[kod]={n:0,konular:[],son:0});
-        h.n++;h.son=Math.floor(Date.now()/1e3);
-        const kisa=String(d.subject).slice(0,60);
-        if(h.konular.indexOf(kisa)<0)h.konular=h.konular.concat([kisa]).slice(-4);
-        degisti=!0;
-      }
-    }
-    if(!degisti)return;
-    /* En çok bildirim alan 25 hisse yeter — KV kaydı şişmesin. */
-    const sirali=Object.keys(v.hisseler).sort((x,y)=>v.hisseler[y].n-v.hisseler[x].n).slice(0,25);
-    const yeni={};for(const k of sirali)yeni[k]=v.hisseler[k];
-    v.hisseler=yeni;
-    await A.VERI.put("kapFon",JSON.stringify(v));
-    saglikArtir("fonKaydi");
-  }catch(e){}
-}
-/* İzlenen kod → uid eşlemesi: ⭐ takip listesi + 💼 portföy birleşimi (union).
-   fav:/portfoy: KV'lerini olduğu gibi okuyor — yeni bir yapı eklenmedi. */
-async function kapIzleyicileriGetir(e){
-if(!e.VERI)return{};const out={};
-for(const pre of["fav:","portfoy:"]){let cursor=void 0;
-for(;;){const liste=await e.VERI.list({prefix:pre,limit:1e3,cursor});
-for(const k of liste.keys){const uid=k.name.slice(pre.length),v=await e.VERI.get(k.name);if(!v)continue;
-try{const veri=JSON.parse(v),kodlar=pre==="fav:"?veri:Object.keys(veri||{});
-if(kodlar&&kodlar.length){out[uid]=out[uid]||new Set();kodlar.forEach(k2=>out[uid].add(String(k2)))}}catch(err){}}
-if(liste.list_complete||!liste.cursor)break;cursor=liste.cursor}}
-return out}
-async function kapKontrolVeGonder(e){
-if(!e.VERI||!e.BOT_TOKEN)return;
-const simdi=Date.now(),sonKontrol=await e.VERI.get("kapSonKontrol");
-if(sonKontrol&&simdi-Number(sonKontrol)<KAP_POLL_MS)return;
-await e.VERI.put("kapSonKontrol",String(simdi));
-const liste=await kapBildirimleriGetir(1);if(!liste.length)return;
-let maxIndex=0;for(const d of liste)if(d.disclosureIndex>maxIndex)maxIndex=d.disclosureIndex;
-const sonIndexStr=await e.VERI.get("kapSonIndex"),sonIndex=sonIndexStr?Number(sonIndexStr):0;
-await e.VERI.put("kapSonIndex",String(maxIndex));
-if(!sonIndex)return;
-const yeni=liste.filter(d=>d.disclosureIndex>sonIndex&&d.relatedStocks);if(!yeni.length)return;
-/* 6️⃣ Fon/pay işlemi sayacı — izleyici olsun olmasın her zaman işler. */
-await kapFonIzle(e,yeni).catch(()=>{});
-await kapSirketGuncelle(e,liste).catch(()=>{});
-const izleyiciler=await kapIzleyicileriGetir(e);if(!Object.keys(izleyiciler).length)return;
-for(const d of yeni.slice(0,20)){
-const kodlar=String(d.relatedStocks).split(",").map(x=>x.trim()).filter(Boolean);if(!kodlar.length)continue;
-const aliciSet=new Set();
-for(const uid of Object.keys(izleyiciler))if(kodlar.some(k=>izleyiciler[uid].has(k)))aliciSet.add(uid);
-if(!aliciSet.size)continue;
-const metin="📰 <b>KAP BİLDİRİMİ</b>\n\n🏷 <b>"+kodlar.join(", ")+"</b>\n📋 "+(d.subject||"Bildirim")+"\n🕐 "+(d.publishDate||"")+"\n\n🔗 https://www.kap.org.tr/tr/Bildirim/"+d.disclosureIndex+"\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
-let i=0;for(const uid of aliciSet){if(i++>=40)break;await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,parse_mode:"HTML",disable_web_page_preview:!0,text:metin}).catch(()=>{})}}}
-/* ============ 💰 TEMETTÜ TAKVİMİ ============
-   bilancoveri.com'un temettü sayfası için JSON API'si yok, sadece HTML var.
-   Daha sağlam bir yol: aynı doğrulanmış KAP uç noktasını "Kar Payı Dağıtım
-   İşlemlerine İlişkin Bildirim" konu filtresiyle kullanmak — bilinen, gerçek
-   bir KAP disclosure subject'i. NOT: Bu, "kâr payı dağıtım KARARI açıklandı"
-   bildirimlerini gösterir; KAP'ın temel API'si ödeme tarihini yapılandırılmış
-   alan olarak vermiyor (o bilgi bildirimin PDF/tablo ekinde) — o yüzden
-   "kesin ödeme tarihi" değil "yeni temettü kararı" habercisi olarak çalışır. */
-const TEMETTU_KONU="Kar Payı Dağıtım";
-const TEMETTU_POLL_MS=18e5;
-async function temettuTakvimiGetir(gunSayisi){
-const liste=await kapBildirimleriGetir(gunSayisi||30);
-return liste.filter(d=>d.subject&&trSad(d.subject).indexOf("KAR PAYI DAGITIM")>=0&&d.relatedStocks)
-.map(d=>({kod:String(d.relatedStocks).split(",")[0].trim().toUpperCase(),tarih:(d.publishDate||"").slice(0,10),disclosureIndex:d.disclosureIndex,konu:d.subject}))}
-async function temettuKontrolVeGonder(e){
-if(!e.VERI||!e.BOT_TOKEN)return;
-const simdi=Date.now(),sonKontrol=await e.VERI.get("temettuSonKontrol");
-if(sonKontrol&&simdi-Number(sonKontrol)<TEMETTU_POLL_MS)return;
-await e.VERI.put("temettuSonKontrol",String(simdi));
-const liste=await temettuTakvimiGetir(3);if(!liste.length)return;
-const bilinenStr=await e.VERI.get("temettuBilinen"),bilinen=new Set(bilinenStr?JSON.parse(bilinenStr):[]),ilkCalisma=!bilinenStr;
-const yeni=liste.filter(x=>!bilinen.has(x.kod+":"+x.disclosureIndex));
-liste.forEach(x=>bilinen.add(x.kod+":"+x.disclosureIndex));
-await e.VERI.put("temettuBilinen",JSON.stringify([...bilinen].slice(-1000)));
-if(ilkCalisma||!yeni.length)return;
-const izleyiciler=await kapIzleyicileriGetir(e);if(!Object.keys(izleyiciler).length)return;
-for(const x of yeni.slice(0,20)){
-const aliciSet=new Set();
-for(const uid of Object.keys(izleyiciler))if(izleyiciler[uid].has(x.kod))aliciSet.add(uid);
-if(!aliciSet.size)continue;
-const metin="💰 <b>TEMETTÜ HABERİ</b>\n\n🏷 <b>"+x.kod+"</b>\n📅 "+x.tarih+"\n📋 "+x.konu+"\n\n🔗 https://www.kap.org.tr/tr/Bildirim/"+x.disclosureIndex+"\n\n<i>⚠️ Yatırım tavsiyesi değildir. Kesin ödeme tarihi/tutarı için KAP bildirimindeki tabloyu kontrol edin.</i>";
-let i=0;for(const uid of aliciSet){if(i++>=40)break;await b(e.BOT_TOKEN,"sendMessage",{chat_id:uid,parse_mode:"HTML",disable_web_page_preview:!0,text:metin}).catch(()=>{})}}}
-/* Mini App'in 📰 KAP / 💰 Temettü sekmeleri için kısa süreli KV önbellek —
-   push ile gelen arka plan kontrolünden BAĞIMSIZ: kullanıcı sekmeyi her
-   açtığında KAP'ı yeniden çekmesin diye. */
-async function kapListesiCache(e){
-const c=e.VERI&&await e.VERI.get("kapCache");
-if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<3e5)return j.liste}catch(err){}}
-const liste=await kapBildirimleriGetir(3);
-if(e.VERI&&liste.length)await e.VERI.put("kapCache",JSON.stringify({ts:Date.now(),liste:liste.slice(0,200)}));
-/* E) Sirket adi haritasini bu akistan besle (en fazla 10 dk'da bir yazar). */
-await kapSirketGuncelle(e,liste).catch(()=>{});
-return liste}
-/* ============ 💰 GERÇEK ÖDEME TARİHLİ TEMETTÜ TAKVİMİ (v3) ============
-   ahlatciyatirim.com.tr denendi, Cloudflare'dan HTTP 525 (origin TLS
-   handshake hatası) döndü — o siteye Worker'dan erişilemiyor, bu benim
-   kontrolümde değil, terk edildi.
-   Gerçek kaynak: KAP'ın KENDİ bildirim DETAY sayfası. KAP'ın liste API'si
-   (byCriteria) ödeme tarihini vermiyor ama her "Kar Payı Dağıtım" bildiriminin
-   DETAY sayfasında (kap.org.tr/tr/Bildirim/{id}) sunucu tarafında render
-   edilmiş "Kar Payı Ödeme Tarihleri" tablosu var — "Ödeme Tarihi (3)" sütunu
-   gerçek ödeme tarihi. Bu domain zaten kapBildirimleriGetir() ile çalışıyor,
-   yeni bir dış siteye bağımlılık yok. */
-const KAP_DETAY_HEADERS={"User-Agent":YF_UA,"Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","Accept":"text/html,application/xhtml+xml"};
-function stripEtiket(h){return String(h||"").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g," ").trim()}
-function trNoktaTarihToISO(s){const m=String(s||"").trim().match(/(\d{2})\.(\d{2})\.(\d{4})/);
-if(!m)return null;return m[3]+"-"+m[2]+"-"+m[1]}
-/* "Kar Payı Ödeme Tarihleri" tablosunu bul: 5'li hücre grupları
-   [Ödeme yöntemi, Teklif(1), Kesinleşen(2), Ödeme Tarihi(3), Kayıt Tarihi(4)].
-   Taksitli ödemelerde birden fazla satır olabilir — en ileri (son) ödeme
-   tarihini esas alıyoruz. */
-function kapOdemeTarihiCikar(html){
-const i=html.indexOf("Kar Payı Ödeme Tarihleri");
-if(i<0)return null;
-const j=html.indexOf("Nakit Kar Payı Ödeme Zaman Aralığı",i);
-const parca=html.slice(i,j>i?j:i+5000);
-const hucreler=(parca.match(/<td[\s\S]*?<\/td>/g)||[]).map(stripEtiket);
-let en=null;
-for(let k=0;k+4<hucreler.length;k+=5){
-const iso=trNoktaTarihToISO(hucreler[k+3]);
-if(iso&&(!en||iso>en.iso))en={iso:iso,ham:hucreler[k+3],hakKazanmaHam:hucreler[k+2],hakKazanmaISO:trNoktaTarihToISO(hucreler[k+2])}}
-return en}
-async function kapBildirimDetayGetir(disclosureIndex){
-try{
-const r=await fetch("https://www.kap.org.tr/tr/Bildirim/"+disclosureIndex,{headers:KAP_DETAY_HEADERS});
-if(!r.ok)return null;
-return kapOdemeTarihiCikar(await r.text())
-}catch(err){return null}}
-async function gecikmeli(ms){return new Promise(res=>setTimeout(res,ms))}
-/* Türkçe karakter/case farklarına (â/a, büyük-küçük harf) karşı dayanıklı
-   karşılaştırma — KAP'ın subject metni bazen "Kâr" bazen "Kar" olarak
-   dönebiliyor, ham metin karşılaştırması kırılgan. */
-function trSad(s){return String(s||"").toUpperCase().replace(/İ/g,"I").replace(/Â/g,"A").replace(/Ş/g,"S").replace(/Ğ/g,"G").replace(/Ü/g,"U").replace(/Ö/g,"O").replace(/Ç/g,"C")}
-/* KAP'ın byCriteria API'si 2000 kayıtta kesiliyor (resmi limit) — 50 günlük
-   TEK istek, hiç ilgisi olmayan binlerce bildirimle (finansal rapor, KGK
-   uyum formu vb.) bu tavana çarpıp temettü bildirimlerine hiç sıra
-   bırakmıyor. Çözüm: 50 günü 6'şar günlük küçük pencerelere bölüp ayrı ayrı
-   istemek — her pencere tavana çarpma riski taşımıyor. */
-/* Tek bir [bas,ucIleri) penceresini ister; 2000 tavanına çarparsa (eskiden
-   sadece UYARI verip verinin bir kısmını SESSİZCE KAYBEDİYORDUK — asıl "0 aday"
-   hatasının kaynağı muhtemelen buydu: yoğun günlerde (çeyrek rapor sezonu vb.)
-   6 günlük pencere bile 2000'i aşıyor ve kesilen kısımda kâr payı bildirimleri
-   kalabiliyordu) artık pencereyi ikiye bölüp HER İKİ YARIYI DA ayrı ayrı ister,
-   1 güne inene kadar rekürsif olarak devam eder. Böylece veri kaybı olmaz. */
-async function kapTekPencereGetir(bas,ucIleri,tani,derinlik){
-const fmt=d=>d.toISOString().slice(0,10);
-try{
-const r=await fetch(KAP_API,{method:"POST",headers:{"Content-Type":"application/json","Referer":"https://www.kap.org.tr/tr/bildirim-sorgu","User-Agent":YF_UA},body:JSON.stringify({fromDate:fmt(bas),toDate:fmt(ucIleri),mkkMemberOidList:[],subjectList:[]})});
-if(!r.ok){tani.push("pencere "+fmt(bas)+".."+fmt(ucIleri)+": HTTP "+r.status);return[]}
-const j=await r.json().catch(()=>null);
-if(!Array.isArray(j))return[];
-const gunFarki=Math.round((ucIleri-bas)/864e5);
-if(j.length>=2000&&gunFarki>1&&derinlik<6){
-const orta=new Date(bas.getTime()+Math.floor(gunFarki/2)*864e5);
-tani.push("bilgi: pencere "+fmt(bas)+".."+fmt(ucIleri)+" 2000 tavanına çarptı → "+fmt(bas)+".."+fmt(orta)+" ve "+fmt(orta)+".."+fmt(ucIleri)+" olarak ikiye bölünüp yeniden istendi (veri kaybı yok)");
-await gecikmeli(200);
-const sol=await kapTekPencereGetir(bas,orta,tani,derinlik+1);
-const sag=await kapTekPencereGetir(orta,ucIleri,tani,derinlik+1);
-return sol.concat(sag)}
-if(j.length>=2000)tani.push("uyarı: pencere "+fmt(bas)+".."+fmt(ucIleri)+" 2000 tavanına çarptı ve 1 güne inildiği için daha fazla bölünemedi — bu tek günde gerçekten 2000+ bildirim var demektir");
-return j
-}catch(err){tani.push("pencere istisnası: "+String(err&&err.message||err));return[]}}
-async function kapBildirimleriPencereli(toplamGun,pencereGun,tani){
-const tumuMap=new Map();
-const simdiTR=new Date(Date.now()+108e5);
-let ucIleri=simdiTR,kalan=toplamGun,pencereSayisi=0;
-while(kalan>0){
-const bu=Math.min(pencereGun,kalan);
-const bas=new Date(ucIleri.getTime()-bu*864e5);
-const parca=await kapTekPencereGetir(bas,ucIleri,tani,0);
-/* disclosureIndex'e göre tekilleştir: bölünen pencerelerin sınır günleri
-   veya art arda pencereler aynı kaydı iki kez getirmiş olabilir. */
-for(const d of parca)if(d&&d.disclosureIndex!=null)tumuMap.set(d.disclosureIndex,d);
-ucIleri=bas;kalan-=bu;pencereSayisi++;
-if(pencereSayisi%3===0)await gecikmeli(250)}
-return[...tumuMap.values()]}
-async function temettuTakvimiGercekGetir(tani){
-/* ESKİ HATA: pencere yalnız SON 50 GÜNdü. BIST'te "Kar Payı Dağıtım
-   İşlemlerine İlişkin Bildirim" duyuruları çoğunlukla Mart–Temmuz genel
-   kurul sezonunda çıkıyor; Ağustos ortası gibi sezon dışı bir tarihte son
-   50 günde GERÇEKTEN sıfır yeni duyuru olabiliyor (12k+ bildirim arasında
-   temettüyle hiç ilgisi olmayanlar dahil) — bu "hata" değil, "şu an yok"
-   durumuydu ama arayüzde hata gibi görünüyordu. Pencere 100 güne çıkarıldı
-   ki sezonun kuyruğundaki (ödeme tarihi hâlâ ileride olan) duyurular da
-   yakalansın. */
-const TEMETTU_GUN=100;
-const ham=await kapBildirimleriPencereli(TEMETTU_GUN,6,tani);
-tani.push(ham.length+" ham KAP bildirimi (son "+TEMETTU_GUN+" gün, tekilleştirilmiş, filtresiz)");
-if(ham.length)tani.push("örnek subject alanları: "+ham.slice(0,5).map(d=>JSON.stringify(d.subject)).join(" | "));
-const map1=d=>({kod:String(d.relatedStocks).split(",")[0].trim().toUpperCase(),tarih:(d.publishDate||"").slice(0,10),disclosureIndex:d.disclosureIndex,konu:d.subject});
-let adaylar=ham.filter(d=>d.subject&&trSad(d.subject).indexOf("KAR PAYI DAGITIM")>=0&&d.relatedStocks).map(map1);
-/* Birincil filtre 0 sonuç verirse (KAP subject metnini sessizce değiştirmiş
-   olabilir, ya da 2000-tavanı geçmişte veriyi kırpmış olabilir) daha geniş
-   bir ikinci filtreyle tekrar dene: "KAR PAYI" veya "TEMETTU" geçen HERHANGİ
-   bir subject. Bu, kesin isabeti biraz düşürür ama sıfır sonuç görme riskini
-   ortadan kaldırır; TANI'ya hangi filtrenin kullanıldığı açıkça yazılır. */
-if(!adaylar.length){
-const genis=ham.filter(d=>d.subject&&d.relatedStocks&&/KAR PAYI|TEMETTU/.test(trSad(d.subject))).map(map1);
-if(genis.length){tani.push("not: birincil 'KAR PAYI DAGITIM' filtresi 0 sonuç verdi → geniş 'KAR PAYI / TEMETTU' filtresine düşüldü");adaylar=genis}}
-tani.push(adaylar.length+" aday KAP bildirimi (subject filtre, Türkçe-toleranslı)");
-/* aynı hisse için birden fazla bildirim varsa (teklif → kesinleşen gibi)
-   en yeni disclosureIndex'i (en güncel bildirim) esas al */
-const sonBildirim={};
-for(const x of adaylar)if(!sonBildirim[x.kod]||Number(x.disclosureIndex)>Number(sonBildirim[x.kod].disclosureIndex))sonBildirim[x.kod]=x;
-const hedefler=Object.values(sonBildirim).slice(0,30);
-tani.push(hedefler.length+" farklı hisse için detay sayfası çekilecek");
-const bugunISO=new Date().toISOString().slice(0,10);
-const sonuc=[];
-let i=0,basarisiz=0;
-for(const x of hedefler){
-i++;
-const detay=await kapBildirimDetayGetir(x.disclosureIndex);
-if(!detay){basarisiz++;continue}
-if(detay.iso&&detay.iso>=bugunISO)
-sonuc.push({kod:x.kod,odemeTarihi:detay.ham,odemeTarihiISO:detay.iso,hakKazanma:detay.hakKazanmaHam||"",disclosureIndex:x.disclosureIndex,konu:x.konu});
-if(i%4===0)await gecikmeli(300)}
-tani.push(hedefler.length-basarisiz+" detay OK, "+basarisiz+" detay başarısız, "+sonuc.length+" ileri tarihli ödeme");
-sonuc.sort((a,b)=>a.odemeTarihiISO<b.odemeTarihiISO?-1:1);
-return sonuc}
-async function temettuListesiCache(e){
-const c=e.VERI&&await e.VERI.get("temettuCacheV3");
-if(c){try{const j=JSON.parse(c);if(Date.now()-j.ts<18e5)return{liste:j.liste,tani:["v3 kv cache"]}}catch(err){}}
-const tani=[];
-let liste=[];
-try{liste=await temettuTakvimiGercekGetir(tani)}catch(err){tani.push("genel istisna: "+String(err&&err.message||err))}
-if(liste.length){if(e.VERI)await e.VERI.put("temettuCacheV3",JSON.stringify({ts:Date.now(),liste:liste.slice(0,150)}));return{liste:liste,tani:tani}}
-if(e.VERI)await e.VERI.put("temettuSonHata",JSON.stringify({ts:Date.now(),tani:tani})).catch(()=>{});
-/* Detay sayfaları erişilemezse (KAP WAF/yoğunluk) eski duyuru listesine düş. */
-const eskiC=e.VERI&&await e.VERI.get("temettuCache");
-if(eskiC){try{const j=JSON.parse(eskiC);if(Date.now()-j.ts<18e5)return{liste:j.liste,tani:tani.concat(["eski kv cache"])}}catch(err){}}
-let eski=[];try{eski=await temettuTakvimiGetir(90)}catch(err){tani.push("eski KAP istisnası: "+String(err&&err.message||err))}
-if(e.VERI&&eski.length)await e.VERI.put("temettuCache",JSON.stringify({ts:Date.now(),liste:eski.slice(0,150)}));
-return{liste:eski,tani:tani}}
 /* LİSTE OKUMA — TAZELİK GARANTİLİ.
    ESKİ HATA: bellekteki kopya (o) bir kez doldu mu bir daha ASLA
    tazelenmiyordu ("if(o)return o"). Cloudflare aynı worker'i birden çok
@@ -2198,7 +1721,6 @@ function ekranAdi(){
   if(sekme==="hata")return"🩺 Hatalar";
   if(sekme==="sag")return"🛡 Sistem";
   if(sekme==="abs")return"🌊 Absorpsiyon";
-  if(sekme==="rad")return"🧠 KAP Radar";
   if(sekme==="rot")return"🔄 Sektör Rotasyonu";
   if(sekme==="perf")return"📈 Performans";
   if(sekme==="davet")return"📤 Davet";
@@ -2207,10 +1729,7 @@ function ekranAdi(){
   if(sekme==="portfoy")return"💼 Portföyüm";
   if(sekme==="preset")return"🎛 Hazır filtreler";
   if(sekme==="backtest")return"📊 Backtest";
-  if(sekme==="mc")return"🎲 Monte Carlo";
   if(sekme==="temel")return"📋 Temel Analiz";
-  if(sekme==="kap")return"📰 KAP Bildirimleri";
-  if(sekme==="temettu")return"💰 Temettü Takvimi";
   if(sekme==="yardim")return"❓ Rozetler ve Sekmeler";
   if(sekme==="alarm")return"🔔 Anlık Alarm";
   if(sekme==="aday")return(TF[adayTf]?TF[adayTf].ad:"Adaylar");
@@ -2309,17 +1828,10 @@ function sekCiz(){
   //s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
   /* 📊 Backtest — yalnız yönetici. Üyeye açmak istersen d(uid) şartını kaldır. */
   if(D&&D.yon)s.push('<button class="sek'+(sekme==="backtest"?" on":"")+'" data-r="nötr" data-s="backtest">📊 Backtest 🔐</button>');
-  if(D&&D.yon)s.push('<button class="sek'+(sekme==="mc"?" on":"")+'" data-r="nötr" data-s="mc">🎲 Monte Carlo 🔐</button>');
   s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
   s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
-  s.push('<button class="sek'+(sekme==="rad"?" on":"")+'" data-r="nötr" data-s="rad">🧠 KAP Radar</button>');
-  /* 📋 Temel Analiz — HERKESE AÇIK ve üst sıralarda: sinyalin arkasında
-     şirket olup olmadığını görmek kilitlenecek bir ayrıcalık değil,
-     sistemin ciddiyetinin göstergesidir. */
-  s.push('<button class="sek'+(sekme==="kap"?" on":"")+'" data-r="nötr" data-s="kap">📰 KAP</button>');
-  s.push('<button class="sek'+(sekme==="temettu"?" on":"")+'" data-r="nötr" data-s="temettu">💰 Temettü</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="sag"?" on":"")+'" data-r="nötr" data-s="sag">🛡 Sistem</button>');
@@ -2353,7 +1865,6 @@ function ciz(){
   if(sekme==="hata")return hataCiz();
   if(sekme==="sag")return saglikCiz();
   if(sekme==="abs")return absCiz();
-  if(sekme==="rad")return radCiz();
   if(sekme==="rot")return rotCiz();
   if(sekme==="perf")return perfCiz();
   if(sekme==="kama")return kamaCiz();
@@ -2364,10 +1875,7 @@ function ciz(){
   if(sekme==="portfoy")return portfoyCiz();
   if(sekme==="preset")return presetCiz();
   if(sekme==="backtest")return backtestCiz();
-  if(sekme==="mc")return mcCiz();
   if(sekme==="temel")return temelCiz();
-  if(sekme==="kap")return kapCiz();
-  if(sekme==="temettu")return temettuCiz();
   if(sekme==="yardim")return yardimCiz();
   if(sekme==="aday")return adayCiz();
   listeCiz(sekme);
@@ -3035,7 +2543,7 @@ function bindPresetChips(){
    Günlük getiri = o gün açılan sinyallerin ortalama getirisi.
    Birikimli = her günün ortalaması bileşik olarak çarpılır; yani
    "her gün o günün sinyallerine eşit dağılmış olsaydın" senaryosu. */
-var btD=null;var mcD=null;
+var btD=null;
 function backtestCiz(){
   if(btD){backtestGoster(btD);return}
   el("govde").innerHTML='<div class="yukleniyor">geçmiş okunuyor…</div>';
@@ -3150,43 +2658,6 @@ function backtestGoster(v){
      'girmek mümkün olmadığı için böyle bir eğri gerçeği yansıtmaz.</div>';
 
   el("govde").innerHTML=h;
-}
-/* ═══════════════ 🎲 MONTE CARLO SAYFASI (yalnız yönetici) ═══════════════
-   Geçmiş günlük getiri dağılımından rastgele (bootstrap) örnekleme ile
-   önümüzdeki 30 gün için olasılıksal bir sonuç aralığı üretir. backtestCiz
-   ile aynı önbellek/çizim kalıbını izler. */
-function mcCiz(){
-  if(mcD){mcGoster(mcD);return}
-  el("govde").innerHTML='<div class="yukleniyor">senaryolar hesaplanıyor…</div>';
-  post("/api/montecarlo",{}).then(function(v){mcD=v;mcGoster(v)})
-    .catch(function(){el("govde").innerHTML='<div class="bos">Hesaplanamadı.</div>'});
-}
-function mcGoster(v){
-  if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Hesaplanamadı.</div>';return}
-  if(!v.yeterli){
-    el("govde").innerHTML='<div class="bos">Henüz yeterli geçmiş yok (en az 10 günlük kayıt gerekli, şu an '+v.gunSayisi+').<br>Sistem birikmeye devam ettikçe burası dolacak.</div>';
-    return;
-  }
-  var h='<div class="kutu"><h3>🎲 '+v.ufukGun+' gün ileri, '+v.trials.toLocaleString('tr-TR')+' senaryo</h3>'+
-    '<div class="btAc" style="margin:-2px 0 9px">Geçmiş '+v.gunSayisi+' günün günlük ortalama getirisinden '+
-    'rastgele (yerine koyarak) çekiliş yapılıp '+v.ufukGun+' günlük zincirleme bir yol kuruldu; '+
-    'bu '+v.trials.toLocaleString('tr-TR')+' kez tekrarlandı. Aşağıdaki sayılar bu senaryoların yüzdelik dilimleridir.</div>'+
-    '<div class="ozIki"><div class="ozKart"><div class="ozBuyuk">'+v.gunSayisi+'</div>'+
-    '<div class="ozAlt">geçmiş gün sayısı</div></div>'+
-    '<div class="ozKart"><div class="ozBuyuk '+(v.pozitifOran>=50?"ye":"kr")+'">%'+v.pozitifOran.toFixed(0)+'</div>'+
-    '<div class="ozAlt">pozitif getiri olasılığı</div></div></div></div>';
-  h+='<div class="kutu"><h3>📈 Olası sonuç aralığı</h3>';
-  h+=btSat("🔴 Kötü senaryo (%5)",Y(v.p5),v.p5>=0?"ye":"kr");
-  h+=btSat("🟠 Alt çeyrek (%25)",Y(v.p25),v.p25>=0?"ye":"kr");
-  h+=btSat("⚪ Medyan",Y(v.p50),v.p50>=0?"ye":"kr");
-  h+=btSat("🟢 Üst çeyrek (%75)",Y(v.p75),v.p75>=0?"ye":"kr");
-  h+=btSat("🟢 İyi senaryo (%95)",Y(v.p95),v.p95>=0?"ye":"kr");
-  h+='</div>';
-  h+='<div class="btAc" style="margin:10px 2px 24px">⚠️ Bu bir tahmin değil, geçmiş dağılımın olasılıksal '+
-     'yansımasıdır. Gelecek geçmişe benzemeyebilir. Komisyon ve vergi dahil değildir. Yatırım tavsiyesi değildir.</div>';
-  el("govde").innerHTML=h+'<button class="dg" id="mcYenile" style="margin:0 2px">🔄 Yeniden çalıştır</button>';
-  var btn=el("mcYenile");
-  if(btn)btn.onclick=function(){mcD=null;mcCiz()};
 }
 /* ═══════════════ 📋 TEMEL ANALİZ SAYFASI ═══════════════
    Sinyal listelerindeki hisselerin temel verisi tek ekranda. Veri
@@ -3456,86 +2927,6 @@ function temelDetay(kod){
   if(kp)kp.onclick=function(){tit();K.classList.remove("ac");K.innerHTML=""};
   try{tgGeriDugme()}catch(e){}
 }
-function kapCiz(){
-  el("govde").innerHTML='<div class="yukleniyor">yükleniyor…</div>';
-  post("/api/kap",{}).then(function(v){
-    var liste=(v&&v.liste)||[];
-    if(!liste.length){
-      var tes="";
-      if(v&&v.sonHata)tes+='<br><br><span style="color:var(--kr)">Hata: '+E(String(v.sonHata))+'</span>';
-      if(v&&v.ardisikHata)tes+='<br><span class="altbilgi">ardışık hata: '+v.ardisikHata+'</span>';
-      if(v&&v.sonBasari)tes+='<br><span class="altbilgi">son başarılı çekim: '+
-        new Date(v.sonBasari*1000).toLocaleString("tr-TR")+'</span>';
-      else if(v)tes+='<br><span class="altbilgi">bu worker açıldığından beri hiç başarılı çekim olmadı</span>';
-      if(v&&v.hamSayi)tes+='<br><span class="altbilgi">KAP '+v.hamSayi+
-        ' bildirim döndü ama hiçbirinde hisse kodu yok</span>';
-      el("govde").innerHTML='<div class="bos"><b>📰 KAP Bildirimleri</b><br><br>'+
-        'Şu an gösterilecek bildirim yok.'+tes+'</div>';
-      return;
-    }
-    el("govde").innerHTML=liste.map(function(d){
-      return '<div class="satir" style="cursor:pointer">'+
-        '<div class="sol"><div class="kod">'+E((d.kodlar||[]).join(", ")||"—")+
-        (d.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
-        '<div class="altbilgi">'+E(d.konu||"Bildirim")+'</div></div>'+
-        '<div class="sag"><div class="yuzde so">'+E((d.tarih||"").slice(0,16).replace("T"," "))+'</div></div></div>';
-    }).join("")+'<div class="uyari">Kaynak: kap.org.tr · yalnız bilgilendirme amaçlıdır, yatırım tavsiyesi değildir.</div>';
-    [].forEach.call(document.querySelectorAll("#govde .satir"),function(row,i){
-      row.onclick=function(){
-        tit();
-        var u2="https://www.kap.org.tr/tr/Bildirim/"+liste[i].disclosureIndex;
-        try{TG.openLink(u2)}catch(e){location.href=u2}
-      };
-    });
-  });
-}
-/* 💰 Temettü sekmesi: KAP'ın kendi bildirim detay sayfasından (Ödeme
-   Tarihi (3) alanı) çekilen GERÇEK ödeme tarihli yaklaşan kar payı takvimi.
-   Detay sayfaları erişilemezse eski KAP-duyuru listesine (sadece "karar
-   açıklandı" haberi, ödeme tarihi yok) düşülür — bu durumda gercekTarih=false
-   döner ve satır görünümü buna göre değişir. */
-function temettuCiz(){
-  el("govde").innerHTML='<div class="yukleniyor">yükleniyor…</div>';
-  post("/api/temettu",{}).then(function(v){
-    var liste=(v&&v.liste)||[],gercek=!!(v&&v.gercekTarih);
-    if(!liste.length){
-      el("govde").innerHTML='<div class="bos"><b>💰 Temettü Takvimi</b><br><br>Şu an ödeme tarihi ileride olan bir kâr payı duyurusu yok.<br>BIST\\'te temettü duyuruları çoğunlukla Mart–Temmuz genel kurul sezonunda çıkar; sezon dışında liste boş görünmesi normaldir. Yeni bir duyuru çıktığında burada listelenir.</div>'+
-        (v&&v.tani?'<div class="uyari" style="text-align:left;white-space:pre-wrap">TANI (sadece admin):\\n'+E(v.tani.join("\\n"))+'</div>':"");
-      return;
-    }
-    if(gercek){
-      el("govde").innerHTML=liste.map(function(x){
-        return '<div class="satir" style="cursor:pointer">'+
-          '<div class="sol"><div class="kod">'+E(x.kod)+
-          (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
-          '<div class="altbilgi">Hak kazanma (kesinleşen) '+E(x.hakKazanma||"—")+'</div></div>'+
-          '<div class="sag"><div class="yuzde so">💵 '+E(x.odemeTarihi||"—")+'</div></div></div>';
-      }).join("")+'<div class="uyari">Kaynak: kap.org.tr bildirim detay sayfası, "Ödeme Tarihi (3)" alanı. Yatırım tavsiyesi değildir.</div>';
-      [].forEach.call(document.querySelectorAll("#govde .satir"),function(row,i){
-        row.onclick=function(){
-          tit();
-          var u2="https://www.kap.org.tr/tr/Bildirim/"+liste[i].disclosureIndex;
-          try{TG.openLink(u2)}catch(e){location.href=u2}
-        };
-      });
-      return;
-    }
-    el("govde").innerHTML=liste.map(function(x){
-      return '<div class="satir" style="cursor:pointer">'+
-        '<div class="sol"><div class="kod">'+E(x.kod)+
-        (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
-        '<div class="altbilgi">'+E(x.konu||"KAP kâr payı bildirimi")+'</div></div>'+
-        '<div class="sag"><div class="yuzde so">'+E(x.tarih||"")+'</div></div></div>';
-    }).join("")+'<div class="uyari">Kaynak: kap.org.tr · "Kar Payı Dağıtım" konulu bildirimler, kararın açıklandığı tarihle listelenir (kesin ödeme tarihi için bildirimin ekindeki tabloya bak). Yatırım tavsiyesi değildir.</div>';
-    [].forEach.call(document.querySelectorAll("#govde .satir"),function(row,i){
-      row.onclick=function(){
-        tit();
-        var u2="https://www.kap.org.tr/tr/Bildirim/"+liste[i].disclosureIndex;
-        try{TG.openLink(u2)}catch(e){location.href=u2}
-      };
-    });
-  });
-}
 /* ═══════════ ❓ YARDIM SAYFASI — rozetler ve sekmeler tek tek ═══════════
    Amaç: hiçbir teknik terimi bilmeyen biri bile okuyunca anlasın. Her
    blokta ne olduğu + neden önemli olduğu + somut bir örnek var. */
@@ -3598,12 +2989,6 @@ function yardimCiz(){
     "Hazır filtre kombinasyonları — “kaliteli” gibi tek dokunuşla belirli bir kalite eşiğinin üstündeki hisseleri gösteren kısayollar.");
   h+=ydBlok("🌊 Absorpsiyon",
     "Günlük barlardan order-flow (emir akışı) tespiti: büyük hacmin fiyatı yükseltmeden “emildiği” (absorbe edildiği) noktaları arar — genelde büyük oyuncuların sessizce topladığı bölgelerdir.");
-  h+=ydBlok("🧠 KAP Radar",
-    "Kamuyu Aydınlatma Platformu'ndaki (KAP) önemli şirket bildirimlerini (pay alım/satım, birleşme, bedelli/bedelsiz sermaye artırımı vb.) otomatik tarar ve önem sırasına göre listeler.");
-  h+=ydBlok("📰 KAP",
-    "Ham KAP bildirim akışı; KAP Radar'daki önem filtrelemesi olmadan tüm bildirimleri kronolojik gösterir.");
-  h+=ydBlok("💰 Temettü Takvimi",
-    "Kâr payı (temettü) dağıtım kararı açıklanan ve ödeme tarihi ileride olan hisseleri listeler.");
   h+=ydBlok("📤 Davet",
     "Uygulamayı başkalarına davet ederek Süper Üyelik süresi kazanma bölümü.");
 
@@ -3705,7 +3090,6 @@ function portfoyCiz(){
       '<button class="dg" id="portfoyPerfDg" style="flex:1">📈 Performans</button></div>';
   }
   if(gecmis.length)h+='<button class="dg" id="portfoyGecmisDg" style="margin-top:8px">📜 Gerçekleşen K/Z geçmişi ('+gecmis.length+')</button>';
-  h+='<div id="portfoyTemettuKutu"></div>';
   h+='<div class="uyari">Satıra dokun: detay/düzenle/sat. Yatırım tavsiyesi değildir.</div>';
   el("govde").innerHTML=h;
   [].forEach.call(document.querySelectorAll("#govde .satir"),function(row){
@@ -3717,25 +3101,7 @@ function portfoyCiz(){
   if(el("portfoyGecmisDg"))el("portfoyGecmisDg").onclick=function(){tit();portfoyGecmisCiz()};
   if(el("portfoySektorDg"))el("portfoySektorDg").onclick=function(){tit();portfoySektorCiz(satirlar,toplamDeger)};
   if(el("portfoyPerfDg"))el("portfoyPerfDg").onclick=function(){tit();portfoyPerformansCiz()};
-  portfoyTemettuKutusuDoldur(kodlar);
   portfoyYeniBagla();
-}
-/* 💰 Portföydeki hisseler için bekleyen kâr payı bildirimlerini gösterir.
-   Ana ekranı bloklamadan, arkada tek bir /api/temettu isteğiyle doldurulur
-   (temettü takvimiyle aynı kaynak — "takipte" alanı zaten portföyü kapsıyor). */
-function portfoyTemettuKutusuDoldur(kodlar){
-  var kutu=el("portfoyTemettuKutu"); if(!kutu||!kodlar.length)return;
-  var set={}; kodlar.forEach(function(k){set[k]=1});
-  post("/api/temettu",{}).then(function(v){
-    var kutu2=el("portfoyTemettuKutu"); if(!kutu2)return;
-    var liste=((v&&v.liste)||[]).filter(function(x){return set[x.kod]});
-    if(!liste.length)return;
-    kutu2.innerHTML='<div class="kutu" style="margin-top:10px"><h3>💰 Portföyünde bekleyen kâr payı</h3>'+
-      liste.map(function(x){
-        var tarih=x.odemeTarihi?("ödeme "+E(x.odemeTarihi)):("bildirim "+E(x.tarih||""));
-        return '<div class="altN" style="margin-top:4px">• <b>'+E(x.kod)+'</b> — '+tarih+'</div>';
-      }).join('')+'<div class="altN" style="margin-top:6px">Tutar bilgisi KAP listesinde yapısal olarak yer almıyor; detay için bildirime dokun (Temettü Takvimi sekmesi).</div></div>';
-  }).catch(function(){});
 }
 /* 🥧 SEKTÖR DAĞILIMI: statik BIST sektör haritasıyla (bkz. backend SEKTOR_HARITA)
    pozisyonları grupluyor. Harita eksiksiz değildir; eşleşmeyenler "Diğer". */
@@ -4405,112 +3771,10 @@ function absGoster(v){
       el("absAyarDurum").textContent="⚠️ bağlantı hatası"});
   };
 }
-/* ================== 🧠 KAP RADAR SEKMESİ ==================
-   Ham KAP listesi (📰 sekmesi) her şeyi tarih sırasıyla verir. Radar ise
-   her bildirimi KATEGORİYE ayırır ve ÖNEM PUANI verir; en üstte en çok
-   fiyat etkileyebilecek olan durur. Üstte TEFAS fon akışı şeridi var. */
-var radD=null,radFiltre="";
-function radCiz(){
-  if(radD){radGoster(radD);return}
-  el("govde").innerHTML='<div class="yukleniyor">bildirimler sınıflandırılıyor…</div>';
-  post("/api/kapradar",{}).then(function(v){radD=v;radGoster(v)})
-    .catch(function(e){
-      /* "Okunamadı." tek başına hiçbir şey söylemiyordu. Sunucu hata
-         fırlattıysa mesajını, KAP boş döndüyse sebebini yazıyoruz. */
-      el("govde").innerHTML='<div class="bos"><b>🧠 KAP Radar</b><br><br>'+
-        'Bildirimler okunamadı.<br><span style="color:var(--kr)">'+
-        E(String((e&&e.message)||e||"bilinmeyen hata")).slice(0,200)+'</span>'+
-        '<br><br><span class="altbilgi">Kaynak kap.org.tr — sorun dışarıda da olabilir. '+
-        '📰 KAP sekmesindeki teşhis satırı sebebi söyler.</span></div>';
-    });
-}
-function radTefasSerit(t){
-  if(!t)return '<div class="uyari" style="margin-top:0">💵 <b>TEFAS fon akışı</b> henüz ölçülmedi. '+
-    'Aşağıdaki düğmeye basınca ilk ölçüm alınır.<br>'+
-    '<button class="sir" id="radTefas" style="margin-top:8px">💵 TEFAS verisini çek</button></div>';
-  if(!t.ok)return '<div class="uyari" style="margin-top:0;border-color:var(--kir)">⛔ <b>TEFAS bağlanamadı</b><br>'+
-    'Hata: '+E(String(t.hata||"?"))+'<br>'+
-    'Bu kaynak devlet sitesinde barındığı için erişim engellenebiliyor. Sistemin geri kalanı bundan etkilenmez.<br>'+
-    '<button class="sir" id="radTefas" style="margin-top:8px">🔄 Tekrar dene</button></div>';
-  var dd=t.degerDegisim,kd=t.kisiDegisim;
-  var ok=function(x){return x==null?"—":((x>0?"▲ +":"▼ ")+x+"%")};
-  var renk=function(x){return x==null?"var(--mavi)":(x>0?"var(--yes)":"var(--kir)")};
-  return '<div class="uyari" style="margin-top:0">💵 <b>TEFAS · hisse fonları</b> ('+((t.fonSayisi)||0)+' fon)<br>'+
-    'Fon büyüklüğü: <b style="color:'+renk(dd)+'">'+ok(dd)+'</b> · '+
-    'Yatırımcı sayısı: <b style="color:'+renk(kd)+'">'+ok(kd)+'</b>'+
-    (t.ortGetiri!=null?' · ort. getiri: <b>'+E(String(t.ortGetiri))+'%</b>':"")+'<br>'+
-    '<span style="opacity:.75">Bu, borsaya para girip girmediğinin bağımsız göstergesidir. '+
-    'TEFAS fonların hangi hisseyi aldığını açıklamaz — sadece toplam akışı verir.</span><br>'+
-    '<button class="sir" id="radTefas" style="margin-top:8px">🔄 Tazele</button></div>';
-}
-function radGoster(v){
-  if(!v||!v.ok){
-    /* Sunucu artik hata sebebini gonderiyor; ekrana yaziyoruz. */
-    var t="";
-    if(v&&v.hata)t+='<br><br><span style="color:var(--kr)">'+E(String(v.hata))+'</span>';
-    if(v&&v.sonHata)t+='<br><span class="altbilgi">KAP son hata: '+E(String(v.sonHata))+'</span>';
-    el("govde").innerHTML='<div class="bos"><b>🧠 KAP Radar</b><br><br>Bildirimler okunamadı.'+t+
-      '<br><br><span class="altbilgi">Kaynak kap.org.tr — sorun dışarıda da olabilir.</span></div>';
-    return;
-  }
-  if(!(v.liste||[]).length){
-    var t2="";
-    if(v.sonHata)t2+='<br><br><span style="color:var(--kr)">KAP hatası: '+E(String(v.sonHata))+'</span>';
-    if(v.ardisikHata)t2+='<br><span class="altbilgi">ardışık hata: '+v.ardisikHata+'</span>';
-    t2+=v.sonBasari
-      ? '<br><span class="altbilgi">son başarılı çekim: '+new Date(v.sonBasari*1000).toLocaleString("tr-TR")+'</span>'
-      : '<br><span class="altbilgi">bu worker açıldığından beri hiç başarılı çekim olmadı</span>';
-    el("govde").innerHTML='<div class="bos"><b>🧠 KAP Radar</b><br><br>Bildirim yok.'+t2+'</div>';
-    return;
-  }
-  var l=(v.liste||[]).filter(function(x){return !radFiltre||x.kat===radFiltre});
-  var say=v.sayim||{};
-  var h=radTefasSerit(v.tefas);
-  h+='<div class="sirala"><button class="sir'+(radFiltre?"":" on")+'" data-k="">Tümü</button>'+
-     (v.kategoriler||[]).filter(function(k){return say[k.kod]}).map(function(k){
-       return '<button class="sir'+(radFiltre===k.kod?" on":"")+'" data-k="'+k.kod+'">'+
-              k.ik+" "+E(k.ad)+" ("+say[k.kod]+")</button>";
-     }).join("")+'</div>';
-  h+='<div class="altbilgi" style="margin:2px 0 8px;opacity:.75">Önem puanına göre sıralı · '+
-     'tanınan şirket: '+((v.sirketSayisi)||0)+' · listeye dokununca KAP sayfası açılır</div>';
-  if(!l.length){h+='<div class="bos">Bu kategoride bildirim yok.</div>'}
-  else{
-    h+=l.map(function(x){
-      var renk=x.onem>=85?"var(--kir)":(x.onem>=65?"var(--sar)":"var(--mavi)");
-      return '<div class="satir rsat" data-i="'+(x.disclosureIndex||"")+'" style="cursor:pointer;border-left-color:'+renk+';align-items:flex-start">'+
-        '<div class="sol"><div class="kod">'+x.ik+" "+E((x.kodlar||[]).join(", "))+
-        (x.takipte?' <span class="rozet">⭐</span>':"")+
-        (x.fonSay>=2?' <span class="rozet">🔁 '+x.fonSay+' bildirim</span>':"")+'</div>'+
-        '<div class="altbilgi" style="white-space:normal">'+E(x.katAd)+' · '+E(x.konu||"")+
-        (x.sirket?'<br><span style="opacity:.7">'+E(x.sirket)+'</span>':"")+'</div></div>'+
-        '<div class="sag"><div class="yuzde" style="color:'+renk+'">'+x.onem+'</div>'+
-        '<div class="altbilgi">'+E(String(x.tarih||"").slice(5,16).replace("T"," "))+'</div></div></div>';
-    }).join("");
-  }
-  h+='<div class="uyari">Kaynak: kap.org.tr · kategori ve önem puanı bizim kural tabanlı '+
-     'sınıflandırmamızdır, KAP tarafındaki resmî etiket değildir. Yatırım tavsiyesi değildir.</div>';
-  el("govde").innerHTML=h;
-  [].forEach.call(document.querySelectorAll("#govde .sir[data-k]"),function(bt){
-    bt.onclick=function(){tit();radFiltre=bt.dataset.k;radGoster(radD);window.scrollTo(0,0)};
-  });
-  [].forEach.call(document.querySelectorAll("#govde .rsat"),function(row){
-    row.onclick=function(){
-      var i2=row.dataset.i;if(!i2)return;tit();
-      var url="https://www.kap.org.tr/tr/Bildirim/"+i2;
-      try{TG.openLink(url)}catch(e){window.open(url,"_blank")}
-    };
-  });
-  var tb=el("radTefas");
-  if(tb)tb.onclick=function(){tit();tb.disabled=true;tb.textContent="çekiliyor…";
-    post("/api/tefas",{yenile:1}).then(function(r){
-      if(radD)radD.tefas=(r&&r.tefas)||null;radGoster(radD);
-    }).catch(function(){tb.textContent="hata";tb.disabled=false})};
-}
 /* ================== 🛡 SİSTEM SEKMESİ (yalnız yönetici) ==================
    Altı dayanıklılık maddesinin tamamı burada görünür:
    Telegram 429/engelli sayaçları, çakışma kilidi atlamaları, panel
-   kaba-kuvvet denemeleri, KAP çekim sağlığı, KAP çoklu bildirim (fon)
-   radarı ve Cloudflare rate-limit binding'lerinin bağlı olup olmadığı.
+   kaba-kuvvet denemeleri ve Cloudflare rate-limit binding'lerinin bağlı olup olmadığı.
    Hepsi "sessizce olan" şeyler — bu sekme onları görünür kılmak için var. */
 function sagSaat(ts){
   if(!ts)return"—";
@@ -4531,7 +3795,7 @@ function saglikCiz(){
 }
 function saglikGoster(v){
   if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Yetkisiz ya da okunamadı.</div>';return}
-  var c=v.sayac||{},k=v.kap||{},f=v.fon||{},bd=v.binding||{};
+  var c=v.sayac||{},bd=v.binding||{};
   var sy=function(x){return Number(c[x]||0)};
   var h='<div class="sirala"><button class="sir" id="sgYenile">🔄 Yenile</button></div>';
   h+='<div class="uyari" style="margin-top:0">Sayaçlar her gün TR 09:00 itibarıyla sıfırlanır · '+
@@ -4555,7 +3819,7 @@ function saglikGoster(v){
   var atl=sy("kilitAtlandi");
   h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">3️⃣ ÇAKIŞMA KİLİDİ</div>';
   h+=sagKart(atl>500?"uyari":"iyi","Atlanan tekrar tur: <b>"+atl+"</b>",
-      atl?"Bu kadar kez bir arka plan işi (KAP/geçmiş/alarm/formasyon) önceki turu bitmeden yeniden başlatılmak istendi ve engellendi. Yüksek sayı normaldir — push 10 saniyede bir geliyor."
+      atl?"Bu kadar kez bir arka plan işi (geçmiş/alarm/formasyon) önceki turu bitmeden yeniden başlatılmak istendi ve engellendi. Yüksek sayı normaldir — push 10 saniyede bir geliyor."
          :"Henüz çakışma olmadı.");
   h+=sagKart(v.gh?"iyi":"uyari","Formasyon tetikleme: <b>"+E(c.sonFormasyonSonuc||"—")+"</b>",
       (v.gh?"GH_TOKEN tanımlı. ":"GH_TOKEN yok — GitHub Actions taraması tetiklenemiyor. ")+
@@ -4580,43 +3844,11 @@ function saglikGoster(v){
            ". Cloudflare bu sayacın kesin olmadığını söylüyor — limiti gerçek ihtiyacın %20 üstünde tut.")
         : "Binding tanımlı değil, bu yüzden hiçbir kısıt uygulanmıyor (sistem eskisi gibi çalışıyor). Eklemek için: Worker → Settings → Bindings → Rate limiting. Öneri: SINIR_PANEL 20 istek/60 sn, SINIR_API 300 istek/60 sn.");
 
-  /* --- 5️⃣ KAP çekim sağlığı --- */
-  var kh=Number(k.ardisikHata||0);
-  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">5️⃣ KAP VERİ SAĞLIĞI</div>';
-  h+=sagKart(kh>=2?"kotu":(kh===1?"uyari":"iyi"),
-      "Son başarılı çekim: <b>"+sagSaat(k.sonBasari)+"</b>",
-      "Bugün çağrı: "+sy("kapCagri")+" · hata: "+sy("kapHata")+" · art arda hata: "+kh+
-      (k.sonHata?" · son hata: "+E(String(k.sonHata)):"")+
-      ". Tarama aralığı "+(k.aralikSn||175)+" sn (KV yazma sınırı yüzünden bilinçli olarak düşürülmedi). "+
-      "Her istekte 9 sn zaman aşımı + 1 kez tekrar deneme var.");
-
-  /* --- 6️⃣ Fon / pay işlemi radarı --- */
-  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">6️⃣ KAP ÇOKLU BİLDİRİM RADARI</div>';
-  var fl=f.liste||[];
-  if(!fl.length){
-    h+=sagKart("bilgi","Bugün çoklu bildirim yok",
-      "Aynı hisseye gün içinde birden fazla pay alım/satım, geri alım veya ortaklık yapısı bildirimi gelirse burada listelenir. Kimseye ekstra mesaj gitmez — bu sadece senin radarın.");
-  }else{
-    h+=fl.map(function(x){
-      var cok=x.n>=2;
-      return '<div class="satir" style="border-left-color:'+(cok?"var(--sar)":"var(--mavi)")+';align-items:flex-start">'+
-        '<div class="sol"><div class="kod">'+E(x.kod)+' <span class="rozet">'+x.n+' bildirim</span></div>'+
-        '<div class="altbilgi" style="white-space:normal">'+E((x.konular||[]).join(" · ").slice(0,150))+
-        '<br>son: '+sagSaat(x.son)+'</div></div></div>';
-    }).join("");
-  }
-  /* --- İkinci paket: panel anahtarı, TEFAS, şirket haritası, absorpsiyon --- */
+  /* --- İkinci paket: panel anahtarı, absorpsiyon --- */
   h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">🔐 İMZALI PANEL ANAHTARI</div>';
   h+=sagKart(sy("panelTokenGecersiz")?"uyari":"iyi",
       "Süreli bağlantıyla giriş: <b>"+sy("panelToken")+"</b> · süresi dolmuş/geçersiz: <b>"+sy("panelTokenGecersiz")+"</b>",
       "Bota <b>/panel</b> yazdığında 30 dakika geçerli, imzalı bir adres üretiliyor. Eski sabit adres de çalışmaya devam ediyor.");
-  h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">💵 TEFAS + 🏷 ŞİRKET HARİTASI</div>';
-  h+=sagKart(sy("tefasHata")?"uyari":(sy("tefasCagri")?"iyi":"bilgi"),
-      "TEFAS çağrı: <b>"+sy("tefasCagri")+"</b> · hata: <b>"+sy("tefasHata")+"</b>",
-      sy("tefasHata")?("Son hata: "+E(String(c.sonTefasHata||"?"))+". TEFAS erişilemezse KAP Radar sekmesi bunu kırmızı yazar; başka hiçbir şey etkilenmez.")
-                     :"TEFAS hisse fonlarının toplam büyüklüğünü verir — borsaya para girip girmediğinin ikinci kaynağı.");
-  h+=sagKart("bilgi","Tanınan şirket sayısı: <b>"+(c.sirketSayisi||0)+"</b>",
-      "Bu harita KAP akışından kendi kendine büyüyor: her bildirimde hisse kodu + şirket ünvanı geliyor. Dışarıdan hazır liste indirmiyoruz.");
   h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">🌊 ABSORPSİYON</div>';
   h+=sagKart("bilgi","Yapılan tarama: <b>"+sy("absTarama")+"</b>",
       "Her tarama en fazla 16 hisseye bakar (Cloudflare istek başına 50 alt-istek sınırı) ve sonuç 30 dakika saklanır.");
@@ -5570,8 +4802,6 @@ q.waitUntil(kilitli(A,"alarmKuyruk",50,()=>alarmKuyrukBosalt(A)).catch(()=>{})),
 /* Absorpsiyon havuzu her turda bir dilim ilerler; birkac dakikada
    tum evren taranmis ve surekli tazelenir olur. */
 q.waitUntil(kilitli(A,"absDilim",50,()=>absDilimTara(A,[])).catch(()=>{})),
-q.waitUntil(kilitli(A,"kap",90,()=>kapKontrolVeGonder(A)).catch(()=>{})),
-q.waitUntil(kilitli(A,"temettu",120,()=>temettuKontrolVeGonder(A)).catch(()=>{})),
 q.waitUntil(kilitli(A,"portfoySnapshot",60,()=>portfoyGunlukSnapshotAl(A)).catch(()=>{})),
 saglikArtir("push")   /* sayaç bellekte artar, KV'ye en fazla 60 sn'de bir yazılır */
 /* Formasyon taramasini da tetikle — arka planda, yanit beklemeden. */
@@ -5781,17 +5011,10 @@ return JS({ok:!0,liste:await hatalariOku(A),sentry:!!A.SENTRY_DSN})}
 if("/api/saglik"===$.pathname){
 if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
 const sg=await saglikOku(A);
-let kapSag={};try{const h=A.VERI&&await A.VERI.get("kapSaglik");if(h)kapSag=JSON.parse(h)}catch(e){}
-let fon={};try{const h=A.VERI&&await A.VERI.get("kapFon");if(h)fon=JSON.parse(h)}catch(e){}
 const L2=await g(A);
-const fonListe=Object.keys((fon&&fon.hisseler)||{})
-  .map(k=>Object.assign({kod:k},fon.hisseler[k]))
-  .sort((x,y)=>y.n-x.n).slice(0,12);
 return JS({ok:!0,
   surum:a,
   sayac:sg,
-  kap:{sonBasari:sg.sonKapBasari||0,ardisikHata:KAP_ARDISIK_HATA,sonHata:KAP_SON_HATA||kapSag.sonHata||"",aralikSn:Math.round(KAP_POLL_MS/1e3)},
-  fon:{gun:fon.gun||"",liste:fonListe},
   binding:{panel:!(!A.SINIR_PANEL),api:!(!A.SINIR_API)},
   depo:!!A.VERI,gh:!!A.GH_TOKEN,
   tgLimit:TG_SANIYE_LIMIT,
@@ -5844,23 +5067,6 @@ pf[kod]={lot:lot,maliyet:mal,eklendi:(pf[kod]&&pf[kod].eklendi)||Date.now()}}
 await XPSET(A,uid,pf);
 if(!gecmis)gecmis=await XPG(A,uid);
 return JS({ok:!0,portfoy:pf,portfoyGecmis:gecmis})}
-if("/api/kap"===$.pathname){
-const liste=await kapListesiCache(A);
-const fav=await X(A,uid),pf2=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf2)]);
-const sonuc=liste.map(d=>{
-const kodlar=String(d.relatedStocks||"").split(",").map(x=>x.trim()).filter(Boolean);
-return{kodlar:kodlar,konu:d.subject||"",tarih:d.publishDate||"",disclosureIndex:d.disclosureIndex,takipte:kodlar.some(k=>izlenen.has(k))}
-}).filter(d=>d.kodlar.length>0)
-.sort((a,b)=>(b.disclosureIndex||0)-(a.disclosureIndex||0)).slice(0,60);
-/* Liste bos gelince ekranda "birazdan tekrar dene" yaziyordu ve SEBEP
-   hicbir yerde gorunmuyordu. KAP disaridan cekilen bir kaynak; sorun
-   bizde degil KAP tarafinda da olabilir (endpoint degisimi, IP engeli,
-   zaman asimi). Teshis bilgisini yaniyla birlikte gonderiyoruz. */
-return JS({ok:!0,liste:sonuc,
-  hamSayi:liste.length,
-  sonHata:KAP_SON_HATA||"",
-  ardisikHata:KAP_ARDISIK_HATA||0,
-  sonBasari:KAP_SON_BASARI||0})}
 /* 🌊 ABSORPSİYON — sinyal listelerindeki hisseler + senin takip ettiklerin.
    Sonuç 30 dakika önbellekte; her açılışta Yahoo'ya yeniden gidilmez. */
 if("/api/absorpsiyon"===$.pathname){
@@ -5988,50 +5194,6 @@ if(!YON)return JS({ok:!1,hata:"yetki yok"},403);
 const ayar=await absAyarKaydet(A,gov.hacimEsik,gov.darlikEsik,gov.puanEsik);
 if(!ayar)return JS({ok:!1,hata:"geçersiz değer"},400);
 return JS({ok:!0,ayar:ayar})}
-/* 🧠 KAP RADAR — aynı bildirimler, ama kategoriye ayrılmış ve önem
-   puanına göre sıralanmış hâlde. Üstte TEFAS fon akışı şeridi var. */
-if("/api/kapradar"===$.pathname){
-try{
-const liste=await kapListesiCache(A);
-const fav=await X(A,uid),pf2=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf2)]);
-const sirket=await kapSirketOku(A);
-let fon={};try{const h=A.VERI&&await A.VERI.get("kapFon");if(h){const j=JSON.parse(h);if(j.gun===onayDonemi())fon=j.hisseler||{}}}catch(e){}
-const sonuc=liste.map(dd=>{
-const kodlar=String(dd.relatedStocks||"").split(",").map(x=>x.trim()).filter(Boolean);
-if(!kodlar.length)return null;
-const kat=kapSinifla(dd.subject);
-const fonSay=Math.max(...kodlar.map(k=>(fon[k]&&fon[k].n)||0),0);
-return{kodlar:kodlar,sirket:sirket[kodlar[0]]||"",konu:dd.subject||"",
-tarih:dd.publishDate||"",disclosureIndex:dd.disclosureIndex,
-kat:kat.kod,katAd:kat.ad,ik:kat.ik,fonSay:fonSay,
-onem:kapOnemDuzelt(kat.onem,dd,fonSay),
-takipte:kodlar.some(k=>izlenen.has(k))}
-}).filter(Boolean).sort((x,y)=>(y.onem-x.onem)||((y.disclosureIndex||0)-(x.disclosureIndex||0))).slice(0,80);
-const sayim={};for(const x of sonuc)sayim[x.kat]=(sayim[x.kat]||0)+1;
-let tefas=null;try{const h=A.VERI&&await A.VERI.get("tefas");if(h)tefas=JSON.parse(h)}catch(e){}
-return JS({ok:!0,liste:sonuc,sayim:sayim,sirketSayisi:Object.keys(sirket).length,
-kategoriler:KAP_KATEGORI.map(k=>({kod:k.kod,ad:k.ad,ik:k.ik})),tefas:tefas,
-sonHata:KAP_SON_HATA||"",ardisikHata:KAP_ARDISIK_HATA||0,sonBasari:KAP_SON_BASARI||0})
-}catch(err){
-/* Sessiz cokme yerine sebebi dondur — ekranda "Okunamadi" yaziyordu ve
-   arkasindaki gercek hata hicbir yere yazilmiyordu. */
-return JS({ok:!1,liste:[],hata:String((err&&err.message)||err).slice(0,200),
-sonHata:KAP_SON_HATA||""},200)}}
-/* 💵 TEFAS — ikinci kaynak. "yenile:1" ile önbelleği atlayıp canlı çeker
-   (bağlantıyı test etmek için). Hata varsa ham mesajı ekrana basar. */
-if("/api/tefas"===$.pathname){
-const paket=await tefasOzet(A,!!gov.yenile).catch(e=>({ok:!1,hata:String((e&&e.message)||e).slice(0,140)}));
-return JS({ok:!0,tefas:paket})}
-if("/api/temettu"===$.pathname){
-const paket=await temettuListesiCache(A);
-const liste=paket.liste||[];
-const fav=await X(A,uid),pf3=await XP(A,uid),izlenen2=new Set([...fav,...Object.keys(pf3)]);
-const gercekTarih=liste.length&&void 0!==liste[0].odemeTarihi;
-const siraliListe=gercekTarih?liste.slice():liste.slice().sort((a,b)=>a.tarih<b.tarih?1:-1);
-const sonuc=siraliListe.map(x=>Object.assign({},x,{takipte:izlenen2.has(x.kod)})).slice(0,80);
-const cevap={ok:!0,liste:sonuc,gercekTarih:gercekTarih};
-if(!liste.length&&d(uid))cevap.tani=paket.tani;
-return JS(cevap)}
 if("/api/onay"===$.pathname){await onayVer(A,uid);return JS({ok:!0})}
 if("/api/performans"===$.pathname){
 /* ================== 📈 PERFORMANS (geriye dönük ölçüm) ==================
@@ -6255,40 +5417,6 @@ genel:ozet(hepsi),dagilim:dagilim,dilimler:dilimler,
 gunler:gunler.reverse(),
 hamSayi:hamSayi,elenenAykiri:elenenAyk,elenenTaze:elenenTaze,
 ayar:ayar3,yonetici:!!YON})}
-if("/api/montecarlo"===$.pathname){
-/* ================== 🎲 MONTE CARLO BOOTSTRAP SİMÜLASYONU ==================
-   Yalnız yönetici. Geçmiş günlerin (hisse bazlı tekilleştirilmiş) günlük
-   ortalama getirilerinden rastgele (yerine koyarak) çekiliş yapıp GUNSAYI
-   günlük zincirleme bir "yol" üretir; bunu TRIALS kez tekrarlayıp sonuç
-   dağılımının yüzdelik dilimlerini döner. /api/backtest'teki hepsi/teklestir
-   mantığıyla aynı veri kaynağını kullanır, farkı rastgele örneklemedir. */
-if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
-const GM=await y(A),GDM=GM.gunler||{},bugunM=new Date(Date.now()+108e5).toISOString().slice(0,10);
-const gunlukOrt=[];
-for(const gun of Object.keys(GDM).sort()){
-if(gun>bugunM)continue;
-const kay=GDM[gun].kayitlar||{},teklestir={};
-for(const key of Object.keys(kay)){
-const rec=kay[key];
-if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
-const kod=rec.k||String(key).split("@")[0],getiri=100*(rec.s/rec.g-1);
-if(Math.abs(getiri)>60)continue;
-const v=teklestir[kod];
-if(void 0===v||getiri>v)teklestir[kod]=getiri}
-const liste=Object.values(teklestir);
-if(liste.length)gunlukOrt.push(liste.reduce((a2,b2)=>a2+b2,0)/liste.length)}
-if(gunlukOrt.length<10)
-return JS({ok:!0,yeterli:!1,gunSayisi:gunlukOrt.length,yonetici:!0});
-const TRIALS=2000,GUNSAYI=30,sonuclar=[];
-for(let s2=0;s2<TRIALS;s2++){let bakiye=1;
-for(let g2=0;g2<GUNSAYI;g2++){const ort=gunlukOrt[Math.floor(Math.random()*gunlukOrt.length)];bakiye*=1+ort/100}
-sonuclar.push(bakiye)}
-sonuclar.sort((a2,b2)=>a2-b2);
-const pct=p=>sonuclar[Math.min(sonuclar.length-1,Math.max(0,Math.floor(p*sonuclar.length)))];
-const pozOran=100*sonuclar.filter(x=>x>1).length/sonuclar.length;
-return JS({ok:!0,yeterli:!0,yonetici:!0,gunSayisi:gunlukOrt.length,trials:TRIALS,ufukGun:GUNSAYI,
-p5:100*(pct(.05)-1),p25:100*(pct(.25)-1),p50:100*(pct(.5)-1),p75:100*(pct(.75)-1),p95:100*(pct(.95)-1),
-pozitifOran:pozOran})}
 /* 📈 Ölçüm süzgeçlerini kaydet — yalnız yönetici. */
 if("/api/perfAyar"===$.pathname){
 if(!YON)return JS({ok:!1,hata:"yetki yok"},403);
@@ -6624,45 +5752,6 @@ if(!t.length)return"⭐ <b>TAKİP LİSTEM</b>\n\nListen boş.\n\nBir hissenin de
 ;let a="⭐ <b>TAKİP LİSTEM</b>\n<i>"+t.length+" hisse</i>\n\n",n=0,i=0;for(const r of t){const t=Z(e,r);if(!t){a+="▫️ <b>"+r+"</b> — güncel listede yok\n";continue}const s=I(t);null!==s&&(n+=s,i++),
 a+=(null===s?"▫️":s>=0?"🟢":"🔴")+" <b>"+r+"</b>  "+Number(t.fiyat).toFixed(2)+" ₺"+(null===s?"":"  ·  <b>"+(s>=0?"+":"")+s.toFixed(2)+"%</b>")+(void 0!==t.potansiyel&&null!==t.potansiyel?"  ·  hedefe +"+Number(t.potansiyel).toFixed(1)+"%":"")+"\n"
 }if(i){const e=n/i;a+="\n"+(e>=0?"🟢":"🔴")+" <b>Ortalama: "+(e>=0?"+":"")+e.toFixed(2)+"%</b>"}return a+="\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>",a}(l,e),e.length?FAVKB(e):u(a),!1)})()),new Response("ok")
-;if("mc"===r){if(!d(a))return new Response("ok");return q.waitUntil((async()=>{let metin;try{
-const G5=await y(A),GD5=G5.gunler||{},bugun5=new Date(Date.now()+108e5).toISOString().slice(0,10);
-const gunlukOrt=[];
-for(const gun of Object.keys(GD5).sort()){
-if(gun>bugun5)continue;
-const kay=GD5[gun].kayitlar||{},teklestir={};
-for(const key of Object.keys(kay)){
-const rec=kay[key];
-if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
-const kod=rec.k||String(key).split("@")[0],getiri=100*(rec.s/rec.g-1);
-if(Math.abs(getiri)>60)continue;
-const v=teklestir[kod];
-if(void 0===v||getiri>v)teklestir[kod]=getiri}
-const liste=Object.values(teklestir);
-if(liste.length)gunlukOrt.push(liste.reduce((a2,b2)=>a2+b2,0)/liste.length)}
-if(gunlukOrt.length<10){
-metin="🎲 <b>MONTE CARLO SİMÜLASYONU</b> 🔐\n<i>Yalnız yönetici görür · deneme aşamasında</i>\n\nHenüz yeterli geçmiş yok (en az 10 günlük kayıt gerekli, şu an <b>"+gunlukOrt.length+"</b>). Sistem birikmeye devam ettikçe burası dolacak."
-}else{
-const TRIALS=2000,GUNSAYI=30,sonuclar=[];
-for(let s2=0;s2<TRIALS;s2++){let bakiye=1;
-for(let g2=0;g2<GUNSAYI;g2++){const ort=gunlukOrt[Math.floor(Math.random()*gunlukOrt.length)];bakiye*=1+ort/100}
-sonuclar.push(bakiye)}
-sonuclar.sort((a2,b2)=>a2-b2);
-const pct=p=>sonuclar[Math.min(sonuclar.length-1,Math.max(0,Math.floor(p*sonuclar.length)))];
-const yz=v=>(v>=0?"+":"")+v.toFixed(1)+"%";
-const p5=100*(pct(.05)-1),p25=100*(pct(.25)-1),p50=100*(pct(.5)-1),p75=100*(pct(.75)-1),p95=100*(pct(.95)-1);
-const pozOran=100*sonuclar.filter(x=>x>1).length/sonuclar.length;
-metin="🎲 <b>MONTE CARLO SİMÜLASYONU</b> 🔐\n<i>Yalnız yönetici görür · deneme aşamasında</i>\n\n"+
-"📅 Önümüzdeki <b>"+GUNSAYI+" gün</b> için, geçmiş <b>"+gunlukOrt.length+"</b> günün günlük ortalama getiri dağılımından "+TRIALS.toLocaleString("tr-TR")+" rastgele senaryo (bootstrap) üretildi.\n\n"+
-"🔴 Kötü senaryo (%5): <b>"+yz(p5)+"</b>\n"+
-"🟠 Alt çeyrek (%25): <b>"+yz(p25)+"</b>\n"+
-"⚪ Medyan: <b>"+yz(p50)+"</b>\n"+
-"🟢 Üst çeyrek (%75): <b>"+yz(p75)+"</b>\n"+
-"🟢 İyi senaryo (%95): <b>"+yz(p95)+"</b>\n\n"+
-"📈 Pozitif getiri olasılığı: <b>%"+pozOran.toFixed(0)+"</b>\n\n"+
-"<i>ℹ️ Yöntem: geçmiş günlerin gerçekleşmiş ortalama getirileri bir torbaya konup rastgele (yerine koyarak) çekiliyor; her deneme "+GUNSAYI+" günlük zincirleme bir yol oluşturuyor. "+TRIALS.toLocaleString("tr-TR")+" denemenin sonuç dağılımı yukarıdaki yüzdelik dilimlerdir.</i>\n"+
-"<i>⚠️ Bu bir tahmin değil, geçmiş dağılımın olasılıksal yansımasıdır. Gelecek geçmişe benzemeyebilir. Yatırım tavsiyesi değildir.</i>"}
-}catch(e){metin="🎲 Monte Carlo şu an hesaplanamadı, birazdan tekrar dene."}
-await V(A,t,i,n,metin,{inline_keyboard:[[{text:"🔄 Yeniden çalıştır",callback_data:"mc"}],[{text:"◀️ Menü",callback_data:"menu"}]]},!0)})()),new Response("ok")}
 if("ilk3"===r){const e=l&&l.kartlar&&l.kartlar.ilk3&&l.kartlar.ilk3.length
 ;return q.waitUntil(V(A,t,i,n,e?function(e,YON){const t=e.kartlar&&e.kartlar.ilk3||[],a=e=>Number(e).toFixed(2),n=["🥇","🥈","🥉"];let i="🏅 <b>BU TARAMANIN İLK 3'Ü</b>\n";if(e.guncelleme&&YON){
 const t=new Date(e.guncelleme);i+="<i>"+String((t.getUTCHours()+3)%24).padStart(2,"0")+":"+String(t.getUTCMinutes()).padStart(2,"0")+" taramasından</i>\n"}return i+="\n",t.forEach((e,t)=>{
