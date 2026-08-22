@@ -1045,47 +1045,93 @@ async function absHavuzGetir(A){
   }catch(_){}
   return [];
 }
-async function absEvren(A,ekKodlar){
-  const kodSet=new Set(); const kaynak=[];
-  let L=null; try{ L=await g(A) }catch(_){}
-  /* 1) sozluk = tarayicinin taradigi TUM havuz */
-  try{
-    if(L&&L.sozluk&&typeof L.sozluk==="object"){
-      let n=0;
-      for(const k of Object.keys(L.sozluk)){const c=kodTemiz(k);if(KOD_GECERLI.test(c)){kodSet.add(c);n++}}
-      if(n)kaynak.push("sözlük:"+n);
-    }
-  }catch(_){}
-  /* 2) havuz.json */
-  if(kodSet.size<100){
-    try{const hv=await absHavuzGetir(A);
-      if(hv.length){for(const k of hv)kodSet.add(k);kaynak.push("havuz.json:"+hv.length)}}catch(_){}
-  }
-  /* 3) sektor.json — DOGRU KATMAN: kodlar j.sektor icinde */
-  if(kodSet.size<100){
+/* ══════════ 🌍 TARAMA EVRENİ — TEK KAYNAK, HAVUZUN TAMAMI ══════════
+   ESKİ HÂLİ (ve 121 HİSSE BUG'I): absEvren kademeli bir yedekleme zinciri
+   kullanıyordu — tarayıcı sözlüğü 100'den çok kod verdiyse sektor.json'a
+   HİÇ bakmıyordu. Sözlükte 121 kod olduğu için havuzdaki 430 hissenin
+   geri kalanı ne absorpsiyonda ne de yeni taramada hiç görülmedi.
+   YENİ: zincir yok. Bütün kaynaklar KOŞULSUZ birleştirilir ve hangi
+   kaynaktan kaç kod geldiği rapor edilir (arayüzde görünür).
+   AYRICA KENDİ KENDİNİ ONARIR: sektör haritası KV önbelleğinden bayat
+   ya da eksik gelirse (200'den az kod) önbellek atlanıp dosya doğrudan
+   çekilir ve bozuk önbellek silinir. */
+const EVREN_ESIK=200;              /* bundan az kod = şüpheli, tazele */
+let _evrenBellek=null,_evrenZaman=0,_evrenRapor=[];
+const EVREN_TTL=18e5;              /* 30 dakika */
+
+/* Sektör haritasını GÜVENİLİR biçimde getirir: önce normal yol, sonuç
+   şüpheliyse KV önbelleğini atlayıp dosyayı doğrudan çeker. */
+async function evrenSektorKodlari(A){
+  const cikar=(j)=>{
+    const h=(j&&j.sektor&&typeof j.sektor==="object")?j.sektor:((j&&typeof j==="object")?j:null);
+    return h?Object.keys(h):[];
+  };
+  let kodlar=[];
+  try{kodlar=cikar(await sektorlariGetir(A))}catch(_){}
+  if(kodlar.length>=EVREN_ESIK)return{kodlar:kodlar,not:"önbellek"};
+  /* Şüpheli: önbelleği atla, dosyayı doğrudan çek. */
+  for(const url of SEKTOR_URLLER){
     try{
-      const sk=await sektorlariGetir(A);
-      const harita=(sk&&sk.sektor&&typeof sk.sektor==="object")?sk.sektor:
-                   ((sk&&typeof sk==="object")?sk:null);
-      if(harita){
-        let n=0;
-        for(const k of Object.keys(harita)){const c=kodTemiz(k);if(KOD_GECERLI.test(c)){kodSet.add(c);n++}}
-        if(n)kaynak.push("sektör.json:"+n);
+      const r=await fetch(url+"?_="+Date.now(),{cf:{cacheTtl:0,cacheEverything:!1}});
+      if(!r.ok)continue;
+      const j=await r.json();
+      const k=cikar(j);
+      if(k.length>kodlar.length){
+        kodlar=k;
+        /* Bozuk önbelleği tazele ki bir daha bu yola girilmesin. */
+        if(A&&A.VERI&&k.length>=EVREN_ESIK){
+          _sBellek=j;_sZaman=Date.now();
+          await A.VERI.put("sektorJson",JSON.stringify(j),{expirationTtl:86400}).catch(()=>{});
+        }
       }
+      if(kodlar.length>=EVREN_ESIK)return{kodlar:kodlar,not:"doğrudan çekildi"};
     }catch(_){}
   }
-  /* 4) sinyal listeleri + favori/portfoy — her hâlükârda eklenir */
+  return{kodlar:kodlar,not:kodlar.length?"eksik olabilir":"ulaşılamadı"};
+}
+
+async function tamEvren(A,ekKodlar){
+  const simdi=Date.now(),ek=(ekKodlar||[]).length>0;
+  if(_evrenBellek&&simdi-_evrenZaman<EVREN_TTL&&!ek)return _evrenBellek;
+  const kodSet=new Set(),rapor=[];
+  const ekle=(k)=>{const c=kodTemiz(k);
+    if(KOD_GECERLI.test(c)){const y=!kodSet.has(c);kodSet.add(c);return y}return!1};
+  const say=(ad,liste,not)=>{let n=0;for(const k of(liste||[]))if(ekle(k))n++;
+    rapor.push({ad:ad,yeni:n,geldi:(liste||[]).length,not:not||""})};
+  /* 1) sektör haritası — havuzun TAMAMI */
+  try{const s=await evrenSektorKodlari(A);say("sektör",s.kodlar,s.not)}
+  catch(_){rapor.push({ad:"sektör",yeni:0,geldi:0,not:"hata"})}
+  /* 2) havuz.json */
+  try{say("havuz",await absHavuzGetir(A))}catch(_){}
+  /* 3) tarayıcı sözlüğü + sinyal kartları */
   try{
-    if(L&&L.kartlar)for(const k of Object.keys(L.kartlar)){
-      if("sira"===k||0===k.indexOf("aday"))continue;
-      for(const x of(L.kartlar[k]||[]))if(x&&x.kod){const c=kodTemiz(x.kod);if(KOD_GECERLI.test(c))kodSet.add(c)}
+    const L=await g(A);
+    if(L&&L.sozluk&&typeof L.sozluk==="object")say("sözlük",Object.keys(L.sozluk));
+    if(L&&L.kartlar){
+      const kk=[];
+      for(const k of Object.keys(L.kartlar)){
+        if("sira"===k||0===k.indexOf("aday"))continue;
+        for(const x of(L.kartlar[k]||[]))if(x&&x.kod)kk.push(x.kod);
+      }
+      say("sinyal",kk);
     }
   }catch(_){}
-  for(const k of(ekKodlar||[])){const c=kodTemiz(k);if(KOD_GECERLI.test(c))kodSet.add(c)}
-  const liste=[...kodSet];
-  liste.kaynak=kaynak.join(" · ")||"yalnız sinyal listesi";
+  if(ek)say("favori/portföy",ekKodlar);
+  const liste=[...kodSet].sort();
+  liste.kaynak=rapor.filter(r=>r.yeni>0).map(r=>r.ad+":"+r.yeni+(r.not?"("+r.not+")":"")).join(" · ")||"kaynak yok";
+  liste.rapor=rapor;
+  _evrenRapor=rapor;
+  if(!ek){_evrenBellek=liste;_evrenZaman=simdi}
   return liste;
 }
+/* Önbellekleri boşalt — yönetici "evreni yenile" dediğinde. */
+async function evrenSifirla(A){
+  _evrenBellek=null;_evrenZaman=0;_sBellek=null;_sZaman=0;
+  _absBirikimBellek=null;
+  try{if(A&&A.VERI){await A.VERI.delete("sektorJson");await A.VERI.delete("absHavuz")}}catch(_){}
+}
+/* Absorpsiyon da ARTIK AYNI evreni kullanıyor — 121 sınırı kalktı. */
+async function absEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
 /* Bir DILIM tarar, sonuclari birikime isler, imleci ilerletir.
    Mini App'i bekletmez — /push turlarinda arka planda cagrilir. */
 async function absDilimTara(A,ekKodlar){
@@ -1508,35 +1554,8 @@ async function mbTekHisse(kod){
    değiştirmiyoruz. */
 let _mbEvrenBellek=null,_mbEvrenZaman=0;
 const MB_EVREN_TTL=36e5;                       /* 1 saat */
-async function mbEvren(A,ekKodlar){
-  const simdi=Date.now();
-  if(_mbEvrenBellek&&simdi-_mbEvrenZaman<MB_EVREN_TTL&&!(ekKodlar&&ekKodlar.length))
-    return _mbEvrenBellek;
-  const kodSet=new Set(),kaynak=[];
-  const ekle=(k)=>{const c=kodTemiz(k);if(KOD_GECERLI.test(c)){const y=!kodSet.has(c);kodSet.add(c);return y}return!1};
-  /* 1) sektör haritası — havuzun TAMAMI (430+) */
-  try{
-    const sk=await sektorlariGetir(A);
-    const harita=(sk&&sk.sektor&&typeof sk.sektor==="object")?sk.sektor:((sk&&typeof sk==="object")?sk:null);
-    if(harita){let n=0;for(const k of Object.keys(harita))if(ekle(k))n++;if(n)kaynak.push("sektör:"+n)}
-  }catch(_){}
-  /* 2) havuz.json */
-  try{const hv=await absHavuzGetir(A);let n=0;for(const k of hv)if(ekle(k))n++;if(n)kaynak.push("havuz:+"+n)}catch(_){}
-  /* 3) tarayıcının sözlüğü + sinyal kartları + favori/portföy */
-  try{
-    const L=await g(A);
-    if(L&&L.sozluk&&typeof L.sozluk==="object"){let n=0;for(const k of Object.keys(L.sozluk))if(ekle(k))n++;if(n)kaynak.push("sözlük:+"+n)}
-    if(L&&L.kartlar){let n=0;for(const k of Object.keys(L.kartlar)){
-      if("sira"===k||0===k.indexOf("aday"))continue;
-      for(const x of(L.kartlar[k]||[]))if(x&&x.kod&&ekle(x.kod))n++}
-      if(n)kaynak.push("sinyal:+"+n)}
-  }catch(_){}
-  for(const k of(ekKodlar||[]))ekle(k);
-  const liste=[...kodSet].sort();
-  liste.kaynak=kaynak.join(" · ")||"kaynak yok";
-  if(!(ekKodlar&&ekKodlar.length)){_mbEvrenBellek=liste;_mbEvrenZaman=simdi}
-  return liste;
-}
+/* Mal+Ayı/Boğa da absorpsiyonla AYNI tam evreni kullanır — tek kaynak. */
+async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
 
 /* ── TÜM HAVUZ × TÜM DİLİM — PARÇALI, KALDIĞI YERDEN DEVAM EDEN TARAMA ──
    Absorpsiyon taramasındaki desenin aynısı: her /push turunda bir DİLİM
@@ -1643,57 +1662,89 @@ async function mbDilimTara(A,oncelikTf,azami){
   return bir;
 }
 /* ══════════════════════════════════════════════════════════════════════
-   🧩 BAĞLAM MOTORU — koşullar tek tek değil BİRLİKTE sorgulanır
+   🧩 KURAL MOTORU — SONSUZ KOMBİNASYON
    ══════════════════════════════════════════════════════════════════════
-   "hem boğa hem mal toplanmış", "son 10 barda hem mal toplama hem boğaya
-   geçiş", "mal toplanmış ama hâlâ ayıda" gibi kurulumlar tek bir sorguya
-   iner. Her koşul iki girdiyle çalışır: ölçüm satırı (x) ve BAR PENCERESİ
-   (N). mod "ve" → hepsi tutmalı, "veya" → biri yeter.
-   Yaş alanları:
-     x.topHam / x.dagHam → HAM barssince (sınırsız) — pencere burada işler
-     x.top / x.dag       → Pine tablosunun 5 barla sınırladığı hâli
-     x.rejYas            → ayı/boğa durumunun kaç bardır sürdüğü */
+   Sabit "hazır kurulum" yok; kullanıcı kendi kurallarını üst üste koyar.
+   Bir KURAL üç şeyden ibarettir:
+       { tf: hangi zaman dilimi , kos: hangi koşul , n: son kaç bar }
+   tf "*" ise "bakılan dilim" demektir — o zaman aynı kural her dilimde
+   ayrı ayrı ölçülebilir ve dilim şeridinde hangi dilimde kaç hisse
+   tuttuğu görünür. tf belirli bir dilimse (örn. "1G") kural HER ZAMAN o
+   dilimden okunur; böylece "1 saatlikte mal toplansın ama günlükte boğa
+   olsun" gibi dilimler arası kurulumlar kurulabilir.
+   Kurallar VE (hepsi tutsun) ya da VEYA (biri yetsin) ile birleşir.
+   Kural sayısı ve bileşim serbesttir — sınır yoktur.
+
+   Yaş alanları (koşullar bunları okur):
+     x.topHam / x.dagHam → HAM barssince (sınırsız) — "son N bar" burada işler
+     x.top    / x.dag    → Pine tablosunun 5 barla sınırladığı hâli
+     x.rejYas            → ayı/boğa rejiminin kaç bardır sürdüğü */
 const MB_KOSUL={
-  mal     :{ad:"📦 Mal toplama",        aciklama:"Son N barda mal toplama barı oluştu",              f:(x,N)=>x.topHam<=N},
-  malTemiz:{ad:"📦 Mal toplama (temiz)",aciklama:"Son N barda toplama var ve arasına dağıtım girmemiş",f:(x,N)=>x.topHam<=N&&x.topHam<x.dagHam},
-  dag     :{ad:"📤 Mal dağıtımı",       aciklama:"Son N barda mal dağıtım barı oluştu",              f:(x,N)=>x.dagHam<=N},
-  boga    :{ad:"🐂 Boğa",               aciklama:"571 durumu şu an boğa (doyum fiyatın üstünde)",     f:(x)=>!!x.boga},
-  ayi     :{ad:"🐻 Ayı",                aciklama:"571 durumu şu an ayı (doyum fiyatın altında)",      f:(x)=>!!x.ayi},
-  bogaGec :{ad:"🐂 Boğaya geçiş",       aciklama:"Boğa VE bu duruma son N bar içinde geçilmiş",       f:(x,N)=>!!x.boga&&x.rejYas<=N},
-  ayiGec  :{ad:"🐻 Ayıya geçiş",        aciklama:"Ayı VE bu duruma son N bar içinde geçilmiş",        f:(x,N)=>!!x.ayi&&x.rejYas<=N},
-  dip     :{ad:"⬇️ Dip bölgesi",        aciklama:"stop < fiyat < 786 ve doyum fiyatın üstünde",       f:(x)=>!!x.dip},
-  bugun   :{ad:"☀ Bu barda olay",      aciklama:"Tam bu barda toplama/dağıtım ya da rejim değişimi",  f:(x)=>!!(x.mt||x.md||x.bogaGec||x.ayiGec)}
+  mal     :{ad:"📦 Mal toplama",        kisa:"MAL TOP",  aciklama:"Son N barda mal toplama barı oluştu"},
+  malTemiz:{ad:"📦 Temiz mal toplama",  kisa:"TEMİZ TOP",aciklama:"Son N barda toplama var ve arasına dağıtım girmemiş"},
+  dag     :{ad:"📤 Mal dağıtımı",       kisa:"MAL DAĞ",  aciklama:"Son N barda mal dağıtım barı oluştu"},
+  boga    :{ad:"🐂 Boğa",               kisa:"BOĞA",     aciklama:"571 rejimi şu an boğa (doyum fiyatın üstünde)"},
+  ayi     :{ad:"🐻 Ayı",                kisa:"AYI",      aciklama:"571 rejimi şu an ayı (doyum fiyatın altında)"},
+  bogaGec :{ad:"🐂 Boğaya geçiş",       kisa:"BOĞA GEÇ", aciklama:"Boğa VE bu rejime son N bar içinde geçilmiş"},
+  ayiGec  :{ad:"🐻 Ayıya geçiş",        kisa:"AYI GEÇ",  aciklama:"Ayı VE bu rejime son N bar içinde geçilmiş"},
+  dip     :{ad:"⬇️ Dip bölgesi",        kisa:"DİP",      aciklama:"stop < fiyat < 786 ve doyum fiyatın üstünde"},
+  bugun   :{ad:"☀ Bu barda olay",      kisa:"BU BAR",   aciklama:"Tam bu barda toplama/dağıtım ya da rejim değişimi"}
 };
+MB_KOSUL.mal.f      =(x,N)=>x.topHam<=N;
+MB_KOSUL.malTemiz.f =(x,N)=>x.topHam<=N&&x.topHam<x.dagHam;
+MB_KOSUL.dag.f      =(x,N)=>x.dagHam<=N;
+MB_KOSUL.boga.f     =(x)=>!!x.boga;
+MB_KOSUL.ayi.f      =(x)=>!!x.ayi;
+MB_KOSUL.bogaGec.f  =(x,N)=>!!x.boga&&x.rejYas<=N;
+MB_KOSUL.ayiGec.f   =(x,N)=>!!x.ayi&&x.rejYas<=N;
+MB_KOSUL.dip.f      =(x)=>!!x.dip;
+MB_KOSUL.bugun.f    =(x)=>!!(x.mt||x.md||x.bogaGec||x.ayiGec);
 const MB_KOSUL_LISTE=["mal","malTemiz","dag","boga","ayi","bogaGec","ayiGec","dip","bugun"];
-/* Hazır bağlamlar — kullanıcının anlattığı kurulumlar burada hazır duruyor. */
-const MB_HAZIR=[
-  {id:"tv",       ad:"⭐ TradingView varsayılanı",       mod:"ve",  pencere:5, kosullar:["mal"],
-   ipucu:"Göstergeyi açtığında karşına çıkan liste: son 5 barda mal toplanmış hisseler."},
-  {id:"bogaMal",  ad:"🐂+📦 Boğa VE mal toplanmış",      mod:"ve",  pencere:10,kosullar:["boga","malTemiz"],
-   ipucu:"Şu an boğa, üstelik son N barda mal toplanmış — ikisi aynı anda."},
-  {id:"tazeIkili",ad:"⚡ Son N barda mal + boğaya geçiş", mod:"ve",  pencere:10,kosullar:["malTemiz","bogaGec"],
-   ipucu:"İkisi de aynı pencerede oldu: hem toplama barı çıktı hem rejim boğaya döndü."},
-  {id:"malAyi",   ad:"📦+🐻 Mal toplanmış ama hâlâ ayı", mod:"ve",  pencere:10,kosullar:["malTemiz","ayi"],
-   ipucu:"Erken yakalama: toplama başlamış ama rejim henüz dönmemiş."},
-  {id:"dipMalBoga",ad:"⬇️+📦+🐂 Dipte, toplanmış, boğa", mod:"ve",  pencere:10,kosullar:["dip","malTemiz","boga"],
-   ipucu:"Üç şart birden — en dar süzgeç, en az sonuç."},
-  {id:"genis",    ad:"🔎 Mal VEYA boğaya geçiş (geniş)", mod:"veya",pencere:10,kosullar:["malTemiz","bogaGec"],
-   ipucu:"İkisinden biri yeterli — hiçbir şeyi kaçırmak istemediğinde."},
-  {id:"kacin",    ad:"📤+🐻 Dağıtım VE ayı (kaçın)",     mod:"ve",  pencere:10,kosullar:["dag","ayi"],
-   ipucu:"Tersi durum: dağıtım var ve rejim ayı — uzak durulacaklar."}
-];
-function mbBaglamUygula(x,bag){
-  const N=(bag&&Number(bag.pencere)>=0)?Number(bag.pencere):10;
-  const ks=(bag&&Array.isArray(bag.kosullar)?bag.kosullar:[]).filter(k=>MB_KOSUL[k]);
-  if(!ks.length)return{gecti:!0,tutan:[]};
-  const tutan=[];
-  for(const k of ks){try{if(MB_KOSUL[k].f(x,N))tutan.push(k)}catch(_){}}
-  return{gecti:(bag&&bag.mod==="veya")?tutan.length>0:tutan.length===ks.length,tutan:tutan};
+const MB_HEPSI="*";                 /* kuralın dilimi = "bakılan dilim" */
+const MB_AZAMI_KURAL=24;
+
+/* Gelen ham kuralları güvene alır: tanınmayan koşul/dilim atılır. */
+function mbKurallariNorm(ham){
+  const out=[];
+  for(const k of(Array.isArray(ham)?ham:[])){
+    if(!k||!MB_KOSUL[k.kos])continue;
+    const tf=(k.tf===MB_HEPSI||!MB_TF[k.tf])?MB_HEPSI:k.tf;
+    let n=Number(k.n);
+    if(!(n>=0))n=10;
+    out.push({tf:tf,kos:k.kos,n:Math.min(200,Math.round(n))});
+    if(out.length>=MB_AZAMI_KURAL)break;
+  }
+  return out;
+}
+/* Tek hisse için bütün kuralları ölçer.
+   sonucHar: {dilim: {kod: ölçüm}}  ·  bakilan: "*" kurallarının bağlandığı dilim */
+function mbKurallariUygula(kod,kurallar,sonucHar,bakilan){
+  const tutan=[],eksik=[];
+  for(let i=0;i<kurallar.length;i++){
+    const k=kurallar[i];
+    const tf=(k.tf===MB_HEPSI)?bakilan:k.tf;
+    const s=(sonucHar[tf]||{})[kod];
+    if(!s){eksik.push(i);continue}          /* o dilimde henüz ölçülmemiş */
+    let ok=!1;try{ok=!!MB_KOSUL[k.kos].f(s,k.n)}catch(_){}
+    if(ok)tutan.push(i);
+  }
+  return{tutan:tutan,eksik:eksik};
+}
+function mbGectiMi(kurallar,r,mod){
+  if(!kurallar.length)return!0;             /* kural yoksa hepsi listelenir */
+  return mod==="veya"?r.tutan.length>0:r.tutan.length===kurallar.length;
 }
 /* En taze olay kaç bar önce oldu — sıralama anahtarı. */
 const mbTazelik=x=>Math.min(Number(x.topHam),Number(x.dagHam),Number(x.rejYas));
+/* Kuralların dokunduğu bütün dilimlerin birikimini yükler. */
+async function mbSonucHaritasi(A,kurallar,bakilanlar){
+  const har={},gerek=new Set(bakilanlar||[]);
+  for(const k of kurallar)if(k.tf!==MB_HEPSI)gerek.add(k.tf);
+  for(const tf of gerek)har[tf]=(await mbTfOku(A,tf)).sonuc||{};
+  return har;
+}
 
-/* Mini App'in gördüğü paket: birikimden anlık üretilir, bağlam burada uygulanır. */
+/* Mini App'in gördüğü paket: birikimden anlık üretilir, kurallar burada işler. */
 async function mbTara(A,tfKod,bag){
   const tf=mbTfNormal(tfKod);
   let bir=await mbTfOku(A,tf);
@@ -1701,8 +1752,8 @@ async function mbTara(A,tfKod,bag){
      Arka plan sırası yedi dilimi tek tek dolaşıyor: 430 hisse × 7 dilim tek
      turda dönmediği için 5 dakikalık dilim saatte bir tazelenirdi — 5
      dakikalık bir grafik için anlamsız. Kullanıcı bir dilime baktığında o
-     dilim, kendi hızına uygun bir tazelik eşiğini aştıysa küçük bir dilim
-     hemen ilerletilir. Böylece bakılan dilim hep taze, bakılmayanlar sırayla
+     dilim, kendi hızına uygun tazelik eşiğini aştıysa küçük bir dilim hemen
+     ilerletilir. Böylece bakılan dilim hep taze, bakılmayanlar sırayla
      dolar; hiçbir istekte alt-istek bütçesi zorlanmaz (en fazla 12 çekim). */
   if(await mbCalisiyorMu(A)){
     const bos=!bir.sonuc||!Object.keys(bir.sonuc).length;
@@ -1712,27 +1763,17 @@ async function mbTara(A,tfKod,bag){
       bir=_mbBellek[tf]||bir;
     }
   }
-  const N=(bag&&Number(bag.pencere)>=0)?Number(bag.pencere):10;
-  /* ÇAPRAZ DİLİM TEYİDİ — "günlükte boğa olsun, saatlikte mal toplansın".
-     Teyit dilimi zaten KV'de birikmiş durumda, ek Yahoo çekimi YOK. */
-  let teyitH=null,teyitTf=null,teyitKosul=null;
-  if(bag&&bag.teyitTf&&MB_TF[bag.teyitTf]&&bag.teyitTf!==tf&&MB_KOSUL[bag.teyitKosul]){
-    teyitTf=bag.teyitTf;teyitKosul=bag.teyitKosul;
-    teyitH=(await mbTfOku(A,teyitTf)).sonuc||{};
-  }
-  const tumu=Object.keys(bir.sonuc||{}).map(k=>Object.assign({kod:k},bir.sonuc[k]));
-  const gecen=[],teyitBekleyen=[];
+  const kurallar=mbKurallariNorm(bag&&bag.kurallar);
+  const mod=(bag&&bag.mod==="veya")?"veya":"ve";
+  const har=await mbSonucHaritasi(A,kurallar,[tf]);
+  har[tf]=bir.sonuc||{};
+  const tumu=Object.keys(har[tf]).map(k=>Object.assign({kod:k},har[tf][k]));
+  const gecen=[];let eksikSayi=0;
   for(const x of tumu){
-    const r=mbBaglamUygula(x,bag);
-    if(!r.gecti)continue;
-    if(teyitH){
-      const t=teyitH[x.kod];
-      if(!t){teyitBekleyen.push(x.kod);continue}      /* o dilimde henüz ölçülmemiş */
-      let ok=!1;try{ok=!!MB_KOSUL[teyitKosul].f(t,N)}catch(_){}
-      if(!ok)continue;
-      x.teyit=teyitTf;
-    }
-    x.tutan=r.tutan;
+    const r=mbKurallariUygula(x.kod,kurallar,har,tf);
+    if(r.eksik.length)eksikSayi++;
+    if(!mbGectiMi(kurallar,r,mod))continue;
+    x.tutan=r.tutan;                        /* hangi kural numaraları tuttu */
     gecen.push(x);
   }
   gecen.sort((a,b)=>(mbTazelik(a)-mbTazelik(b))||(a.kod<b.kod?-1:1));
@@ -1740,26 +1781,31 @@ async function mbTara(A,tfKod,bag){
     ts:bir.ts||0,evren:bir.evren||tumu.length,olculen:tumu.length,
     kalan:Math.max(0,(bir.evren||tumu.length)-tumu.length),
     cikan:gecen.length,elenen:Math.max(0,tumu.length-gecen.length),
-    teyitTf:teyitTf,teyitKosul:teyitKosul,teyitBekleyen:teyitBekleyen.length,
+    eksikOlcum:eksikSayi,kurallar:kurallar,mod:mod,
     kaynak:bir.kaynak||"",calisiyor:await mbCalisiyorMu(A),
     liste:gecen.slice(0,150)};
 }
-/* Tüm dilimlerin özeti — AYNI bağlam her dilimde kaç hisse tutuyor.
-   Böylece "bu kurulum hangi zaman diliminde var?" tek bakışta görülür. */
+/* Dilim şeridi: AYNI kural takımı her dilimde kaç hisse tutuyor.
+   "*" dilimli kurallar o dilime bağlanır, sabit dilimli kurallar sabit kalır.
+   Böylece "bu kurulum hangi zaman diliminde var?" tek bakışta görünür. */
 async function mbOzet(A,bag){
+  const kurallar=mbKurallariNorm(bag&&bag.kurallar);
+  const mod=(bag&&bag.mod==="veya")?"veya":"ve";
+  const har=await mbSonucHaritasi(A,kurallar,MB_TF_LISTE);
   const out=[];
   for(const t of MB_TF_LISTE){
     const bir=await mbTfOku(A,t);
-    const tumu=Object.keys(bir.sonuc||{}).map(k=>bir.sonuc[k]);
-    let boga=0,ayi=0,top=0,dag=0,gecen=0;
-    for(const x of tumu){
+    const sonuc=bir.sonuc||{};har[t]=sonuc;
+    let boga=0,ayi=0,top=0,dag=0,gecen=0,n=0;
+    for(const kod of Object.keys(sonuc)){
+      const x=sonuc[kod];n++;
       if(x.boga)boga++;else if(x.ayi)ayi++;
       if(x.topHam<=10)top++;
       if(x.dagHam<=10)dag++;
-      if(mbBaglamUygula(x,bag).gecti)gecen++;
+      if(mbGectiMi(kurallar,mbKurallariUygula(kod,kurallar,har,t),mod))gecen++;
     }
     out.push({tf:t,ad:MB_TF[t].ad,ik:MB_TF[t].ik,
-      olculen:tumu.length,evren:bir.evren||0,boga:boga,ayi:ayi,top:top,dag:dag,gecen:gecen,
+      olculen:n,evren:bir.evren||0,boga:boga,ayi:ayi,top:top,dag:dag,gecen:gecen,
       yas:bir.ts?Math.round((Date.now()-bir.ts)/6e4):null});
   }
   return out;
@@ -4367,16 +4413,20 @@ function absGoster(v){
 /* ================== 🐂🐻 MAL + AYI/BOĞA SEKMESİ ==================
    TradingView'deki "MAL + BOĞA TARAMA" tablosunun ve 7 dilimlik
    DURUM/MAL panelinin Mini App karşılığı. Motor Pine'dan birebir port
-   edildi (bkz. worker içindeki mbMotor bloğu); yedi zaman diliminde de
-   bar ızgarası TradingView ile aynı, sonuçlar aynı.
-   BAĞLAM: koşullar tek tek değil birlikte sorgulanır — "hem boğa hem mal
-   toplanmış", "son 10 barda hem toplama hem boğaya geçiş" gibi. */
-/* Varsayılan bağlam = TradingView varsayılanı (son 5 barda mal toplanmış). */
-var mbD=null, mbTek=null, mbTf="1G", mbAcik=false;
-var mbBag={mod:"ve",pencere:5,kosullar:["mal"],teyitTf:null,teyitKosul:null,hazir:"tv"};
+   edildi; yedi zaman diliminde de bar ızgarası TradingView ile aynı.
+   KURAL SİSTEMİ: hazır kalıp yok. Kullanıcı dilim + koşul + "son kaç bar"
+   tiklerinden istediği kadar kural üretir, VE/VEYA ile birleştirir.
+   Kuralın dilimi "Bakılan dilim" ise şerit üzerinde hangi zaman diliminde
+   kaç hisse tuttuğu da görünür; belirli bir dilim seçilirse kural hep o
+   dilimden okunur (dilimler arası kurulumlar böyle yapılır). */
+var mbD=null, mbTek=null, mbTf="1G", mbKur=false;
+/* Açılış kuralı = TradingView varsayılanı: son 5 barda mal toplanmış. */
+var mbBag={mod:"ve",kurallar:[{tf:"*",kos:"mal",n:5}]};
+var mbSec={tfler:["*"],kosullar:[],n:10};
+var MB_N_HIZLI=[0,1,2,3,5,10,20,50];
+
 function mbIstek(ek){
-  var o={tf:mbTf,mod:mbBag.mod,pencere:mbBag.pencere,kosullar:mbBag.kosullar,
-         teyitTf:mbBag.teyitTf,teyitKosul:mbBag.teyitKosul};
+  var o={tf:mbTf,mod:mbBag.mod,kurallar:mbBag.kurallar};
   if(ek)for(var k in ek)o[k]=ek[k];
   return o;
 }
@@ -4390,17 +4440,7 @@ function mbGetir(){
   post("/api/malboga",mbIstek()).then(function(v){mbD=v;mbGoster(v)})
     .catch(function(){el("govde").innerHTML='<div class="bos">Tarama alınamadı. Birazdan tekrar dene.</div>'});
 }
-/* Kurucu panelindeki serbest girdileri (pencere + teyit) bağlama işler.
-   Her tazelemeden ÖNCE çağrılır ki kullanıcının yazdığı değer kaybolmasın. */
-function mbOku(){
-  var p=el("mbPencere");
-  if(p&&isFinite(Number(p.value)))mbBag.pencere=Math.max(0,Math.min(200,Math.round(Number(p.value))));
-  var tt=el("mbTeyitTf"),tk=el("mbTeyitKos");
-  if(tt){mbBag.teyitTf=tt.value||null;
-         mbBag.teyitKosul=mbBag.teyitTf?((tk&&tk.value)||"boga"):null}
-}
 function mbTazele(){
-  mbOku();
   mbD=null;el("govde").innerHTML='<div class="yukleniyor">taranıyor…</div>';mbGetir();
 }
 /* MAL hücresi — Pine tablosuyla aynı: toplama yaşı 5 barı geçtiyse tablo
@@ -4419,125 +4459,161 @@ function mbAbHucre(x){
   if(x.ayi) return{t:"🐻 "+x.rejYas+"B",r:"var(--kir)"};
   return{t:"?",r:"#6b7280"};
 }
-function mbCip(id,ad,ac,ekstra){
-  return '<button class="sir'+(ac?" on":"")+'" '+id+' style="'+
-    (ac?"background:var(--yes);color:#04140a;font-weight:800;":"")+(ekstra||"")+'">'+ad+'</button>';
+function mbCip(attr,ad,ac){
+  return '<button class="sir'+(ac?" on":"")+'" '+attr+' style="'+
+    (ac?"background:var(--yes);color:#04140a;font-weight:800":"")+'">'+ad+'</button>';
 }
-/* Zaman dilimi şeridi — her dilimin yanında BU BAĞLAMI kaç hisse tutuyor. */
-function mbTfSerit(secili,ozet){
-  var o=ozet||[],h='<div class="sirala" style="flex-wrap:wrap">';
-  for(var i=0;i<o.length;i++){
-    var t=o[i],on=(t.tf===secili);
-    h+=mbCip('data-mbtf="'+E(t.tf)+'"',
-      E(t.ik)+" "+E(t.ad)+(t.olculen?' <span style="opacity:.75">'+t.gecen+"/"+t.olculen+'</span>':""),on);
-  }
-  return h+'</div>';
+function mbTfAd(sz,tf){
+  if(tf==="*")return"Bakılan dilim";
+  var f=(sz.tfler||[]).filter(function(t){return t.tf===tf})[0];
+  return f?(f.ik+" "+f.ad):tf;
+}
+function mbKosAd(sz,id){
+  var f=(sz.kosullar||[]).filter(function(k){return k.id===id})[0];
+  return f?f.ad:id;
+}
+function mbKosKisa(sz,id){
+  var f=(sz.kosullar||[]).filter(function(k){return k.id===id})[0];
+  return (f&&f.kisa)||id;
+}
+/* Koşulun "son N bar" penceresine bakıp bakmadığı — bakmıyorsa
+   kural rozetinde bar sayısı yazmaya gerek yok. */
+function mbNGerek(id){return id!=="boga"&&id!=="ayi"&&id!=="dip"&&id!=="bugun"}
+/* Serbest bar kutusuna yazılanı kaybetmeden okur. */
+function mbOkuN(){
+  var s=el("mbNSerbest");
+  if(s&&s.value!==""&&isFinite(Number(s.value)))
+    mbSec.n=Math.max(0,Math.min(200,Math.round(Number(s.value))));
 }
 function mbGoster(v){
-  var l=(v&&v.liste)||[], ozet=(v&&v.ozet)||[], sz=(v&&v.sozluk)||{kosullar:[],hazir:[],tfler:[]};
+  var l=(v&&v.liste)||[], ozet=(v&&v.ozet)||[], sz=(v&&v.sozluk)||{kosullar:[],tfler:[]};
   var calisiyor=!v||v.calisiyor!==false;
-  var kosAd={}; (sz.kosullar||[]).forEach(function(k){kosAd[k.id]=k.ad});
-  /* ── Bağlam özeti (tek satırda okunur cümle) ── */
-  var secAd=(mbBag.kosullar||[]).map(function(k){return kosAd[k]||k});
-  var cumle=secAd.length?secAd.join(mbBag.mod==="veya"?"  <b>veya</b>  ":"  <b>ve</b>  ")
-                        :"<i>koşul seçilmedi — bütün ölçülenler listelenir</i>";
-  var h='<div class="kutu" style="margin-top:0;border-left:3px solid var(--yes)">'+
-    '<h3 style="margin:0 0 6px">🧩 Aradığın bağlam</h3>'+
-    '<div style="font-size:14px;line-height:1.6">'+cumle+'</div>'+
-    '<div class="altbilgi" style="margin-top:5px">pencere: son <b>'+mbBag.pencere+'</b> bar'+
-    ((v&&v.teyitTf)?' · teyit: <b>'+E(v.teyitTf)+'</b> diliminde de <b>'+E(kosAd[v.teyitKosul]||v.teyitKosul)+'</b>':"")+
-    '</div></div>';
-  /* ── Hazır bağlamlar ── */
-  h+='<div class="altbilgi" style="margin:10px 0 4px;opacity:.75">HAZIR BAĞLAMLAR</div>';
-  h+='<div class="sirala" style="flex-wrap:wrap">';
-  (sz.hazir||[]).forEach(function(p){
-    h+=mbCip('data-mbhazir="'+E(p.id)+'" title="'+E(p.ipucu||"")+'"',E(p.ad),mbBag.hazir===p.id);
-  });
-  h+=mbCip('id="mbKendim"','⚙️ Kendim kurayım',mbBag.hazir==="ozel");
-  h+='</div>';
-  var secPreset=(sz.hazir||[]).filter(function(p){return p.id===mbBag.hazir})[0];
-  if(secPreset)h+='<div class="altbilgi" style="margin:5px 0 0;opacity:.75">'+E(secPreset.ipucu||"")+'</div>';
-  /* ── Kendi bağlamını kur ── */
-  if(mbAcik){
-    h+='<div class="kutu" style="margin:10px 0"><h3>⚙️ Bağlamı kendin kur</h3>'+
-       '<div class="altbilgi" style="margin-bottom:8px">İstediğin koşullara dokun, mantığı ve pencereyi seç.</div>'+
-       '<div class="sirala" style="flex-wrap:wrap;margin-bottom:8px">'+
-       mbCip('id="mbModVe"','<b>VE</b> · hepsi tutsun',mbBag.mod==="ve")+
-       mbCip('id="mbModVeya"','<b>VEYA</b> · biri yetsin',mbBag.mod==="veya")+
-       '</div><div class="sirala" style="flex-wrap:wrap">';
-    (sz.kosullar||[]).forEach(function(k){
-      var ac=mbBag.kosullar.indexOf(k.id)>=0;
-      h+=mbCip('data-mbkos="'+E(k.id)+'" title="'+E(k.aciklama||"")+'"',E(k.ad),ac);
+  var kur=mbBag.kurallar||[];
+  var azami=sz.azamiKural||24;
+  var h="";
+  /* ── 1) KURALLARIM ── */
+  h+='<div class="kutu" style="margin-top:0;border-left:3px solid var(--yes)">'+
+     '<h3 style="margin:0 0 7px">🧩 Kurallarım'+
+     '<span style="float:right;font-weight:400;opacity:.7;font-size:12px">'+kur.length+' kural</span></h3>';
+  if(!kur.length){
+    h+='<div class="altbilgi">Hiç kural yok — <b>ölçülen bütün hisseler</b> listeleniyor. '+
+       'Aşağıdan tikleyerek kendi kombinasyonunu kur.</div>';
+  }else{
+    h+='<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">';
+    kur.forEach(function(k,i){
+      h+='<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,230,118,.14);'+
+         'border:1px solid rgba(0,230,118,.35);border-radius:8px;padding:4px 7px;font-size:12px">'+
+         '<b>'+E(mbTfAd(sz,k.tf))+'</b> · '+E(mbKosAd(sz,k.kos))+
+         (mbNGerek(k.kos)?' · <span style="opacity:.8">son '+k.n+' bar</span>':"")+
+         ' <b data-mbsil="'+i+'" style="cursor:pointer;color:var(--kir);padding:0 2px">✕</b></span>';
+      if(i<kur.length-1)h+='<span style="font-size:11px;opacity:.75;font-weight:800">'+
+         (mbBag.mod==="veya"?"VEYA":"VE")+'</span>';
     });
     h+='</div>';
-    h+='<div class="sat" style="margin-top:10px"><span class="et">Bar penceresi (son kaç bar)</span>'+
-       '<input id="mbPencere" type="number" min="0" max="200" step="1" value="'+E(String(mbBag.pencere))+'" '+
-       'style="width:64px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>';
-    /* Çapraz dilim teyidi */
-    h+='<div class="altbilgi" style="margin:10px 0 4px;opacity:.75">ÇAPRAZ DİLİM TEYİDİ <span style="opacity:.7">(isteğe bağlı)</span></div>'+
-       '<div class="altbilgi" style="margin-bottom:6px;opacity:.7">Örnek: liste 1 saatlik dilimden gelsin ama '+
-       'hisse <b>günlükte de boğa</b> olsun.</div>'+
-       '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
-       '<select id="mbTeyitTf" style="flex:1;min-width:110px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:6px 8px;font-size:13px">'+
-       '<option value="">— teyit yok —</option>';
-    (sz.tfler||[]).forEach(function(t){
-      h+='<option value="'+E(t.tf)+'"'+(mbBag.teyitTf===t.tf?" selected":"")+'>'+E(t.ik+" "+t.ad)+'</option>'});
-    h+='</select><select id="mbTeyitKos" style="flex:1;min-width:110px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:6px 8px;font-size:13px">';
-    (sz.kosullar||[]).forEach(function(k){
-      h+='<option value="'+E(k.id)+'"'+(mbBag.teyitKosul===k.id?" selected":"")+'>'+E(k.ad)+'</option>'});
-    h+='</select></div>';
-    h+='<button class="dg" id="mbUygula" style="margin-top:10px">🔎 Bu bağlamla tara</button></div>';
+    h+='<div class="sirala" style="flex-wrap:wrap;margin-top:8px">'+
+       mbCip('id="mbModVe"','<b>VE</b> hepsi tutsun',mbBag.mod==="ve")+
+       mbCip('id="mbModVeya"','<b>VEYA</b> biri yetsin',mbBag.mod==="veya")+
+       '<button class="sir" id="mbTemizle">🗑 Hepsini sil</button></div>';
   }
-  /* ── Zaman dilimleri ── */
-  h+='<div class="altbilgi" style="margin:10px 0 4px;opacity:.75">ZAMAN DİLİMİ '+
-     '<span style="opacity:.7">(yanındaki sayı: bu bağlamı tutan / ölçülen)</span></div>';
-  h+=mbTfSerit(mbTf,ozet);
+  h+='</div>';
+  /* ── 2) KURAL EKLE ── */
+  h+='<div class="sirala" style="margin-top:8px">'+
+     mbCip('id="mbKurAc"',(mbKur?"▲ Kural ekleme panelini kapat":"➕ Kural ekle"),mbKur)+'</div>';
+  if(mbKur){
+    h+='<div class="kutu" style="margin:8px 0">';
+    h+='<div class="altbilgi" style="margin-bottom:6px;opacity:.8"><b>1) Hangi dilimde?</b> '+
+       '“Bakılan dilim” dersen kural, aşağıda hangi dilime bakıyorsan orada ölçülür. '+
+       'Belirli dilim seçersen kural <b>hep</b> o dilimden okunur — dilimler arası kurulum böyle yapılır.</div>'+
+       '<div class="sirala" style="flex-wrap:wrap">'+
+       mbCip('data-mbstf="*"','Bakılan dilim',mbSec.tfler.indexOf("*")>=0);
+    (sz.tfler||[]).forEach(function(t){
+      h+=mbCip('data-mbstf="'+E(t.tf)+'"',E(t.ik+" "+t.ad),mbSec.tfler.indexOf(t.tf)>=0)});
+    h+='</div>';
+    h+='<div class="altbilgi" style="margin:10px 0 6px;opacity:.8"><b>2) Hangi koşullar?</b> '+
+       'Birden çok tiklersen her biri ayrı kural olur.</div><div class="sirala" style="flex-wrap:wrap">';
+    (sz.kosullar||[]).forEach(function(k){
+      h+=mbCip('data-mbskos="'+E(k.id)+'" title="'+E(k.aciklama||"")+'"',E(k.ad),mbSec.kosullar.indexOf(k.id)>=0)});
+    h+='</div>';
+    h+='<div class="altbilgi" style="margin:10px 0 6px;opacity:.8"><b>3) Son kaç bar?</b> '+
+       'Mal toplama/dağıtım ve rejim geçişi bu pencerede aranır. '+
+       '(Boğa / Ayı / Dip gibi “şu anki durum” koşulları pencereyi kullanmaz.)</div>'+
+       '<div class="sirala" style="flex-wrap:wrap">';
+    MB_N_HIZLI.forEach(function(n){
+      h+=mbCip('data-mbsn="'+n+'"',(n===0?"0 (bu bar)":n+" bar"),mbSec.n===n)});
+    h+='<input id="mbNSerbest" type="number" min="0" max="200" step="1" placeholder="serbest" value="'+
+       (MB_N_HIZLI.indexOf(mbSec.n)<0?E(String(mbSec.n)):"")+'" '+
+       'style="width:80px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);'+
+       'border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>';
+    var adet=Math.max(1,mbSec.tfler.length)*mbSec.kosullar.length;
+    h+='<button class="dg" id="mbEkle" style="margin-top:11px">'+
+       (adet?"➕ "+adet+" kural ekle":"önce koşul seç")+'</button>';
+    h+='<div class="altbilgi" style="margin-top:6px;opacity:.6">Seçili dilim × seçili koşul kadar kural eklenir. '+
+       'En fazla '+azami+' kural tutulabilir.</div>';
+    h+='</div>';
+  }
+  /* ── 3) ZAMAN DİLİMİ ŞERİDİ ── */
+  h+='<div class="altbilgi" style="margin:10px 0 4px;opacity:.75">SONUÇ HANGİ DİLİMDEN GELSİN '+
+     '<span style="opacity:.7">(yanındaki sayı: kuralları tutan / ölçülen)</span></div>';
+  h+='<div class="sirala" style="flex-wrap:wrap">';
+  ozet.forEach(function(t){
+    h+=mbCip('data-mbtf="'+E(t.tf)+'"',
+      E(t.ik+" "+t.ad)+(t.olculen?' <span style="opacity:.75">'+t.gecen+"/"+t.olculen+'</span>':""),t.tf===mbTf)});
+  h+='</div>';
   h+='<div class="sirala" style="flex-wrap:wrap;margin-top:6px">'+
      '<button class="sir" id="mbYenile">🔄 Yenile</button>'+
      (D.yon?'<button class="sir" id="mbDur">'+(calisiyor?"⏸ Durdur":"▶️ Sürdür")+'</button>':"")+
+     (D.yon?'<button class="sir" id="mbEvrenBtn">🌍 Evreni yenile</button>':"")+
      '</div>';
-  /* ── Tek hisse ── */
+  /* ── 4) TEK HİSSE ── */
   h+='<div class="kutu" style="margin:8px 0;padding:9px 11px">'+
      '<div class="altbilgi" style="margin-bottom:6px">Tek hissenin <b>bütün zaman dilimlerini</b> yan yana gör:</div>'+
      '<div style="display:flex;gap:6px">'+
      '<input id="mbKod" placeholder="THYAO" maxlength="6" autocapitalize="characters" '+
      'style="flex:1;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:7px 9px;font-size:14px;text-transform:uppercase">'+
      '<button class="dg" id="mbKodBtn" style="width:auto;padding:7px 14px">🔎 Bak</button></div></div>';
-  /* ── İlerleme ── */
-  var evren=(v&&v.evren)||0, olculen=(v&&v.olculen)||0;
+  /* ── 5) İLERLEME ── */
+  var eb=(v&&v.evrenBilgi)||{}, evren=(v&&v.evren)||eb.sayi||0, olculen=(v&&v.olculen)||0;
   var yuzde=evren?Math.min(100,Math.round(olculen/evren*100)):0;
   h+='<div class="kutu" style="margin:8px 0;padding:9px 11px">'+
      '<div class="altbilgi" style="opacity:.85">'+(calisiyor?"🔄 Arka planda taranıyor":"⏸ Tarama durduruldu")+
      ' · '+E(((v&&v.ik)||"")+" "+((v&&v.ad)||""))+
      ((v&&v.yas!=null)?" · son ölçüm "+v.yas+" dk önce":"")+'</div>'+
      '<div class="altbilgi" style="margin-top:4px">ölçülen <b>'+olculen+'</b> / '+evren+
-     ' · kalan <b>'+((v&&v.kalan)||0)+'</b> · bağlamı tutan <b style="color:var(--yes)">'+((v&&v.cikan)||0)+'</b>'+
+     ' · kalan <b>'+((v&&v.kalan)||0)+'</b> · kuralları tutan <b style="color:var(--yes)">'+((v&&v.cikan)||0)+'</b>'+
      ' · elenen '+((v&&v.elenen)||0)+'</div>'+
-     ((v&&v.teyitBekleyen)?'<div class="altbilgi" style="margin-top:3px;opacity:.7">'+v.teyitBekleyen+
-       ' hisse teyit dilimde henüz ölçülmedi — o dilim dolunca listeye girebilirler.</div>':"")+
+     ((v&&v.eksikOlcum)?'<div class="altbilgi" style="margin-top:3px;opacity:.7">'+v.eksikOlcum+
+       ' hisse, kuralların işaret ettiği başka bir dilimde henüz ölçülmedi — o dilim dolunca listeye girebilirler.</div>':"")+
      '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
      '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
-     ((v&&v.kaynak)?'<div class="altbilgi" style="margin-top:5px;opacity:.55">evren: '+E(v.kaynak)+'</div>':"")+
-     '<div class="altbilgi" style="margin-top:5px;opacity:.6">Yedi zaman dilimi sırayla taranır; '+
-     'bir dilimin havuzu bitince sıradakine geçilir. Sayfayı kapatsan da arka planda sürer.</div></div>';
-  /* ── Liste ── */
+     '<div class="altbilgi" style="margin-top:5px;opacity:.6">🌍 evren <b>'+(eb.sayi||0)+'</b> hisse'+
+     (eb.kaynak?' · '+E(eb.kaynak):"")+'</div>';
+  if(D.yon&&eb.rapor&&eb.rapor.length){
+    h+='<div class="altbilgi" style="margin-top:4px;opacity:.55">kaynak dökümü: '+
+       eb.rapor.map(function(r){return E(r.ad)+" geldi:"+r.geldi+" yeni:"+r.yeni+(r.not?" ("+E(r.not)+")":"")}).join(" · ")+'</div>';
+  }
+  h+='<div class="altbilgi" style="margin-top:5px;opacity:.6">Yedi zaman dilimi sırayla taranır; '+
+     'baktığın dilim öncelikli tazelenir. Sayfayı kapatsan da arka planda sürer.</div></div>';
+  /* ── 6) LİSTE ── */
   if(!l.length){
-    h+='<div class="bos"><b>Bu bağlamı tutan hisse yok</b><br><br>'+
+    h+='<div class="bos"><b>Kuralları tutan hisse yok</b><br><br>'+
        'Tarama sürüyorsa birazdan dolabilir; ya da pencereyi genişlet, '+
-       'koşul sayısını azalt veya <b>VEYA</b> mantığına geç.</div>';
+       'kural sil veya <b>VEYA</b> mantığına geç.</div>';
   }else{
     h+=l.map(function(x){
       var mal=mbMalHucre(x), ab=mbAbHucre(x);
       var olay=(x.mt||x.md||x.bogaGec||x.ayiGec);
       var kenar=x.boga?"var(--yes)":(x.ayi?"var(--kir)":"var(--ciz)");
-      var rozet=(x.tutan||[]).map(function(k){
-        return '<span class="rozet" style="background:rgba(0,230,118,.16);color:var(--yes)">'+E(kosAd[k]||k)+'</span>'}).join(" ");
+      var roz=(x.tutan||[]).map(function(i){
+        var k=kur[i];if(!k)return"";
+        return '<span class="rozet" style="background:rgba(0,230,118,.16);color:var(--yes)">'+
+          (k.tf==="*"?"":E(k.tf)+" ")+E(mbKosKisa(sz,k.kos))+
+          (mbNGerek(k.kos)?"·"+k.n+"B":"")+'</span>'}).join(" ");
       return '<div class="satir" style="border-left-color:'+kenar+';align-items:flex-start">'+
         '<div class="sol"><div class="kod">'+E(x.kod)+
         (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+
-        (x.teyit?' <span class="rozet" style="background:rgba(124,77,255,.2);color:#b39dff">✓ '+E(x.teyit)+'</span>':"")+
-        (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀ '+E(x.sonTxt)+'</span>':"")+'</div>'+
-        (rozet?'<div style="margin:3px 0 2px">'+rozet+'</div>':"")+
+        (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀ '+E(x.sonTxt)+'</span>':"")+
+        (x.dip?' <span class="rozet">⬇️ dip</span>':"")+'</div>'+
+        (roz?'<div style="margin:3px 0 2px">'+roz+'</div>':"")+
         '<div class="altbilgi" style="white-space:normal">'+
         '<b style="color:'+mal.r+'">MAL '+E(mal.t)+'</b> · '+
         '<b style="color:'+ab.r+'">A/B '+E(ab.t)+'</b>'+
@@ -4547,44 +4623,58 @@ function mbGoster(v){
         '<div class="altbilgi">fiyat</div></div></div>';
     }).join("");
   }
-  /* ── Açıklama en altta: ekranı tıkamasın ── */
+  /* ── 7) AÇIKLAMA (en altta, ekranı tıkamasın) ── */
   h+='<div class="uyari" style="margin-top:12px"><b>🐂🐻 Kavramlar</b><br>'+
-     '<b>MAL toplama</b> — fiyat son 10 barın dibini kırdı ama yükselerek, ortalamanın üstünde ve '+
+     '<b>Mal toplama</b> — fiyat son 10 barın dibini kırdı ama yükselerek, ortalamanın üstünde ve '+
      'artan hacimle kapandı: birileri ucuzdan topluyor. <b>Dağıtım</b> bunun aynadaki hâli.<br>'+
-     '<b>A/B</b> — 571 seviye motorunun rejimi: doyum seviyesi fiyatın <b>üstünde</b>yse 🐂, '+
-     '<b>altında</b>ysa 🐻. Yanındaki sayı o duruma kaç bar önce geçildiğidir.<br>'+
-     '<b>Temiz toplama</b> — toplamadan sonra araya dağıtım girmemiş demektir.<br><br>'+
-     'Yedi dilimin hepsinde bar ızgarası TradingView ile aynıdır (BIST seansı 09:30-18:00, '+
-     'barlar seans açılışına çapalanır), motor da göstergenden birebir port edildi.</div>';
+     '<b>Temiz toplama</b> — toplamadan sonra araya dağıtım girmemiş demektir.<br>'+
+     '<b>A/B</b> — 571 rejimi: doyum seviyesi fiyatın <b>üstünde</b>yse 🐂, <b>altında</b>ysa 🐻. '+
+     'Yanındaki sayı o rejime kaç bar önce geçildiğidir.<br><br>'+
+     'Yedi dilimde de bar ızgarası TradingView ile aynıdır (BIST seansı 09:30-18:00, barlar seans '+
+     'açılışına çapalanır); motor da göstergenden birebir port edildi.</div>';
   el("govde").innerHTML=h;
-  /* ── Olaylar ── */
+
+  /* ── OLAYLAR ── */
   [].forEach.call(document.querySelectorAll("[data-mbtf]"),function(b){
     b.onclick=function(){tit();mbTf=b.dataset.mbtf;mbTazele()}});
-  [].forEach.call(document.querySelectorAll("[data-mbhazir]"),function(b){
+  [].forEach.call(document.querySelectorAll("[data-mbsil]"),function(b){
+    b.onclick=function(){tit();mbBag.kurallar.splice(Number(b.dataset.mbsil),1);mbTazele()}});
+  var mv=el("mbModVe");if(mv)mv.onclick=function(){tit();mbBag.mod="ve";mbTazele()};
+  var my=el("mbModVeya");if(my)my.onclick=function(){tit();mbBag.mod="veya";mbTazele()};
+  var tm=el("mbTemizle");if(tm)tm.onclick=function(){tit();mbBag.kurallar=[];mbTazele()};
+  var ka=el("mbKurAc");if(ka)ka.onclick=function(){tit();mbKur=!mbKur;mbGoster(v)};
+  /* Ekleme panelindeki tikler sunucuya GİTMEZ — yalnız paneli yeniden çizer.
+     Tarama ancak "Ekle" dendiğinde tazelenir; böylece kombinasyonu kurarken
+     her tikte boş yere sorgu atılmaz. */
+  [].forEach.call(document.querySelectorAll("[data-mbstf]"),function(b){
     b.onclick=function(){tit();
-      var p=(sz.hazir||[]).filter(function(q){return q.id===b.dataset.mbhazir})[0];
-      if(!p)return;
-      mbBag={mod:p.mod,pencere:p.pencere,kosullar:p.kosullar.slice(),
-             teyitTf:null,teyitKosul:null,hazir:p.id};
-      mbAcik=false;mbTazele()}});
-  var ka=el("mbKendim");if(ka)ka.onclick=function(){tit();
-    mbAcik=!mbAcik;mbBag.hazir="ozel";mbGoster(v)};
-  /* Koşul ve mantık düğmeleri ANINDA yeniden tarar: sunucu yalnızca
-     birikimi süzüyor (Yahoo'ya gitmiyor), o yüzden ucuz. Böylece alttaki
-     liste ile üstteki bağlam cümlesi asla birbirinden ayrı düşmez. */
-  [].forEach.call(document.querySelectorAll("[data-mbkos]"),function(b){
+      var id=b.dataset.mbstf,i=mbSec.tfler.indexOf(id);
+      if(i>=0)mbSec.tfler.splice(i,1);else mbSec.tfler.push(id);
+      mbOkuN();mbGoster(v)}});
+  [].forEach.call(document.querySelectorAll("[data-mbskos]"),function(b){
     b.onclick=function(){tit();
-      var id=b.dataset.mbkos,i=mbBag.kosullar.indexOf(id);
-      if(i>=0)mbBag.kosullar.splice(i,1);else mbBag.kosullar.push(id);
-      mbBag.hazir="ozel";mbTazele()}});
-  var mv=el("mbModVe");if(mv)mv.onclick=function(){tit();mbBag.mod="ve";mbBag.hazir="ozel";mbTazele()};
-  var my=el("mbModVeya");if(my)my.onclick=function(){tit();mbBag.mod="veya";mbBag.hazir="ozel";mbTazele()};
-  var uy=el("mbUygula");
-  if(uy)uy.onclick=function(){tit();mbBag.hazir="ozel";mbTazele()};
+      var id=b.dataset.mbskos,i=mbSec.kosullar.indexOf(id);
+      if(i>=0)mbSec.kosullar.splice(i,1);else mbSec.kosullar.push(id);
+      mbOkuN();mbGoster(v)}});
+  [].forEach.call(document.querySelectorAll("[data-mbsn]"),function(b){
+    b.onclick=function(){tit();mbSec.n=Number(b.dataset.mbsn);mbGoster(v)}});
+  var ek=el("mbEkle");
+  if(ek)ek.onclick=function(){tit();mbOkuN();
+    if(!mbSec.kosullar.length)return;
+    var tfler=mbSec.tfler.length?mbSec.tfler:["*"];
+    tfler.forEach(function(t){mbSec.kosullar.forEach(function(k){
+      if(mbBag.kurallar.length>=azami)return;
+      var ayni=mbBag.kurallar.some(function(q){return q.tf===t&&q.kos===k&&q.n===mbSec.n});
+      if(!ayni)mbBag.kurallar.push({tf:t,kos:k,n:mbSec.n});
+    })});
+    mbSec.kosullar=[];mbTazele()};
   var yn=el("mbYenile");if(yn)yn.onclick=function(){tit();mbTazele()};
   var dd=el("mbDur");if(dd)dd.onclick=function(){tit();dd.disabled=true;
     post("/api/malboga",mbIstek({dur:calisiyor?1:0})).then(function(v2){mbD=v2;mbGoster(v2)})
       .catch(function(){dd.disabled=false})};
+  var ev=el("mbEvrenBtn");if(ev)ev.onclick=function(){tit();ev.disabled=true;ev.textContent="🌍 yenileniyor…";
+    post("/api/malboga",mbIstek({evrenYenile:1})).then(function(v2){mbD=v2;mbGoster(v2)})
+      .catch(function(){ev.disabled=false;ev.textContent="🌍 Evreni yenile"})};
   var kb=el("mbKodBtn"),ki=el("mbKod");
   var bak=function(){var k=String((ki&&ki.value)||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
     if(k.length<3)return;tit();
@@ -5965,38 +6055,47 @@ if("/api/malboga"===$.pathname){
     if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
     await mbDurdurAyarla(A,gov.dur===1);
   }
-  /* Koşul/hazır-bağlam sözlükleri her cevapta gider — arayüz bunları
-     kendi elinde tutmasın, tek kaynak sunucu olsun. */
+  /* EVRENİ YENİLE — yalnız yönetici. Sektör/havuz önbelleklerini siler ve
+     bir sonraki turda liste dosyadan taze çekilir. "Hâlâ 121 hisse
+     tarıyor" durumunun elle çözümü budur. */
+  if(gov&&gov.evrenYenile){
+    if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+    await evrenSifirla(A);
+  }
+  /* Koşul + dilim sözlüğü her cevapta gider — arayüz kendi listesini
+     tutmasın, tek kaynak sunucu olsun. */
   const sozluk={
-    kosullar:MB_KOSUL_LISTE.map(k=>({id:k,ad:MB_KOSUL[k].ad,aciklama:MB_KOSUL[k].aciklama})),
-    hazir:MB_HAZIR,
-    tfler:MB_TF_LISTE.map(t=>({tf:t,ad:MB_TF[t].ad,ik:MB_TF[t].ik}))};
+    kosullar:MB_KOSUL_LISTE.map(k=>({id:k,ad:MB_KOSUL[k].ad,kisa:MB_KOSUL[k].kisa,aciklama:MB_KOSUL[k].aciklama})),
+    tfler:MB_TF_LISTE.map(t=>({tf:t,ad:MB_TF[t].ad,ik:MB_TF[t].ik})),
+    hepsi:MB_HEPSI,azamiKural:MB_AZAMI_KURAL};
   const kod=KOD(gov.kod||"");
   if(kod){
     const r=await mbTekHisse(kod).catch(()=>null);
     if(!r)return JS({ok:!1,hata:"ölçüm alınamadı"});
     return JS({ok:!0,tek:r,sozluk:sozluk});
   }
-  /* BAĞLAM: hangi koşullar, hangi mantıkla, kaç barlık pencerede.
-     Bilinmeyen koşul adları sessizce atılır (eski istemci kırılmasın). */
-  const bag={
-    mod:gov.mod==="veya"?"veya":"ve",
-    pencere:Math.max(0,Math.min(200,Number(gov.pencere)>=0?Number(gov.pencere):10)),
-    kosullar:(Array.isArray(gov.kosullar)?gov.kosullar:[]).filter(k=>MB_KOSUL[k]).slice(0,9),
-    teyitTf:MB_TF[gov.teyitTf]?gov.teyitTf:null,
-    teyitKosul:MB_KOSUL[gov.teyitKosul]?gov.teyitKosul:null};
-  if(!gov.tf)return JS({ok:!0,sozluk:sozluk,ozet:await mbOzet(A,bag).catch(()=>[]),calisiyor:await mbCalisiyorMu(A)});
-  /* Önce seçili dilim taranır (boşsa küçük bir dilim anında ölçülür),
+  /* KURALLAR: [{tf,kos,n}, …] · mod: "ve" | "veya"
+     Tanınmayan koşul/dilim sessizce atılır (eski istemci kırılmasın). */
+  const bag={mod:gov.mod==="veya"?"veya":"ve",kurallar:mbKurallariNorm(gov.kurallar)};
+  const evrenBilgi=async()=>{
+    try{const ev=await tamEvren(A);return{sayi:ev.length,kaynak:ev.kaynak,rapor:YON?ev.rapor:null}}
+    catch(_){return{sayi:0,kaynak:"okunamadı",rapor:null}}
+  };
+  if(!gov.tf)return JS({ok:!0,sozluk:sozluk,ozet:await mbOzet(A,bag).catch(()=>[]),
+    evrenBilgi:await evrenBilgi(),calisiyor:await mbCalisiyorMu(A)});
+  /* Önce seçili dilim taranır (boşsa/bayatsa küçük bir dilim anında ölçülür),
      ÖZET ondan SONRA üretilir — yoksa ilk açılışta o dilim "0 ölçüldü" görünürdü. */
   const paket=await mbTara(A,gov.tf,bag).catch(()=>null);
   const ozet=await mbOzet(A,bag).catch(()=>[]);
-  if(!paket)return JS({ok:!0,sozluk:sozluk,ozet:ozet,liste:[],calisiyor:!0});
+  const eb=await evrenBilgi();
+  if(!paket)return JS({ok:!0,sozluk:sozluk,ozet:ozet,evrenBilgi:eb,liste:[],calisiyor:!0});
   const fav=await X(A,uid),pf=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf)]);
-  return JS({ok:!0,sozluk:sozluk,ozet:ozet,bag:bag,
+  return JS({ok:!0,sozluk:sozluk,ozet:ozet,evrenBilgi:eb,
+    mod:paket.mod,kurallar:paket.kurallar,
     tf:paket.tf,ad:paket.ad,ik:paket.ik,
     evren:paket.evren,olculen:paket.olculen,kalan:paket.kalan,cikan:paket.cikan,
-    elenen:paket.elenen,kaynak:paket.kaynak,calisiyor:paket.calisiyor,
-    teyitTf:paket.teyitTf,teyitKosul:paket.teyitKosul,teyitBekleyen:paket.teyitBekleyen,
+    elenen:paket.elenen,eksikOlcum:paket.eksikOlcum,
+    kaynak:paket.kaynak,calisiyor:paket.calisiyor,
     yas:paket.ts?Math.round((Date.now()-paket.ts)/6e4):null,
     liste:paket.liste.map(x=>Object.assign({takipte:izlenen.has(x.kod)},x))});
 }
