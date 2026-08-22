@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-22-g · yeşil kapanış araştırması (dört bölmeli doğrulama) · filtre alarmı";
+const WORKER_SURUM="2026-08-22-h · yeşil kapanış sekmesi (uygulama içinde) · filtre alarmı";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -3243,6 +3243,7 @@ function ekranAdi(){
   if(sekme==="sag")return"🛡 Sistem";
   if(sekme==="abs")return"🌊 Absorpsiyon";
   if(sekme==="malboga")return"🐂🐻 Mal + Ayı/Boğa";
+  if(sekme==="yesil")return"🟢 Yeşil Kapanış";
   if(sekme==="rot")return"🔄 Sektör Rotasyonu";
   if(sekme==="perf")return"📈 Performans";
   if(sekme==="davet")return"📤 Davet";
@@ -3366,6 +3367,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
   s.push('<button class="sek'+(sekme==="malboga"?" on":"")+'" data-r="nötr" data-s="malboga">🐂 Mal+Ayı/Boğa</button>');
+  if(D&&D.yon)s.push('<button class="sek'+(sekme==="yesil"?" on":"")+'" data-r="nötr" data-s="yesil">🟢 Yeşil Kapanış 🔐</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="sag"?" on":"")+'" data-r="nötr" data-s="sag">🛡 Sistem</button>');
@@ -3409,6 +3411,7 @@ function ciz(){
   if(sekme==="sag")return saglikCiz();
   if(sekme==="abs")return absCiz();
   if(sekme==="malboga")return mbCiz();
+  if(sekme==="yesil")return ykCiz();
   if(sekme==="rot")return rotCiz();
   if(sekme==="perf")return perfCiz();
   if(sekme==="kama")return kamaCiz();
@@ -5654,6 +5657,144 @@ function mbTekGoster(v){
     var k=t.kod;el("govde").innerHTML='<div class="yukleniyor">'+k+' yeniden ölçülüyor…</div>';
     post("/api/malboga",{kod:k}).then(function(v2){if(v2&&v2.ok&&v2.tek){mbTek=v2;mbTekGoster(v2)}})};
 }
+/* ================== 🟢 YEŞİL KAPANIŞ SEKMESİ (yalnız yönetici) ==========
+   Baştan sona uygulamanın içinde: başlat → ilerleme → rapor. Tarayıcıda
+   ayrı sayfa açılmaz. Tarama arka planda parça parça ilerler; sekmeden
+   çıkıp geri gelsen kaldığı yerden devam eder. */
+var ykD=null, ykSuruyor=false, ykAcik={};
+function ykCiz(){
+  if(ykD){ykGoster(ykD);return}
+  el("govde").innerHTML='<div class="yukleniyor">durum okunuyor…</div>';
+  post("/api/yesil",{is:"durum"}).then(function(v){ykD=v;ykGoster(v);
+    if(v&&v.ok&&!v.yok&&!v.tamamlandi)ykAdim();})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
+}
+/* Bir adım ilerlet, bitene kadar kendini çağırır. */
+function ykAdim(){
+  if(ykSuruyor)return;
+  ykSuruyor=true;
+  post("/api/yesil",{is:"adim"}).then(function(v){
+    ykSuruyor=false;
+    if(!v||!v.ok||v.yok){ykD=v;ykGoster(v);return}
+    ykD=v;ykGoster(v);
+    if(!v.tamamlandi&&sekme==="yesil")setTimeout(ykAdim,120);
+  }).catch(function(){ykSuruyor=false;
+    if(sekme==="yesil")setTimeout(ykAdim,2500)});
+}
+function ykYuz(v,o){return v===null||v===undefined||!isFinite(v)?"—":(v>0?"+":"")+v.toFixed(o===undefined?1:o)}
+/* Bir kurulum satırı — dört bölme kutucuk olarak gösterilir. */
+function ykSatir(r,taban){
+  var kutu=(r.bolmeler||[]).map(function(v,i){
+    var ad=["eski dönem","yeni dönem","hisse A","hisse B"][i];
+    return '<span title="'+ad+'" style="display:inline-block;min-width:38px;text-align:center;'+
+      'background:'+(v>0?"rgba(63,185,80,.18)":"rgba(248,81,73,.18)")+';'+
+      'color:'+(v>0?"var(--yes)":"var(--kir)")+';border-radius:5px;padding:1px 4px;font-size:11px;font-weight:700">'+
+      ykYuz(v)+'</span>';
+  }).join(" ");
+  return '<div class="satir" style="border-left-color:'+(r.kaldirac>0?"var(--yes)":"var(--kir)")+';align-items:flex-start">'+
+    '<div class="sol"><div class="kod" style="font-size:13px;white-space:normal;line-height:1.35">'+E(r.ad)+'</div>'+
+    '<div class="altbilgi" style="margin-top:4px">'+r.n+' hisse-günü · yeşil <b>%'+r.yesil.toFixed(0)+'</b>'+
+    ' · ortalama <b>'+ykYuz(r.ort,2)+'%</b></div>'+
+    '<div style="margin-top:5px">'+kutu+'</div></div>'+
+    '<div class="sag"><div class="yuzde" style="color:'+(r.kaldirac>0?"var(--yes)":"var(--kir)")+';font-size:17px">'+
+    ykYuz(r.kaldirac)+'</div><div class="altbilgi">kaldıraç</div></div></div>';
+}
+function ykBolum(p,anahtar,baslik,aciklama){
+  if(!p)return '<div class="kutu"><h3>'+baslik+'</h3><div class="altbilgi">yeterli veri toplanmadı</div></div>';
+  var ac=ykAcik[anahtar];
+  var h='<div class="kutu" style="border-left:3px solid '+(p.gecen?"var(--yes)":"var(--ciz)")+'">'+
+    '<h3 style="margin:0 0 5px">'+baslik+'</h3>'+
+    '<div class="altbilgi" style="white-space:normal;margin-bottom:8px">'+aciklama+'</div>'+
+    '<div class="altbilgi" style="margin-bottom:8px">'+
+    '<b>TABAN: yeşil %'+p.taban.yesil.toFixed(1)+'</b> · ortalama '+ykYuz(p.taban.ort,3)+'% · '+
+    p.taban.n+' hisse-günü<br>'+
+    '<span style="opacity:.75">Yani hiçbir kural kullanmadan rastgele bir gün alsan sonuç bu. '+
+    'Aşağıdaki kurulumlar bunu ne kadar geçiyor, ona bak.</span></div>'+
+    '<div class="altbilgi" style="padding:7px 9px;background:'+(p.gecen?"rgba(63,185,80,.10)":"rgba(248,81,73,.10)")+';border-radius:8px">'+
+    '<b>'+p.denenen+' kurulum denendi · '+p.gecen+' tanesi dört sınavı da geçti</b><br>'+
+    '<span style="opacity:.8">Şans eseri geçmesi beklenen: yaklaşık '+p.beklenenGurultu+'. '+
+    (p.gecen>p.beklenenGurultu*1.5?"Bu sayının belirgin üstünde — gerçek bir sinyal var."
+      :"Bu sayıya yakın — bulunanlar büyük ölçüde şans olabilir.")+'</span></div>';
+  if(p.gecenler&&p.gecenler.length){
+    h+='<div class="altbilgi" style="margin:10px 0 4px;opacity:.8">SINAVI GEÇENLER (en iyi '+
+      Math.min(p.gecenler.length,25)+')</div>';
+    h+=p.gecenler.map(function(r){return ykSatir(r,p.taban)}).join("");
+  }else{
+    h+='<div class="bos" style="margin-top:10px">Dört sınavı da geçen kurulum yok.</div>';
+  }
+  h+='<button class="sir" data-ykac="'+anahtar+'" style="margin-top:10px">'+
+    (ac?"▲ elenenleri gizle":"▼ elenenleri de gör")+'</button>';
+  if(ac&&p.elenenler&&p.elenenler.length){
+    h+='<div class="altbilgi" style="margin:8px 0 4px;opacity:.7">ELENENLER — biri ya da birkaç sınavda düştüler</div>'+
+      p.elenenler.map(function(r){return ykSatir(r,p.taban)}).join("");
+  }
+  return h+'</div>';
+}
+function ykGoster(v){
+  var h='<div class="kutu" style="margin-top:0;border-left:3px solid var(--yes)">'+
+    '<h3 style="margin:0 0 6px">🟢 Yeşil Kapanış Araştırması</h3>'+
+    '<div class="altbilgi" style="white-space:normal;line-height:1.65">'+
+    'Şu soruyu araştırır: <b>hisse, fibo merdiveninin hangi basamağındayken ertesi günü yeşil kapatıyor?</b><br><br>'+
+    'Yüzlerce kurulum denenir. Ama çok deneyince rastgele veride bile parlak sonuçlar çıkar — '+
+    'o yüzden her kurulum <b>dört ayrı sınavdan</b> geçirilir:<br>'+
+    '• eski dönem · • yeni dönem · • hisselerin yarısı · • diğer yarısı<br>'+
+    'Dördünde birden tabanı geçemeyen kurulum şans sayılıp elenir.</div></div>';
+  var suruyor=v&&v.ok&&!v.yok&&!v.tamamlandi;
+  var bitti=v&&v.ok&&!v.yok&&v.tamamlandi;
+  /* ── durum / ilerleme ── */
+  if(suruyor){
+    var p=v.toplam?Math.min(100,Math.round(100*v.tamam/v.toplam)):0;
+    h+='<div class="kutu" style="margin:10px 0"><h3 style="margin:0 0 7px">⏳ Taranıyor…</h3>'+
+      '<div class="altbilgi">'+v.tamam+' / '+v.toplam+' hisse · '+(v.gozlem||0)+' hisse-günü toplandı · '+
+      (v.sure||0)+' sn</div>'+
+      '<div style="height:9px;background:var(--ciz);border-radius:5px;overflow:hidden;margin-top:8px">'+
+      '<div style="height:100%;width:'+p+'%;background:var(--yes);transition:width .3s"></div></div>'+
+      '<div class="altbilgi" style="margin-top:7px;opacity:.7">Sekmede kaldığın sürece ilerler. '+
+      'Çıkıp geri gelirsen kaldığı yerden devam eder.</div>'+
+      '<button class="sir" id="ykIptal" style="margin-top:9px">✕ Taramayı iptal et</button></div>';
+  }else{
+    h+='<div class="kutu" style="margin:10px 0"><h3 style="margin:0 0 7px">▶ Yeni tarama</h3>'+
+      (bitti?'<div class="altbilgi" style="margin-bottom:8px">Son tarama bitti: '+v.toplam+' hisse · '+
+        (v.gozlem||0)+' hisse-günü · '+(v.sure||0)+' sn.</div>':"")+
+      '<div class="altbilgi" style="margin-bottom:8px">Havuzun tamamı 2-3 dakika sürer ve en güvenilir '+
+      'sonucu verir. Hızlı deneme 40 hisseyle yaklaşık 20 saniyede biter ama örnek az olur.</div>'+
+      '<button class="dg" id="ykTam">🌍 Havuzun tamamını tara</button>'+
+      '<button class="sir" id="ykHizli" style="margin-top:8px">⚡ Hızlı deneme (40 hisse)</button>'+
+      '</div>';
+  }
+  /* ── sonuçlar ── */
+  if(bitti){
+    h+=ykBolum(v.gun,"gun","📈 Gün içi — sabah al, akşam sat",
+      "Senin sorduğun ölçü bu: mumun yeşil kapanması. Sabah açılışta alıp akşam kapanışta satmak.");
+    h+=ykBolum(v.kap,"kap","🌙 Kapanıştan kapanışa — akşam al, ertesi akşam sat",
+      "Geceyi de elinde tutmak. İki bölümün TABAN satırlarını karşılaştır: aradaki fark, "+
+      "yükselişin gece mi gündüz mü olduğunu gösterir.");
+    h+='<div class="uyari" style="margin-top:12px"><b>Nasıl okunur?</b><br>'+
+      '<b>Kaldıraç</b> — kurulumun tabandan kaç puan iyi olduğu. Taban %45 ise %48 çıkan bir kurulumun kaldıracı +3  puandır.<br>'+
+      '<b>Dört küçük kutucuk</b> — sırasıyla eski dönem, yeni dönem, hisselerin bir yarısı, öbür yarısı. '+
+      'Dördü de yeşilse kurulum her koşulda tutmuş demektir. İçlerinden biri kırmızıysa güvenme.<br>'+
+      '<b>hisse-günü</b> — kaç örnek üzerinde ölçüldüğü. Sayı büyüdükçe sonuç güvenilir olur.<br><br>'+
+      '⚠️ Yüksek kaldıraçlı bir kurulum bile kesinlik değildir. %54 yeşil demek, her 100 işlemin '+
+      '46 tanesinin kırmızı kapanması demektir.</div>';
+    if(v.hatali&&v.hatali.length)
+      h+='<div class="altbilgi" style="margin-top:10px;opacity:.6">veri alınamayan: '+
+        v.hatali.map(function(k){return E(k)}).join(", ")+'</div>';
+  }
+  el("govde").innerHTML=h;
+  var t=el("ykTam");if(t)t.onclick=function(){tit();ykBaslat(false)};
+  var z=el("ykHizli");if(z)z.onclick=function(){tit();ykBaslat(true)};
+  var ip=el("ykIptal");if(ip)ip.onclick=function(){tit();ip.disabled=true;
+    post("/api/yesil",{is:"iptal"}).then(function(){ykD=null;ykCiz()})};
+  [].forEach.call(document.querySelectorAll("[data-ykac]"),function(b){
+    b.onclick=function(){tit();var k=b.dataset.ykac;ykAcik[k]=!ykAcik[k];ykGoster(v)}});
+}
+function ykBaslat(hizli){
+  el("govde").innerHTML='<div class="yukleniyor">tarama hazırlanıyor…</div>';
+  post("/api/yesil",{is:"basla",hizli:hizli?1:0}).then(function(r){
+    if(!r||!r.ok){el("govde").innerHTML='<div class="bos">'+((r&&r.hata)||"başlatılamadı")+'</div>';return}
+    ykD=null;ykAdim();
+  }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı hatası.</div>'});
+}
 /* ================== 🛡 SİSTEM SEKMESİ (yalnız yönetici) ==================
    Altı dayanıklılık maddesinin tamamı burada görünür:
    Telegram 429/engelli sayaçları, çakışma kilidi atlamaları, panel
@@ -6081,6 +6222,8 @@ function panelCiz(){
     h+='<div class="kutu"><h3>🛠 Tam panel</h3>'+
       '<div class="bilgi">Üye tablosu, CSV dışa aktarma, davet ağacı ve ayarlar tarayıcıda.</div>'+
       '<button class="dg ik" id="pTam">🌐 Tam paneli aç</button></div>';
+    h+='<div class="kutu"><h3>🟢 Yeşil Kapanış</h3>'+
+      '<div class="bilgi">Hangi fibo basamağında ertesi gün yeşil kapanıyor — dört sınavlı araştırma. Uygulamanın içinde, 🟢 Yeşil Kapanış sekmesinde.</div></div>';
     h+='<div class="kutu"><h3>🧪 Dip Backtest (Fibo)</h3>'+
       '<div class="bilgi">571 sisteminin dip/derin dip sinyallerini geçmişe dönük ölçer — TP1=doyumun hemen altındaki fibo çizgisi (786), TP2=doyum noktası.</div>'+
       '<button class="dg ik" id="pDbt">🧪 Dip Backtest\\'i aç</button></div>';
@@ -7264,6 +7407,58 @@ return JS({ok:!0,guncelleme:T.guncelleme||null,toplam:liste.length,
  super:!!sup||!!YON,kilitSayi:(!sup&&!YON)?Math.min(KILIT,liste.length):0,
  sektorler:Object.keys(sekSay).sort().map(s2=>({ad:s2,n:sekSay[s2]})),
  liste:liste})}
+/* 🟢 YEŞİL KAPANIŞ ARAŞTIRMASI — artık tamamen uygulamanın içinden yönetilir.
+   Üç iş tek uçta: başlat · bir adım ilerlet · sonucu getir.
+   Tarayıcıda ayrı sayfa açmaya gerek yok. */
+if("/api/yesil"===$.pathname){
+  if(!YON)return JS({ok:!1,hata:"Yetkin yok."},403);
+  const is=String(gov.is||"durum");
+  if(is==="basla"){
+    let kodlar;
+    const ev=await mbEvren(A,[]);
+    if(gov.kodlar&&String(gov.kodlar).trim()){
+      kodlar=String(gov.kodlar).toUpperCase().split(/[^A-Z0-9]+/).filter(x=>KOD_GECERLI.test(x));
+    }else kodlar=ev.slice();
+    if(gov.hizli)kodlar=kodlar.slice(0,40);
+    kodlar=[...new Set(kodlar)];
+    if(!kodlar.length)return JS({ok:!1,hata:"taranacak hisse bulunamadı"});
+    const simdi=Math.floor(Date.now()/1000);
+    await ykIsYaz(A,{anahtar:"",kodlar:kodlar,kuyruk:kodlar.slice(),toplam:kodlar.length,tamam:0,
+      zamanKesim:simdi-330*86400,sayac:ykSayacYeni(),semboller:[],
+      baslangic:Date.now(),guncelleme:Date.now(),tamamlandi:!1});
+    return JS({ok:!0,baslatildi:!0,toplam:kodlar.length});
+  }
+  if(is==="iptal"){try{await A.VERI.delete("ykIs")}catch(_){}return JS({ok:!0,iptal:!0})}
+  const job=await ykIsOku(A);
+  if(!job)return JS({ok:!0,yok:!0});
+  if(is==="adim"&&!job.tamamlandi&&job.kuyruk.length){
+    const grup=job.kuyruk.splice(0,YK_ADIM);
+    const{sayac,semboller}=await ykKosu(grup,job.zamanKesim,ykHisseTek(job.kodlar));
+    job.sayac=ykSayacBirlestir(job.sayac,sayac);
+    job.semboller=job.semboller.concat(semboller).slice(-600);
+    job.tamam+=grup.length;job.guncelleme=Date.now();
+    if(!job.kuyruk.length)job.tamamlandi=!0;
+    await ykIsYaz(A,job);
+  }
+  const t=job.sayac&&job.sayac.taban&&job.sayac.taban[0];
+  const cvp={ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:!!job.tamamlandi,
+    gozlem:t?t.n:0,sure:Math.round((job.guncelleme-job.baslangic)/1000)};
+  if(job.tamamlandi||is==="rapor"){
+    const paket=(alan)=>{
+      const o=ykOzetle(job.sayac,alan);
+      if(!o.taban)return null;
+      return{taban:{n:o.taban.n,yesil:o.taban.yesil,ort:o.taban.ort},
+        denenen:o.denenen,gecen:o.gecen,beklenenGurultu:Math.round(o.denenen*0.06),
+        gecenler:o.satirlar.filter(r=>r.gecti).slice(0,25).map(r=>({
+          ad:r.ad,tur:r.tur,n:r.n,yesil:r.yesil,ort:r.ort,kaldirac:r.kaldirac,bolmeler:r.bolmeler})),
+        elenenler:o.satirlar.filter(r=>!r.gecti).slice(0,10).map(r=>({
+          ad:r.ad,n:r.n,yesil:r.yesil,kaldirac:r.kaldirac,bolmeler:r.bolmeler}))};
+    };
+    cvp.gun=paket("g");cvp.kap=paket("k");
+    cvp.hatali=(job.semboller||[]).filter(s=>s.hata).map(s=>s.kod).slice(0,40);
+  }
+  return JS(cvp);
+}
 if("/api/tara"===$.pathname){
 if(!YON)return JS({ok:!1,mesaj:"Yetkin yok."},403);
 const s2=await taramaTetikle(A);
