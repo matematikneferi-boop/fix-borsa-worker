@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-23-g · otomatik tazeleme · ölçüm önbelleği · paralel tarama";
+const WORKER_SURUM="2026-08-23-h · pivot kırılım modülü (kısa/orta/uzun)";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -5551,6 +5551,7 @@ var mbIst={
   tfler:["1G"],
   mal:{acik:true, top:true, dag:false, temiz:true, sinirsiz:false, n:5},
   dip:{acik:false,kademe:"dip"},
+  pivot:{acik:false,dilimler:["KISA","ORTA","UZUN"],kirdi:true,yakin:false,uzerinde:false,yuzde:3},
   ab :{acik:false,boga:true, ayi:false, sinirsiz:false, n:5}
 };
 var MB_BAR=[0,1,2,3,4];
@@ -5609,6 +5610,95 @@ function mbUygula(){ mbCizYenile(); }
 function mbTazele(){ mbCizYenile(); }   /* eski çağrı adları için */
 function mbGetir(){ mbCizYenile(); }
 
+/* ═══ 📈 PİVOT KIRILIM MODÜLÜ ═══════════════════════════════════════════
+   Pivot kırılım taraması zaten sistemde var: KISA (1 saat), ORTA (4 saat),
+   UZUN (1 gün) listeleri ve bunların aday listeleri. Bu modül o veriyi
+   YENİDEN ÖLÇMEZ — uygulamada zaten yüklü olan kartları süzer, dolayısıyla
+   sunucuya tek istek bile gitmez, sonuç anında çıkar.
+   Üç durum:
+     ⚡ son barda kırdı      — kırılım en son barda oldu
+     🎯 kırılıma %X kaldı    — henüz kırmadı ama yakın (aday listesi)
+     ✅ kırılımın üzerinde   — kırmış ve fiyat hâlâ seviyenin üstünde */
+var MB_PIVOT_DILIM=[["KISA","potansiyel","adayOrta","1 saat","📊"],
+                    ["ORTA","fibo","adayOrtaVade","4 saat","📐"],
+                    ["UZUN","uzunvade","adayUzun","1 gün","🗓"]];
+/* Bir barın saniyesi — "son barda kırdı" bununla ölçülür */
+var MB_PIVOT_BAR={KISA:3600,ORTA:14400,UZUN:86400};
+var mbPivotHar=null, mbPivotDamga=0;
+function mbPivotHaritasi(){
+  /* D.kartlar değişmediyse yeniden kurma */
+  var damga=(D&&D.guncelleme)||"";
+  if(mbPivotHar&&mbPivotDamga===damga)return mbPivotHar;
+  var har={};
+  var K=(D&&D.kartlar)||{};
+  var simdi=Math.floor(Date.now()/1000);
+  MB_PIVOT_DILIM.forEach(function(p){
+    var ad=p[0], kirListe=K[p[1]]||[], adayListe=K[p[2]]||[];
+    var bar=MB_PIVOT_BAR[ad]||86400;
+    kirListe.forEach(function(x){
+      if(!x||!x.kod)return;
+      if(!har[x.kod])har[x.kod]={};
+      var ts=Number(x.sinyalTs)||0;
+      /* Son barda mı kırdı: canlı (bar kapanmadı) ya da sinyal bir bar
+         süresi kadar taze. 1,5 kat pay bırakıldı — tarama turu gecikebilir. */
+      var sonBar=!!x.canli||(ts>0&&(simdi-ts)<=bar*1.5);
+      var ust=(x.kirilim!=null&&x.fiyat!=null)?(Number(x.fiyat)>=Number(x.kirilim)):null;
+      har[x.kod][ad]={tip:"kirdi",kirilim:x.kirilim,fiyat:x.fiyat,
+        yuzde:x.kirilimYuzde,kalite:x.kalite,canli:!!x.canli,ts:ts,
+        sonBar:sonBar,uzerinde:ust===null?sonBar:ust};
+    });
+    adayListe.forEach(function(x){
+      if(!x||!x.kod)return;
+      if(!har[x.kod])har[x.kod]={};
+      /* Kırılmış kaydı varsa adayla ezme — kırılım daha ileri bir durum */
+      if(har[x.kod][ad]&&har[x.kod][ad].tip==="kirdi")return;
+      har[x.kod][ad]={tip:"aday",kirilim:x.tetik,fiyat:x.fiyat,
+        yuzde:x.tetikYuzde,kalite:x.kalite,canli:false,ts:Number(x.sinyalTs)||0,
+        sonBar:false,uzerinde:false};
+    });
+  });
+  mbPivotHar=har;mbPivotDamga=damga;
+  return har;
+}
+/* Bir hisse pivot şartını sağlıyor mu? Seçili dilimlerden HERHANGİ birinde
+   seçili durumlardan HERHANGİ biri tutuyorsa geçer. */
+function mbPivotGecti(kod,ist){
+  var p=ist.pivot;
+  if(!p||!p.acik)return true;
+  var har=mbPivotHaritasi();
+  var h=har[kod];
+  if(!h)return false;
+  var dilimler=(p.dilimler&&p.dilimler.length)?p.dilimler:["KISA","ORTA","UZUN"];
+  for(var i=0;i<dilimler.length;i++){
+    var d=h[dilimler[i]];
+    if(!d)continue;
+    if(p.kirdi&&d.tip==="kirdi"&&d.sonBar)return true;
+    if(p.uzerinde&&d.tip==="kirdi"&&d.uzerinde)return true;
+    if(p.yakin&&d.tip==="aday"&&d.yuzde!=null&&Math.abs(Number(d.yuzde))<=p.yuzde)return true;
+  }
+  return false;
+}
+/* Satırda gösterilecek kısa özet */
+function mbPivotRozet(kod,ist){
+  var p=ist.pivot;
+  if(!p||!p.acik)return "";
+  var har=mbPivotHaritasi(), h=har[kod];
+  if(!h)return "";
+  var dilimler=(p.dilimler&&p.dilimler.length)?p.dilimler:["KISA","ORTA","UZUN"];
+  var par=[];
+  dilimler.forEach(function(ad){
+    var d=h[ad];if(!d)return;
+    var im,rk;
+    if(d.tip==="kirdi"&&d.sonBar){im="⚡ son bar";rk="var(--yes)"}
+    else if(d.tip==="kirdi"&&d.uzerinde){im="✅ üzerinde";rk="var(--yes)"}
+    else if(d.tip==="kirdi"){im="kırdı";rk="#8b949e"}
+    else if(d.yuzde!=null){im="🎯 %"+Math.abs(Number(d.yuzde)).toFixed(1)+" kaldı";rk="var(--sar)"}
+    else return;
+    par.push('<span style="font-size:10px;padding:2px 5px;border-radius:4px;'+
+      'background:rgba(124,77,255,.15);color:'+rk+';font-weight:700">'+E(ad)+' '+im+'</span>');
+  });
+  return par.length?'<div style="display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 2px">'+par.join("")+'</div>':"";
+}
 /* ═══ TARAMAYI UYGULAMA YÜRÜTÜR ═══════════════════════════════════════
    Ölçümler burada, uygulamanın belleğinde birikir. Sunucudan yalnız
    "şu hisseleri ölç" diye ham sonuç istenir. KV, isolate ve arka plan
@@ -5629,8 +5719,9 @@ function mbIlerleme(){
 }
 /* Sunucudaki mbModulGecti ile AYNI kurallar — tek kaynak olması için
    birebir aynı sırayla yazıldı. */
-function mbGectiMi(x,ist){
+function mbGectiMi(x,ist,kod){
   if(!x)return false;
+  if(ist.pivot&&ist.pivot.acik&&kod&&!mbPivotGecti(kod,ist))return false;
   if(ist.mal.acik){
     var N=ist.mal.sinirsiz?1e9:ist.mal.n, ok=false;
     if(ist.mal.top)ok=ok||(ist.mal.temiz?(x.topHam<=N&&x.topHam<x.dagHam):x.topHam<=N);
@@ -5665,7 +5756,7 @@ function mbPaketUret(){
   mbIst.tfler.forEach(function(t){
     var h=mbOlcum[t]||{};har[t]=h;
     var set={};
-    for(var k in h)if(mbGectiMi(h[k],mbIst))set[k]=true;
+    for(var k in h)if(mbGectiMi(h[k],mbIst,k))set[k]=true;
     gecen[t]=set;
   });
   /* kesişim */
@@ -5892,6 +5983,35 @@ function mbGoster(v,yerel){
     h+=mbYasSatir("ab",mbIst.ab);
   }
   h+='</div>';
+  /* ── 4b) PİVOT KIRILIM ── */
+  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("pivot","📈","PİVOT KIRILIM",mbIst.pivot.acik);
+  if(mbIst.pivot.acik){
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
+       'Sistemin pivot kırılım listelerini süzer — yeniden ölçüm yapmaz, anında sonuç verir.</div>';
+    h+='<div class="sirala" style="flex-wrap:wrap">';
+    MB_PIVOT_DILIM.forEach(function(p){
+      h+=mbCip('data-mbpd="'+p[0]+'"',p[4]+' '+p[0]+' <span style="opacity:.7;font-size:11px">'+p[3]+'</span>',
+        mbIst.pivot.dilimler.indexOf(p[0])>=0);
+    });
+    h+='</div>';
+    h+='<div class="altbilgi" style="margin:9px 0 5px;opacity:.8">Hangi durum?</div>'+
+       '<div class="sirala" style="flex-wrap:wrap">'+
+       mbCip('data-mbpdurum="kirdi"','⚡ Son barda kırdı',mbIst.pivot.kirdi)+
+       mbCip('data-mbpdurum="yakin"','🎯 Kırılıma yakın',mbIst.pivot.yakin)+
+       mbCip('data-mbpdurum="uzerinde"','✅ Kırılımın üzerinde',mbIst.pivot.uzerinde)+
+       '</div>';
+    if(mbIst.pivot.yakin){
+      h+='<div class="altbilgi" style="margin:9px 0 5px;opacity:.8">Kırılıma en fazla yüzde kaç kalmış?</div>'+
+         '<div class="sirala" style="flex-wrap:wrap">';
+      [1,2,3,5,10].forEach(function(n){
+        h+=mbCip('data-mbpy="'+n+'"','%'+n,mbIst.pivot.yuzde===n)});
+      h+='<input id="mbPYSerbest" type="number" min="0.1" max="50" step="0.5" placeholder="elle" '+
+         'value="'+([1,2,3,5,10].indexOf(mbIst.pivot.yuzde)<0?E(String(mbIst.pivot.yuzde)):"")+'" '+
+         'style="width:78px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);'+
+         'border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>';
+    }
+  }
+  h+='</div>';
   /* ── 5) DÜĞMELER ── */
   h+='<div class="sirala" style="flex-wrap:wrap;margin:8px 0">'+
      '<button class="'+((mbTaraDurum&&mbTaraDurum.suruyor)?"sir":"dg")+'" id="mbTaraBtn" style="width:auto;padding:9px 16px">'+
@@ -5928,7 +6048,7 @@ function mbGoster(v,yerel){
      'style="flex:1;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:7px 9px;font-size:14px;text-transform:uppercase">'+
      '<button class="dg" id="mbKodBtn" style="width:auto;padding:7px 14px">🔎 Bak</button></div></div>';
   /* ── 7) HİÇ MODÜL AÇIK DEĞİLSE ── */
-  var acikSayi=(mbIst.mal.acik?1:0)+(mbIst.dip.acik?1:0)+(mbIst.ab.acik?1:0);
+  var acikSayi=(mbIst.mal.acik?1:0)+(mbIst.dip.acik?1:0)+(mbIst.ab.acik?1:0)+(mbIst.pivot.acik?1:0);
   if(!acikSayi){
     h+='<div class="bos"><b>Hiç modül açık değil</b><br><br>'+
        'Yukarıdaki üç modülden en az birinin sağındaki <b>○</b> tikine dokun.</div>';
@@ -5993,6 +6113,7 @@ function mbGoster(v,yerel){
         (x.takipte?' <span class="rozet">⭐</span>':"")+
         (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀</span>':"")+
         (dip?' <span class="rozet">'+dip+'</span>':"")+'</div>'+
+        (mbIst.pivot.acik?mbPivotRozet(x.kod,mbIst):"")+
         serit+
         ((x.digerTfler&&x.digerTfler.length)?
           '<div style="margin:3px 0 2px"><span class="rozet" style="background:rgba(124,77,255,.22);color:#b39dff">'+
@@ -6062,6 +6183,24 @@ function mbBagla(v,dilimler){
     mbUygula()});
   T("[data-mbtemiz]",function(){mbIst.mal.temiz=!mbIst.mal.temiz;mbUygula()});
   T("[data-mbkademe]",function(b){mbIst.dip.kademe=b.dataset.mbkademe;mbUygula()});
+  T("[data-mbpd]",function(b){
+    var d=b.dataset.mbpd,i=mbIst.pivot.dilimler.indexOf(d);
+    if(i>=0)mbIst.pivot.dilimler.splice(i,1);else mbIst.pivot.dilimler.push(d);
+    if(!mbIst.pivot.dilimler.length)mbIst.pivot.dilimler.push(d);   /* en az biri */
+    mbUygula()});
+  T("[data-mbpdurum]",function(b){
+    var d=b.dataset.mbpdurum;mbIst.pivot[d]=!mbIst.pivot[d];
+    if(!mbIst.pivot.kirdi&&!mbIst.pivot.yakin&&!mbIst.pivot.uzerinde)mbIst.pivot[d]=true;
+    mbUygula()});
+  T("[data-mbpy]",function(b){mbIst.pivot.yuzde=Number(b.dataset.mbpy);mbUygula()});
+  var pys=el("mbPYSerbest");
+  if(pys){var uyg=function(){
+    var n=Number(pys.value);
+    if(pys.value===""||!isFinite(n)||n<=0)return;
+    n=Math.max(0.1,Math.min(50,n));
+    if(mbIst.pivot.yuzde===n)return;
+    mbIst.pivot.yuzde=n;tit();mbUygula();
+  };pys.onkeydown=function(e2){if(e2.key==="Enter"){e2.preventDefault();uyg()}};pys.onblur=uyg}
   T("[data-mbabyon]",function(b){
     var y=b.dataset.mbabyon;mbIst.ab[y]=!mbIst.ab[y];
     if(!mbIst.ab.boga&&!mbIst.ab.ayi)mbIst.ab[y]=true;
