@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-23-h · pivot kırılım modülü (kısa/orta/uzun)";
+const WORKER_SURUM="2026-08-23-i · fibo bölge modülü (4 ana bölge) + pivot kırılım";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1473,7 +1473,14 @@ function mbMotor(mumlar){
      da 236'nın altına sarkmışsa daha derindedir. */
   const dip382=!!(dip&&isFinite(lv.s382)&&lv.close<lv.s382);
   const dip236=!!(dip&&isFinite(lv.s236)&&lv.close<lv.s236);
-  return{bar:m.length,mt:mt,md:md,dip382:dip382,dip236:dip236,
+  /* MERDİVENDEKİ KONUM — fiyat 0.0 çizgisinden kaç "birim" yukarıda.
+     Birim, Pine'daki _diff ile aynı: (786 çizgisi − 0.0 çizgisi) / 0.786.
+     Bölge taraması bu tek sayıdan türetilir; 0.618 = BOĞA, 1.0 = KARAR
+     YERİ, 1.618 = DİRENÇ, 2.618 = GÜÇLÜ D/D çizgileri. */
+  let oran=null;
+  if(lv&&isFinite(lv.stop)&&isFinite(lv.s786)&&isFinite(lv.close)&&lv.s786!==lv.stop)
+    oran=Math.round(((lv.close-lv.stop)/((lv.s786-lv.stop)/0.786))*1000)/1000;
+  return{bar:m.length,mt:mt,md:md,dip382:dip382,dip236:dip236,oran:oran,
     top:top_yas,dag:dag_yas,topHam:top_raw,dagHam:dag_raw,
     boga:boga,ayi:ayi,bogaGec:boga_gec,ayiGec:ayi_gec,
     rej:rej,rejYas:rej_yas,sonYas:son_yas,
@@ -5552,6 +5559,7 @@ var mbIst={
   mal:{acik:true, top:true, dag:false, temiz:true, sinirsiz:false, n:5},
   dip:{acik:false,kademe:"dip"},
   pivot:{acik:false,dilimler:["KISA","ORTA","UZUN"],kirdi:true,yakin:false,uzerinde:false,yuzde:3},
+  bolge:{acik:false,secili:["b2"]},
   ab :{acik:false,boga:true, ayi:false, sinirsiz:false, n:5}
 };
 var MB_BAR=[0,1,2,3,4];
@@ -5619,6 +5627,27 @@ function mbGetir(){ mbCizYenile(); }
      ⚡ son barda kırdı      — kırılım en son barda oldu
      🎯 kırılıma %X kaldı    — henüz kırmadı ama yakın (aday listesi)
      ✅ kırılımın üzerinde   — kırmış ve fiyat hâlâ seviyenin üstünde */
+/* ═══ 🪜 FİBO BÖLGELERİ ═══════════════════════════════════════════════
+   Merdivenin dört ana bölgesi — sınırlar TradingView'deki çizgi adlarının
+   birebir karşılığı:
+     🟠 DİKKAT AYI → BOĞA      0.0   – 0.618   dip bölgesi, toparlanma
+     🟢 BOĞA → KARAR YERİ      0.618 – 1.0     boğaya geçmiş, karara yürüyor
+     🔵 KARAR YERİ → DİRENÇ    1.0   – 1.618   kararı geçmiş, dirence yürüyor
+     🟣 DİRENÇ → GÜÇLÜ D/D     1.618 – 2.618   direnci geçmiş, güçlü bölge */
+var MB_BOLGE=[
+  {id:"b1",ik:"🟠",ad:"DİKKAT AYI → BOĞA",alt:0.0,ust:0.618},
+  {id:"b2",ik:"🟢",ad:"BOĞA → KARAR YERİ",alt:0.618,ust:1.0},
+  {id:"b3",ik:"🔵",ad:"KARAR YERİ → DİRENÇ",alt:1.0,ust:1.618},
+  {id:"b4",ik:"🟣",ad:"DİRENÇ → GÜÇLÜ D/D",alt:1.618,ust:2.618}
+];
+function mbBolgeBul(oran){
+  if(oran===null||oran===undefined||!isFinite(oran))return null;
+  for(var i=0;i<MB_BOLGE.length;i++){
+    var b=MB_BOLGE[i];
+    if(oran>=b.alt&&oran<b.ust)return b;
+  }
+  return null;    /* dört ana bölgenin dışında (0.0 altı ya da güçlü D/D üstü) */
+}
 var MB_PIVOT_DILIM=[["KISA","potansiyel","adayOrta","1 saat","📊"],
                     ["ORTA","fibo","adayOrtaVade","4 saat","📐"],
                     ["UZUN","uzunvade","adayUzun","1 gün","🗓"]];
@@ -5729,6 +5758,10 @@ function mbGectiMi(x,ist,kod){
     if(!ok)return false;
   }
   if(ist.dip.acik&&!x[ist.dip.kademe])return false;
+  if(ist.bolge&&ist.bolge.acik){
+    var bl=mbBolgeBul(x.oran);
+    if(!bl||ist.bolge.secili.indexOf(bl.id)<0)return false;
+  }
   if(ist.ab.acik){
     var M=ist.ab.sinirsiz?1e9:ist.ab.n, ok2=false;
     if(ist.ab.boga)ok2=ok2||(!!x.boga&&x.rejYas<=M);
@@ -5983,6 +6016,21 @@ function mbGoster(v,yerel){
     h+=mbYasSatir("ab",mbIst.ab);
   }
   h+='</div>';
+  /* ── 3b) FİBO BÖLGESİ ── */
+  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("bolge","🪜","FİBO BÖLGESİ",mbIst.bolge.acik);
+  if(mbIst.bolge.acik){
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
+       'Fiyat merdivenin hangi ana bölgesinde? Sınırlar TradingView’deki çizgi adlarının aynısı.</div>'+
+       '<div style="display:flex;flex-direction:column;gap:5px">';
+    MB_BOLGE.forEach(function(b){
+      var ac=mbIst.bolge.secili.indexOf(b.id)>=0;
+      h+='<button class="sir'+(ac?" on":"")+'" data-mbbolge="'+b.id+'" '+
+         'style="text-align:left;'+(ac?"background:var(--yes);color:#04140a;font-weight:800":"")+'">'+
+         b.ik+' '+E(b.ad)+' <span style="opacity:.65;font-size:11px">('+b.alt+' – '+b.ust+')</span></button>';
+    });
+    h+='</div>';
+  }
+  h+='</div>';
   /* ── 4b) PİVOT KIRILIM ── */
   h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("pivot","📈","PİVOT KIRILIM",mbIst.pivot.acik);
   if(mbIst.pivot.acik){
@@ -6048,7 +6096,8 @@ function mbGoster(v,yerel){
      'style="flex:1;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:7px 9px;font-size:14px;text-transform:uppercase">'+
      '<button class="dg" id="mbKodBtn" style="width:auto;padding:7px 14px">🔎 Bak</button></div></div>';
   /* ── 7) HİÇ MODÜL AÇIK DEĞİLSE ── */
-  var acikSayi=(mbIst.mal.acik?1:0)+(mbIst.dip.acik?1:0)+(mbIst.ab.acik?1:0)+(mbIst.pivot.acik?1:0);
+  var acikSayi=(mbIst.mal.acik?1:0)+(mbIst.dip.acik?1:0)+(mbIst.ab.acik?1:0)+
+               (mbIst.pivot.acik?1:0)+(mbIst.bolge.acik?1:0);
   if(!acikSayi){
     h+='<div class="bos"><b>Hiç modül açık değil</b><br><br>'+
        'Yukarıdaki üç modülden en az birinin sağındaki <b>○</b> tikine dokun.</div>';
@@ -6113,6 +6162,10 @@ function mbGoster(v,yerel){
         (x.takipte?' <span class="rozet">⭐</span>':"")+
         (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀</span>':"")+
         (dip?' <span class="rozet">'+dip+'</span>':"")+'</div>'+
+        (function(){var bl=mbBolgeBul(x.oran);
+          return bl?'<div style="margin:4px 0 2px"><span style="font-size:10px;padding:2px 5px;'+
+            'border-radius:4px;background:rgba(124,77,255,.15);color:#b39dff;font-weight:700">'+
+            bl.ik+' '+E(bl.ad)+(x.oran!=null?' · '+Number(x.oran).toFixed(2):'')+'</span></div>':""})()+
         (mbIst.pivot.acik?mbPivotRozet(x.kod,mbIst):"")+
         serit+
         ((x.digerTfler&&x.digerTfler.length)?
@@ -6183,6 +6236,11 @@ function mbBagla(v,dilimler){
     mbUygula()});
   T("[data-mbtemiz]",function(){mbIst.mal.temiz=!mbIst.mal.temiz;mbUygula()});
   T("[data-mbkademe]",function(b){mbIst.dip.kademe=b.dataset.mbkademe;mbUygula()});
+  T("[data-mbbolge]",function(b){
+    var id=b.dataset.mbbolge,i=mbIst.bolge.secili.indexOf(id);
+    if(i>=0)mbIst.bolge.secili.splice(i,1);else mbIst.bolge.secili.push(id);
+    if(!mbIst.bolge.secili.length)mbIst.bolge.secili.push(id);   /* en az biri */
+    mbUygula()});
   T("[data-mbpd]",function(b){
     var d=b.dataset.mbpd,i=mbIst.pivot.dilimler.indexOf(d);
     if(i>=0)mbIst.pivot.dilimler.splice(i,1);else mbIst.pivot.dilimler.push(d);
