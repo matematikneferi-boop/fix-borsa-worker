@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-23-b · elle doldurma · canlı sonuç + teşhis · panel sadeleşti";
+const WORKER_SURUM="2026-08-23-c · KV tutarlılık hatası düzeltildi: parçalı yazma + istemci imleci";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2189,15 +2189,30 @@ function ykOzetle(S,alan){
 /* Bir adımda kaç hisse. Her hisse 2 ayrı Yahoo çekimi yapıyor (60m ve 1d);
    yfMumlar gerekirse ikinci sunucuyu da deniyor. 8 hisse = en kötü 32
    alt-istek — Cloudflare'in ücretsiz plandaki 50 sınırının altında kalır. */
-const YK_ADIM=8;
+const YK_ADIM=20;
+/* 🐞 DÜZELTİLEN HATA — "tarama biterken ekrandaki her şey silindi"
+   Cloudflare KV ANLIK TUTARLI DEĞİLDİR: yazdıktan hemen sonra okursan
+   eski değeri alabilirsin. Tarama adımları 120 ms arayla oku-değiştir-yaz
+   yaptığı için son adım çoğu kez ESKİ işi okuyor, "bitti" damgasını ona
+   basıp geri yazıyordu — o ana kadar biriken bütün sayaçlar siliniyordu.
+   ÇÖZÜM: iş bellekte de tutulur ve iki kopyadan DAHA İLERİDE olanı kazanır.
+   Böylece aynı isolate içinde hiçbir adım kaybolmaz; KV yalnız yedek olur. */
+let _ykBellek=null;
 async function ykIsOku(A){
-  if(!A.VERI)return null;
-  try{const j=await A.VERI.get("ykIs");return j?JSON.parse(j):null}catch(_){return null}
+  let kv=null;
+  if(A&&A.VERI){try{const j=await A.VERI.get("ykIs");kv=j?JSON.parse(j):null}catch(_){}}
+  if(_ykBellek&&kv&&_ykBellek.baslangic===kv.baslangic)
+    return (Number(_ykBellek.tamam)||0)>=(Number(kv.tamam)||0)?_ykBellek:kv;
+  if(_ykBellek&&!kv&&_ykBellek.tamam<_ykBellek.toplam)return _ykBellek;
+  _ykBellek=kv;
+  return kv;
 }
 async function ykIsYaz(A,job){
-  if(!A.VERI)return;
+  _ykBellek=job;                       /* önce bellek — kayıp olmasın */
+  if(!A||!A.VERI)return;
   try{await A.VERI.put("ykIs",JSON.stringify(job),{expirationTtl:172800})}catch(_){}
 }
+function ykIsSil(){_ykBellek=null}
 const ykHisseTek=(kodlar)=>{
   const har={};kodlar.forEach((k,i)=>har[k]=(i%2===0));
   return k=>!!har[k];
@@ -2300,18 +2315,22 @@ const MB_DILIM_TABAN=8,MB_DILIM_TAVAN=60,MB_SURE_TAVAN_MS=1e4,MB_ES=5;
 const MB_ANLIK_AZAMI=12;
 /* Kullanıcı "şimdi doldur" derse bir istekte bu kadar hisse ölçülür.
    24 hisse × 1 çekim = 24 alt-istek — ücretsiz plandaki 50 sınırının altı. */
-const MB_DOLDUR_AZAMI=24;
+const MB_DOLDUR_AZAMI=40;
 /* Dilim başına tazelik eşiği — bakılan dilim bundan eskiyse önceliklendirilir.
    Hızlı dilim sık, yavaş dilim seyrek tazelenir; boşuna çekim yapılmaz. */
 const MB_TAZELIK={"5DK":6e5,"15DK":12e5,"1SA":36e5,"4SA":72e5,"1G":108e5,"1HAF":216e5,"1AY":216e5};
 const MB_BIRIKIM_TTL=21600,MB_YAZMA_ARALIK=6e5,MB_BAYAT_MS=216e5; /* 6 saat */
 const _mbBellek={};let _mbYazma={},_mbImlec=null;
 
-async function mbTfOku(A,tf){
-  if(_mbBellek[tf])return _mbBellek[tf];
-  let v={ts:0,sonuc:{}};
-  try{const h=A&&A.VERI&&await A.VERI.get("mbBirikim:"+tf);if(h)v=JSON.parse(h)||v}catch(_){}
-  if(!v.sonuc||typeof v.sonuc!=="object")v.sonuc={};
+async function mbTfOku(A,tf,parcalarla){
+  if(_mbBellek[tf]&&!parcalarla)return _mbBellek[tf];
+  let v=_mbBellek[tf];
+  if(!v){
+    v={ts:0,sonuc:{}};
+    try{const h=A&&A.VERI&&await A.VERI.get("mbBirikim:"+tf);if(h)v=JSON.parse(h)||v}catch(_){}
+    if(!v.sonuc||typeof v.sonuc!=="object")v.sonuc={};
+  }
+  if(parcalarla)await mbParcalariKat(A,tf,v);
   _mbBellek[tf]=v;return v;
 }
 /* 🐞 DÜZELTİLEN HATA — "hep 20-25 hisse taranıyor, 434'e hiç ulaşmıyor"
@@ -2328,6 +2347,46 @@ async function mbTfYaz(A,tf){
   const v=_mbBellek[tf];if(!v||!A||!A.VERI)return;
   _mbYazma[tf]=Date.now();
   await A.VERI.put("mbBirikim:"+tf,JSON.stringify(v),{expirationTtl:MB_BIRIKIM_TTL}).catch(()=>{});
+}
+/* ── PARÇALI YAZMA — KV gecikmesine karşı asıl çözüm ────────────────────
+   Tek büyük harita üzerinde oku-değiştir-yaz yapmak KV'de veri kaybettirir:
+   iki istek arka arkaya gelince ikincisi birincinin yazdığını görmeden
+   üstüne yazar. "Havuz 434'e bir türlü ulaşmıyor" sorununun kökü buydu.
+   Doldurma sırasında her istek KENDİ parçasına yazar (mbP:DİLİM:NO) —
+   iki istek asla aynı anahtara dokunmaz, dolayısıyla hiçbir ölçüm kaybolmaz.
+   Parçalar okuma anında ana birikimle birleştirilir; doldurma bitince
+   tek seferde ana birikime katılıp silinirler. */
+async function mbParcaYaz(A,tf,no,yeni){
+  if(!A||!A.VERI||!yeni||!Object.keys(yeni).length)return;
+  try{await A.VERI.put("mbP:"+tf+":"+no,JSON.stringify(yeni),{expirationTtl:MB_BIRIKIM_TTL})}catch(_){}
+}
+async function mbParcalariKat(A,tf,bir){
+  if(!A||!A.VERI)return bir;
+  try{
+    const l=await A.VERI.list({prefix:"mbP:"+tf+":"});
+    if(!l||!l.keys||!l.keys.length)return bir;
+    for(const k of l.keys){
+      try{const h=await A.VERI.get(k.name);if(!h)continue;
+        const v=JSON.parse(h);
+        for(const kod in v)if(!bir.sonuc[kod]||(v[kod].ts||0)>(bir.sonuc[kod].ts||0))bir.sonuc[kod]=v[kod];
+      }catch(_){}
+    }
+    bir.parca=l.keys.length;
+  }catch(_){}
+  return bir;
+}
+/* Parçaları ana birikime kalıcı olarak katar ve siler. */
+async function mbParcalariBirlestir(A,tf){
+  const bir=await mbTfOku(A,tf);
+  await mbParcalariKat(A,tf,bir);
+  bir.ts=Date.now();bir.olculen=Object.keys(bir.sonuc).length;
+  _mbBellek[tf]=bir;
+  await mbTfYaz(A,tf);
+  try{
+    const l=await A.VERI.list({prefix:"mbP:"+tf+":"});
+    for(const k of (l&&l.keys)||[])await A.VERI.delete(k.name).catch(()=>{});
+  }catch(_){}
+  return bir;
 }
 /* Bu dilim tamamlandı mı: havuzun tamamı ölçülü ve hiçbiri bayat değil. */
 function mbTfTamam(bir,evrenSayi){
@@ -2359,7 +2418,13 @@ async function mbImlecOku(A){
 }
 /* Bir dilim tarar. oncelikTf verilirse imleç yerine o dilimden devam eder —
    kullanıcı bir dilimi açtığında o dilim öne alınsın diye. */
-async function mbDilimTara(A,oncelikTf,azami){
+/* 🐞 Aynı KV tutarlılık sorunu burada da vardı: her doldurma isteği imleci
+   KV'den okuyordu, okuma bayat gelince tarama hep aynı 20-25 hisseyi
+   yeniden ölçüyor, havuz bir türlü dolmuyordu.
+   ÇÖZÜM: doldurma sırasında imleci İSTEMCİ taşır (disImlec) — sunucu her
+   cevapta nerede kaldığını söyler, istemci bir sonraki istekte geri verir.
+   Böylece ilerleme KV'nin gecikmesinden tamamen bağımsız olur. */
+async function mbDilimTara(A,oncelikTf,azami,disImlec){
   if(!A||!A.VERI)return null;
   if(!(await mbCalisiyorMu(A)))return null;
   const evren=await mbEvren(A);               /* havuzun TAMAMI */
@@ -2384,7 +2449,9 @@ async function mbDilimTara(A,oncelikTf,azami){
     }
   }
   const bir=await mbTfOku(A,tf);              /* imleç için ÖNCE yüklenmeli */
-  const kodIdx=oncelikTf?(Number(bir.imlec)||0):(Number(imlec.kod)||0);
+  const kodIdx=(disImlec!==undefined&&disImlec!==null&&Number(disImlec)>=0)
+    ?Number(disImlec)
+    :(oncelikTf?(Number(bir.imlec)||0):(Number(imlec.kod)||0));
   let dilim=await mbDilimOku(A);
   if(azami>0)dilim=Math.min(dilim,azami);
   const bas=kodIdx%evren.length;
@@ -2410,6 +2477,13 @@ async function mbDilimTara(A,oncelikTf,azami){
   /* Bayat ölçümleri at */
   const kes=Date.now()-MB_BAYAT_MS;
   for(const k of Object.keys(bir.sonuc))if(Number(bir.sonuc[k].ts||0)<kes)delete bir.sonuc[k];
+  /* DOLDURMA KİPİ: bu turun ölçümlerini kendi parçasına yaz, ana haritaya
+     dokunma. Böylece eşzamanlı istekler birbirinin verisini ezemez. */
+  if(disImlec!==undefined&&disImlec!==null&&Number(disImlec)>=0){
+    const yeniler={};
+    for(const kod of kodlar)if(bir.sonuc[kod])yeniler[kod]=bir.sonuc[kod];
+    await mbParcaYaz(A,tf,Math.floor(bas/Math.max(1,dilim)),yeniler);
+  }
   const yeniKod=(bas+islenen)%evren.length;
   bir.imlec=yeniKod;bir.ts=Date.now();bir.evren=evren.length;bir.kaynak=evren.kaynak||"";
   bir.olculen=Object.keys(bir.sonuc).length;
@@ -2553,7 +2627,7 @@ async function mbModulTara(A,ist){
   /* 2) her seçili dilimde süz */
   const gecenHar={},gruplar={},har={};
   for(const tf of ist.tfler){
-    const bir=_mbBellek[tf]||await mbTfOku(A,tf);
+    const bir=await mbTfOku(A,tf,!0);          /* parçalar dahil */
     const sonuc=bir.sonuc||{};har[tf]=sonuc;
     const liste=[];
     for(const kod of Object.keys(sonuc)){
@@ -5703,7 +5777,7 @@ function mbBagla(v,dilimler){
   var dl=el("mbDoldur");
   if(dl)dl.onclick=function(){tit();
     if(mbDolduruyor){mbDolduruyor=false;mbGoster(v);return}
-    mbDolduruyor=true;mbDoldurSayac=0;mbDoldurTur()};
+    mbDolduruyor=true;mbDoldurSayac=0;mbDoldurDilim="";mbDoldurImlec=null;mbDoldurTur()};
   var dd=el("mbDur");if(dd)dd.onclick=function(){tit();dd.disabled=true;
     var o={};for(var k in mbIst)o[k]=mbIst[k];o.dur=(!v||v.calisiyor!==false)?1:0;
     post("/api/malboga",o).then(function(v2){mbD=v2;mbGoster(v2)}).catch(function(){dd.disabled=false})};
@@ -5744,20 +5818,29 @@ function mbBagla(v,dilimler){
 }
 /* ⏩ Havuzu elle doldurma döngüsü: her turda bir dilimi biraz ilerletir,
    eksik dilim kalmayınca kendiliğinden durur ve listeyi tazeler. */
-var mbDolduruyor=false, mbDoldurSayac=0, mbDoldurDilim="";
+/* İMLECİ İSTEMCİ TAŞIR. Sunucu her cevapta "şu dilimde şuraya kadar
+   geldim" der, biz onu bir sonraki istekte geri veririz. Böylece ilerleme
+   KV'nin gecikmesine takılmaz — bu, havuzun bir türlü dolmamasının sebebiydi. */
+var mbDolduruyor=false, mbDoldurSayac=0, mbDoldurDilim="", mbDoldurImlec=null;
 function mbDoldurTur(){
   if(!mbDolduruyor||sekme!=="malboga")return;
-  var o={};for(var k in mbIst)o[k]=mbIst[k];o.doldur=1;
+  var o={};for(var k in mbIst)o[k]=mbIst[k];
+  o.doldur=1;
+  if(mbDoldurDilim){o.imlecTf=mbDoldurDilim;o.imlecKod=mbDoldurImlec}
   post("/api/malboga",o).then(function(r){
     if(!mbDolduruyor)return;
     mbDoldurSayac++;
+    var oncekiDilim=mbDoldurDilim;
     mbDoldurDilim=(r&&r.dilim)||"";
+    /* dilim değiştiyse imleç sıfırdan başlar */
+    mbDoldurImlec=(mbDoldurDilim&&mbDoldurDilim===oncekiDilim)?(r&&r.imlecKod):0;
+    if(mbDoldurDilim!==oncekiDilim)mbDoldurImlec=(r&&r.imlecKod)||0;
     if(r&&r.dilimler&&mbD)mbD.dilimler=r.dilimler;
     if(!r||!r.dilim||r.eksik===0){        /* hepsi tamam */
-      mbDolduruyor=false;mbTazele();return;
+      mbDolduruyor=false;mbDoldurImlec=null;mbTazele();return;
     }
     if(mbD)mbGoster(mbD);
-    setTimeout(mbDoldurTur,150);
+    setTimeout(mbDoldurTur,1200);
   }).catch(function(){
     if(mbDolduruyor)setTimeout(mbDoldurTur,2500);
   });
@@ -5819,7 +5902,8 @@ function ykAdim(){
     ykSuruyor=false;
     if(!v||!v.ok||v.yok){ykD=v;ykGoster(v);return}
     ykD=v;ykGoster(v);
-    if(!v.tamamlandi&&sekme==="yesil")setTimeout(ykAdim,120);
+    /* KV'nin yayılması için nefes payı — çok sık istek bayat okumaya yol açar */
+    if(!v.tamamlandi&&sekme==="yesil")setTimeout(ykAdim,1200);
   }).catch(function(){ykSuruyor=false;
     if(sekme==="yesil")setTimeout(ykAdim,2500)});
 }
@@ -7458,17 +7542,31 @@ if("/api/malboga"===$.pathname){
      Bir istekte tek dilim × sınırlı hisse: alt-istek bütçesi taşmasın. */
   if(gov&&gov.doldur){
     const d=mbIstekNorm(gov);
+    const evSayi=(await tamEvren(A)).length;
     let ilerleyen=null;
     for(const tf of d.tfler){
-      const b=await mbTfOku(A,tf);
-      const ev=(await tamEvren(A)).length;
-      if(Object.keys(b.sonuc||{}).length<ev){ilerleyen=tf;break}
+      const b=await mbTfOku(A,tf,!0);            /* parçalar dahil */
+      if(Object.keys(b.sonuc||{}).length<evSayi){ilerleyen=tf;break}
+      await mbParcalariBirlestir(A,tf).catch(()=>{});  /* tamamsa kalıcılaştır */
     }
-    if(ilerleyen)await mbDilimTara(A,ilerleyen,MB_DOLDUR_AZAMI).catch(()=>{});
-    const durum=await mbDilimDurum(A).catch(()=>[]);
-    const ev=(await tamEvren(A).catch(()=>[])).length||0;
-    const eksik=durum.filter(x=>d.tfler.indexOf(x.tf)>=0&&x.olculen<ev).length;
-    return JS({ok:!0,dolduruldu:!0,dilim:ilerleyen,dilimler:durum,evren:ev,eksik:eksik});
+    /* İstemci aynı dilimde devam ediyorsa kendi imlecini gönderir. */
+    const dis=(gov.imlecTf&&gov.imlecTf===ilerleyen)?Number(gov.imlecKod):null;
+    let yeniImlec=0;
+    if(ilerleyen){
+      const b2=await mbDilimTara(A,ilerleyen,MB_DOLDUR_AZAMI,dis).catch(()=>null);
+      yeniImlec=(b2&&Number(b2.imlec))||0;
+    }
+    const durum=[];
+    for(const t of MB_TF_LISTE){
+      const b=d.tfler.indexOf(t)>=0?await mbTfOku(A,t,!0):await mbTfOku(A,t);
+      durum.push({tf:t,ad:MB_TF[t].ad,ik:MB_TF[t].ik,
+        olculen:Object.keys(b.sonuc||{}).length,evren:b.evren||evSayi,
+        yas:b.ts?Math.round((Date.now()-b.ts)/6e4):null});
+    }
+    const eksik=durum.filter(x=>d.tfler.indexOf(x.tf)>=0&&x.olculen<evSayi).length;
+    if(!eksik)for(const t of d.tfler)await mbParcalariBirlestir(A,t).catch(()=>{});
+    return JS({ok:!0,dolduruldu:!0,dilim:ilerleyen,imlecKod:yeniImlec,
+      dilimler:durum,evren:evSayi,eksik:eksik});
   }
   /* ÜÇ MODÜL × SEÇİLİ ZAMAN DİLİMLERİ */
   const ist=mbIstekNorm(gov);
@@ -7607,7 +7705,7 @@ if("/api/yesil"===$.pathname){
       baslangic:Date.now(),guncelleme:Date.now(),tamamlandi:!1});
     return JS({ok:!0,baslatildi:!0,toplam:kodlar.length});
   }
-  if(is==="iptal"){try{await A.VERI.delete("ykIs")}catch(_){}return JS({ok:!0,iptal:!0})}
+  if(is==="iptal"){ykIsSil();try{await A.VERI.delete("ykIs")}catch(_){}return JS({ok:!0,iptal:!0})}
   const job=await ykIsOku(A);
   if(!job)return JS({ok:!0,yok:!0});
   if(is==="adim"&&!job.tamamlandi&&job.kuyruk.length){
