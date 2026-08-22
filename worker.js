@@ -776,7 +776,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-22-a · mal toplama/dağıtım + 571 ayı/boğa · 7 zaman dilimi taraması";
+const WORKER_SURUM="2026-08-22-b · mal+ayı/boğa kural motoru · kademeli dip · tam havuz (430)";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1451,7 +1451,11 @@ function mbMotor(mumlar){
   const dip=!!(lv&&isFinite(lv.stop)&&isFinite(lv.s236)&&isFinite(lv.s786)&&
     isFinite(lv.close)&&isFinite(lv.doyum)&&lv.stop<lv.close&&lv.close<lv.s786&&lv.doyum>lv.close);
 
-  return{bar:m.length,mt:mt,md:md,
+  /* 6.2:1430 DİP TARAMA kademeli: aynı dip bölgesi içinde fiyat 382'nin ya
+     da 236'nın altına sarkmışsa daha derindedir. */
+  const dip382=!!(dip&&isFinite(lv.s382)&&lv.close<lv.s382);
+  const dip236=!!(dip&&isFinite(lv.s236)&&lv.close<lv.s236);
+  return{bar:m.length,mt:mt,md:md,dip382:dip382,dip236:dip236,
     top:top_yas,dag:dag_yas,topHam:top_raw,dagHam:dag_raw,
     boga:boga,ayi:ayi,bogaGec:boga_gec,ayiGec:ayi_gec,
     rej:rej,rejYas:rej_yas,sonYas:son_yas,
@@ -1460,6 +1464,8 @@ function mbMotor(mumlar){
     doyum:lv&&isFinite(lv.doyum)?Math.round(lv.doyum*100)/100:null,
     stop:lv&&isFinite(lv.stop)?Math.round(lv.stop*100)/100:null,
     s786:lv&&isFinite(lv.s786)?Math.round(lv.s786*100)/100:null,
+    s382:lv&&isFinite(lv.s382)?Math.round(lv.s382*100)/100:null,
+    s236:lv&&isFinite(lv.s236)?Math.round(lv.s236*100)/100:null,
     /* Yalnız GÖSTERİM için yuvarlanır; motorun içindeki bütün karşılaştırmalar
        ham kapanışla yapıldı — sonuç etkilenmez. */
     fiyat:Math.round(m[son].close*100)/100,zaman:m[son].time};
@@ -1545,16 +1551,8 @@ async function mbTekHisse(kod){
   return{kod:kod,ts:Date.now(),satir:satir};
 }
 
-/* ── TARAMA EVRENİ — HAVUZUN TAMAMI ────────────────────────────────────
-   absEvren() kademeli bir yedekleme zinciri kullanıyor: tarayıcı sözlüğü
-   100'den çok kod verdiyse sektor.json'a HİÇ bakmıyor. Sözlükte 121 kod
-   olduğu için havuzdaki 430+ hissenin geri kalanı hiç taranmıyordu.
-   Burada zincir yok: bütün kaynaklar KOŞULSUZ birleştirilir. Absorpsiyon
-   tarafı kendi absEvren'ini kullanmaya devam ediyor — onun davranışını
-   değiştirmiyoruz. */
-let _mbEvrenBellek=null,_mbEvrenZaman=0;
-const MB_EVREN_TTL=36e5;                       /* 1 saat */
-/* Mal+Ayı/Boğa da absorpsiyonla AYNI tam evreni kullanır — tek kaynak. */
+/* Mal+Ayı/Boğa da absorpsiyonla AYNI tam evreni kullanır — tek kaynak
+   (bkz. tamEvren). Böylece 121 sınırı iki tarafta birden kalktı. */
 async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
 
 /* ── TÜM HAVUZ × TÜM DİLİM — PARÇALI, KALDIĞI YERDEN DEVAM EDEN TARAMA ──
@@ -1687,7 +1685,9 @@ const MB_KOSUL={
   ayi     :{ad:"🐻 Ayı",                kisa:"AYI",      aciklama:"571 rejimi şu an ayı (doyum fiyatın altında)"},
   bogaGec :{ad:"🐂 Boğaya geçiş",       kisa:"BOĞA GEÇ", aciklama:"Boğa VE bu rejime son N bar içinde geçilmiş"},
   ayiGec  :{ad:"🐻 Ayıya geçiş",        kisa:"AYI GEÇ",  aciklama:"Ayı VE bu rejime son N bar içinde geçilmiş"},
-  dip     :{ad:"⬇️ Dip bölgesi",        kisa:"DİP",      aciklama:"stop < fiyat < 786 ve doyum fiyatın üstünde"},
+  dip     :{ad:"⬇️ Dip bölgesi",        kisa:"DİP",      aciklama:"Pine DİP TARAMA ile birebir: stop < fiyat < 786 ve doyum fiyatın üstünde"},
+  dip382  :{ad:"⬇️⬇️ Derin dip (382 altı)",kisa:"DİP382",aciklama:"Dip bölgesinde VE fiyat 0.382 seviyesinin altında"},
+  dip236  :{ad:"⬇️⬇️⬇️ En dip (236 altı)",kisa:"DİP236",aciklama:"Dip bölgesinde VE fiyat 0.236 seviyesinin altında — stop'a en yakın bant"},
   bugun   :{ad:"☀ Bu barda olay",      kisa:"BU BAR",   aciklama:"Tam bu barda toplama/dağıtım ya da rejim değişimi"}
 };
 MB_KOSUL.mal.f      =(x,N)=>x.topHam<=N;
@@ -1698,8 +1698,10 @@ MB_KOSUL.ayi.f      =(x)=>!!x.ayi;
 MB_KOSUL.bogaGec.f  =(x,N)=>!!x.boga&&x.rejYas<=N;
 MB_KOSUL.ayiGec.f   =(x,N)=>!!x.ayi&&x.rejYas<=N;
 MB_KOSUL.dip.f      =(x)=>!!x.dip;
+MB_KOSUL.dip382.f   =(x)=>!!x.dip382;
+MB_KOSUL.dip236.f   =(x)=>!!x.dip236;
 MB_KOSUL.bugun.f    =(x)=>!!(x.mt||x.md||x.bogaGec||x.ayiGec);
-const MB_KOSUL_LISTE=["mal","malTemiz","dag","boga","ayi","bogaGec","ayiGec","dip","bugun"];
+const MB_KOSUL_LISTE=["mal","malTemiz","dag","boga","ayi","bogaGec","ayiGec","dip","dip382","dip236","bugun"];
 const MB_HEPSI="*";                 /* kuralın dilimi = "bakılan dilim" */
 const MB_AZAMI_KURAL=24;
 
@@ -2500,6 +2502,15 @@ function ciz(){
     el("serit").innerHTML="";el("hotSerit").innerHTML="";
   }
   sekCiz();
+  /* 🖥 TAM EKRAN: mal+ayı/boğa taraması dar telefon ekranında bütün dikey
+     alana ihtiyaç duyuyor. Bu sekmede üstteki sekme şeridi ve sekme adı
+     tamamen kalkar; 🏠 Ana Menü düğmesi başlıkta kalır, dilimler arası
+     geri/ileri ise ekranın kendi çubuğundan yapılır. */
+  var sekS=el("sekmeler");
+  if(sekme==="malboga"){
+    if(sekS){sekS.innerHTML="";sekS.style.display="none"}
+    if(sekAdi)sekAdi.style.display="none";
+  }else if(sekS)sekS.style.display="";
   if(sekme==="hata")return hataCiz();
   if(sekme==="sag")return saglikCiz();
   if(sekme==="abs")return absCiz();
@@ -4478,7 +4489,7 @@ function mbKosKisa(sz,id){
 }
 /* Koşulun "son N bar" penceresine bakıp bakmadığı — bakmıyorsa
    kural rozetinde bar sayısı yazmaya gerek yok. */
-function mbNGerek(id){return id!=="boga"&&id!=="ayi"&&id!=="dip"&&id!=="bugun"}
+function mbNGerek(id){return ["boga","ayi","dip","dip382","dip236","bugun"].indexOf(id)<0}
 /* Serbest bar kutusuna yazılanı kaybetmeden okur. */
 function mbOkuN(){
   var s=el("mbNSerbest");
@@ -4491,6 +4502,21 @@ function mbGoster(v){
   var kur=mbBag.kurallar||[];
   var azami=sz.azamiKural||24;
   var h="";
+  /* ── TAM EKRAN GEZİNME ÇUBUĞU ──
+     Sekme şeridi bu ekranda gizli; dilimler arası geçiş buradan yapılır.
+     Yapışkan (sticky) — liste kaydırılırken üstte kalır. */
+  var tfL=(sz.tfler||[]).map(function(t){return t.tf});
+  var tfi=tfL.indexOf(mbTf);
+  var suan=(ozet.filter(function(t){return t.tf===mbTf})[0])||{};
+  h+='<div style="position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;'+
+     'background:var(--zemin,#0d1117);padding:6px 0 8px;margin-bottom:2px;border-bottom:1px solid var(--ciz)">'+
+     '<button class="sir" id="mbGeriTf" style="padding:6px 13px;font-size:16px"'+(tfi<=0?" disabled":"")+'>◀</button>'+
+     '<div style="flex:1;text-align:center;line-height:1.25;min-width:0">'+
+     '<div style="font-weight:800;font-size:14px">'+E((((suan.ik||"")+" "+(suan.ad||mbTf))).trim())+'</div>'+
+     '<div class="altbilgi" style="opacity:.72">'+((suan.gecen!=null)?suan.gecen+" / "+suan.olculen+" hisse":"…")+
+     ' · '+kur.length+' kural</div></div>'+
+     '<button class="sir" id="mbIleriTf" style="padding:6px 13px;font-size:16px"'+(tfi>=tfL.length-1?" disabled":"")+'>▶</button>'+
+     '</div>';
   /* ── 1) KURALLARIM ── */
   h+='<div class="kutu" style="margin-top:0;border-left:3px solid var(--yes)">'+
      '<h3 style="margin:0 0 7px">🧩 Kurallarım'+
@@ -4637,6 +4663,10 @@ function mbGoster(v){
   /* ── OLAYLAR ── */
   [].forEach.call(document.querySelectorAll("[data-mbtf]"),function(b){
     b.onclick=function(){tit();mbTf=b.dataset.mbtf;mbTazele()}});
+  var gt=el("mbGeriTf");if(gt)gt.onclick=function(){tit();
+    if(tfi>0){mbTf=tfL[tfi-1];mbTazele()}};
+  var it=el("mbIleriTf");if(it)it.onclick=function(){tit();
+    if(tfi>=0&&tfi<tfL.length-1){mbTf=tfL[tfi+1];mbTazele()}};
   [].forEach.call(document.querySelectorAll("[data-mbsil]"),function(b){
     b.onclick=function(){tit();mbBag.kurallar.splice(Number(b.dataset.mbsil),1);mbTazele()}});
   var mv=el("mbModVe");if(mv)mv.onclick=function(){tit();mbBag.mod="ve";mbTazele()};
@@ -4710,7 +4740,9 @@ function mbTekGoster(v){
       '<div class="altbilgi" style="white-space:normal">'+
       '<b style="color:'+mal.r+'">MAL '+E(mal.t)+'</b> · '+
       '<b style="color:'+ab.r+'">A/B '+E(ab.t)+'</b>'+
-      (x.doyum!=null?'<br>doyum <b>'+E(String(x.doyum))+'</b> · dip sınırı '+E(String(x.stop))+' · 786 '+E(String(x.s786)):"")+
+      (x.doyum!=null?'<br>doyum <b>'+E(String(x.doyum))+'</b> · dip sınırı '+E(String(x.stop))+
+        ' · 786 '+E(String(x.s786))+(x.s382!=null?' · 382 '+E(String(x.s382)):"")+
+        (x.s236!=null?' · 236 '+E(String(x.s236)):""):"")+
       '<br><span style="opacity:.6">'+x.bar+' bar · fiyat '+E(String(x.fiyat))+'</span></div></div>'+
       '<div class="sag"><div class="yuzde" style="color:'+kenar+';font-size:20px">'+(x.boga?"🐂":x.ayi?"🐻":"?")+'</div>'+
       '<div class="altbilgi">'+(x.durum===1?"topluyor":x.durum===-1?"dağıtıyor":"—")+'</div></div></div>';
