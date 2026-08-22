@@ -1638,7 +1638,7 @@ function dbtSonucOlc(seri,girisIdx){
    dilimlerin dip durumunu ("uyum") kaydeder. */
 async function dbtKosu(kodlar,dilimler,seviyeler){
   const tumSonuclar=[],semboller=[];
-  const ES=10;let sira=0;
+  const ES=6;let sira=0;
   const isci=async()=>{
     while(sira<kodlar.length){
       const kod=kodlar[sira++];
@@ -1724,7 +1724,7 @@ function dbtOzetle(sonuclar){
   return{satirlar:satirlar,uyumSatirlar:uyumSatirlar};
 }
 const DBT_STIL='<style>body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.5 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:22px 0 8px;color:#8b949e}.a{color:#8b949e;font-size:13px}table{border-collapse:collapse;width:100%;margin-top:6px;font-size:13px}th,td{padding:6px 8px;text-align:right;border-bottom:1px solid #21262d;white-space:nowrap}th{color:#8b949e;font-weight:600;text-align:right}td:first-child,th:first-child{text-align:left}.iy{color:#3fb950}.kt{color:#f85149}input,textarea,button{background:#161b22;border:1px solid #272e37;color:#e6edf3;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box}textarea{width:100%;min-height:70px}button{background:#388bfd;border:none;font-weight:700;cursor:pointer;margin-top:10px}label{display:block;margin-top:12px;font-size:13px;color:#8b949e}.wrap{overflow-x:auto}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px}</style>';
-const DBT_ADIM_BOYUT=20;              /* her "adım" isteğinde kaç hisse işlenir (turbo: 10→20, paralel çekimle güvenli) */
+const DBT_ADIM_BOYUT=10;              /* her "adım" isteğinde kaç hisse işlenir (eski, CPU açısından güvenli değer korundu — asıl hız kazancı paralel çekimden geliyor) */
 async function dbtIsOku(A){
   if(!A.VERI)return null;
   try{const j=await A.VERI.get("dbtIs");return j?JSON.parse(j):null}catch(_){return null}
