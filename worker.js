@@ -290,7 +290,7 @@ const YF_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML
    ekler. Grafik ile "Şimdi" fiyatı hep aynı kaynağı göstersin diye. */
 async function yfMumCek(host,kod,interval,range){interval=interval||"1d";range=range||"6mo"
 ;const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range="+range+"&interval="+interval+"&_="+Date.now()
-;let res;try{res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store"})}catch(e){return{hata:"fetch istisnası: "+(e&&e.message||e)}}
+;let res;try{const _ac=new AbortController();const _to=setTimeout(()=>_ac.abort(),8000);try{res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store",signal:_ac.signal})}finally{clearTimeout(_to)}}catch(e){return{hata:"fetch istisnası (zaman aşımı olabilir): "+(e&&e.message||e)}}
 ;if(!res.ok)return{hata:"HTTP "+res.status+" ("+host+")"};const j=await res.json().catch(()=>null)
 ;if(!j)return{hata:"JSON parse edilemedi ("+host+")"}
 ;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp)return{hata:"Yahoo hatası: "+JSON.stringify((j.chart&&j.chart.error)||j).slice(0,200)}
@@ -1638,16 +1638,31 @@ function dbtSonucOlc(seri,girisIdx){
    dilimlerin dip durumunu ("uyum") kaydeder. */
 async function dbtKosu(kodlar,dilimler,seviyeler){
   const tumSonuclar=[],semboller=[];
-  const ES=4;let sira=0;
+  const ES=10;let sira=0;
   const isci=async()=>{
     while(sira<kodlar.length){
       const kod=kodlar[sira++];
       try{
-        const onbellek={},serilerTf={};
+        /* 🚀 TURBO: aynı hissenin farklı zaman dilimleri artık SIRAYLA değil
+           AYNI ANDA (Promise.all) çekiliyor. Eskiden 4 dilim = 4 ardışık
+           Yahoo isteği demekti (toplam süre = 4×tekil süre); şimdi hepsi
+           paralel gidiyor (toplam süre ≈ en yavaş tekil istek). Aynı
+           interval+range birden fazla dilimde geçiyorsa (ör. 1SA ve 4SA
+           ikisi de 60m çekiyor) tek seferde çekilip paylaşılıyor. */
+        const ckListe=[],ckGorulen={};
         for(const t of dilimler){
           const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
-          let ham=onbellek[ck];
-          if(!ham){const r=await yfMumlar(kod,tf.interval,tf.range);ham=(r&&r.veri)||[];onbellek[ck]=ham}
+          if(!ckGorulen[ck]){ckGorulen[ck]=!0;ckListe.push({ck:ck,interval:tf.interval,range:tf.range})}
+        }
+        const onbellek={};
+        await Promise.all(ckListe.map(async x=>{
+          const r=await yfMumlar(kod,x.interval,x.range);
+          onbellek[x.ck]=(r&&r.veri)||[];
+        }));
+        const serilerTf={};
+        for(const t of dilimler){
+          const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
+          const ham=onbellek[ck]||[];
           if(!ham.length){serilerTf[t]=null;continue}
           const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
           const m=tf.grupSaat?mbGrupla(temiz,tf.grupSaat):temiz;
@@ -1709,7 +1724,7 @@ function dbtOzetle(sonuclar){
   return{satirlar:satirlar,uyumSatirlar:uyumSatirlar};
 }
 const DBT_STIL='<style>body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.5 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:22px 0 8px;color:#8b949e}.a{color:#8b949e;font-size:13px}table{border-collapse:collapse;width:100%;margin-top:6px;font-size:13px}th,td{padding:6px 8px;text-align:right;border-bottom:1px solid #21262d;white-space:nowrap}th{color:#8b949e;font-weight:600;text-align:right}td:first-child,th:first-child{text-align:left}.iy{color:#3fb950}.kt{color:#f85149}input,textarea,button{background:#161b22;border:1px solid #272e37;color:#e6edf3;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box}textarea{width:100%;min-height:70px}button{background:#388bfd;border:none;font-weight:700;cursor:pointer;margin-top:10px}label{display:block;margin-top:12px;font-size:13px;color:#8b949e}.wrap{overflow-x:auto}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px}</style>';
-const DBT_ADIM_BOYUT=10;              /* her "adım" isteğinde kaç hisse işlenir */
+const DBT_ADIM_BOYUT=20;              /* her "adım" isteğinde kaç hisse işlenir (turbo: 10→20, paralel çekimle güvenli) */
 async function dbtIsOku(A){
   if(!A.VERI)return null;
   try{const j=await A.VERI.get("dbtIs");return j?JSON.parse(j):null}catch(_){return null}
