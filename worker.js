@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-23-d · tarama uygulamada çalışıyor · sayaç çökme hatası düzeltildi";
+const WORKER_SURUM="2026-08-23-e · yeşil kapanış da uygulamada · otomatik tarama · grafik sürüm uyumu";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -4875,9 +4875,13 @@ function portfoyPerformansGrafikCiz(gunluk){
       timeScale:{timeVisible:false,secondsVisible:false},
       rightPriceScale:{borderVisible:false}
     });
-    var seri=chart.addSeries(LightweightCharts.AreaSeries,{
+    var alanAyar={
       lineColor:"#388bfd",topColor:"rgba(56,139,253,0.35)",bottomColor:"rgba(56,139,253,0.02)",lineWidth:2
-    });
+    };
+    var seri=null;
+    if(chart.addSeries&&LightweightCharts.AreaSeries)seri=chart.addSeries(LightweightCharts.AreaSeries,alanAyar);
+    else if(chart.addAreaSeries)seri=chart.addAreaSeries(alanAyar);
+    if(!seri){kutu.innerHTML='<p class="bilgi">Grafik kütüphanesi bu sürümde alan serisi oluşturamadı.</p>';return}
     seri.setData(gunluk.map(function(x){return{time:x.gun,value:x.deger}}));
     chart.timeScale().fitContent();
     window.addEventListener("resize",function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}});
@@ -5263,10 +5267,20 @@ function grafikCiz(kod,ad,deneme,yukseklik){
         timeScale:{timeVisible:saatlik,secondsVisible:false},
         rightPriceScale:{borderVisible:false}
       });
-      var seri=chart.addSeries(LightweightCharts.CandlestickSeries,{
-        upColor:"#3fb950",downColor:"#f85149",borderVisible:false,
-        wickUpColor:"#3fb950",wickDownColor:"#f85149"
-      });
+      /* Grafik kütüphanesinin iki farklı sürüm API'si var:
+           v5 → chart.addSeries(LightweightCharts.CandlestickSeries,…)
+           v4 → chart.addCandlestickSeries(…)
+         CDN hangi sürümü verirse versin çalışsın diye ikisi de deneniyor.
+         Eskiden yalnız v5 yolu vardı; CDN v4 döndürdüğünde grafik sessizce
+         boş kalıyordu (yalnız köşedeki logo görünüyordu). */
+      var mumAyar={upColor:"#3fb950",downColor:"#f85149",borderVisible:false,
+        wickUpColor:"#3fb950",wickDownColor:"#f85149"};
+      var seri=null;
+      if(chart.addSeries&&LightweightCharts.CandlestickSeries)
+        seri=chart.addSeries(LightweightCharts.CandlestickSeries,mumAyar);
+      else if(chart.addCandlestickSeries)
+        seri=chart.addCandlestickSeries(mumAyar);
+      if(!seri){kutu.innerHTML='<p class="bilgi">Grafik kütüphanesi bu sürümde mum serisi oluşturamadı.</p>';return}
       seri.setData(veri.map(function(b){return{time:b.time,open:b.open,high:b.high,low:b.low,close:b.close}}));
       var rz=el("desenRozet"),yr=el("desenYorum"),d=v&&v.desen;
       var sonFiyat=veri.length?veri[veri.length-1].close:null;
@@ -5275,9 +5289,12 @@ function grafikCiz(kod,ad,deneme,yukseklik){
         /* Pine gibi: P1-P3 / P2-P4 arası DÜZ çizgi, sonrası NOKTALI uzatma. */
         var cizgi=function(nokta,stil){
           if(!nokta||nokta.length<2)return;
-          var s=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:stil,
-            crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
-          s.setData(nokta);
+          var ay={color:renk,lineWidth:2,lineStyle:stil,
+            crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false};
+          var s=null;
+          if(chart.addSeries&&LightweightCharts.LineSeries)s=chart.addSeries(LightweightCharts.LineSeries,ay);
+          else if(chart.addLineSeries)s=chart.addLineSeries(ay);
+          if(s)s.setData(nokta);
         };
         cizgi(d.ust,0);cizgi(d.alt,0);cizgi(d.ustUz,2);cizgi(d.altUz,2);
         if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk+';border-color:'+renk+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+"</span>";
@@ -5294,7 +5311,12 @@ function grafikCiz(kod,ad,deneme,yukseklik){
       var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
       window.addEventListener("resize",yenidenBoyutla);
     }catch(e){
-      var k2=el("mumKutu"); if(k2)k2.innerHTML='<p class="bilgi">Grafik çizilemedi.</p>';
+      /* Sessiz kalmak en kötüsü: sebebi yaz ki ne olduğu anlaşılsın. */
+      var k2=el("mumKutu");
+      if(k2)k2.innerHTML='<p class="bilgi">Grafik çizilemedi.<br>'+
+        '<span style="font-size:11px;opacity:.7">'+E(String((e&&e.message)||e)).slice(0,160)+
+        '<br>kütüphane: '+(window.LightweightCharts?(LightweightCharts.version?LightweightCharts.version():"yüklü"):"YOK")+
+        ' · mum: '+(((v&&v.mumlar)||[]).length)+'</span></p>';
     }
   }).catch(function(){var k2=el("mumKutu"); if(k2)k2.innerHTML='<p class="bilgi">Grafik verisi alınamadı.</p>'});
 }
@@ -5514,11 +5536,22 @@ function mbCiz(){
     el("govde").innerHTML='<div class="yukleniyor">hazırlanıyor…</div>';
     post("/api/malboga",{is:"evren"}).then(function(r){
       if(r&&r.ok&&r.kodlar){mbEvrenKod=r.kodlar;mbEvrenKaynak=r.kaynak||""}
-      mbCizYenile();
+      mbCizYenile();mbOtomatikBaslat();
     }).catch(function(){mbCizYenile()});
     return;
   }
   mbCizYenile();
+  /* Sekmeye girildiğinde tarama KENDİLİĞİNDEN başlar — her seferinde
+     düğmeye basmaya gerek yok. Ölçümler bellekte durduğu için ikinci
+     girişte yeniden taramaz, yalnız eksik kalanları tamamlar. */
+  mbOtomatikBaslat();
+}
+function mbOtomatikBaslat(){
+  if(mbTaraDurum&&mbTaraDurum.suruyor)return;
+  if(!mbIst.tfler.length)return;
+  var ilr=mbIlerleme();
+  if(ilr.gereken&&ilr.olculen>=ilr.gereken)return;   /* zaten tamam */
+  mbTaraBaslat();
 }
 /* Tik değişti → seçimi hemen boya, sonucu tazele. */
 function mbUygula(){ mbCizYenile(); }
@@ -6068,26 +6101,134 @@ function mbTekGoster(v){
    ayrı sayfa açılmaz. Tarama arka planda parça parça ilerler; sekmeden
    çıkıp geri gelsen kaldığı yerden devam eder. */
 var ykD=null, ykSuruyor=false, ykAcik={};
+/* ── TARAMAYI UYGULAMA YÜRÜTÜR ──
+   Hisse listesi, sıra ve sayaçlar burada; sunucu yalnız ölçer. Böylece
+   KV gecikmesi ve isolate değişimi denklemden çıkar. */
+var ykKuyruk=null, ykIdx=0, ykSayac=null, ykTekler=null, ykKesim=0,
+    ykBaslangic=0, ykTeshis=null, ykHatali=[];
+function ykSayacKat(A,B){
+  if(!B)return A;
+  if(!A.taban)A.taban={};if(!A.komb)A.komb={};
+  var kat=function(h,k){
+    if(!k)return;
+    for(var b in k){var kay=k[b];if(!kay)continue;
+      if(!h[b])h[b]={n:0,gY:0,gT:0,kN:0,kY:0,kT:0};
+      ["n","gY","gT","kN","kY","kT"].forEach(function(al){h[b][al]+=Number(kay[al])||0});
+    }
+  };
+  kat(A.taban,B.taban);
+  for(var a in B.komb){if(!A.komb[a])A.komb[a]={};kat(A.komb[a],B.komb[a])}
+  return A;
+}
+function ykGozlem(){return (ykSayac&&ykSayac.taban&&ykSayac.taban[0]&&ykSayac.taban[0].n)||0}
+function ykDurumPaketi(){
+  var bitti=!!(ykKuyruk&&ykIdx>=ykKuyruk.length);
+  return{ok:true,yerel:true,tamam:ykKuyruk?Math.min(ykIdx,ykKuyruk.length):0,
+    toplam:ykKuyruk?ykKuyruk.length:0,tamamlandi:bitti,gozlem:ykGozlem(),
+    sure:ykBaslangic?Math.round((Date.now()-ykBaslangic)/1000):0,
+    teshis:ykTeshis,hatali:ykHatali.slice(0,40),bekle:true};
+}
+/* ── Rapor da uygulamada üretilir (sunucudaki ykOzetle ile aynı kurallar).
+   Sayaçları her turda sunucuya göndermek gereksiz yük olurdu. ── */
+var YK_LV_I=[-0.786,-0.618,-0.382,-0.236,0.0,0.236,0.382,0.5,0.618,0.786,1.0,1.272,1.618,2.618,3.618,4.236];
+var YK_AD_I=["D/D-786","D/D-618","D/D-382","D/D-236","DİKKAT AYI","D/D236","D/D382","Hazırlık",
+  "BOĞA","ZAYIF D/D","KARAR YERİ","KÜÇÜK DİRENÇ","DİRENÇ","GÜÇLÜ D/D","ÇOK GÜÇLÜ D/D","DOYUM"];
+var YK_BOLGE_I=["0.0 altı","dip bölgesi","karar/direnç","güçlü D/D üstü"];
+var YK_DILIM_I=["1SA","4SA","1G"];
+var YK_ASGARI_I=40, YK_KALDIRAC_I=0.5;
+function ykBantAdI(b){b=Number(b);
+  return b===0?"< "+YK_AD_I[0]:b===YK_LV_I.length?"> "+YK_AD_I[15]:YK_AD_I[b-1]+" → "+YK_AD_I[b]}
+function ykKombAd(id){
+  var p=String(id).split("|");
+  if(p[0]==="B")return p[1]+" · "+ykBantAdI(p[2]);
+  if(p[0]==="Z")return p[1]+" · "+YK_BOLGE_I[Number(p[2])];
+  if(p[0]==="P")return p[1]+" ["+YK_BOLGE_I[Number(p[2])]+"] + "+p[3]+" ["+YK_BOLGE_I[Number(p[4])]+"]";
+  if(p[0]==="U")return "1SA ["+YK_BOLGE_I[Number(p[1])]+"] + 4SA ["+YK_BOLGE_I[Number(p[2])]+"] + 1G ["+YK_BOLGE_I[Number(p[3])]+"]";
+  return id;
+}
+function ykOzetleYerel(S,alan){
+  if(!S||!S.taban)return null;
+  var oku=function(kutu,b){
+    var c=kutu&&kutu[b];
+    if(!c||typeof c!=="object")return null;
+    var n=alan==="g"?c.n:c.kN;
+    if(!n)return null;
+    return{n:n,yesil:100*(alan==="g"?c.gY:c.kY)/n,ort:(alan==="g"?c.gT:c.kT)/n};
+  };
+  var taban={};for(var b=0;b<=4;b++)taban[b]=oku(S.taban,b);
+  if(!taban[0])return null;
+  var satirlar=[],denenen=0;
+  for(var id in S.komb){
+    var kutu=S.komb[id];
+    var g=oku(kutu,0);if(!g||g.n<YK_ASGARI_I*2)continue;
+    var bl=[1,2,3,4].map(function(x){return oku(kutu,x)});
+    var eksik=false;
+    for(var i=0;i<4;i++)if(!bl[i]||bl[i].n<YK_ASGARI_I)eksik=true;
+    if(eksik)continue;
+    denenen++;
+    var k=bl.map(function(x,i2){return x.yesil-taban[i2+1].yesil});
+    var enAz=Math.min.apply(null,k);
+    satirlar.push({id:id,ad:ykKombAd(id),n:g.n,yesil:g.yesil,ort:g.ort,
+      kaldirac:g.yesil-taban[0].yesil,bolmeler:k,enAz:enAz,gecti:enAz>=YK_KALDIRAC_I});
+  }
+  satirlar.sort(function(a,b2){return b2.enAz-a.enAz});
+  var gecen=satirlar.filter(function(r){return r.gecti});
+  return{taban:{n:taban[0].n,yesil:taban[0].yesil,ort:taban[0].ort},
+    denenen:denenen,gecen:gecen.length,beklenenGurultu:Math.round(denenen*0.06),
+    gecenler:gecen.slice(0,25),
+    elenenler:satirlar.filter(function(r){return !r.gecti}).slice(0,10)};
+}
+/* ── Tarama döngüsü ── */
 function ykCiz(){
   if(ykD){ykGoster(ykD);return}
-  el("govde").innerHTML='<div class="yukleniyor">durum okunuyor…</div>';
-  post("/api/yesil",{is:"durum"}).then(function(v){ykD=v;ykGoster(v);
-    if(v&&v.ok&&!v.yok&&!v.tamamlandi)ykAdim();})
-    .catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
+  ykD=ykDurumPaketi();
+  if(!ykKuyruk){ykD.yok=true}
+  ykGoster(ykD);
+}
+function ykBaslat(hizli){
+  el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
+  post("/api/malboga",{is:"evren"}).then(function(r){
+    if(!r||!r.ok||!r.kodlar||!r.kodlar.length){
+      el("govde").innerHTML='<div class="bos">Hisse listesi alınamadı.</div>';return}
+    ykKuyruk=hizli?r.kodlar.slice(0,40):r.kodlar.slice();
+    ykTekler=ykKuyruk.filter(function(_,i){return i%2===0});
+    ykIdx=0;ykSayac={taban:{},komb:{}};ykHatali=[];ykTeshis={veriYok:{},gozlemsiz:0,hata:0};
+    ykKesim=Math.floor(Date.now()/1000)-330*86400;
+    ykBaslangic=Date.now();ykSuruyor=true;
+    ykTur();
+  }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
+}
+function ykDur(){ykSuruyor=false;ykYenidenCiz()}
+function ykYenidenCiz(){
+  var v=ykDurumPaketi();
+  v.gun=ykOzetleYerel(ykSayac,"g");
+  v.kap=ykOzetleYerel(ykSayac,"k");
+  ykD=v;ykGoster(v);
+}
+function ykTur(){
+  if(!ykSuruyor||sekme!=="yesil"||!ykKuyruk)return;
+  if(ykIdx>=ykKuyruk.length){ykSuruyor=false;ykYenidenCiz();return}
+  var parca=ykKuyruk.slice(ykIdx,ykIdx+20);
+  post("/api/yesil",{is:"parti",kodlar:parca,tekler:ykTekler,zamanKesim:ykKesim})
+    .then(function(r){
+      if(!ykSuruyor)return;
+      if(r&&r.ok&&r.sayac)ykSayacKat(ykSayac,r.sayac);
+      if(r&&r.teshis){
+        for(var k in (r.teshis.veriYok||{}))ykTeshis.veriYok[k]=(ykTeshis.veriYok[k]||0)+r.teshis.veriYok[k];
+        ykTeshis.gozlemsiz+=r.teshis.gozlemsiz||0;ykTeshis.hata+=r.teshis.hata||0;
+      }
+      if(r&&r.hatali&&r.hatali.length)ykHatali=ykHatali.concat(r.hatali);
+      ykIdx+=parca.length;
+      ykYenidenCiz();
+      setTimeout(ykTur,60);
+    }).catch(function(){
+      if(!ykSuruyor)return;
+      ykTeshis.hata++;
+      if(ykTeshis.hata>30){ykSuruyor=false;ykYenidenCiz();return}
+      setTimeout(ykTur,1500);
+    });
 }
 /* Bir adım ilerlet, bitene kadar kendini çağırır. */
-function ykAdim(){
-  if(ykSuruyor)return;
-  ykSuruyor=true;
-  post("/api/yesil",{is:"adim"}).then(function(v){
-    ykSuruyor=false;
-    if(!v||!v.ok||v.yok){ykD=v;ykGoster(v);return}
-    ykD=v;ykGoster(v);
-    /* KV'nin yayılması için nefes payı — çok sık istek bayat okumaya yol açar */
-    if(!v.tamamlandi&&sekme==="yesil")setTimeout(ykAdim,1200);
-  }).catch(function(){ykSuruyor=false;
-    if(sekme==="yesil")setTimeout(ykAdim,2500)});
-}
 /* Neden veri gelmedi — sessiz boş rapor yerine açık sebep. */
 function ykTeshisHTML(v){
   var t=v&&v.teshis;if(!t)return"";
@@ -6214,17 +6355,9 @@ function ykGoster(v){
   el("govde").innerHTML=h;
   var t=el("ykTam");if(t)t.onclick=function(){tit();ykBaslat(false)};
   var z=el("ykHizli");if(z)z.onclick=function(){tit();ykBaslat(true)};
-  var ip=el("ykIptal");if(ip)ip.onclick=function(){tit();ip.disabled=true;
-    post("/api/yesil",{is:"iptal"}).then(function(){ykD=null;ykCiz()})};
+  var ip=el("ykIptal");if(ip)ip.onclick=function(){tit();ykDur()};
   [].forEach.call(document.querySelectorAll("[data-ykac]"),function(b){
     b.onclick=function(){tit();var k=b.dataset.ykac;ykAcik[k]=!ykAcik[k];ykGoster(v)}});
-}
-function ykBaslat(hizli){
-  el("govde").innerHTML='<div class="yukleniyor">tarama hazırlanıyor…</div>';
-  post("/api/yesil",{is:"basla",hizli:hizli?1:0}).then(function(r){
-    if(!r||!r.ok){el("govde").innerHTML='<div class="bos">'+((r&&r.hata)||"başlatılamadı")+'</div>';return}
-    ykD=null;ykAdim();
-  }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı hatası.</div>'});
 }
 /* ================== 🛡 SİSTEM SEKMESİ (yalnız yönetici) ==================
    Altı dayanıklılık maddesinin tamamı burada görünür:
@@ -7936,6 +8069,22 @@ async function ykParcalariSil(A){
 if("/api/yesil"===$.pathname){
   if(!YON)return JS({ok:!1,hata:"Yetkin yok."},403);
   const is=String(gov.is||"durum");
+  /* ⚡ DURUMSUZ ÖLÇÜM — sunucu hiçbir şey hatırlamaz.
+     Eskiden "başlat" KV'ye bir iş yazıyor, hemen ardından gelen "adım"
+     isteği başka bir isolate'e düşünce o işi bulamıyor ve "iş yok" diyordu;
+     ekran da başlangıç menüsüne geri dönüyordu. Artık hisse listesini ve
+     nerede kalındığını UYGULAMA tutuyor, sunucu yalnız verilen partiyi
+     ölçüp sayacı geri veriyor. */
+  if(is==="parti"){
+    const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[])
+      .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,YK_ADIM);
+    if(!kodlar.length)return JS({ok:!1,hata:"kod yok"});
+    const kesim=Number(gov.zamanKesim)||(Math.floor(Date.now()/1000)-330*86400);
+    const tekSet=new Set((Array.isArray(gov.tekler)?gov.tekler:[]));
+    const{sayac,semboller,teshis}=await ykKosu(kodlar,kesim,k=>tekSet.has(k));
+    return JS({ok:!0,sayac:sayac,teshis:teshis,
+      hatali:(semboller||[]).filter(x=>x.hata).map(x=>x.kod)});
+  }
   if(is==="basla"){
     let kodlar;
     const ev=await mbEvren(A,[]);
