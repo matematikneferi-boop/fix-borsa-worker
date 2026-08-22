@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-22-f · filtre alarmı · dip backtest: TP=güçlü/çok güçlü D-D, yeni stop, sade rapor";
+const WORKER_SURUM="2026-08-22-g · yeşil kapanış araştırması (dört bölmeli doğrulama) · filtre alarmı";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1986,6 +1986,298 @@ function dbtRaporHTML(o){
   '<div class="wrap"><table><tr><th>kurulum</th><th>giriş</th><th>ort. getiri</th><th>kazanan</th><th>TP1</th><th>stop</th><th>TP1 uzaklık</th><th>stop uzaklık</th><th>doyum uzaklık</th></tr>'+temelHtml+'</table></div>'+
   (semHtml?'<h2>⚠️ Veri alınamayan hisseler</h2><div class="a">'+semHtml+'</div>':'')+
   '<div class="a" style="margin-top:16px"><a href="/dipbacktest?key='+encodeURIComponent(o.anahtar||'')+'" style="color:#388bfd">← yeni koşum</a></div>'+
+  '</body></html>';
+}
+
+/* ═══════════════ 🟢 YEŞİL KAPANIŞ ARAŞTIRMASI ═══════════════════════════
+   Soru: hisse hangi zaman diliminde fibo merdiveninin hangi basamak
+   aralığındayken ertesi günü YEŞİL kapatıyor?
+
+   KURULUM — ileriye bakma YOK:
+     · Durum, D gününün barı AÇILMADAN önceki son barlardan okunur.
+     · Sonuç iki türlü ölçülür:
+         GÜN İÇİ        : açılışta al, kapanışta sat  (= "yeşil mum")
+         KAPANIŞ→KAPANIŞ: kapanışta al, ertesi kapanışta sat (geceyi de alır)
+
+   AŞIRI UYDURMAYA KARŞI DÖRT BÖLME:
+   Yüzlerce kombinasyon denenince rastgele veride bile parlak sonuç çıkar.
+   Bu yüzden her kombinasyon DÖRT bağımsız bölmede birden sınanır:
+     zaman: eski yarı / yeni yarı   (rejim değişince de tutuyor mu?)
+     hisse: tek sıra / çift sıra    (birkaç hisseye mi özgü?)
+   Dördünde de TABANI geçmeyen kurulum gürültü sayılır ve listeye girmez.
+   Taban = o bölmedeki genel yeşil oranı; kaldıraç = kurulum − taban.
+
+   ÖLÇEK: 430 hisse × ~450 gün = ~190 bin gözlem. Ham gözlemi saklamak KV'yi
+   patlatırdı; onun yerine kombinasyon × bölme başına SAYAÇ biriktirilir
+   (175 kombinasyon × 5 bölme = 875 sayaç, birkaç KB). */
+const YK_LV=[-0.786,-0.618,-0.382,-0.236,0.0,0.236,0.382,0.5,0.618,0.786,1.0,1.272,1.618,2.618,3.618,4.236];
+const YK_AD=["D/D-786","D/D-618","D/D-382","D/D-236","DİKKAT AYI","D/D236","D/D382","Hazırlık",
+  "BOĞA","ZAYIF D/D","KARAR YERİ","KÜÇÜK DİRENÇ","DİRENÇ","GÜÇLÜ D/D","ÇOK GÜÇLÜ D/D","DOYUM"];
+const YK_BOLGE_AD=["0.0 altı","dip bölgesi","karar/direnç","güçlü D/D üstü"];
+const YK_DILIM=["1SA","4SA","1G"];      /* 15DK/5DK: yalnız 60 gün veri, dışarıda */
+const YK_PENCERE=4000;                  /* backtest için geniş pencere (canlı tarama 700 kullanır) */
+const YK_ASGARI=80;                     /* bir bölmede en az kaç gözlem */
+const YK_KALDIRAC=0.5;                  /* tabanı en az bu kadar geçmeli (yüzde puan) */
+
+function ykBant(o){if(!isFinite(o))return null;for(let i=0;i<YK_LV.length;i++)if(o<YK_LV[i])return i;return YK_LV.length}
+function ykBantAd(b){return b===null?"?":b===0?"< "+YK_AD[0]:b===YK_LV.length?"> "+YK_AD[15]:YK_AD[b-1]+" → "+YK_AD[b]}
+function ykBolge(o){if(!isFinite(o))return null;return o<0?0:o<0.786?1:o<1.618?2:3}
+/* Her bar için merdivendeki konum (0.0 çizgisinden kaç birim yukarıda) */
+function ykOranSeri(m){
+  const s=m.slice(-YK_PENCERE);
+  const lv=mb571Seri(s,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV);
+  const out=new Array(s.length);
+  for(let i=0;i<s.length;i++){
+    const x=lv[i];
+    if(!x||!isFinite(x.stop)||!isFinite(x.s786)||x.s786===x.stop){out[i]=null;continue}
+    out[i]={time:s[i].time,oran:(x.close-x.stop)/((x.s786-x.stop)/0.786)};
+  }
+  return out;
+}
+/* Kombinasyon listesi — hepsi tek yerde tanımlı, rapor da bunu kullanır. */
+function ykKombinasyonlar(){
+  const c=[];
+  for(const t of YK_DILIM)for(let b=0;b<=YK_LV.length;b++)
+    c.push({id:"B|"+t+"|"+b,ad:t+" · "+ykBantAd(b),tur:"bant"});
+  for(const t of YK_DILIM)for(let z=0;z<4;z++)
+    c.push({id:"Z|"+t+"|"+z,ad:t+" · "+YK_BOLGE_AD[z],tur:"bölge"});
+  for(let i=0;i<YK_DILIM.length;i++)for(let j=i+1;j<YK_DILIM.length;j++)
+    for(let z1=0;z1<4;z1++)for(let z2=0;z2<4;z2++)
+      c.push({id:"P|"+YK_DILIM[i]+"|"+z1+"|"+YK_DILIM[j]+"|"+z2,
+        ad:YK_DILIM[i]+" ["+YK_BOLGE_AD[z1]+"] + "+YK_DILIM[j]+" ["+YK_BOLGE_AD[z2]+"]",tur:"ikili"});
+  for(let z1=0;z1<4;z1++)for(let z2=0;z2<4;z2++)for(let z3=0;z3<4;z3++)
+    c.push({id:"U|"+z1+"|"+z2+"|"+z3,
+      ad:"1SA ["+YK_BOLGE_AD[z1]+"] + 4SA ["+YK_BOLGE_AD[z2]+"] + 1G ["+YK_BOLGE_AD[z3]+"]",tur:"üçlü"});
+  return c;
+}
+/* Bir gözlemin hangi kombinasyonlara girdiği */
+function ykEslesenler(d){
+  const out=[];
+  for(const t of YK_DILIM){out.push("B|"+t+"|"+d[t].bant);out.push("Z|"+t+"|"+d[t].bolge)}
+  for(let i=0;i<YK_DILIM.length;i++)for(let j=i+1;j<YK_DILIM.length;j++)
+    out.push("P|"+YK_DILIM[i]+"|"+d[YK_DILIM[i]].bolge+"|"+YK_DILIM[j]+"|"+d[YK_DILIM[j]].bolge);
+  out.push("U|"+d["1SA"].bolge+"|"+d["4SA"].bolge+"|"+d["1G"].bolge);
+  return out;
+}
+/* Boş sayaç kabı. bolme: 0 genel · 1 zaman-eski · 2 zaman-yeni · 3 hisse-tek · 4 hisse-çift */
+function ykSayacYeni(){return{taban:[],komb:{}}}
+function ykSayacEkle(S,anahtar,bolmeler,yesilG,getiriG,yesilK,getiriK){
+  const kutu=(hedef,b)=>{
+    if(!hedef[b])hedef[b]={n:0,gY:0,gT:0,kN:0,kY:0,kT:0};
+    return hedef[b];
+  };
+  for(const b of bolmeler){
+    const t=kutu(S.taban,b);
+    t.n++;if(yesilG)t.gY++;t.gT+=getiriG;
+    if(getiriK!==null){t.kN++;if(yesilK)t.kY++;t.kT+=getiriK}
+  }
+  for(const a of anahtar){
+    if(!S.komb[a])S.komb[a]=[];
+    for(const b of bolmeler){
+      const c=kutu(S.komb[a],b);
+      c.n++;if(yesilG)c.gY++;c.gT+=getiriG;
+      if(getiriK!==null){c.kN++;if(yesilK)c.kY++;c.kT+=getiriK}
+    }
+  }
+}
+function ykSayacBirlestir(A,B){
+  const kat=(h,k)=>{
+    for(const b in k){
+      if(!h[b])h[b]={n:0,gY:0,gT:0,kN:0,kY:0,kT:0};
+      for(const alan of ["n","gY","gT","kN","kY","kT"])h[b][alan]+=k[b][alan];
+    }
+  };
+  kat(A.taban,B.taban);
+  for(const a in B.komb){if(!A.komb[a])A.komb[a]=[];kat(A.komb[a],B.komb[a])}
+  return A;
+}
+/* Bir grup hisseyi tarar, sayaç üretir. zamanKesim: bu damgadan öncesi "eski". */
+async function ykKosu(kodlar,zamanKesim,hisseTek){
+  const S=ykSayacYeni();
+  const semboller=[];
+  let sira=0;
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      const kod=kodlar[sira++];
+      try{
+        const ckListe=[],gor={};
+        for(const t of YK_DILIM){
+          const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
+          if(!gor[ck]){gor[ck]=!0;ckListe.push({ck:ck,interval:tf.interval,range:tf.range})}
+        }
+        const onb={};
+        await Promise.all(ckListe.map(async x=>{
+          const r=await yfMumlar(kod,x.interval,x.range);onb[x.ck]=(r&&r.veri)||[];
+        }));
+        const sr={};
+        for(const t of YK_DILIM){
+          const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
+          let m=onb[ck]||[];
+          if(!m.length){sr[t]=null;continue}
+          if(tf.hayaletAt)m=mbHayaletAt(m);
+          if(tf.grupSaat)m=mbGrupla(m,tf.grupSaat);
+          sr[t]=ykOranSeri(m);
+        }
+        const gtf=MB_TF["1G"];
+        let gm=mbHayaletAt(onb[gtf.interval+"|"+gtf.range]||[]).slice(-YK_PENCERE);
+        const imlec={};for(const t of YK_DILIM)imlec[t]=-1;
+        let say=0;
+        const tekMi=hisseTek(kod);
+        for(let i=1;i<gm.length-1;i++){
+          const g=gm[i];
+          if(!(g.open>0)||!(g.close>0))continue;
+          const durum={};let eksik=!1;
+          for(const t of YK_DILIM){
+            const s2=sr[t];if(!s2){eksik=!0;break}
+            let k=imlec[t];
+            while(k+1<s2.length&&s2[k+1]&&s2[k+1].time<g.time)k++;
+            while(k+1<s2.length&&!s2[k+1])k++;
+            imlec[t]=k;
+            const b2=k>=0?s2[k]:null;
+            if(!b2){eksik=!0;break}
+            durum[t]={bant:ykBant(b2.oran),bolge:ykBolge(b2.oran)};
+          }
+          if(eksik)continue;
+          const yarin=gm[i+1];
+          const gunIci=100*(g.close/g.open-1);
+          const kapKap=(yarin&&yarin.close>0)?100*(yarin.close/g.close-1):null;
+          const bolmeler=[0, g.time<zamanKesim?1:2, tekMi?3:4];
+          ykSayacEkle(S,ykEslesenler(durum),bolmeler,gunIci>0,gunIci,
+            kapKap!==null&&kapKap>0,kapKap);
+          say++;
+        }
+        semboller.push({kod:kod,gun:say});
+      }catch(e){semboller.push({kod:kod,hata:String((e&&e.message)||e)})}
+    }
+  };
+  await Promise.all(Array.from({length:DBT_ES},isci));
+  return{sayac:S,semboller:semboller};
+}
+/* Sayaçlardan rapor. alan: "g" gün içi · "k" kapanış→kapanış */
+function ykOzetle(S,alan){
+  const oku=(kutu,b)=>{
+    const c=kutu&&kutu[b];if(!c)return null;
+    const n=alan==="g"?c.n:c.kN;
+    if(!n)return null;
+    return{n:n,yesil:100*(alan==="g"?c.gY:c.kY)/n,ort:(alan==="g"?c.gT:c.kT)/n};
+  };
+  const taban={};for(let b=0;b<=4;b++)taban[b]=oku(S.taban,b);
+  if(!taban[0])return{taban:null,satirlar:[],denenen:0,gecen:0};
+  const adlar={};for(const c of ykKombinasyonlar())adlar[c.id]={ad:c.ad,tur:c.tur};
+  const satirlar=[];let denenen=0;
+  for(const id in S.komb){
+    const kutu=S.komb[id];
+    const g=oku(kutu,0);if(!g||g.n<YK_ASGARI*2)continue;
+    const b=[1,2,3,4].map(x=>oku(kutu,x));
+    if(b.some(x=>!x||x.n<YK_ASGARI))continue;
+    denenen++;
+    const k=b.map((x,i)=>x.yesil-taban[i+1].yesil);
+    const enAz=Math.min.apply(null,k);
+    satirlar.push({id:id,ad:(adlar[id]||{}).ad||id,tur:(adlar[id]||{}).tur||"",
+      n:g.n,yesil:g.yesil,ort:g.ort,kaldirac:g.yesil-taban[0].yesil,
+      bolmeler:k,enAz:enAz,gecti:enAz>=YK_KALDIRAC});
+  }
+  satirlar.sort((x,y)=>y.enAz-x.enAz);
+  return{taban:taban[0],satirlar:satirlar,denenen:denenen,
+    gecen:satirlar.filter(r=>r.gecti).length};
+}
+/* ── Yeşil Kapanış: iş akışı (parçalı tarama) + sayfalar ── */
+const YK_ADIM=16;                    /* bir adımda kaç hisse */
+async function ykIsOku(A){
+  if(!A.VERI)return null;
+  try{const j=await A.VERI.get("ykIs");return j?JSON.parse(j):null}catch(_){return null}
+}
+async function ykIsYaz(A,job){
+  if(!A.VERI)return;
+  try{await A.VERI.put("ykIs",JSON.stringify(job),{expirationTtl:172800})}catch(_){}
+}
+const ykHisseTek=(kodlar)=>{
+  const har={};kodlar.forEach((k,i)=>har[k]=(i%2===0));
+  return k=>!!har[k];
+};
+function ykYuzde(v,o){return v===null||v===undefined||!isFinite(v)?"—":(v>0?"+":"")+v.toFixed(o===undefined?1:o)}
+function ykFormHTML(anahtar,is){
+  let devam="";
+  if(is&&!is.tamamlandi&&is.toplam)
+    devam='<div class="kur" style="border-color:#1f6feb;background:#0d1b2e"><b>⏳ Süren tarama var</b>'+
+      '<div class="a" style="margin-top:4px">'+is.tamam+' / '+is.toplam+' hisse.</div>'+
+      '<a class="a" style="color:#388bfd;display:inline-block;margin-top:6px" href="/yesil/rapor?key='+encodeURIComponent(anahtar||'')+'">→ ilerlemeyi aç</a></div>';
+  else if(is&&is.tamamlandi)
+    devam='<div class="a" style="margin-top:10px">Son tarama bitti ('+is.tamam+' hisse). '+
+      '<a href="/yesil/rapor?key='+encodeURIComponent(anahtar||'')+'" style="color:#388bfd">sonucu aç</a></div>';
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yeşil Kapanış Araştırması</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🟢 Yeşil Kapanış Araştırması</h1>'+
+  '<div class="a">Hisse, fibo merdiveninin hangi basamak aralığındayken ertesi günü <b>yeşil</b> kapatıyor? '+
+  'Yüzlerce kombinasyon denenir ve her biri <b>dört bağımsız bölmede</b> (zaman: eski/yeni yarı · hisse: tek/çift sıra) '+
+  'ayrı ayrı sınanır. Dördünde de tabanı geçmeyen kurulum gürültü sayılıp elenir.</div>'+
+  devam+
+  '<form method="get" action="/yesil">'+
+  '<input type="hidden" name="key" value="'+(anahtar||'').replace(/"/g,'')+'">'+
+  '<label style="display:flex;align-items:center;gap:8px;margin-top:14px"><input type="checkbox" name="evren" value="1" checked style="width:auto">🌍 <b>Havuzun tamamı</b> (430+ hisse · birkaç dakika)</label>'+
+  '<label>Ya da hisse kodları (virgülle · boş bırakırsan havuzdan ilk 40)</label>'+
+  '<textarea name="kod" placeholder="THYAO, ASELS, GARAN..."></textarea>'+
+  '<input type="hidden" name="git" value="1"><button type="submit">▶ Başlat</button></form>'+
+  '<div class="a" style="margin-top:12px">Ölçülen iki sonuç: <b>gün içi</b> (açılışta al, kapanışta sat) ve '+
+  '<b>kapanış→kapanış</b> (kapanışta al, ertesi kapanışta sat — geceyi de alır). '+
+  'Durum her zaman gün <i>açılmadan önce</i> okunur, ileriye bakma yoktur.</div>'+
+  '</body></html>';
+}
+function ykIlerlemeHTML(anahtar){
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yeşil Kapanış — taranıyor</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🟢 Yeşil Kapanış — taranıyor</h1>'+
+  '<div class="kur" style="border-color:#272e37;background:#161b22"><div id="y" class="a">başlıyor…</div>'+
+  '<div style="background:#0d1117;border:1px solid #272e37;border-radius:8px;height:14px;margin-top:8px;overflow:hidden">'+
+  '<div id="c" style="background:#3fb950;height:100%;width:0%"></div></div></div>'+
+  '<div class="a" style="margin-top:10px">Sayfayı açık bırak; bitince rapora geçer. Kapatırsan iş devam eder, /yesil/rapor adresinden bakabilirsin.</div>'+
+  '<script>var key='+JSON.stringify(anahtar||'')+';'+
+  'function a(){fetch("/yesil/adim?key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(v){'+
+  'if(!v||!v.ok){document.getElementById("y").textContent="hata — sayfayı yenile";return}'+
+  'var p=v.toplam?Math.round(100*v.tamam/v.toplam):0;'+
+  'document.getElementById("c").style.width=p+"%";'+
+  'document.getElementById("y").textContent=v.tamam+" / "+v.toplam+" hisse ("+p+"%)"+(v.gozlem?" · "+v.gozlem+" hisse-günü":"");'+
+  'if(v.tamamlandi){location.href="/yesil/rapor?key="+encodeURIComponent(key)}else{setTimeout(a,250)}'+
+  '}).catch(function(){setTimeout(a,2000)})}a();</script></body></html>';
+}
+function ykTabloHTML(o,baslik,aciklama){
+  if(!o.taban)return '<h2>'+baslik+'</h2><div class="a">yeterli veri yok</div>';
+  const gecen=o.satirlar.filter(r=>r.gecti);
+  const satir=(r)=>'<tr><td>'+E2(r.ad)+'</td><td>'+r.n+'</td>'+
+    '<td class="'+(r.yesil>=o.taban.yesil?'iy':'kt')+'"><b>%'+r.yesil.toFixed(0)+'</b></td>'+
+    '<td class="'+(r.kaldirac>0?'iy':'kt')+'"><b>'+ykYuzde(r.kaldirac)+'</b></td>'+
+    r.bolmeler.map(v=>'<td class="'+(v>0?'iy':'kt')+'">'+ykYuzde(v)+'</td>').join('')+
+    '<td class="'+(r.ort>0?'iy':'kt')+'">'+ykYuzde(r.ort,2)+'</td></tr>';
+  const bas='<div class="wrap"><table><tr><th>kurulum</th><th>n</th><th>yeşil</th><th>kaldıraç</th>'+
+    '<th>zaman<br>eski</th><th>zaman<br>yeni</th><th>hisse<br>tek</th><th>hisse<br>çift</th><th>ort.<br>getiri</th></tr>';
+  return '<h2>'+baslik+'</h2>'+
+    '<div class="a">'+aciklama+'<br>TABAN: yeşil <b>%'+o.taban.yesil.toFixed(1)+'</b> · ortalama <b>'+
+    ykYuzde(o.taban.ort,3)+'%</b> ('+o.taban.n+' hisse-günü). '+
+    '<b>Kaldıraç</b> = kurulumun tabandan farkı (yüzde puan). Dört bölme sütunu da artıysa kurulum sağlamdır.</div>'+
+    '<div class="kur" style="border-color:'+(gecen.length?'#238636':'#6b2b2b')+';background:'+(gecen.length?'#0f2016':'#22171a')+'">'+
+    '<b>'+o.denenen+' kombinasyon denendi · dört bölmenin dördünü geçen: '+gecen.length+'</b>'+
+    '<div class="a" style="margin-top:4px">Saf gürültüden beklenen yanlış-pozitif ≈ '+
+    Math.round(o.denenen*0.06)+'. Bunun belirgin üstündeyse gerçek sinyal var demektir.</div></div>'+
+    (gecen.length?bas+gecen.slice(0,25).map(satir).join('')+'</table></div>':'')+
+    '<div class="a" style="margin-top:10px;opacity:.7">— elenenler dahil ilk 15 (karşılaştırma için) —</div>'+
+    bas+o.satirlar.slice(0,15).map(satir).join('')+'</table></div>';
+}
+function E2(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function ykRaporHTML(o){
+  const g=ykOzetle(o.sayac,"g"), k=ykOzetle(o.sayac,"k");
+  const hata=(o.semboller||[]).filter(s=>s.hata);
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yeşil Kapanış sonuçları</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🟢 Yeşil Kapanış sonuçları</h1>'+
+  '<div class="a">'+o.toplam+' hisse · '+(g.taban?g.taban.n:0)+' hisse-günü · '+o.sure+' sn</div>'+
+  '<div class="kur" style="border-color:#272e37;background:#161b22"><b>Nasıl okunur?</b>'+
+  '<div class="a" style="margin-top:5px;line-height:1.7">'+
+  'Durum, gün <b>açılmadan önce</b> okunur — ileriye bakma yok.<br>'+
+  '<b>Kaldıraç</b>, kurulumun taban yeşil oranından farkıdır. Taban zaten %45 ise %48 çıkan bir kural sadece +3 puan katıyor demektir.<br>'+
+  'Dört bölme sütunu (zaman eski/yeni, hisse tek/çift) <b>ayrı ayrı</b> hesaplanır. Bir kurulum yalnız birinde parlıyorsa tesadüftür.</div></div>'+
+  ykTabloHTML(g,'📈 Gün içi — açılışta al, kapanışta sat',
+    'Bu, senin sorduğun "günü yeşil kapatsın" ölçüsü: mumun yeşil olması.')+
+  ykTabloHTML(k,'🌙 Kapanış → kapanış — kapanışta al, ertesi kapanışta sat',
+    'Gecelik boşluğu da alır. İki tabanı karşılaştır: fark, gün içi ile gecenin farklı davrandığını gösterir.')+
+  (hata.length?'<h2>⚠️ Veri alınamayan</h2><div class="a">'+hata.map(s=>E2(s.kod)).join(', ')+'</div>':'')+
+  '<div class="a" style="margin-top:16px"><a href="/yesil?key='+encodeURIComponent(o.anahtar||'')+'" style="color:#388bfd">← yeni koşum</a></div>'+
   '</body></html>';
 }
 
@@ -6483,6 +6775,59 @@ if("/dipbacktest/rapor"===$.pathname){
   return new Response(dbtRaporHTML({kodlar:{length:job.toplam},dilimler:job.dilimler,
     ozet:ozet,semboller:job.semboller,sure:sure,
     toplamGiris:job.sonuclar.length,anahtar:anahtar}),{headers:{"content-type":"text/html; charset=utf-8"}})
+}
+if("/yesil"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
+  const anahtar=$.searchParams.get("key")||$.searchParams.get("t")||"";
+  const mevcut=await ykIsOku(A);
+  if($.searchParams.get("git")!=="1")
+    return new Response(ykFormHTML(anahtar,mevcut),{headers:{"content-type":"text/html; charset=utf-8"}});
+  let kodlar=String($.searchParams.get("kod")||"").toUpperCase().split(/[^A-Z0-9]+/).filter(x=>KOD_GECERLI.test(x));
+  if($.searchParams.get("evren")==="1"||!kodlar.length){
+    const ev=await mbEvren(A,[]);
+    kodlar=$.searchParams.get("evren")==="1"?ev.slice():ev.slice(0,40);
+  }
+  kodlar=[...new Set(kodlar)];
+  /* Zaman kesimi: en eski gözlem ile bugünün ortası. Veriyi görmeden
+     sabitlenir ki "en iyi bölme"yi seçme yanlılığı olmasın. */
+  const simdi=Math.floor(Date.now()/1000);
+  const job={anahtar:anahtar,kodlar:kodlar,kuyruk:kodlar.slice(),toplam:kodlar.length,tamam:0,
+    zamanKesim:simdi-330*86400,   /* ~11 ay önce: 1SA verisinin kapsadığı aralığın ortası */
+    sayac:ykSayacYeni(),semboller:[],baslangic:Date.now(),guncelleme:Date.now(),tamamlandi:!1};
+  await ykIsYaz(A,job);
+  return new Response(ykIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+}
+if("/yesil/adim"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(JSON.stringify({ok:!1}),{status:kk.kod||401,headers:{"content-type":"application/json"}});
+  const job=await ykIsOku(A);
+  if(!job)return new Response(JSON.stringify({ok:!1,mesaj:"aktif tarama yok"}),{headers:{"content-type":"application/json"}});
+  if(!job.tamamlandi&&job.kuyruk.length){
+    const grup=job.kuyruk.splice(0,YK_ADIM);
+    const tek=ykHisseTek(job.kodlar);
+    const{sayac,semboller}=await ykKosu(grup,job.zamanKesim,tek);
+    job.sayac=ykSayacBirlestir(job.sayac,sayac);
+    job.semboller=job.semboller.concat(semboller).slice(-600);
+    job.tamam+=grup.length;
+    job.guncelleme=Date.now();
+    if(!job.kuyruk.length)job.tamamlandi=!0;
+    await ykIsYaz(A,job);
+  }
+  const t=job.sayac&&job.sayac.taban&&job.sayac.taban[0];
+  return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,
+    tamamlandi:job.tamamlandi,gozlem:t?t.n:0}),{headers:{"content-type":"application/json"}});
+}
+if("/yesil/rapor"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
+  const job=await ykIsOku(A);
+  if(!job)return new Response("Aktif ya da tamamlanmış tarama yok. /yesil adresinden başlat.",{headers:{"content-type":"text/plain; charset=utf-8"}});
+  const anahtar=$.searchParams.get("key")||job.anahtar||"";
+  if(!job.tamamlandi)return new Response(ykIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+  return new Response(ykRaporHTML({sayac:job.sayac,semboller:job.semboller,toplam:job.toplam,
+    sure:((job.guncelleme-job.baslangic)/1000).toFixed(1),anahtar:anahtar}),
+    {headers:{"content-type":"text/html; charset=utf-8"}});
 }
 if($.pathname.startsWith("/panel")){
 /* 4️⃣ + 1️⃣ Panel kapısı: IP başına yanlış deneme sayacı + (tanımlıysa)
