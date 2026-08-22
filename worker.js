@@ -1565,6 +1565,175 @@ async function mbTekHisse(kod){
    (bkz. tamEvren). Böylece 121 sınırı iki tarafta birden kalktı. */
 async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
 
+/* ═══════════════════ 🧪 DİP BACKTEST — yalnız yönetici görür ═══════════════
+   Soru: "dip / derin dip (382 altı) / en dip (236 altı)" sinyalleri
+   fiilen ne kadar işe yarıyor? Hedef = doyum noktası (TP2) ile onun bir
+   altındaki fibo çizgisi (786 → TP1). Ayrıca aynı hissenin diğer zaman
+   dilimlerinde AYNI ANDA dipte olması ("uyum/ahenk") sonucu değiştiriyor
+   mu — onu da ölçer. Kapanışla değerlendirilir (fitil sayılmaz),
+   mbMotor'daki BİREBİR AYNI dip formülü kullanılır — tek fark: mbMotor
+   yalnız SON barı üretir, burada HER bar için üretilir. */
+const DBT_UFUK=200; /* TP'ye ulaşma için ileri taranacak azami bar sayısı */
+const DBT_SEVIYE=["dip","dip382","dip236"];
+
+function dbtSeriUret(mumlar){
+  if(!mumlar||mumlar.length<30)return null;
+  const m=mumlar.slice(-MB_PENCERE);
+  const uzun=Math.floor(MB_DEPTH/2);
+  const lv=mb571Seri(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV);
+  const out=new Array(m.length);
+  for(let i=0;i<m.length;i++){
+    const x=lv[i];
+    if(!x||i<uzun||!isFinite(x.stop)||!isFinite(x.s236)||!isFinite(x.s382)||
+       !isFinite(x.s786)||!isFinite(x.close)||!isFinite(x.doyum)){out[i]=null;continue}
+    const dip=x.stop<x.close&&x.close<x.s786&&x.doyum>x.close;
+    out[i]={time:m[i].time,close:x.close,doyum:x.doyum,s786:x.s786,s382:x.s382,
+      s236:x.s236,stop:x.stop,dip:!!dip,dip382:!!(dip&&x.close<x.s382),
+      dip236:!!(dip&&x.close<x.s236)};
+  }
+  return out;
+}
+/* Her seviye için false→true geçişi = "yeni giriş". Aynı dip bölgesinde
+   kaldığı sürece tekrar sayılmaz — yoksa aynı sinyal onlarca kez girer. */
+function dbtGirisleriBul(seri){
+  const cikti=[];
+  for(const sv of DBT_SEVIYE){
+    let onceki=!1;
+    for(let i=0;i<seri.length;i++){
+      const b=seri[i],su=!!(b&&b[sv]);
+      if(su&&!onceki)cikti.push({i:i,seviye:sv,time:b.time});
+      onceki=su;
+    }
+  }
+  return cikti;
+}
+/* Bir girişin ileriye dönük sonucu: TP1(786)'ya değdi mi/kaç barda/%kaç,
+   TP2(doyum)'a değdi mi/kaç barda/%kaç, stop(0.0) altına kapandı mı,
+   ufuk boyunca görülen en yüksek getiri ve ufuk sonundaki getiri. */
+function dbtSonucOlc(seri,girisIdx){
+  const b0=seri[girisIdx];if(!b0)return null;
+  const giris=b0.close,tp1=b0.s786,tp2=b0.doyum,stopSev=b0.stop;
+  let tp1Bar=null,tp1Getiri=null,tp2Bar=null,tp2Getiri=null,stopBar=null,enYuksek=0;
+  const son=Math.min(seri.length-1,girisIdx+DBT_UFUK);
+  for(let j=girisIdx+1;j<=son;j++){
+    const b=seri[j];if(!b||!isFinite(b.close))continue;
+    const getiri=100*(b.close/giris-1);
+    if(getiri>enYuksek)enYuksek=getiri;
+    if(tp1Bar===null&&b.close>=tp1){tp1Bar=j-girisIdx;tp1Getiri=getiri}
+    if(tp2Bar===null&&b.close>=tp2){tp2Bar=j-girisIdx;tp2Getiri=getiri;break}
+    if(stopBar===null&&b.close<stopSev)stopBar=j-girisIdx;
+  }
+  const ufukGetiri=son>girisIdx?100*(seri[son].close/giris-1):0;
+  return{giris:giris,tp1:tp1,tp2:tp2,stop:stopSev,
+    tp1Bar:tp1Bar,tp1Getiri:tp1Getiri,tp2Bar:tp2Bar,tp2Getiri:tp2Getiri,
+    stopBar:stopBar,enYuksekGetiri:enYuksek,ufukGetiri:ufukGetiri};
+}
+/* Havuz × seçili dilimler: her hisse için her dilimin serisini çıkarır,
+   girişleri bulur, sonuçları ölçer ve GİRİŞ ANINDA diğer seçili
+   dilimlerin dip durumunu ("uyum") kaydeder. */
+async function dbtKosu(kodlar,dilimler){
+  const tumSonuclar=[],semboller=[];
+  const ES=4;let sira=0;
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      const kod=kodlar[sira++];
+      try{
+        const onbellek={},serilerTf={};
+        for(const t of dilimler){
+          const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
+          let ham=onbellek[ck];
+          if(!ham){const r=await yfMumlar(kod,tf.interval,tf.range);ham=(r&&r.veri)||[];onbellek[ck]=ham}
+          if(!ham.length){serilerTf[t]=null;continue}
+          const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
+          const m=tf.grupSaat?mbGrupla(temiz,tf.grupSaat):temiz;
+          serilerTf[t]=dbtSeriUret(m);
+        }
+        let hisseGiris=0;
+        for(const t of dilimler){
+          const seri=serilerTf[t];if(!seri)continue;
+          for(const gi of dbtGirisleriBul(seri)){
+            const sonuc=dbtSonucOlc(seri,gi.i);if(!sonuc)continue;
+            let uyumSayisi=0;const uyumDetay=[];
+            for(const t2 of dilimler){
+              if(t2===t)continue;
+              const seri2=serilerTf[t2];
+              let k=-1;
+              if(seri2)for(let z=0;z<seri2.length;z++){
+                const bz=seri2[z];if(!bz)continue;
+                if(bz.time<=gi.time)k=z;else break;
+              }
+              const b2=k>=0?seri2[k]:null;
+              const durum=b2?(b2.dip236?3:b2.dip382?2:b2.dip?1:0):0;
+              if(durum>0)uyumSayisi++;
+              uyumDetay.push({tf:t2,durum:durum});
+            }
+            tumSonuclar.push(Object.assign({kod:kod,tf:t,seviye:gi.seviye,time:gi.time,
+              uyumSayisi:uyumSayisi,uyumDetay:uyumDetay},sonuc));
+            hisseGiris++;
+          }
+        }
+        semboller.push({kod:kod,giris:hisseGiris});
+      }catch(e){semboller.push({kod:kod,hata:String((e&&e.message)||e)})}
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(ES,kodlar.length)},isci));
+  return{sonuclar:tumSonuclar,semboller:semboller};
+}
+/* Dilim × seviye kırılımı + uyum sayısına göre kovalar. */
+function dbtOzetle(sonuclar){
+  const ort=a=>a.length?a.reduce((s,v)=>s+v,0)/a.length:null;
+  const gruplar={};
+  for(const x of sonuclar){const k=x.tf+"|"+x.seviye;(gruplar[k]=gruplar[k]||[]).push(x)}
+  const satirlar=Object.keys(gruplar).map(k=>{
+    const liste=gruplar[k],[tf,seviye]=k.split("|"),n=liste.length;
+    const tp1Vur=liste.filter(x=>x.tp1Bar!==null),tp2Vur=liste.filter(x=>x.tp2Bar!==null);
+    const stopVur=liste.filter(x=>x.stopBar!==null&&(x.tp1Bar===null||x.stopBar<x.tp1Bar));
+    return{tf:tf,seviye:seviye,n:n,
+      tp1Oran:100*tp1Vur.length/n,tp1OrtBar:ort(tp1Vur.map(x=>x.tp1Bar)),tp1OrtGetiri:ort(tp1Vur.map(x=>x.tp1Getiri)),
+      tp2Oran:100*tp2Vur.length/n,tp2OrtBar:ort(tp2Vur.map(x=>x.tp2Bar)),tp2OrtGetiri:ort(tp2Vur.map(x=>x.tp2Getiri)),
+      stopOran:100*stopVur.length/n,ortEnYuksek:ort(liste.map(x=>x.enYuksekGetiri)),ortUfukGetiri:ort(liste.map(x=>x.ufukGetiri))};
+  }).sort((a,b)=>a.tf===b.tf?a.seviye.localeCompare(b.seviye):a.tf.localeCompare(b.tf));
+  const uyumSatirlar=Object.keys(gruplar).map(k=>{
+    const liste=gruplar[k],[tf,seviye]=k.split("|"),kovalar={};
+    for(const x of liste)(kovalar[x.uyumSayisi]=kovalar[x.uyumSayisi]||[]).push(x);
+    return{tf:tf,seviye:seviye,kovalar:Object.keys(kovalar).sort((a,b)=>a-b).map(u=>{
+      const l2=kovalar[u],tp1Vur=l2.filter(x=>x.tp1Bar!==null);
+      return{uyum:Number(u),n:l2.length,tp1Oran:100*tp1Vur.length/l2.length,ortGetiri:ort(l2.map(x=>x.ufukGetiri))};
+    })};
+  }).sort((a,b)=>a.tf===b.tf?a.seviye.localeCompare(b.seviye):a.tf.localeCompare(b.tf));
+  return{satirlar:satirlar,uyumSatirlar:uyumSatirlar};
+}
+const DBT_STIL='<style>body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.5 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:22px 0 8px;color:#8b949e}.a{color:#8b949e;font-size:13px}table{border-collapse:collapse;width:100%;margin-top:6px;font-size:13px}th,td{padding:6px 8px;text-align:right;border-bottom:1px solid #21262d;white-space:nowrap}th{color:#8b949e;font-weight:600;text-align:right}td:first-child,th:first-child{text-align:left}.iy{color:#3fb950}.kt{color:#f85149}input,textarea,button{background:#161b22;border:1px solid #272e37;color:#e6edf3;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box}textarea{width:100%;min-height:70px}button{background:#388bfd;border:none;font-weight:700;cursor:pointer;margin-top:10px}label{display:block;margin-top:12px;font-size:13px;color:#8b949e}.wrap{overflow-x:auto}</style>';
+function dbtFormHTML(anahtar,kod,tf){
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🧪 Dip Backtest</h1><div class="a">571 sisteminin dip / derin dip (382 altı) / en dip (236 altı) sinyallerini geçmişe dönük ölçer. Hedef: TP1=786 çizgisi, TP2=doyum noktası. Bu sayfayı yalnız sen görebiliyorsun.</div>'+
+  '<form method="get" action="/dipbacktest"><input type="hidden" name="key" value="'+(anahtar||'').replace(/"/g,'')+'">'+
+  '<label>Hisse kodları (boş bırakırsan havuzdan ilk 25 alınır, virgülle ayır)</label>'+
+  '<textarea name="kod" placeholder="THYAO, ASELS, GARAN...">'+(kod||'')+'</textarea>'+
+  '<label>Zaman dilimleri (virgülle)</label><input name="tf" value="'+(tf||'15DK,1SA,4SA,1G')+'" style="width:100%">'+
+  '<input type="hidden" name="git" value="1"><button type="submit">▶ Çalıştır</button></form>'+
+  '<div class="a" style="margin-top:10px">Not: Cloudflare alt-istek bütçesi yüzünden tek istekte azami 40 hisse × seçilen dilim taranır; daha fazlası için birkaç kez farklı hisse gruplarıyla çalıştır.</div>'+
+  '</body></html>';
+}
+function dbtSayi(v,ondalik){return v===null||v===undefined||!isFinite(v)?'—':v.toFixed(ondalik===undefined?1:ondalik)}
+function dbtRaporHTML(o){
+  const satirHtml=o.satirlar.map(r=>'<tr><td>'+r.tf+' · '+r.seviye+'</td><td>'+r.n+'</td>'+
+    '<td class="'+(r.tp1Oran>=50?'iy':'kt')+'">'+dbtSayi(r.tp1Oran)+'%</td><td>'+dbtSayi(r.tp1OrtBar,1)+'</td><td>'+dbtSayi(r.tp1OrtGetiri)+'%</td>'+
+    '<td class="'+(r.tp2Oran>=30?'iy':'kt')+'">'+dbtSayi(r.tp2Oran)+'%</td><td>'+dbtSayi(r.tp2OrtBar,1)+'</td><td>'+dbtSayi(r.tp2OrtGetiri)+'%</td>'+
+    '<td class="'+(r.stopOran<=30?'iy':'kt')+'">'+dbtSayi(r.stopOran)+'%</td><td>'+dbtSayi(r.ortEnYuksek)+'%</td><td>'+dbtSayi(r.ortUfukGetiri)+'%</td></tr>').join('');
+  const uyumHtml=o.uyumSatirlar.map(r=>'<div style="margin-top:8px"><b>'+r.tf+' · '+r.seviye+'</b> — diğer dilimlerden kaç tanesi AYNI ANDA dipteydi?<div class="wrap"><table><tr><th>uyumlu dilim sayısı</th><th>giriş</th><th>TP1 isabet</th><th>ufuk sonu ort. getiri</th></tr>'+
+    r.kovalar.map(k=>'<tr><td>'+k.uyum+'</td><td>'+k.n+'</td><td>'+dbtSayi(k.tp1Oran)+'%</td><td>'+dbtSayi(k.ortGetiri)+'%</td></tr>').join('')+'</table></div></div>').join('');
+  const semHtml=o.semboller.map(s=>s.hata?s.kod+' ⚠️':s.kod+': '+s.giris).join(' · ');
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest sonuçları</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🧪 Dip Backtest sonuçları</h1><div class="a">'+o.kodlar.length+' hisse × '+o.dilimler.join(', ')+' · '+o.toplamGiris+' giriş bulundu · '+o.sure+' sn sürdü</div>'+
+  '<div class="a" style="margin-top:4px">TP1 = doyum\'un bir altındaki fibo çizgisi (0.786) · TP2 = doyum noktası (4.236 uzantısı) · stop = 0.0 seviyesinin altına kapanış</div>'+
+  '<h2>Dilim × seviye özeti</h2><div class="wrap"><table><tr><th>dilim · seviye</th><th>giriş</th><th>TP1 isabet</th><th>TP1 ort. bar</th><th>TP1 ort. getiri</th><th>TP2 isabet</th><th>TP2 ort. bar</th><th>TP2 ort. getiri</th><th>stop-out</th><th>ort. en yüksek</th><th>ufuk sonu ort.</th></tr>'+satirHtml+'</table></div>'+
+  '<h2>Dilimler arası uyum (ahenk)</h2>'+uyumHtml+
+  '<h2>Taranan hisseler</h2><div class="a">'+semHtml+'</div>'+
+  '<div class="a" style="margin-top:16px"><a href="/dipbacktest?key='+encodeURIComponent(o.anahtar||'')+'" style="color:#388bfd">← yeni koşum</a></div>'+
+  '</body></html>';
+}
+
 /* ── TÜM HAVUZ × TÜM DİLİM — PARÇALI, KALDIĞI YERDEN DEVAM EDEN TARAMA ──
    Absorpsiyon taramasındaki desenin aynısı: her /push turunda bir DİLİM
    ilerler, sonuçlar KV'de birikir, imleç nerede kalındığını tutar. Böylece
@@ -5773,7 +5942,28 @@ saglikArtir("push")   /* sayaç bellekte artar, KV'ye en fazla 60 sn'de bir yaz�
 /* Formasyon taramasini da tetikle — arka planda, yanit beklemeden. */
 ;const frmDurum=await formasyonTetikle(A).catch(()=>"hata")
 ;const n=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+(t.kartlar[e]||[]).length).join(" · "):""
-;return e({ok:!0,surum:a,depo:!!A.VERI,sayim:n,guncelleme:t.guncelleme,formasyon:frmDurum})}if($.pathname.startsWith("/panel")){
+;return e({ok:!0,surum:a,depo:!!A.VERI,sayim:n,guncelleme:t.guncelleme,formasyon:frmDurum})}if("/dipbacktest"===$.pathname){
+/* 🧪 Panelle AYNI kapı: PANEL_KEY (?key=) veya /panel'den alınan geçici
+   token (?t=) ile açılır. Başka kimse göremez. */
+const kk=await kapiKontrol(A,$,p,!0);
+if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
+const anahtar=$.searchParams.get("key")||$.searchParams.get("t")||"";
+const kodParam=($.searchParams.get("kod")||"").trim();
+const dilimParam=($.searchParams.get("tf")||"15DK,1SA,4SA,1G").trim();
+if($.searchParams.get("git")!=="1")
+  return new Response(dbtFormHTML(anahtar,kodParam,dilimParam),{headers:{"content-type":"text/html; charset=utf-8"}});
+let kodlar=kodParam?kodParam.split(/[,\s]+/).map(s=>s.toUpperCase().trim()).filter(Boolean):null;
+if(!kodlar||!kodlar.length){const evren=await mbEvren(A,[]);kodlar=evren.slice(0,25)}
+kodlar=kodlar.slice(0,40);
+const dilimler=dilimParam.split(",").map(s=>s.trim().toUpperCase()).filter(t=>MB_TF[mbTfNormal(t)]);
+const dbtT0=Date.now();
+const{sonuclar:dbtSonuclar,semboller:dbtSemboller}=await dbtKosu(kodlar,dilimler.length?dilimler:["15DK","1SA","4SA","1G"]);
+const{satirlar:dbtSatirlar,uyumSatirlar:dbtUyumSatirlar}=dbtOzetle(dbtSonuclar);
+const dbtSure=((Date.now()-dbtT0)/1000).toFixed(1);
+return new Response(dbtRaporHTML({kodlar:kodlar,dilimler:dilimler.length?dilimler:["15DK","1SA","4SA","1G"],
+  satirlar:dbtSatirlar,uyumSatirlar:dbtUyumSatirlar,semboller:dbtSemboller,sure:dbtSure,
+  toplamGiris:dbtSonuclar.length,anahtar:anahtar}),{headers:{"content-type":"text/html; charset=utf-8"}})}
+if($.pathname.startsWith("/panel")){
 /* 4️⃣ + 1️⃣ Panel kapısı: IP başına yanlış deneme sayacı + (tanımlıysa)
    Cloudflare yerel rate limit. Doğru anahtarla girişte hiçbir fark yok. */
 const kk=await kapiKontrol(A,$,p,!0);
