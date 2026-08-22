@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-23-e · yeşil kapanış da uygulamada · otomatik tarama · grafik sürüm uyumu";
+const WORKER_SURUM="2026-08-23-f · tarama parti boyu düzeltildi · dilim şeridinde MAL yaşı";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2330,7 +2330,12 @@ const MB_ANLIK_AZAMI=12;
 const MB_DOLDUR_AZAMI=40;
 /* Uygulamanın tek istekte isteyebileceği en fazla hisse. 30 hisse = 30
    dış çağrı; Cloudflare'in ücretsiz plandaki 50 sınırının altında kalır. */
-const MB_OLC_AZAMI=30;
+/* 🐞 "tarama hata veriyor, can çekişiyor" — parti 30 hisseydi. Her hisse
+   1 Yahoo çekimi yapıyor, çekim başarısız olursa ikinci sunucu deneniyor:
+   en kötü 60 dış çağrı. Cloudflare'in ücretsiz plandaki sınırı 50 — istek
+   komple düşüyor, hiçbir ölçüm dönmüyordu (ekranda "0/434 · 4 hata").
+   12 hisse = en kötü 24 çağrı, sınırın rahat altında. */
+const MB_OLC_AZAMI=12;
 /* Dilim başına tazelik eşiği — bakılan dilim bundan eskiyse önceliklendirilir.
    Hızlı dilim sık, yavaş dilim seyrek tazelenir; boşuna çekim yapılmaz. */
 const MB_TAZELIK={"5DK":6e5,"15DK":12e5,"1SA":36e5,"4SA":72e5,"1G":108e5,"1HAF":216e5,"1AY":216e5};
@@ -5634,6 +5639,10 @@ function mbPaketUret(){
     });
   }
   if(mbIst.kapsam==="hepsi"){
+    /* 🐞 Satırdaki MAL / A-B değerleri EN BÜYÜK seçili dilimden gelir.
+       Eskiden bu hiçbir yerde yazmıyordu; kullanıcı 7 dilim seçince satırda
+       AYLIK değerleri görüp TradingView'in günlüğüyle karşılaştırıyor ve
+       "tutmuyor" diyordu. Artık hangi dilim olduğu satırda yazıyor. */
     var enBuyuk=mbIst.tfler[mbIst.tfler.length-1];
     var kaynak=har[enBuyuk]||{};
     var liste=ortakListe.map(function(k){
@@ -5643,7 +5652,9 @@ function mbPaketUret(){
     }).sort(function(a,b){return (mbTazelikSay(a)-mbTazelikSay(b))||(a.kod<b.kod?-1:1)});
     var olculen=Math.min.apply(null,mbIst.tfler.map(function(t){return mbOlcumSay(t)}));
     v.kapsam="hepsi";
-    v.gruplar=[{tf:"HEPSİ",ad:mbIst.tfler.join(" + ")+" dilimlerinin HEPSİNDE",ik:"🎯",
+    v.kaynakTf=enBuyuk;
+    v.gruplar=[{tf:"HEPSİ",ad:mbIst.tfler.join(" + ")+" dilimlerinin HEPSİNDE"+
+      (mbIst.tfler.length>1?" · satırdaki MAL/AB değerleri "+enBuyuk+" diliminden":""),ik:"🎯",
       olculen:olculen,evren:evren,kalan:Math.max(0,evren-olculen),yas:null,
       cikan:liste.length,liste:liste.slice(0,150)}];
     return v;
@@ -5692,7 +5703,7 @@ function mbTaraTur(){
   if(d.tfIdx>=mbIst.tfler.length){       /* hepsi bitti */
     d.suruyor=false;mbCizYenile();return;
   }
-  var parca=mbEvrenKod.slice(d.idx,d.idx+30);
+  var parca=mbEvrenKod.slice(d.idx,d.idx+12);
   post("/api/malboga",{is:"olc",tf:d.tf,kodlar:parca}).then(function(r){
     if(!mbTaraDurum||!mbTaraDurum.suruyor)return;
     if(r&&r.ok&&r.olcum){
@@ -5892,8 +5903,15 @@ function mbGoster(v,yerel){
             var im=d.boga?"🐂":d.ayi?"🐻":"?";
             var rk=d.gecti?"rgba(0,230,118,.20)":"rgba(248,81,73,.16)";
             var yz=d.gecti?"var(--yes)":"var(--kir)";
+            /* MAL yaşı da yazılır: her dilimi TradingView ile doğrudan
+               karşılaştırabilmek için. top=toplama, dağ=dağıtım. */
+            var mal="";
+            if(d.topHam!==undefined&&d.dagHam!==undefined){
+              var t=Number(d.topHam),g=Number(d.dagHam);
+              if(t<9999||g<9999)mal=" "+(t<=g?"t"+t:"d"+g);
+            }
             return '<span style="font-size:10px;padding:1px 4px;border-radius:4px;background:'+rk+';color:'+yz+';font-weight:700">'+
-              E(d.tf)+' '+im+'</span>';
+              E(d.tf)+' '+im+E(String(d.rejYas===undefined?"":d.rejYas))+E(mal)+'</span>';
           }).join("")+'</div>';
       }
       return '<div class="satir" style="border-left-color:'+kenar+';align-items:flex-start">'+
