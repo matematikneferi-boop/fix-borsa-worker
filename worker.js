@@ -540,9 +540,34 @@ async function formasyonTetikleIc(A,simdi){
     return r.ok?"başlatıldı":("github "+r.status);
   }catch(e){saglikArtir("formasyonHata");saglikSet("sonFormasyonSonuc","hata");return"hata"}
 }
+/* ➕ 3. SIRA YEDEK KAYNAK (borsapy'den ilham — github.com/saidsurucu/borsapy):
+   query1 VE query2 (ikisi de Yahoo aynası) başarısız olursa devreye girer.
+   TAMAMEN EK bir katman: yfKapanislar'ın imzasını, dönüş şeklini (gün→kapanış
+   sözlüğü) ya da onu çağıran hiçbir yeri DEĞİŞTİRMEZ. Kendi try/catch'i
+   içinde fail-open çalışır — bu kaynak da düşerse zaten var olan
+   "her kaynak da başarısız" davranışına sessizce geri döner.
+   isyatirim.com.tr'nin kimlik gerektirmeyen genel JSON ucu kullanılıyor. */
+async function isyCekTek(kod){
+  try{
+    const bugun=new Date(),birYilOnce=new Date(bugun);birYilOnce.setFullYear(birYilOnce.getFullYear()-1)
+    ;const fmt=d=>String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear()
+    ;const u="https://www.isyatirim.com.tr/_layouts/15/IsYatirim.Website/Common/Data.aspx/HisseTekil"
+      +"?hisse="+encodeURIComponent(kod)+"&startdate="+fmt(birYilOnce)+"&enddate="+fmt(bugun)
+    ;const res=await fetch(u,{headers:{"Accept":"application/json"}})
+    ;if(!res.ok)return null
+    ;const j=await res.json().catch(()=>null),rows=j&&j.value
+    ;if(!Array.isArray(rows)||!rows.length)return null
+    ;const out={}
+    ;for(const row of rows){const tarih=row.HGDG_TARIH,kapanis=row.HGDG_KAPANIS
+      ;if(!tarih||!(kapanis>0))continue
+      ;out[String(tarih).slice(0,10)]=Number(kapanis)}
+    ;return Object.keys(out).length?out:null
+  }catch(e){return null}
+}
 async function yfKapanislar(kod){try{const a=await yfCekTek("query1.finance.yahoo.com",kod);if(a)return a}catch(e){console.error("yfCekTek query1 hata",kod,e&&e.message)}
 try{const b=await yfCekTek("query2.finance.yahoo.com",kod);if(b)return b}catch(e){console.error("yfCekTek query2 hata",kod,e&&e.message)}
-console.error("yfKapanislar: her iki host de başarısız",kod);return null}
+try{const c=await isyCekTek(kod);if(c)return c}catch(e){console.error("isyCekTek hata",kod,e&&e.message)}
+console.error("yfKapanislar: üç kaynak da başarısız",kod);return null}
 const YF_PARTI=30;async function gecmisiDoldur(e,t){if(!e.VERI)return;if(await e.VERI.get("gecmisDolduruldu"))return
 ;const kodlar=new Set();if(t&&t.kartlar)for(const k of Object.keys(t.kartlar))if("sira"!==k)for(const rc of t.kartlar[k]||[])rc&&rc.kod&&kodlar.add(rc.kod)
 ;if(!kodlar.size)return
