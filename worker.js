@@ -1,4 +1,4 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.9";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="12.0";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null,oTS=0;const c=new Set(["potansiyel","fibo","uzunvade","haftalik","aday","adayOrta","adayOrtaVade","adayUzun","adayHafta"]),EM=new Set(["menu","davet","bilgi"]),d=t=>{const _s=String(t);return e.has(_s)||(EK_YON&&EK_YON.has(_s))};let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
@@ -1600,9 +1600,9 @@ function dbtSeriUret(mumlar){
 }
 /* Her seviye için false→true geçişi = "yeni giriş". Aynı dip bölgesinde
    kaldığı sürece tekrar sayılmaz — yoksa aynı sinyal onlarca kez girer. */
-function dbtGirisleriBul(seri){
+function dbtGirisleriBul(seri,seviyeler){
   const cikti=[];
-  for(const sv of DBT_SEVIYE){
+  for(const sv of (seviyeler&&seviyeler.length?seviyeler:DBT_SEVIYE)){
     let onceki=!1;
     for(let i=0;i<seri.length;i++){
       const b=seri[i],su=!!(b&&b[sv]);
@@ -1636,7 +1636,7 @@ function dbtSonucOlc(seri,girisIdx){
 /* Havuz × seçili dilimler: her hisse için her dilimin serisini çıkarır,
    girişleri bulur, sonuçları ölçer ve GİRİŞ ANINDA diğer seçili
    dilimlerin dip durumunu ("uyum") kaydeder. */
-async function dbtKosu(kodlar,dilimler){
+async function dbtKosu(kodlar,dilimler,seviyeler){
   const tumSonuclar=[],semboller=[];
   const ES=4;let sira=0;
   const isci=async()=>{
@@ -1656,7 +1656,7 @@ async function dbtKosu(kodlar,dilimler){
         let hisseGiris=0;
         for(const t of dilimler){
           const seri=serilerTf[t];if(!seri)continue;
-          for(const gi of dbtGirisleriBul(seri)){
+          for(const gi of dbtGirisleriBul(seri,seviyeler)){
             const sonuc=dbtSonucOlc(seri,gi.i);if(!sonuc)continue;
             let uyumSayisi=0;const uyumDetay=[];
             for(const t2 of dilimler){
@@ -1708,16 +1708,57 @@ function dbtOzetle(sonuclar){
   }).sort((a,b)=>a.tf===b.tf?a.seviye.localeCompare(b.seviye):a.tf.localeCompare(b.tf));
   return{satirlar:satirlar,uyumSatirlar:uyumSatirlar};
 }
-const DBT_STIL='<style>body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.5 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:22px 0 8px;color:#8b949e}.a{color:#8b949e;font-size:13px}table{border-collapse:collapse;width:100%;margin-top:6px;font-size:13px}th,td{padding:6px 8px;text-align:right;border-bottom:1px solid #21262d;white-space:nowrap}th{color:#8b949e;font-weight:600;text-align:right}td:first-child,th:first-child{text-align:left}.iy{color:#3fb950}.kt{color:#f85149}input,textarea,button{background:#161b22;border:1px solid #272e37;color:#e6edf3;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box}textarea{width:100%;min-height:70px}button{background:#388bfd;border:none;font-weight:700;cursor:pointer;margin-top:10px}label{display:block;margin-top:12px;font-size:13px;color:#8b949e}.wrap{overflow-x:auto}</style>';
-function dbtFormHTML(anahtar,kod,tf){
+const DBT_STIL='<style>body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.5 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:22px 0 8px;color:#8b949e}.a{color:#8b949e;font-size:13px}table{border-collapse:collapse;width:100%;margin-top:6px;font-size:13px}th,td{padding:6px 8px;text-align:right;border-bottom:1px solid #21262d;white-space:nowrap}th{color:#8b949e;font-weight:600;text-align:right}td:first-child,th:first-child{text-align:left}.iy{color:#3fb950}.kt{color:#f85149}input,textarea,button{background:#161b22;border:1px solid #272e37;color:#e6edf3;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box}textarea{width:100%;min-height:70px}button{background:#388bfd;border:none;font-weight:700;cursor:pointer;margin-top:10px}label{display:block;margin-top:12px;font-size:13px;color:#8b949e}.wrap{overflow-x:auto}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px}</style>';
+const DBT_ADIM_BOYUT=10;              /* her "adım" isteğinde kaç hisse işlenir */
+async function dbtIsOku(A){
+  if(!A.VERI)return null;
+  try{const j=await A.VERI.get("dbtIs");return j?JSON.parse(j):null}catch(_){return null}
+}
+async function dbtIsYaz(A,job){
+  if(!A.VERI)return;
+  try{await A.VERI.put("dbtIs",JSON.stringify(job),{expirationTtl:86400})}catch(_){}
+}
+function dbtIlerlemeHTML(anahtar){
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest — tüm hisseler</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🧪 Dip Backtest — tüm hisseler taranıyor</h1>'+
+  '<div class="kur" style="border-color:#272e37;background:#161b22"><div id="ilerYazi" class="a">başlıyor…</div>'+
+  '<div style="background:#0d1117;border:1px solid #272e37;border-radius:8px;height:14px;margin-top:8px;overflow:hidden">'+
+  '<div id="ilerBar" style="background:#388bfd;height:100%;width:0%"></div></div></div>'+
+  '<div class="a" style="margin-top:10px">Bu sayfayı açık bırak — bitince otomatik olarak sonuç raporuna geçecek. Sekmeyi kapatırsan iş KV üzerinde kalmaya devam eder, /dipbacktest/rapor adresinden sonradan bakabilirsin.</div>'+
+  '<script>'+
+  'var key='+JSON.stringify(anahtar||'')+';'+
+  'function adim(){fetch("/dipbacktest/adim?key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(v){'+
+  'if(!v||!v.ok){document.getElementById("ilerYazi").textContent="hata — sayfayı yenile";return}'+
+  'var pct=v.toplam?Math.round(100*v.tamam/v.toplam):0;'+
+  'document.getElementById("ilerBar").style.width=pct+"%";'+
+  'document.getElementById("ilerYazi").textContent=v.tamam+" / "+v.toplam+" hisse tarandı ("+pct+"%)"+(v.toplamGiris?" · "+v.toplamGiris+" giriş bulundu":"");'+
+  'if(v.tamamlandi){location.href="/dipbacktest/rapor?key="+encodeURIComponent(key)}else{setTimeout(adim,900)}'+
+  '}).catch(function(){setTimeout(adim,2000)})}'+
+  'adim();'+
+  '</script></body></html>';
+}
+
+function dbtFormHTML(anahtar,kod,tf,is){
+  const seviyeKutu=(deger,etiket)=>'<label style="display:inline-flex;align-items:center;gap:6px;margin:6px 12px 0 0;font-size:13px;color:#e6edf3"><input type="checkbox" name="sv" value="'+deger+'" checked style="width:auto">'+etiket+'</label>';
+  let devamKutu='';
+  if(is&&!is.tamamlandi&&is.toplam)
+    devamKutu='<div class="kur" style="border-color:#1f6feb;background:#0d1b2e"><b>⏳ Sürmekte olan tam-havuz taraması var</b><div class="a" style="margin-top:4px">'+is.tamam+' / '+is.toplam+' hisse tarandı.</div>'+
+      '<a class="a" style="color:#388bfd;display:inline-block;margin-top:6px" href="/dipbacktest/rapor?key='+encodeURIComponent(anahtar||'')+'">→ ilerlemeyi / şu ana kadarki sonucu aç</a></div>';
+  else if(is&&is.tamamlandi)
+    devamKutu='<div class="a" style="margin-top:10px">Son tam-havuz taraması bitti (' +is.tamam+' hisse). <a href="/dipbacktest/rapor?key='+encodeURIComponent(anahtar||'')+'" style="color:#388bfd">sonucu aç</a></div>';
   return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest</title>'+DBT_STIL+'</head><body>'+
   '<h1>🧪 Dip Backtest</h1><div class="a">571 sisteminin dip / derin dip (382 altı) / en dip (236 altı) sinyallerini geçmişe dönük ölçer. Hedef: TP1=786 çizgisi, TP2=doyum noktası. Bu sayfayı yalnız sen görebiliyorsun.</div>'+
-  '<form method="get" action="/dipbacktest"><input type="hidden" name="key" value="'+(anahtar||'').replace(/"/g,'')+'">'+
-  '<label>Hisse kodları (boş bırakırsan havuzdan ilk 25 alınır, virgülle ayır)</label>'+
-  '<textarea name="kod" placeholder="THYAO, ASELS, GARAN...">'+(kod||'')+'</textarea>'+
+  devamKutu+
+  '<form method="get" action="/dipbacktest">'+
+  '<input type="hidden" name="key" value="'+(anahtar||'').replace(/"/g,'')+'">'+
+  '<label>Dip modelleri</label>'+
+  seviyeKutu('dip','⬇️ Dip bölgesi')+seviyeKutu('dip382','⬇️⬇️ Derin (382 altı)')+seviyeKutu('dip236','⬇️⬇️⬇️ En dip (236 altı)')+
   '<label>Zaman dilimleri (virgülle)</label><input name="tf" value="'+(tf||'15DK,1SA,4SA,1G')+'" style="width:100%">'+
+  '<label style="display:flex;align-items:center;gap:8px;margin-top:14px"><input type="checkbox" name="evren" value="1" style="width:auto">🌍 <b>Sistemde kayıtlı tüm hisseler</b> (430+, havuzun tamamı — birkaç dakika sürer, arka planda parça parça taranır)</label>'+
+  '<label>Hisse kodları (yukarıdaki kutu işaretliyse bu alan yok sayılır; boş bırakırsan havuzdan ilk 25 alınır, virgülle ayır)</label>'+
+  '<textarea name="kod" placeholder="THYAO, ASELS, GARAN...">'+(kod||'')+'</textarea>'+
   '<input type="hidden" name="git" value="1"><button type="submit">▶ Çalıştır</button></form>'+
-  '<div class="a" style="margin-top:10px">Not: Cloudflare alt-istek bütçesi yüzünden tek istekte azami 40 hisse × seçilen dilim taranır; daha fazlası için birkaç kez farklı hisse gruplarıyla çalıştır.</div>'+
+  '<div class="a" style="margin-top:10px">"Tüm hisseler" işaretli değilse: Cloudflare alt-istek bütçesi yüzünden tek istekte azami 40 hisse × seçilen dilim taranır.</div>'+
   '</body></html>';
 }
 function dbtSayi(v,ondalik){return v===null||v===undefined||!isFinite(v)?'—':v.toFixed(ondalik===undefined?1:ondalik)}
@@ -5961,19 +6002,66 @@ if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
 const anahtar=$.searchParams.get("key")||$.searchParams.get("t")||"";
 const kodParam=($.searchParams.get("kod")||"").trim();
 const dilimParam=($.searchParams.get("tf")||"15DK,1SA,4SA,1G").trim();
-if($.searchParams.get("git")!=="1")
-  return new Response(dbtFormHTML(anahtar,kodParam,dilimParam),{headers:{"content-type":"text/html; charset=utf-8"}});
+if($.searchParams.get("git")!=="1"){
+  const mevcutIs=await dbtIsOku(A);
+  return new Response(dbtFormHTML(anahtar,kodParam,dilimParam,mevcutIs),{headers:{"content-type":"text/html; charset=utf-8"}});
+}
+const seviyeler=$.searchParams.getAll("sv").filter(v=>DBT_SEVIYE.includes(v));
+const dilimler=dilimParam.split(",").map(s=>s.trim().toUpperCase()).filter(t=>MB_TF[mbTfNormal(t)]);
+const dilimlerSon=dilimler.length?dilimler:["15DK","1SA","4SA","1G"];
+if($.searchParams.get("evren")==="1"){
+  /* 🌍 TÜM HAVUZ: tek istekte sığmaz, KV'de kalıcı bir "iş" başlatıp
+     /dipbacktest/adim ile parça parça ilerletiyoruz. */
+  const evren=await mbEvren(A,[]);
+  const job={anahtar:anahtar,kuyruk:evren.slice(),toplam:evren.length,tamam:0,
+    dilimler:dilimlerSon,seviyeler:seviyeler.length?seviyeler:DBT_SEVIYE,
+    sonuclar:[],semboller:[],baslangic:Date.now(),guncelleme:Date.now(),tamamlandi:!1};
+  await dbtIsYaz(A,job);
+  return new Response(dbtIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+}
 let kodlar=kodParam?kodParam.split(/[,\s]+/).map(s=>s.toUpperCase().trim()).filter(Boolean):null;
 if(!kodlar||!kodlar.length){const evren=await mbEvren(A,[]);kodlar=evren.slice(0,25)}
 kodlar=kodlar.slice(0,40);
-const dilimler=dilimParam.split(",").map(s=>s.trim().toUpperCase()).filter(t=>MB_TF[mbTfNormal(t)]);
 const dbtT0=Date.now();
-const{sonuclar:dbtSonuclar,semboller:dbtSemboller}=await dbtKosu(kodlar,dilimler.length?dilimler:["15DK","1SA","4SA","1G"]);
+const{sonuclar:dbtSonuclar,semboller:dbtSemboller}=await dbtKosu(kodlar,dilimlerSon,seviyeler.length?seviyeler:DBT_SEVIYE);
 const{satirlar:dbtSatirlar,uyumSatirlar:dbtUyumSatirlar}=dbtOzetle(dbtSonuclar);
 const dbtSure=((Date.now()-dbtT0)/1000).toFixed(1);
-return new Response(dbtRaporHTML({kodlar:kodlar,dilimler:dilimler.length?dilimler:["15DK","1SA","4SA","1G"],
+return new Response(dbtRaporHTML({kodlar:kodlar,dilimler:dilimlerSon,
   satirlar:dbtSatirlar,uyumSatirlar:dbtUyumSatirlar,semboller:dbtSemboller,sure:dbtSure,
   toplamGiris:dbtSonuclar.length,anahtar:anahtar}),{headers:{"content-type":"text/html; charset=utf-8"}})}
+if("/dipbacktest/adim"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(JSON.stringify({ok:!1,mesaj:kk.mesaj||"yetkisiz"}),{status:kk.kod||401,headers:{"content-type":"application/json"}});
+  const job=await dbtIsOku(A);
+  if(!job)return new Response(JSON.stringify({ok:!1,mesaj:"aktif tarama yok"}),{headers:{"content-type":"application/json"}});
+  if(!job.tamamlandi&&job.kuyruk.length){
+    const grup=job.kuyruk.splice(0,DBT_ADIM_BOYUT);
+    const{sonuclar,semboller}=await dbtKosu(grup,job.dilimler,job.seviyeler);
+    /* Toplam sonuç listesi çok büyümesin diye 20.000 girişte kırpılır —
+       özet istatistikler etkilenmez, yalnız en eski girişler atılır. */
+    job.sonuclar=job.sonuclar.concat(sonuclar).slice(-20000);
+    job.semboller=job.semboller.concat(semboller);
+    job.tamam+=grup.length;
+    job.guncelleme=Date.now();
+    if(!job.kuyruk.length)job.tamamlandi=!0;
+    await dbtIsYaz(A,job);
+  }
+  return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:job.tamamlandi,toplamGiris:job.sonuclar.length}),{headers:{"content-type":"application/json"}})
+}
+if("/dipbacktest/rapor"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
+  const job=await dbtIsOku(A);
+  if(!job)return new Response("Aktif ya da tamamlanmış bir tam-havuz taraması yok. /dipbacktest adresinden 🌍 Tüm hisseler kutusunu işaretleyip başlat.",{headers:{"content-type":"text/plain; charset=utf-8"}});
+  const anahtar=$.searchParams.get("key")||$.searchParams.get("t")||job.anahtar||"";
+  if(!job.tamamlandi)
+    return new Response(dbtIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+  const{satirlar,uyumSatirlar}=dbtOzetle(job.sonuclar);
+  const sure=((job.guncelleme-job.baslangic)/1000).toFixed(1);
+  return new Response(dbtRaporHTML({kodlar:{length:job.toplam},dilimler:job.dilimler,
+    satirlar:satirlar,uyumSatirlar:uyumSatirlar,semboller:job.semboller,sure:sure,
+    toplamGiris:job.sonuclar.length,anahtar:anahtar}),{headers:{"content-type":"text/html; charset=utf-8"}})
+}
 if($.pathname.startsWith("/panel")){
 /* 4️⃣ + 1️⃣ Panel kapısı: IP başına yanlış deneme sayacı + (tanımlıysa)
    Cloudflare yerel rate limit. Doğru anahtarla girişte hiçbir fark yok. */
