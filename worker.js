@@ -1,4 +1,4 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.8";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+const e=new Set(["6819672343"]),t="kolayfix",a="11.9";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
 ;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null,oTS=0;const c=new Set(["potansiyel","fibo","uzunvade","haftalik","aday","adayOrta","adayOrtaVade","adayUzun","adayHafta"]),EM=new Set(["menu","davet","bilgi"]),d=t=>{const _s=String(t);return e.has(_s)||(EK_YON&&EK_YON.has(_s))};let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
@@ -3409,6 +3409,7 @@ function backtestGoster(v){
      '</div>'+
      '<div class="btAc" style="margin:-2px 0 9px">Beklenti = isabet×ortalama kazanç + ıskalama×ortalama kayıp. '+
      'Her sinyalin matematiksel karşılığı. Artıysa sistem uzun vadede kazandırır.</div>';
+  if(v.dipbacktestUrl)h+='<button class="dg ik" id="btDbtBtn" style="margin-bottom:12px">🧪 Dip Backtest (Fibo) — 786 çizgisi ölçümü</button>';
 
   h+=btSat("Ölçülen sinyal",G.n+" <span class='btN'>("+G.hisse+" farklı hisse)</span>","", 
        "Aynı hisse aynı gün birden fazla dilimde kırdıysa tek sinyal sayıldı.");
@@ -3499,6 +3500,7 @@ function backtestGoster(v){
      'girmek mümkün olmadığı için böyle bir eğri gerçeği yansıtmaz.</div>';
 
   el("govde").innerHTML=h;
+  if(v.dipbacktestUrl){var _db=el("btDbtBtn");if(_db)_db.onclick=function(){tit();try{TG.openLink(v.dipbacktestUrl)}catch(e){location.href=v.dipbacktestUrl}}}
 }
 /* ═══════════════ 📋 TEMEL ANALİZ SAYFASI ═══════════════
    Sinyal listelerindeki hisselerin temel verisi tek ekranda. Veri
@@ -5327,6 +5329,9 @@ function panelCiz(){
     h+='<div class="kutu"><h3>🛠 Tam panel</h3>'+
       '<div class="bilgi">Üye tablosu, CSV dışa aktarma, davet ağacı ve ayarlar tarayıcıda.</div>'+
       '<button class="dg ik" id="pTam">🌐 Tam paneli aç</button></div>';
+    h+='<div class="kutu"><h3>🧪 Dip Backtest (Fibo)</h3>'+
+      '<div class="bilgi">571 sisteminin dip/derin dip sinyallerini geçmişe dönük ölçer — TP1=0.786 fibo çizgisi, TP2=doyum noktası.</div>'+
+      '<button class="dg ik" id="pDbt">🧪 Dip Backtest\\'i aç</button></div>';
     el("govde").innerHTML=h;
     function id(x){return(el(x).value||"").replace(/\\D/g,"")}
     function calis(is,gov,kutu,btn){
@@ -5380,6 +5385,7 @@ function panelCiz(){
       catch(e){if(confirm("Tüm üyelere gönderilsin mi?"))g()}
     };
     el("pTam").onclick=function(){tit();try{TG.openLink(v.panelUrl)}catch(e){location.href=v.panelUrl}};
+    el("pDbt").onclick=function(){tit();try{TG.openLink(v.dipbacktestUrl)}catch(e){location.href=v.dipbacktestUrl}};
   });
 }
 try{
@@ -6486,7 +6492,7 @@ const kurulusGun=Math.max(1,Math.round((new Date(bg)-new Date(KURULUS))/864e5));
 const cikti=JS({ok:!0,donem:{h1:olc(7),a1:olc(30),a3:olc(90),y1:olc(365)},
 kurulus:{tarih:KURULUS,gun:kurulusGun,ist:olc(kurulusGun)},
 ayar:PA,elenenAykiri:elenenAykiri,elenenTaze:elenenTaze,yonetici:!!YON,
-guncelleme:G2.guncelleme||null});return cikti}
+guncelleme:G2.guncelleme||null,dipbacktestUrl:YON?(n+"/dipbacktest?key="+encodeURIComponent(i)):null});return cikti}
 /* ═══════════════════ 📊 BACKTEST — DÜRÜST ÖLÇÜM ═══════════════════
    İLK SÜRÜM ÜÇ AYRI YERDE YANLIŞTI, HEPSİ BURADA DÜZELTİLDİ:
 
@@ -6686,7 +6692,7 @@ return JS({ok:!0,uye:st.toplam||0,aktif24:Object.values(kl).filter(x=>x.son&&sim
 super:sup,engel:eng.length,depo:!!A.VERI,
 guncelleme:L2&&L2.guncelleme?new Date(L2.guncelleme).toLocaleString("tr-TR"):null,
 ozet:L2&&L2.kartlar?Object.keys(L2.kartlar).filter(x=>"sira"!==x).map(x=>({ad:x,n:L2.kartlar[x].length})):[],
-sonYayin:sy,panelUrl:r()})}
+sonYayin:sy,panelUrl:r(),dipbacktestUrl:n+"/dipbacktest?key="+encodeURIComponent(i)})}
 if("super"===is){
 const hid=ID(gov.id);if(!hid)return JS({ok:!0,mesaj:"⚠️ ID gir."});
 const ay=Math.max(1,Math.min(60,parseInt(gov.ay||"1",10)||1));
