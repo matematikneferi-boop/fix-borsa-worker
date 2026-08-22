@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-22-d · 3 tarama modülü · çoklu dilim · hayalet bar düzeltmesi";
+const WORKER_SURUM="2026-08-22-f · filtre alarmı · dip backtest: TP=güçlü/çok güçlü D-D, yeni stop, sade rapor";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1339,24 +1339,36 @@ function mb571Seri(m,depth,lowTh,upTh,rev){
   const high=m.map(x=>x.high),low=m.map(x=>x.low),zaman=m.map(x=>x.time);
   let pivotsH=[],pivotsL=[],lastH=null,lastL=null;
   let isHighLast=false,startPrice=NaN,endPrice=NaN,offset=NaN,diff=NaN;
+  /* ⚡ HIZ: projeksiyon (isHighLast/startPrice/endPrice/offset) YALNIZCA
+     pivot dizilerinden hesaplanır — o barın fiyatına hiç bakmaz. Yani
+     pivot dizisi değişmediyse sonuç da değişmez. Eskiden her bar dizinin
+     tam kopyası alınıp döngü baştan çalışıyordu (700 bar × ~200 pivot).
+     Artık yalnız pivot eklendiği/değiştiği barda çalışır — pivotlar 5-15
+     barda bir oluştuğu için ~10 kat az iş. SONUÇ BİREBİR AYNI.
+     Not: yukarıdaki blok isHighLast'i her bar yazıyor ama orijinalde
+     hemen ardından döngü onu ezip yeniden hesaplıyordu; döngüyü atladığımız
+     barlarda "yerlesik" değeri geri konur ki davranış aynı kalsın. */
+  let yerlesikIHL=false;
   const cikti=new Array(n);
   for(let i=0;i<n;i++){
     let H=mbPivot571(high,zaman,i,uzun,true);
     let L=mbPivot571(low ,zaman,i,uzun,false);
+    let degisti=false;
     const cH=pivotsH.length,cL=pivotsL.length;
     if(cH>0&&cL>0){
       lastH=pivotsH[cH-1];lastL=pivotsL[cL-1];
       isHighLast=lastH.t>lastL.t;
-      if(isHighLast){if(H){if(H.p>lastH.p)pivotsH[cH-1]=H;H=null}}
-      else          {if(L){if(L.p<lastL.p)pivotsL[cL-1]=L;L=null}}
+      if(isHighLast){if(H){if(H.p>lastH.p){pivotsH[cH-1]=H;degisti=true}H=null}}
+      else          {if(L){if(L.p<lastL.p){pivotsL[cL-1]=L;degisti=true}L=null}}
     }
-    if(H)pivotsH.push(H);
-    if(L)pivotsL.push(L);
+    if(H){pivotsH.push(H);degisti=true}
+    if(L){pivotsL.push(L);degisti=true}
     /* PERF FIX (kütüphanedeki yorumun aynısı): son 200 pivot yeter, sonuç
        değişmez — algoritma yalnız en SONDAKİ pivotlardan geriye bakar. */
-    if(pivotsH.length>200)pivotsH.shift();
-    if(pivotsL.length>200)pivotsL.shift();
-    if(pivotsH.length>0&&pivotsL.length>0){
+    if(pivotsH.length>200){pivotsH.shift();degisti=true}
+    if(pivotsL.length>200){pivotsL.shift();degisti=true}
+    if(!degisti)isHighLast=yerlesikIHL;
+    if(degisti&&pivotsH.length>0&&pivotsL.length>0){
       const hc=pivotsH.slice(),lc=pivotsL.slice();
       let kilit=0;
       while(hc.length>0&&lc.length>0){
@@ -1392,6 +1404,7 @@ function mb571Seri(m,depth,lowTh,upTh,rev){
         offset=(isHighLast?-1:1)*Math.abs(offset);
         break;
       }
+      yerlesikIHL=isHighLast;      /* döngü atlanan barlarda buradan okunur */
     }
     diff=(isHighLast?-1:1)*Math.abs(startPrice-endPrice);
     if(isFinite(diff)&&isFinite(endPrice)&&isFinite(offset)){
@@ -1571,15 +1584,44 @@ async function mbTekHisse(kod){
 async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
 
 /* ═══════════════════ 🧪 DİP BACKTEST — yalnız yönetici görür ═══════════════
-   Soru: "dip / derin dip (382 altı) / en dip (236 altı)" sinyalleri
-   fiilen ne kadar işe yarıyor? Hedef = doyum noktası (TP2) ile onun bir
-   altındaki fibo çizgisi (786 → TP1). Ayrıca aynı hissenin diğer zaman
-   dilimlerinde AYNI ANDA dipte olması ("uyum/ahenk") sonucu değiştiriyor
-   mu — onu da ölçer. Kapanışla değerlendirilir (fitil sayılmaz),
-   mbMotor'daki BİREBİR AYNI dip formülü kullanılır — tek fark: mbMotor
-   yalnız SON barı üretir, burada HER bar için üretilir. */
-const DBT_UFUK=200; /* TP'ye ulaşma için ileri taranacak azami bar sayısı */
+   Soru: "dip / derin dip (382 altı) / en dip (236 altı)" sinyalleri fiilen
+   ne kadar işe yarıyor? Ve asıl soru: BİRDEN ÇOK ZAMAN DİLİMİ AYNI ANDA
+   dipteyken başarı yükseliyor mu — yükseliyorsa ne kadar?
+
+   HEDEFLER (571 fibo merdiveninden, TradingView'deki etiketlerin aynısı):
+     TP1 = GÜÇLÜ D/D        → 2.618 uzantısı
+     TP2 = ÇOK GÜÇLÜ D/D    → 3.618 uzantısı
+     stop = 0.0 çizgisi ("DİKKAT AYI") altına KAPANIŞ
+   Doyum noktası (4.236) hedef olarak kullanılmaz — çok uzakta kalıyor,
+   ölçümü anlamsızlaştırıyordu. Yine de raporda mesafesi gösterilir.
+
+   Kapanışla değerlendirilir (fitil sayılmaz). Dip formülü mbMotor ile
+   BİREBİR AYNI — tek fark: mbMotor yalnız son barı üretir, burada her bar. */
+const DBT_UFUK=200;                 /* TP'ye ulaşma için ileri taranacak azami bar */
+/* ⚡ HIZ AYARLARI — ölçüm: sürenin %93'ü Yahoo çekimi, %7'si hesap.
+   Yani hız = eşzamanlı çekim sayısı. Bir adımda 24 hisse × en çok 3 ayrı
+   çekim = 72 alt-istek; Cloudflare ücretli planın 1000 sınırının çok
+   altında, ücretsiz planın 50 sınırını aşar (o durumda DBT_ADIM_BOYUT'u
+   12'ye çek). */
+const DBT_ES=10;                    /* aynı anda kaç hisse çekilsin */
 const DBT_SEVIYE=["dip","dip382","dip236"];
+const DBT_SEVIYE_AD={dip:"dip bölgesi",dip382:"derin dip",dip236:"en dip"};
+/* Fibo merdiveni — Pine'daki _lvls/_lbl_t dizileriyle aynı oranlar */
+const DBT_TP1_ORAN=2.618, DBT_TP2_ORAN=3.618, DBT_DOYUM_ORAN=4.236;
+/* STOP ÇİZGİSİ — 0.0'ın kaç birim ALTI. Merdivende 0.0'ın altındaki
+   çizgiler de "D/D" etiketli: -0.236 / -0.382 / -0.618 / -0.786.
+   ÖLÇÜLDÜ (30 hisse · 4 dilim · 3069 giriş, TP1 sabit):
+     0.0    → ort +0.5% · kazanan %23 · stop %75
+     -0.236 → ort +0.9% · kazanan %30 · stop %65
+     -0.382 → ort +0.9% · kazanan %35 · stop %59
+     -0.618 → ort +1.3% · kazanan %40 · stop %50
+     -0.786 → ort +1.7% · kazanan %44 · stop %43
+   0.0 çizgisi normal dalgalanmanın İÇİNDE kalıyor, giriş daha nefes
+   almadan stop oluyordu. -0.382 orta yol: kazanan oranı %23'ten %35'e
+   çıkıyor, risk hâlâ tanımlı. Değeri değiştirip yeniden koşabilirsin. */
+const DBT_STOP_ORAN=0.382;
+/* Zaman dilimi büyüklük sırası — "üst dilim uyumu" bunu kullanır */
+const DBT_TF_SIRA={"5DK":1,"15DK":2,"1SA":3,"4SA":4,"1G":5,"1HAF":6,"1AY":7};
 
 function dbtSeriUret(mumlar){
   if(!mumlar||mumlar.length<30)return null;
@@ -1592,12 +1634,21 @@ function dbtSeriUret(mumlar){
     if(!x||i<uzun||!isFinite(x.stop)||!isFinite(x.s236)||!isFinite(x.s382)||
        !isFinite(x.s786)||!isFinite(x.close)||!isFinite(x.doyum)){out[i]=null;continue}
     const dip=x.stop<x.close&&x.close<x.s786&&x.doyum>x.close;
-    out[i]={time:m[i].time,close:x.close,doyum:x.doyum,s786:x.s786,s382:x.s382,
-      s236:x.s236,stop:x.stop,dip:!!dip,dip382:!!(dip&&x.close<x.s382),
-      dip236:!!(dip&&x.close<x.s236)};
+    /* Merdivenin birim adımı: 0.0 ile 0.786 arasındaki mesafeden türetilir
+       (Pine'da _diff = (s786 - s0)/0.786 ile birebir aynı). */
+    const birim=(x.s786-x.stop)/0.786;
+    out[i]={time:m[i].time,close:x.close,stop:x.stop,s236:x.s236,s382:x.s382,s786:x.s786,
+      doyum:x.doyum,
+      birim:birim,
+      tp1:x.stop+birim*DBT_TP1_ORAN,      /* GÜÇLÜ D/D */
+      tp2:x.stop+birim*DBT_TP2_ORAN,      /* ÇOK GÜÇLÜ D/D */
+      dip:!!dip,dip382:!!(dip&&x.close<x.s382),dip236:!!(dip&&x.close<x.s236)};
   }
   return out;
 }
+/* Bir barın dip derinliği: 0 yok · 1 dip · 2 derin · 3 en dip */
+const dbtDerinlik=b=>!b?0:(b.dip236?3:b.dip382?2:b.dip?1:0);
+
 /* Her seviye için false→true geçişi = "yeni giriş". Aynı dip bölgesinde
    kaldığı sürece tekrar sayılmaz — yoksa aynı sinyal onlarca kez girer. */
 function dbtGirisleriBul(seri,seviyeler){
@@ -1612,43 +1663,58 @@ function dbtGirisleriBul(seri,seviyeler){
   }
   return cikti;
 }
-/* Bir girişin ileriye dönük sonucu: TP1(786)'ya değdi mi/kaç barda/%kaç,
-   TP2(doyum)'a değdi mi/kaç barda/%kaç, stop(0.0) altına kapandı mı,
-   ufuk boyunca görülen en yüksek getiri ve ufuk sonundaki getiri. */
+/* Bir girişin ileriye dönük sonucu.
+   GERÇEKLEŞEN GETİRİ tek bir kurala göre hesaplanır — raporun can damarı:
+     · önce TP1'e değdiyse   → TP1'de çık
+     · önce stop'a düştüyse  → stop barında çık
+     · ikisi de olmadıysa    → ufuk sonunda çık
+   Böylece her giriş TEK bir sayıya iner, ortalaması da "bu kurulumu her
+   seferinde alsaydım ortalama ne kazanırdım" sorusunun cevabı olur. */
 function dbtSonucOlc(seri,girisIdx){
   const b0=seri[girisIdx];if(!b0)return null;
-  const giris=b0.close,tp1=b0.s786,tp2=b0.doyum,stopSev=b0.stop;
-  let tp1Bar=null,tp1Getiri=null,tp2Bar=null,tp2Getiri=null,stopBar=null,enYuksek=0;
+  const giris=b0.close,tp1=b0.tp1,tp2=b0.tp2;
+  const stopSev=b0.stop-b0.birim*DBT_STOP_ORAN;   /* 0.0'ın DBT_STOP_ORAN kadar altı */
+  let tp1Bar=null,tp2Bar=null,stopBar=null,enYuksek=0;
+  let gerceklesen=null,cikisTip=null,cikisBar=null;
   const son=Math.min(seri.length-1,girisIdx+DBT_UFUK);
   for(let j=girisIdx+1;j<=son;j++){
     const b=seri[j];if(!b||!isFinite(b.close))continue;
     const getiri=100*(b.close/giris-1);
     if(getiri>enYuksek)enYuksek=getiri;
-    if(tp1Bar===null&&b.close>=tp1){tp1Bar=j-girisIdx;tp1Getiri=getiri}
-    if(tp2Bar===null&&b.close>=tp2){tp2Bar=j-girisIdx;tp2Getiri=getiri;break}
-    if(stopBar===null&&b.close<stopSev)stopBar=j-girisIdx;
+    if(tp1Bar===null&&b.close>=tp1){tp1Bar=j-girisIdx;
+      if(gerceklesen===null){gerceklesen=getiri;cikisTip="tp1";cikisBar=tp1Bar}}
+    if(tp2Bar===null&&b.close>=tp2)tp2Bar=j-girisIdx;
+    if(stopBar===null&&b.close<stopSev){stopBar=j-girisIdx;
+      if(gerceklesen===null){gerceklesen=getiri;cikisTip="stop";cikisBar=stopBar}}
+    if(gerceklesen!==null&&tp2Bar!==null)break;
   }
-  const ufukGetiri=son>girisIdx?100*(seri[son].close/giris-1):0;
+  const ufukGetiri=son>girisIdx&&seri[son]?100*(seri[son].close/giris-1):0;
+  if(gerceklesen===null){gerceklesen=ufukGetiri;cikisTip="ufuk";cikisBar=son-girisIdx}
   return{giris:giris,tp1:tp1,tp2:tp2,stop:stopSev,
-    tp1Bar:tp1Bar,tp1Getiri:tp1Getiri,tp2Bar:tp2Bar,tp2Getiri:tp2Getiri,
-    stopBar:stopBar,enYuksekGetiri:enYuksek,ufukGetiri:ufukGetiri};
+    tp1Uzak:100*(tp1/giris-1),tp2Uzak:100*(tp2/giris-1),
+    doyumUzak:100*(b0.doyum/giris-1),stopUzak:100*(stopSev/giris-1),
+    tp1Bar:tp1Bar,tp2Bar:tp2Bar,stopBar:stopBar,
+    gerceklesen:gerceklesen,cikisTip:cikisTip,cikisBar:cikisBar,
+    enYuksekGetiri:enYuksek,ufukGetiri:ufukGetiri};
 }
 /* Havuz × seçili dilimler: her hisse için her dilimin serisini çıkarır,
    girişleri bulur, sonuçları ölçer ve GİRİŞ ANINDA diğer seçili
-   dilimlerin dip durumunu ("uyum") kaydeder. */
+   dilimlerin dip durumunu ("uyum") kaydeder.
+
+   ⚡ İki hız düzeltmesi:
+   1) Aynı hissenin farklı dilimleri AYNI ANDA çekilir; aynı interval+range
+      birden fazla dilimde geçiyorsa (1SA ve 4SA ikisi de 60m) tek çekilir.
+   2) Uyum aramasında her giriş için diğer serinin başından taranıyordu
+      (giriş sayısı × 700 bar). Girişler zaman sırasında olduğu için artık
+      dilim başına tek bir İMLEÇ ileri kaydırılıyor — toplam maliyet
+      giriş sayısı + bar sayısı. */
 async function dbtKosu(kodlar,dilimler,seviyeler){
   const tumSonuclar=[],semboller=[];
-  const ES=6;let sira=0;
+  const ES=DBT_ES;let sira=0;
   const isci=async()=>{
     while(sira<kodlar.length){
       const kod=kodlar[sira++];
       try{
-        /* 🚀 TURBO: aynı hissenin farklı zaman dilimleri artık SIRAYLA değil
-           AYNI ANDA (Promise.all) çekiliyor. Eskiden 4 dilim = 4 ardışık
-           Yahoo isteği demekti (toplam süre = 4×tekil süre); şimdi hepsi
-           paralel gidiyor (toplam süre ≈ en yavaş tekil istek). Aynı
-           interval+range birden fazla dilimde geçiyorsa (ör. 1SA ve 4SA
-           ikisi de 60m çekiyor) tek seferde çekilip paylaşılıyor. */
         const ckListe=[],ckGorulen={};
         for(const t of dilimler){
           const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
@@ -1671,24 +1737,36 @@ async function dbtKosu(kodlar,dilimler,seviyeler){
         let hisseGiris=0;
         for(const t of dilimler){
           const seri=serilerTf[t];if(!seri)continue;
-          for(const gi of dbtGirisleriBul(seri,seviyeler)){
+          const girisler=dbtGirisleriBul(seri,seviyeler);
+          /* Girişler seviye seviye üretildiği için zamanı sıfırlanıyor;
+             imleç tekniği için tek sıraya dizip zamana göre sıralıyoruz. */
+          girisler.sort((a,b)=>a.time-b.time);
+          const imlec={};for(const t2 of dilimler)imlec[t2]=-1;
+          for(const gi of girisler){
             const sonuc=dbtSonucOlc(seri,gi.i);if(!sonuc)continue;
-            let uyumSayisi=0;const uyumDetay=[];
+            let uyumSayisi=0,ustUyum=0,derinUyum=0;const uyumDetay=[];
             for(const t2 of dilimler){
               if(t2===t)continue;
               const seri2=serilerTf[t2];
-              let k=-1;
-              if(seri2)for(let z=0;z<seri2.length;z++){
-                const bz=seri2[z];if(!bz)continue;
-                if(bz.time<=gi.time)k=z;else break;
+              let k=imlec[t2];
+              if(seri2){
+                while(k+1<seri2.length&&seri2[k+1]&&seri2[k+1].time<=gi.time)k++;
+                /* null barları atlarken imleci bozma: yalnız ilerlet */
+                while(k+1<seri2.length&&!seri2[k+1])k++;
+                imlec[t2]=k;
               }
-              const b2=k>=0?seri2[k]:null;
-              const durum=b2?(b2.dip236?3:b2.dip382?2:b2.dip?1:0):0;
-              if(durum>0)uyumSayisi++;
+              const b2=(seri2&&k>=0)?seri2[k]:null;
+              const durum=dbtDerinlik(b2);
+              if(durum>0){
+                uyumSayisi++;
+                if((DBT_TF_SIRA[t2]||0)>(DBT_TF_SIRA[t]||0))ustUyum++;
+                if(durum>=2)derinUyum++;
+              }
               uyumDetay.push({tf:t2,durum:durum});
             }
             tumSonuclar.push(Object.assign({kod:kod,tf:t,seviye:gi.seviye,time:gi.time,
-              uyumSayisi:uyumSayisi,uyumDetay:uyumDetay},sonuc));
+              uyumSayisi:uyumSayisi,ustUyum:ustUyum,derinUyum:derinUyum,
+              uyumDetay:uyumDetay},sonuc));
             hisseGiris++;
           }
         }
@@ -1699,32 +1777,70 @@ async function dbtKosu(kodlar,dilimler,seviyeler){
   await Promise.all(Array.from({length:Math.min(ES,kodlar.length)},isci));
   return{sonuclar:tumSonuclar,semboller:semboller};
 }
-/* Dilim × seviye kırılımı + uyum sayısına göre kovalar. */
-function dbtOzetle(sonuclar){
+/* Rapor özeti. Tek karar sayısı: ORTALAMA GERÇEKLEŞEN GETİRİ.
+   "Bu kurulumu her gördüğümde alsaydım, ortalama ne kazanırdım?"
+   TP1 isabet oranı tek başına yanıltıcı (isabet yüksek ama stoplar büyükse
+   sistem yine zarar ettirir), o yüzden sıralama hep bu sayıya göre. */
+function dbtGrupOlc(liste){
+  const n=liste.length;if(!n)return null;
   const ort=a=>a.length?a.reduce((s,v)=>s+v,0)/a.length:null;
-  const gruplar={};
-  for(const x of sonuclar){const k=x.tf+"|"+x.seviye;(gruplar[k]=gruplar[k]||[]).push(x)}
-  const satirlar=Object.keys(gruplar).map(k=>{
-    const liste=gruplar[k],[tf,seviye]=k.split("|"),n=liste.length;
-    const tp1Vur=liste.filter(x=>x.tp1Bar!==null),tp2Vur=liste.filter(x=>x.tp2Bar!==null);
-    const stopVur=liste.filter(x=>x.stopBar!==null&&(x.tp1Bar===null||x.stopBar<x.tp1Bar));
-    return{tf:tf,seviye:seviye,n:n,
-      tp1Oran:100*tp1Vur.length/n,tp1OrtBar:ort(tp1Vur.map(x=>x.tp1Bar)),tp1OrtGetiri:ort(tp1Vur.map(x=>x.tp1Getiri)),
-      tp2Oran:100*tp2Vur.length/n,tp2OrtBar:ort(tp2Vur.map(x=>x.tp2Bar)),tp2OrtGetiri:ort(tp2Vur.map(x=>x.tp2Getiri)),
-      stopOran:100*stopVur.length/n,ortEnYuksek:ort(liste.map(x=>x.enYuksekGetiri)),ortUfukGetiri:ort(liste.map(x=>x.ufukGetiri))};
-  }).sort((a,b)=>a.tf===b.tf?a.seviye.localeCompare(b.seviye):a.tf.localeCompare(b.tf));
-  const uyumSatirlar=Object.keys(gruplar).map(k=>{
-    const liste=gruplar[k],[tf,seviye]=k.split("|"),kovalar={};
-    for(const x of liste)(kovalar[x.uyumSayisi]=kovalar[x.uyumSayisi]||[]).push(x);
-    return{tf:tf,seviye:seviye,kovalar:Object.keys(kovalar).sort((a,b)=>a-b).map(u=>{
-      const l2=kovalar[u],tp1Vur=l2.filter(x=>x.tp1Bar!==null);
-      return{uyum:Number(u),n:l2.length,tp1Oran:100*tp1Vur.length/l2.length,ortGetiri:ort(l2.map(x=>x.ufukGetiri))};
-    })};
-  }).sort((a,b)=>a.tf===b.tf?a.seviye.localeCompare(b.seviye):a.tf.localeCompare(b.tf));
-  return{satirlar:satirlar,uyumSatirlar:uyumSatirlar};
+  const tp1=liste.filter(x=>x.tp1Bar!==null);
+  const tp2=liste.filter(x=>x.tp2Bar!==null);
+  const stop=liste.filter(x=>x.cikisTip==="stop");
+  const kazanan=liste.filter(x=>x.gerceklesen>0);
+  return{n:n,
+    tp1Oran:100*tp1.length/n, tp2Oran:100*tp2.length/n, stopOran:100*stop.length/n,
+    basariOran:100*kazanan.length/n,
+    ortGetiri:ort(liste.map(x=>x.gerceklesen)),          /* ← ana sayı */
+    ortBar:ort(liste.map(x=>x.cikisBar)),
+    tp1OrtBar:ort(tp1.map(x=>x.tp1Bar)),
+    ortTp1Uzak:ort(liste.map(x=>x.tp1Uzak)),
+    ortTp2Uzak:ort(liste.map(x=>x.tp2Uzak)),
+    ortDoyumUzak:ort(liste.map(x=>x.doyumUzak)),
+    ortStopUzak:ort(liste.map(x=>x.stopUzak)),
+    ortEnYuksek:ort(liste.map(x=>x.enYuksekGetiri))};
+}
+const DBT_ASGARI=25;   /* bu sayının altındaki gruplar "az örnek" sayılır */
+
+function dbtOzetle(sonuclar){
+  const grupla=(anahtarFn)=>{
+    const g={};for(const x of sonuclar){const k=anahtarFn(x);if(k===null)continue;(g[k]=g[k]||[]).push(x)}
+    return g;
+  };
+  /* 1) dilim × seviye */
+  const g1=grupla(x=>x.tf+"|"+x.seviye);
+  const temel=Object.keys(g1).map(k=>{
+    const [tf,seviye]=k.split("|");
+    return Object.assign({tf:tf,seviye:seviye},dbtGrupOlc(g1[k]));
+  }).sort((a,b)=>b.ortGetiri-a.ortGetiri);
+  /* 2) UYUM — kaç dilim aynı anda dipte (asıl soru) */
+  const g2=grupla(x=>String(x.uyumSayisi));
+  const uyum=Object.keys(g2).map(k=>Object.assign({uyum:Number(k)},dbtGrupOlc(g2[k])))
+    .sort((a,b)=>a.uyum-b.uyum);
+  /* 3) ÜST DİLİM UYUMU — girişin dilimindEN BÜYÜK dilimler de dipte mi */
+  const g3=grupla(x=>String(x.ustUyum));
+  const ust=Object.keys(g3).map(k=>Object.assign({ust:Number(k)},dbtGrupOlc(g3[k])))
+    .sort((a,b)=>a.ust-b.ust);
+  /* 4) tam kombinasyon: dilim × seviye × uyum — "en iyi kurulum" buradan */
+  const g4=grupla(x=>x.tf+"|"+x.seviye+"|"+x.uyumSayisi);
+  const kombo=Object.keys(g4).map(k=>{
+    const [tf,seviye,u]=k.split("|");
+    return Object.assign({tf:tf,seviye:seviye,uyum:Number(u)},dbtGrupOlc(g4[k]));
+  }).filter(r=>r.n>=DBT_ASGARI).sort((a,b)=>b.ortGetiri-a.ortGetiri);
+  /* 5) genel */
+  const genel=dbtGrupOlc(sonuclar);
+  /* 6) uyumun etkisi tek cümlede: 0 uyum vs en yüksek uyum */
+  let uyumEtki=null;
+  const u0=uyum.filter(r=>r.uyum===0)[0];
+  const uMax=uyum.filter(r=>r.n>=DBT_ASGARI).slice(-1)[0];
+  if(u0&&uMax&&uMax.uyum>0)
+    uyumEtki={dusuk:u0,yuksek:uMax,fark:uMax.ortGetiri-u0.ortGetiri,
+      katsayi:u0.ortGetiri!==0?uMax.ortGetiri/Math.abs(u0.ortGetiri):null};
+  return{genel:genel,temel:temel,uyum:uyum,ust:ust,kombo:kombo,uyumEtki:uyumEtki,
+    enIyi:kombo[0]||null};
 }
 const DBT_STIL='<style>body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.5 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:22px 0 8px;color:#8b949e}.a{color:#8b949e;font-size:13px}table{border-collapse:collapse;width:100%;margin-top:6px;font-size:13px}th,td{padding:6px 8px;text-align:right;border-bottom:1px solid #21262d;white-space:nowrap}th{color:#8b949e;font-weight:600;text-align:right}td:first-child,th:first-child{text-align:left}.iy{color:#3fb950}.kt{color:#f85149}input,textarea,button{background:#161b22;border:1px solid #272e37;color:#e6edf3;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box}textarea{width:100%;min-height:70px}button{background:#388bfd;border:none;font-weight:700;cursor:pointer;margin-top:10px}label{display:block;margin-top:12px;font-size:13px;color:#8b949e}.wrap{overflow-x:auto}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px}</style>';
-const DBT_ADIM_BOYUT=10;              /* her "adım" isteğinde kaç hisse işlenir (eski, CPU açısından güvenli değer korundu — asıl hız kazancı paralel çekimden geliyor) */
+const DBT_ADIM_BOYUT=24;              /* her "adım" isteğinde kaç hisse (10→24: adım sayısı yarıdan aza indi) */
 async function dbtIsOku(A){
   if(!A.VERI)return null;
   try{const j=await A.VERI.get("dbtIs");return j?JSON.parse(j):null}catch(_){return null}
@@ -1747,7 +1863,7 @@ function dbtIlerlemeHTML(anahtar){
   'var pct=v.toplam?Math.round(100*v.tamam/v.toplam):0;'+
   'document.getElementById("ilerBar").style.width=pct+"%";'+
   'document.getElementById("ilerYazi").textContent=v.tamam+" / "+v.toplam+" hisse tarandı ("+pct+"%)"+(v.toplamGiris?" · "+v.toplamGiris+" giriş bulundu":"");'+
-  'if(v.tamamlandi){location.href="/dipbacktest/rapor?key="+encodeURIComponent(key)}else{setTimeout(adim,900)}'+
+  'if(v.tamamlandi){location.href="/dipbacktest/rapor?key="+encodeURIComponent(key)}else{setTimeout(adim,250)}'+
   '}).catch(function(){setTimeout(adim,2000)})}'+
   'adim();'+
   '</script></body></html>';
@@ -1762,7 +1878,7 @@ function dbtFormHTML(anahtar,kod,tf,is){
   else if(is&&is.tamamlandi)
     devamKutu='<div class="a" style="margin-top:10px">Son tam-havuz taraması bitti (' +is.tamam+' hisse). <a href="/dipbacktest/rapor?key='+encodeURIComponent(anahtar||'')+'" style="color:#388bfd">sonucu aç</a></div>';
   return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest</title>'+DBT_STIL+'</head><body>'+
-  '<h1>🧪 Dip Backtest</h1><div class="a">571 sisteminin dip / derin dip (382 altı) / en dip (236 altı) sinyallerini geçmişe dönük ölçer. Hedef: TP1=doyumun hemen altındaki fibo çizgisi (786), TP2=doyum noktası. Bu sayfayı yalnız sen görebiliyorsun.</div>'+
+  '<h1>🧪 Dip Backtest</h1><div class="a">571 sisteminin dip / derin dip (382 altı) / en dip (236 altı) sinyallerini geçmişe dönük ölçer. Hedefler fibo merdiveninden: <b>TP1 = GÜÇLÜ D/D (2.618)</b>, <b>TP2 = ÇOK GÜÇLÜ D/D (3.618)</b>. Doyum noktası (4.236) hedef olarak kullanılmaz — çok uzakta kalıyor. Bu sayfayı yalnız sen görebiliyorsun.</div>'+
   devamKutu+
   '<form method="get" action="/dipbacktest">'+
   '<input type="hidden" name="key" value="'+(anahtar||'').replace(/"/g,'')+'">'+
@@ -1777,20 +1893,98 @@ function dbtFormHTML(anahtar,kod,tf,is){
   '</body></html>';
 }
 function dbtSayi(v,ondalik){return v===null||v===undefined||!isFinite(v)?'—':v.toFixed(ondalik===undefined?1:ondalik)}
+function dbtYuzde(v,ond){return v===null||v===undefined||!isFinite(v)?'—':(v>0?'+':'')+v.toFixed(ond===undefined?1:ond)+'%'}
+function dbtRenk(v,esik){return v===null||!isFinite(v)?'':(v>=(esik===undefined?0:esik)?' class="iy"':' class="kt"')}
+function dbtSvAd(s){return DBT_SEVIYE_AD[s]||s}
+/* Ortalama getiriye göre 0-100 arası bir çubuk — göz tek bakışta sıralasın */
+function dbtCubuk(v,enBuyuk){
+  const g=Math.max(0,Math.min(1,(v||0)/(enBuyuk||1)));
+  return '<div style="background:#21262d;border-radius:3px;height:6px;width:70px;display:inline-block;vertical-align:middle;overflow:hidden">'+
+    '<div style="background:'+(v>=0?'#3fb950':'#f85149')+';height:100%;width:'+(g*100).toFixed(0)+'%"></div></div>';
+}
 function dbtRaporHTML(o){
-  const satirHtml=o.satirlar.map(r=>'<tr><td>'+r.tf+' · '+r.seviye+'</td><td>'+r.n+'</td>'+
-    '<td class="'+(r.tp1Oran>=50?'iy':'kt')+'">'+dbtSayi(r.tp1Oran)+'%</td><td>'+dbtSayi(r.tp1OrtBar,1)+'</td><td>'+dbtSayi(r.tp1OrtGetiri)+'%</td>'+
-    '<td class="'+(r.tp2Oran>=30?'iy':'kt')+'">'+dbtSayi(r.tp2Oran)+'%</td><td>'+dbtSayi(r.tp2OrtBar,1)+'</td><td>'+dbtSayi(r.tp2OrtGetiri)+'%</td>'+
-    '<td class="'+(r.stopOran<=30?'iy':'kt')+'">'+dbtSayi(r.stopOran)+'%</td><td>'+dbtSayi(r.ortEnYuksek)+'%</td><td>'+dbtSayi(r.ortUfukGetiri)+'%</td></tr>').join('');
-  const uyumHtml=o.uyumSatirlar.map(r=>'<div style="margin-top:8px"><b>'+r.tf+' · '+r.seviye+'</b> — diğer dilimlerden kaç tanesi AYNI ANDA dipteydi?<div class="wrap"><table><tr><th>uyumlu dilim sayısı</th><th>giriş</th><th>TP1 isabet</th><th>ufuk sonu ort. getiri</th></tr>'+
-    r.kovalar.map(k=>'<tr><td>'+k.uyum+'</td><td>'+k.n+'</td><td>'+dbtSayi(k.tp1Oran)+'%</td><td>'+dbtSayi(k.ortGetiri)+'%</td></tr>').join('')+'</table></div></div>').join('');
-  const semHtml=o.semboller.map(s=>s.hata?s.kod+' ⚠️':s.kod+': '+s.giris).join(' · ');
+  const z=o.ozet||{};
+  const g=z.genel||{};
+  /* ── başlık kartı: ne ölçüldü ── */
+  const aciklama='<div class="kur" style="border-color:#272e37;background:#161b22">'+
+    '<b>Ne ölçüldü?</b><div class="a" style="margin-top:5px;line-height:1.7">'+
+    '<b>Giriş</b> — fiyatın dip bölgesine <i>ilk girdiği</i> bar (kapanış). Bölgede kaldığı sürece tekrar sayılmaz.<br>'+
+    '<b>TP1</b> — GÜÇLÜ D/D çizgisi (fibo 2.618) · <b>TP2</b> — ÇOK GÜÇLÜ D/D çizgisi (3.618)<br>'+
+    '<b>Stop</b> — 0.0 çizgisinin <b>'+DBT_STOP_ORAN+' birim altına</b> kapanış (0.0 = "DİKKAT AYI"). '+
+    'Tam 0.0 çizgisi normal dalgalanmanın içinde kaldığı için giriş nefes almadan stop oluyordu.<br>'+
+    '<b>Gerçekleşen getiri</b> — önce TP1 geldiyse orada, önce stop geldiyse orada, hiçbiri gelmediyse '+DBT_UFUK+'. barda çıkılmış sayılır. Tablolardaki <b>ort. getiri</b> bunun ortalamasıdır: '+
+    '<i>"bu kurulumu her gördüğümde alsaydım ortalama ne kazanırdım"</i>.</div></div>';
+  /* ── en iyi kurulum ── */
+  let enIyiHtml='';
+  if(z.enIyi){
+    const e=z.enIyi;
+    enIyiHtml='<div class="kur" style="border-color:#238636;background:#0f2016">'+
+      '<div style="font-size:16px;font-weight:700;margin-bottom:4px">⭐ En iyi kurulum</div>'+
+      '<div style="font-size:15px"><b>'+e.tf+'</b> · '+dbtSvAd(e.seviye)+' · <b>'+e.uyum+' dilim uyumlu</b></div>'+
+      '<div class="a" style="margin-top:6px;line-height:1.8">'+
+      e.n+' giriş · ortalama <b class="iy">'+dbtYuzde(e.ortGetiri)+'</b> · '+
+      'kazançla biten %'+dbtSayi(e.basariOran,0)+'<br>'+
+      'TP1 isabet %'+dbtSayi(e.tp1Oran,0)+' (ort. '+dbtSayi(e.tp1OrtBar,0)+' bar) · '+
+      'stop %'+dbtSayi(e.stopOran,0)+' · ort. çıkış '+dbtSayi(e.ortBar,0)+' bar</div></div>';
+  }
+  /* ── uyum etkisi: tek cümle ── */
+  let etkiHtml='';
+  if(z.uyumEtki){
+    const u=z.uyumEtki;
+    etkiHtml='<div class="kur" style="border-color:#1f6feb;background:#0d1b2e">'+
+      '<b>🔗 Uyumun etkisi</b><div class="a" style="margin-top:5px;line-height:1.7">'+
+      'Hiçbir dilim uyumlu değilken ortalama <b'+dbtRenk(u.dusuk.ortGetiri)+'>'+dbtYuzde(u.dusuk.ortGetiri)+'</b> ('+u.dusuk.n+' giriş)<br>'+
+      '<b>'+u.yuksek.uyum+' dilim</b> aynı anda dipteyken ortalama <b'+dbtRenk(u.yuksek.ortGetiri)+'>'+dbtYuzde(u.yuksek.ortGetiri)+'</b> ('+u.yuksek.n+' giriş)<br>'+
+      '<b>Fark: '+dbtYuzde(u.fark)+'</b></div></div>';
+  }
+  /* ── uyum tablosu ── */
+  const uyumEn=Math.max(...(z.uyum||[]).map(r=>r.ortGetiri||0),0.01);
+  const uyumHtml=(z.uyum||[]).map(r=>
+    '<tr><td><b>'+r.uyum+' dilim</b></td><td>'+r.n+'</td>'+
+    '<td'+dbtRenk(r.ortGetiri)+'><b>'+dbtYuzde(r.ortGetiri)+'</b> '+dbtCubuk(r.ortGetiri,uyumEn)+'</td>'+
+    '<td>%'+dbtSayi(r.basariOran,0)+'</td><td>%'+dbtSayi(r.tp1Oran,0)+'</td>'+
+    '<td>%'+dbtSayi(r.stopOran,0)+'</td><td>'+dbtSayi(r.ortBar,0)+'</td>'+
+    (r.n<DBT_ASGARI?'<td class="a">az örnek</td>':'<td></td>')+'</tr>').join('');
+  /* ── üst dilim uyumu ── */
+  const ustHtml=(z.ust||[]).map(r=>
+    '<tr><td><b>'+r.ust+' üst dilim</b></td><td>'+r.n+'</td>'+
+    '<td'+dbtRenk(r.ortGetiri)+'><b>'+dbtYuzde(r.ortGetiri)+'</b></td>'+
+    '<td>%'+dbtSayi(r.basariOran,0)+'</td><td>%'+dbtSayi(r.tp1Oran,0)+'</td>'+
+    '<td>%'+dbtSayi(r.stopOran,0)+'</td>'+
+    (r.n<DBT_ASGARI?'<td class="a">az örnek</td>':'<td></td>')+'</tr>').join('');
+  /* ── kombinasyon sıralaması (ilk 20) ── */
+  const komboEn=Math.max(...(z.kombo||[]).map(r=>r.ortGetiri||0),0.01);
+  const komboHtml=(z.kombo||[]).slice(0,20).map((r,i)=>
+    '<tr><td>'+(i+1)+'. <b>'+r.tf+'</b> · '+dbtSvAd(r.seviye)+' · uyum '+r.uyum+'</td>'+
+    '<td>'+r.n+'</td><td'+dbtRenk(r.ortGetiri)+'><b>'+dbtYuzde(r.ortGetiri)+'</b> '+dbtCubuk(r.ortGetiri,komboEn)+'</td>'+
+    '<td>%'+dbtSayi(r.basariOran,0)+'</td><td>%'+dbtSayi(r.tp1Oran,0)+'</td>'+
+    '<td>%'+dbtSayi(r.stopOran,0)+'</td><td>'+dbtSayi(r.ortBar,0)+'</td></tr>').join('');
+  /* ── dilim × seviye ── */
+  const temelHtml=(z.temel||[]).map(r=>
+    '<tr><td><b>'+r.tf+'</b> · '+dbtSvAd(r.seviye)+'</td><td>'+r.n+'</td>'+
+    '<td'+dbtRenk(r.ortGetiri)+'><b>'+dbtYuzde(r.ortGetiri)+'</b></td>'+
+    '<td>%'+dbtSayi(r.basariOran,0)+'</td><td>%'+dbtSayi(r.tp1Oran,0)+'</td>'+
+    '<td>%'+dbtSayi(r.stopOran,0)+'</td><td>'+dbtYuzde(r.ortTp1Uzak,0)+'</td>'+
+    '<td>'+dbtYuzde(r.ortStopUzak,0)+'</td><td>'+dbtYuzde(r.ortDoyumUzak,0)+'</td></tr>').join('');
+  const semHtml=(o.semboller||[]).filter(s=>s.hata).map(s=>s.kod).join(', ');
   return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest sonuçları</title>'+DBT_STIL+'</head><body>'+
-  '<h1>🧪 Dip Backtest sonuçları</h1><div class="a">'+o.kodlar.length+' hisse × '+o.dilimler.join(', ')+' · '+o.toplamGiris+' giriş bulundu · '+o.sure+' sn sürdü</div>'+
-  '<div class="a" style="margin-top:4px">TP1 = doyum\'un bir altındaki fibo çizgisi (0.786) · TP2 = doyum noktası (4.236 uzantısı) · stop = 0.0 seviyesinin altına kapanış</div>'+
-  '<h2>Dilim × seviye özeti</h2><div class="wrap"><table><tr><th>dilim · seviye</th><th>giriş</th><th>TP1 isabet</th><th>TP1 ort. bar</th><th>TP1 ort. getiri</th><th>TP2 isabet</th><th>TP2 ort. bar</th><th>TP2 ort. getiri</th><th>stop-out</th><th>ort. en yüksek</th><th>ufuk sonu ort.</th></tr>'+satirHtml+'</table></div>'+
-  '<h2>Dilimler arası uyum (ahenk)</h2>'+uyumHtml+
-  '<h2>Taranan hisseler</h2><div class="a">'+semHtml+'</div>'+
+  '<h1>🧪 Dip Backtest sonuçları</h1>'+
+  '<div class="a">'+o.kodlar.length+' hisse · '+o.dilimler.join(' · ')+' · <b>'+o.toplamGiris+'</b> giriş · '+o.sure+' sn</div>'+
+  (g.n?'<div class="a" style="margin-top:3px">Genel ortalama: <b'+dbtRenk(g.ortGetiri)+'>'+dbtYuzde(g.ortGetiri)+'</b>'+
+      ' · kazançla biten %'+dbtSayi(g.basariOran,0)+' · TP1 %'+dbtSayi(g.tp1Oran,0)+' · stop %'+dbtSayi(g.stopOran,0)+'</div>':'')+
+  enIyiHtml+etkiHtml+
+  '<h2>🔗 Kaç dilim aynı anda dipteydi?</h2>'+
+  '<div class="a">Asıl soru bu: uyum arttıkça sonuç düzeliyor mu? Satırlar aşağı indikçe getiri yükseliyorsa uyum işe yarıyor demektir.</div>'+
+  '<div class="wrap"><table><tr><th>uyum</th><th>giriş</th><th>ort. getiri</th><th>kazanan</th><th>TP1</th><th>stop</th><th>ort. bar</th><th></th></tr>'+uyumHtml+'</table></div>'+
+  '<h2>⬆️ Üst dilimler de dipte miydi?</h2>'+
+  '<div class="a">Girişin diliminden BÜYÜK kaç dilim aynı anda dipteydi (ör. 1SA girişinde 4SA ve 1G).</div>'+
+  '<div class="wrap"><table><tr><th>üst uyum</th><th>giriş</th><th>ort. getiri</th><th>kazanan</th><th>TP1</th><th>stop</th><th></th></tr>'+ustHtml+'</table></div>'+
+  '<h2>🏆 En iyi 20 kurulum</h2>'+
+  '<div class="a">dilim × dip derinliği × uyum — en az '+DBT_ASGARI+' giriş olanlar, ortalama getiriye göre.</div>'+
+  '<div class="wrap"><table><tr><th>kurulum</th><th>giriş</th><th>ort. getiri</th><th>kazanan</th><th>TP1</th><th>stop</th><th>ort. bar</th></tr>'+komboHtml+'</table></div>'+
+  '<h2>📋 Dilim × dip derinliği</h2>'+
+  '<div class="wrap"><table><tr><th>kurulum</th><th>giriş</th><th>ort. getiri</th><th>kazanan</th><th>TP1</th><th>stop</th><th>TP1 uzaklık</th><th>stop uzaklık</th><th>doyum uzaklık</th></tr>'+temelHtml+'</table></div>'+
+  (semHtml?'<h2>⚠️ Veri alınamayan hisseler</h2><div class="a">'+semHtml+'</div>':'')+
   '<div class="a" style="margin-top:16px"><a href="/dipbacktest?key='+encodeURIComponent(o.anahtar||'')+'" style="color:#388bfd">← yeni koşum</a></div>'+
   '</body></html>';
 }
@@ -2058,6 +2252,153 @@ async function mbDilimDurum(A){
       yas:b.ts?Math.round((Date.now()-b.ts)/6e4):null});
   }
   return out;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   🔔 FİLTRE ALARMI — "bu taramayı seans içinde bana bildir"
+   ══════════════════════════════════════════════════════════════════════
+   Yönetici ekranda modülleri/dilimleri ayarlar ve "Bu filtreyi alarma
+   gönder" der. Filtre KV'ye yazılır; her /push turunda arka planda
+   yeniden ölçülür ve LİSTEYE YENİ GİREN hisseler bildirim olarak gider.
+   Alıcılar: alarmKullanicilari() — yönetici + süper üyeler (mevcut alarm
+   akışının aynı süzgeci).
+
+   TASARIM KARARLARI:
+   1) Alarm YENİ GİRENLERİ bildirir, listenin tamamını değil. Aksi hâlde
+      aynı hisse her turda tekrar tekrar gelirdi.
+   2) Filtre kaydedilirken o anki eşleşmeler "görülmüş" sayılır (tohumlama).
+      Yoksa kaydettiğin anda 200 hisselik bir sel gelirdi. Kayıttan
+      SONRA listeye girenler bildirilir.
+   3) Yalnız SEANS İÇİNDE çalışır (BIST 09:30-18:10, hafta içi). Kapalıyken
+      ölçüm zaten değişmiyor, boşuna bildirim gitmesin.
+   4) Hafıza günlüktür: ertesi gün sıfırlanır, aynı hisse yeni günde
+      yeniden bildirilebilir.
+   5) Yahoo'ya EK ÇAĞRI YAPMAZ — birikimdeki ölçümleri süzer. Ölçümleri
+      tazeleyen zaten mbDilimTara'dır. */
+const MB_ALARM_ANAHTAR="mbAlarmFiltre";
+const MB_ALARM_GUN="mbAlarmGun";
+const MB_ALARM_AZAMI=12;            /* tek mesajda en fazla kaç hisse */
+
+async function mbAlarmFiltreOku(A){
+  try{const h=A&&A.VERI&&await A.VERI.get(MB_ALARM_ANAHTAR);
+    if(h){const j=JSON.parse(h);if(j&&j.ist)return j}}catch(_){}
+  return null;
+}
+async function mbAlarmFiltreYaz(A,ist,uid){
+  if(!A||!A.VERI)return null;
+  const kayit={ist:ist,ts:Date.now(),kuran:String(uid||"")};
+  await A.VERI.put(MB_ALARM_ANAHTAR,JSON.stringify(kayit)).catch(()=>{});
+  return kayit;
+}
+async function mbAlarmFiltreSil(A){
+  try{if(A&&A.VERI){await A.VERI.delete(MB_ALARM_ANAHTAR);await A.VERI.delete(MB_ALARM_GUN)}}catch(_){}
+}
+/* Günlük "bildirdim" hafızası — anahtar: KOD|DİLİM */
+async function mbAlarmGecmisi(A){
+  const bugun=onayDonemi();
+  try{const h=await A.VERI.get(MB_ALARM_GUN);
+    if(h){const j=JSON.parse(h);if(j&&j.gun===bugun&&Array.isArray(j.anahtarlar))return j}}catch(_){}
+  return{gun:bugun,anahtarlar:[]};
+}
+async function mbAlarmGecmisiYaz(A,g){
+  g.anahtarlar=g.anahtarlar.slice(-4000);
+  try{await A.VERI.put(MB_ALARM_GUN,JSON.stringify(g),{expirationTtl:172800})}catch(_){}
+}
+/* BIST seansı: hafta içi 09:30-18:10 (İstanbul). Yahoo barları da bu
+   aralıkta değişiyor; dışında ölçüm sabit kaldığı için alarm da susar. */
+function mbSeansIci(){
+  const ist=new Date(Date.now()+108e5);          /* UTC+3 */
+  const gun=ist.getUTCDay();                     /* 0 Pazar · 6 Cumartesi */
+  if(gun===0||gun===6)return!1;
+  const dk=ist.getUTCHours()*60+ist.getUTCMinutes();
+  return dk>=570&&dk<=1090;                      /* 09:30 - 18:10 */
+}
+/* Filtreyi tek satırda özetler — bildirimde hangi tarama olduğu belli olsun. */
+function mbFiltreOzet(ist){
+  const p=[];
+  if(ist.mal.acik){
+    const y=[];if(ist.mal.top)y.push("toplama");if(ist.mal.dag)y.push("dağıtım");
+    p.push("📦 "+y.join("/")+(ist.mal.temiz?" (temiz)":"")+
+      (ist.mal.sinirsiz?"":" ≤"+ist.mal.n+"B"));
+  }
+  if(ist.dip.acik)p.push("⬇️ "+(ist.dip.kademe==="dip236"?"en dip":ist.dip.kademe==="dip382"?"derin dip":"dip"));
+  if(ist.ab.acik){
+    const y=[];if(ist.ab.boga)y.push("🐂 boğa");if(ist.ab.ayi)y.push("🐻 ayı");
+    p.push(y.join("/")+(ist.ab.sinirsiz?"":" ≤"+ist.ab.n+"B"));
+  }
+  return p.join(" · ")||"(koşul yok)";
+}
+/* Filtrenin ŞU ANKİ eşleşmeleri — birikimden, ek çekim yok.
+   Dönen: {anahtarlar:Set, satirlar:[{kod,tf,fiyat,...}]} */
+async function mbAlarmEslesme(A,ist){
+  const anahtarlar=[],satirlar=[];
+  for(const tf of ist.tfler){
+    const bir=_mbBellek[tf]||await mbTfOku(A,tf);
+    const sonuc=bir.sonuc||{};
+    for(const kod of Object.keys(sonuc)){
+      const x=sonuc[kod];
+      if(!mbModulGecti(x,ist))continue;
+      anahtarlar.push(kod+"|"+tf);
+      satirlar.push({kod:kod,tf:tf,fiyat:x.fiyat,topHam:x.topHam,dagHam:x.dagHam,
+        boga:x.boga,ayi:x.ayi,rejYas:x.rejYas,dip:x.dip,taze:mbTazelik(x)});
+    }
+  }
+  return{anahtarlar:anahtarlar,satirlar:satirlar};
+}
+/* Kaydederken tohumla: o anki eşleşmeler "bildirildi" sayılsın. */
+async function mbAlarmTohumla(A,ist){
+  const e=await mbAlarmEslesme(A,ist);
+  await mbAlarmGecmisiYaz(A,{gun:onayDonemi(),anahtarlar:e.anahtarlar});
+  return e.anahtarlar.length;
+}
+/* Her /push turunda çalışır. Yeni girenleri bulur ve bildirir. */
+async function mbAlarmTara(A){
+  if(!A||!A.VERI||!A.BOT_TOKEN)return;
+  const kayit=await mbAlarmFiltreOku(A);
+  if(!kayit)return;                                  /* filtre kurulmamış */
+  if(!mbSeansIci())return;                           /* seans dışı */
+  const ist=mbIstekNorm(kayit.ist);
+  if(!ist.mal.acik&&!ist.dip.acik&&!ist.ab.acik)return;
+  const e=await mbAlarmEslesme(A,ist);
+  const gecmis=await mbAlarmGecmisi(A);
+  const bilinen=new Set(gecmis.anahtarlar);
+  const yeni=e.satirlar.filter(s=>!bilinen.has(s.kod+"|"+s.tf));
+  if(!yeni.length)return;
+  /* En taze olay önce; mesaj kalabalık olmasın diye tavan var. */
+  yeni.sort((a,b)=>(a.taze-b.taze)||(a.kod<b.kod?-1:1));
+  const gosterilen=yeni.slice(0,MB_ALARM_AZAMI);
+  /* Dilim dilim grupla */
+  const grup={};
+  for(const s of gosterilen){(grup[s.tf]=grup[s.tf]||[]).push(s)}
+  let metin="🔔 <b>TARAMA ALARMI</b>\n<i>"+mbFiltreOzet(ist)+"</i>\n";
+  for(const tf of ist.tfler){
+    const g=grup[tf];if(!g||!g.length)continue;
+    metin+="\n"+(MB_TF[tf]?MB_TF[tf].ik+" <b>"+MB_TF[tf].ad+"</b>":tf)+"\n";
+    for(const s of g){
+      const mal=s.topHam<=s.dagHam?("TOP "+(s.topHam>999?"-":s.topHam+"B")):("DAĞ "+(s.dagHam>999?"-":s.dagHam+"B"));
+      metin+="• <b>"+s.kod+"</b>  "+s.fiyat+"  ·  "+mal+"  ·  "+
+        (s.boga?"🐂":s.ayi?"🐻":"?")+s.rejYas+"B"+(s.dip?"  ⬇️":"")+"\n";
+    }
+  }
+  while(metin.slice(-1)==="\n")metin=metin.slice(0,-1);   /* son bloğun fazla satır sonu */
+  if(yeni.length>gosterilen.length)
+    metin+="\n<i>…ve "+(yeni.length-gosterilen.length)+" hisse daha.</i>";
+  metin+="\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
+  /* 1) KANAL — tek istek, abone sayısından bağımsız */
+  const kanal=String((A.ALARM_KANAL||"")).trim();
+  if(kanal)await b(A.BOT_TOKEN,"sendMessage",{chat_id:kanal,text:metin,
+    parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
+  /* 2) ÖZEL MESAJ — yönetici + süper üyeler, mevcut kuyruk altyapısıyla */
+  const kullanicilar=await alarmKullanicilari(A).catch(()=>[]);
+  if(kullanicilar.length){
+    await alarmKuyrugaKoy(A,metin,kullanicilar);
+    await alarmKuyrukBosalt(A);
+  }
+  /* Hafızaya YENİLERİN HEPSİ yazılır (mesajda gösterilmeyenler dahil) —
+     yoksa tavanın altında kalanlar her turda tekrar "yeni" sayılırdı. */
+  for(const s of yeni)gecmis.anahtarlar.push(s.kod+"|"+s.tf);
+  await mbAlarmGecmisiYaz(A,gecmis);
+  saglikArtir("mbAlarm");
 }
 
 /* ---------- B) 🔐 İMZALI PANEL ANAHTARI ----------
@@ -4867,7 +5208,32 @@ function mbGoster(v,yerel){
         '<div class="altbilgi">fiyat</div></div></div>';
     }).join("");
   });
-  /* ── 10) DURUM ── */
+  /* ── 10) 🔔 FİLTREYİ ALARMA GÖNDER ──
+     Sonuçların hemen altında: ekranda ne görüyorsan onu alarma bağlarsın. */
+  var al=(v&&v.alarm)||null;
+  h+='<div class="kutu" style="margin:14px 0 0;border-left:3px solid '+(al?"var(--yes)":"var(--ciz)")+'">'+
+     '<div style="font-weight:800;font-size:14px;margin-bottom:6px">🔔 Filtre alarmı</div>';
+  if(al){
+    h+='<div class="altbilgi" style="margin-bottom:7px">Şu an kurulu: <b>'+E(al.ozet)+'</b>'+
+       '<br>dilimler: <b>'+al.tfler.map(function(t){return E(t)}).join(" · ")+'</b>'+
+       '<br>'+(al.seans?"🟢 seans açık — listeye yeni giren hisseler bildirilir"
+                       :"🌙 seans kapalı — bildirim seans açılınca sürer")+'</div>';
+  }else{
+    h+='<div class="altbilgi" style="margin-bottom:7px">Kurulu alarm yok. '+
+       'Yukarıdaki tikleri istediğin gibi ayarla, sonra bu filtreyi alarma bağla — '+
+       'seans içinde listeye <b>yeni giren</b> hisseler sana ve süper üyelere bildirim olarak gider.</div>';
+  }
+  if(D.yon){
+    h+='<div class="sirala" style="flex-wrap:wrap">'+
+       '<button class="dg" id="mbAlarmKur" style="width:auto;padding:8px 14px">'+
+       (al?"🔁 Alarmı bu filtreyle değiştir":"🔔 Bu filtreyi alarma gönder")+'</button>'+
+       (al?'<button class="sir" id="mbAlarmSil">🚫 Alarmı kaldır</button>':"")+'</div>'+
+       '<div class="altbilgi" id="mbAlarmDurum" style="margin-top:6px"></div>';
+  }else{
+    h+='<div class="altbilgi" style="opacity:.6">Alarm filtresini yalnız yönetici kurar.</div>';
+  }
+  h+='</div>';
+  /* ── 11) DURUM ── */
   var eb=(v&&v.evrenBilgi)||{};
   h+='<div class="kutu" style="margin:12px 0 0;padding:9px 11px">'+
      '<div class="altbilgi" style="opacity:.8">'+(calisiyor?"🔄 Arka planda taranıyor":"⏸ Tarama durduruldu")+
@@ -4928,6 +5294,27 @@ function mbBagla(v,dilimler){
     var o={};for(var k in mbIst)o[k]=mbIst[k];o.evrenYenile=1;
     post("/api/malboga",o).then(function(v2){mbD=v2;mbGoster(v2)})
       .catch(function(){ev.disabled=false;ev.textContent="🌍 Evreni yenile"})};
+  var ak=el("mbAlarmKur");
+  if(ak)ak.onclick=function(){tit();ak.disabled=true;ak.textContent="⏳ kuruluyor…";
+    var o={};for(var k in mbIst)o[k]=mbIst[k];o.alarmKur=1;
+    post("/api/malboga",o).then(function(r){
+      ak.disabled=false;
+      if(r&&r.ok){
+        var dv=el("mbAlarmDurum");
+        if(dv)dv.innerHTML='✅ Alarm kuruldu. Şu anki <b>'+(r.tohum||0)+'</b> eşleşme '+
+          '“görülmüş” sayıldı; bundan sonra listeye <b>yeni girenler</b> bildirilecek.';
+        mbGetir();
+      }else{
+        ak.textContent="🔔 Bu filtreyi alarma gönder";
+        var dv2=el("mbAlarmDurum");if(dv2)dv2.textContent="⚠️ "+((r&&r.hata)||"kurulamadı");
+      }
+    }).catch(function(){ak.disabled=false;ak.textContent="🔔 Bu filtreyi alarma gönder";
+      var dv3=el("mbAlarmDurum");if(dv3)dv3.textContent="⚠️ bağlantı hatası"});
+  };
+  var as=el("mbAlarmSil");
+  if(as)as.onclick=function(){tit();as.disabled=true;
+    post("/api/malboga",{alarmSil:1}).then(function(){mbGetir()})
+      .catch(function(){as.disabled=false})};
   var kb=el("mbKodBtn"),ki=el("mbKod");
   var bak=function(){var k=String((ki&&ki.value)||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
     if(k.length<3)return;tit();
@@ -5057,6 +5444,9 @@ function saglikGoster(v){
   h+=sagKart("bilgi","Yapılan tarama: <b>"+sy("absTarama")+"</b>",
       "Her tarama en fazla 16 hisseye bakar (Cloudflare istek başına 50 alt-istek sınırı) ve sonuç 30 dakika saklanır.");
   h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">🐂🐻 MAL + AYI/BOĞA</div>';
+  h+=sagKart("bilgi","Filtre alarmı gönderimi: <b>"+sy("mbAlarm")+"</b>",
+      "Kurulu tarama filtresine YENİ giren hisseler seans içinde bildirilir. "+
+      "Alıcılar: yönetici + süper üyeler (+ tanımlıysa alarm kanalı).");
   h+=sagKart("bilgi","İlerleyen dilim sayısı: <b>"+sy("mbTarama")+"</b>",
       "Yedi zaman dilimi sırayla taranır; bir dilimin havuzu bitince sıradakine geçilir. "+
       "Ölçümler dilim başına ayrı anahtarda birikir, 6 saat sonra bayatlayıp düşer.");
@@ -6018,6 +6408,9 @@ q.waitUntil(kilitli(A,"absDilim",50,()=>absDilimTara(A,[])).catch(()=>{})),
    ilerler; havuz bitince sıradaki zaman dilimine geçilir. Böylece yedi
    dilimin tamamı sırayla ve sürekli tazelenir. */
 q.waitUntil(kilitli(A,"mbDilim",50,()=>mbDilimTara(A)).catch(()=>{})),
+/* 🔔 Kurulu tarama filtresi varsa listeye YENİ girenleri bildir.
+   mbDilimTara'dan sonra sıraya girer ki o turun taze ölçümünü görsün. */
+q.waitUntil(kilitli(A,"mbAlarm",50,()=>mbAlarmTara(A)).catch(()=>{})),
 q.waitUntil(kilitli(A,"portfoySnapshot",60,()=>portfoyGunlukSnapshotAl(A)).catch(()=>{})),
 saglikArtir("push")   /* sayaç bellekte artar, KV'ye en fazla 60 sn'de bir yazılır */
 /* Formasyon taramasini da tetikle — arka planda, yanit beklemeden. */
@@ -6053,10 +6446,10 @@ if(!kodlar||!kodlar.length){const evren=await mbEvren(A,[]);kodlar=evren.slice(0
 kodlar=kodlar.slice(0,40);
 const dbtT0=Date.now();
 const{sonuclar:dbtSonuclar,semboller:dbtSemboller}=await dbtKosu(kodlar,dilimlerSon,seviyeler.length?seviyeler:DBT_SEVIYE);
-const{satirlar:dbtSatirlar,uyumSatirlar:dbtUyumSatirlar}=dbtOzetle(dbtSonuclar);
+const dbtOzet=dbtOzetle(dbtSonuclar);
 const dbtSure=((Date.now()-dbtT0)/1000).toFixed(1);
 return new Response(dbtRaporHTML({kodlar:kodlar,dilimler:dilimlerSon,
-  satirlar:dbtSatirlar,uyumSatirlar:dbtUyumSatirlar,semboller:dbtSemboller,sure:dbtSure,
+  ozet:dbtOzet,semboller:dbtSemboller,sure:dbtSure,
   toplamGiris:dbtSonuclar.length,anahtar:anahtar}),{headers:{"content-type":"text/html; charset=utf-8"}})}
 if("/dipbacktest/adim"===$.pathname){
   const kk=await kapiKontrol(A,$,p,!0);
@@ -6085,10 +6478,10 @@ if("/dipbacktest/rapor"===$.pathname){
   const anahtar=$.searchParams.get("key")||$.searchParams.get("t")||job.anahtar||"";
   if(!job.tamamlandi)
     return new Response(dbtIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
-  const{satirlar,uyumSatirlar}=dbtOzetle(job.sonuclar);
+  const ozet=dbtOzetle(job.sonuclar);
   const sure=((job.guncelleme-job.baslangic)/1000).toFixed(1);
   return new Response(dbtRaporHTML({kodlar:{length:job.toplam},dilimler:job.dilimler,
-    satirlar:satirlar,uyumSatirlar:uyumSatirlar,semboller:job.semboller,sure:sure,
+    ozet:ozet,semboller:job.semboller,sure:sure,
     toplamGiris:job.sonuclar.length,anahtar:anahtar}),{headers:{"content-type":"text/html; charset=utf-8"}})
 }
 if($.pathname.startsWith("/panel")){
@@ -6393,19 +6786,39 @@ if("/api/malboga"===$.pathname){
     if(!r)return JS({ok:!1,hata:"ölçüm alınamadı"});
     return JS({ok:!0,tek:r,sozluk:sozluk});
   }
+  /* 🔔 FİLTREYİ ALARMA GÖNDER / KALDIR — yalnız yönetici. */
+  if(gov&&gov.alarmKur){
+    if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+    const kur=mbIstekNorm(gov);
+    if(!kur.mal.acik&&!kur.dip.acik&&!kur.ab.acik)
+      return JS({ok:!1,hata:"önce en az bir modül aç"},400);
+    if(!kur.tfler.length)return JS({ok:!1,hata:"önce zaman dilimi seç"},400);
+    await mbAlarmFiltreYaz(A,kur,uid);
+    const tohum=await mbAlarmTohumla(A,kur).catch(()=>0);
+    return JS({ok:!0,alarmKuruldu:!0,tohum:tohum,
+      alarm:{ozet:mbFiltreOzet(kur),tfler:kur.tfler,ts:Date.now()}});
+  }
+  if(gov&&gov.alarmSil){
+    if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+    await mbAlarmFiltreSil(A);
+    return JS({ok:!0,alarmSilindi:!0});
+  }
   /* ÜÇ MODÜL × SEÇİLİ ZAMAN DİLİMLERİ */
   const ist=mbIstekNorm(gov);
   const paket=await mbModulTara(A,ist).catch(()=>null);
   const dilimler=await mbDilimDurum(A).catch(()=>[]);
   let evrenBilgi={sayi:0,kaynak:"okunamadı",rapor:null};
   try{const ev=await tamEvren(A);evrenBilgi={sayi:ev.length,kaynak:ev.kaynak,rapor:YON?ev.rapor:null}}catch(_){}
+  const ak=await mbAlarmFiltreOku(A).catch(()=>null);
+  const alarm=ak?{ozet:mbFiltreOzet(mbIstekNorm(ak.ist)),tfler:mbIstekNorm(ak.ist).tfler,
+                  ts:ak.ts,seans:mbSeansIci()}:null;
   if(!paket)return JS({ok:!0,sozluk:sozluk,dilimler:dilimler,evrenBilgi:evrenBilgi,
-    ist:ist,gruplar:[],ortak:[],calisiyor:!0});
+    ist:ist,gruplar:[],ortak:[],calisiyor:!0,alarm:alarm});
   const fav=await X(A,uid),pf=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf)]);
   for(const g of paket.gruplar)
     g.liste=g.liste.map(x=>Object.assign({takipte:izlenen.has(x.kod)},x));
   return JS({ok:!0,sozluk:sozluk,dilimler:dilimler,evrenBilgi:evrenBilgi,ist:ist,
-    gruplar:paket.gruplar,ortak:paket.ortak,calisiyor:paket.calisiyor});
+    gruplar:paket.gruplar,ortak:paket.ortak,calisiyor:paket.calisiyor,alarm:alarm});
 }
 /* 🌊 Absorpsiyon eşiklerini kaydet — SADECE yönetici. Kaydedince yeni
    önbellek anahtarına düştüğü için bir sonraki istekte anında yeni
