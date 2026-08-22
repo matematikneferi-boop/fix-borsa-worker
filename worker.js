@@ -1762,7 +1762,7 @@ function dbtFormHTML(anahtar,kod,tf,is){
   else if(is&&is.tamamlandi)
     devamKutu='<div class="a" style="margin-top:10px">Son tam-havuz taraması bitti (' +is.tamam+' hisse). <a href="/dipbacktest/rapor?key='+encodeURIComponent(anahtar||'')+'" style="color:#388bfd">sonucu aç</a></div>';
   return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest</title>'+DBT_STIL+'</head><body>'+
-  '<h1>🧪 Dip Backtest</h1><div class="a">571 sisteminin dip / derin dip (382 altı) / en dip (236 altı) sinyallerini geçmişe dönük ölçer. Hedef: TP1=786 çizgisi, TP2=doyum noktası. Bu sayfayı yalnız sen görebiliyorsun.</div>'+
+  '<h1>🧪 Dip Backtest</h1><div class="a">571 sisteminin dip / derin dip (382 altı) / en dip (236 altı) sinyallerini geçmişe dönük ölçer. Hedef: TP1=doyumun hemen altındaki fibo çizgisi (786), TP2=doyum noktası. Bu sayfayı yalnız sen görebiliyorsun.</div>'+
   devamKutu+
   '<form method="get" action="/dipbacktest">'+
   '<input type="hidden" name="key" value="'+(anahtar||'').replace(/"/g,'')+'">'+
@@ -2140,10 +2140,12 @@ void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  �
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Fix Borsa Sinyal</title>
+<meta name="color-scheme" content="dark">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js';document.head.appendChild(s)"></script>
 <style>
 :root{
+  color-scheme:dark;
   --bg:#0e1116; --kart:#161b22; --kart2:#1c2330; --ciz:#262d38;
   --yazi:#e6edf3; --soluk:#8b949e; --mavi:#388bfd;
   --yes:#3fb950; --kir:#f85149; --sar:#d29922; --mor:#a371f7;
@@ -2244,6 +2246,7 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .dg.ik{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi)}
 .dg.kirmizi{background:var(--kir)}
 .gir{width:100%;background:var(--bg);border:1px solid var(--ciz);color:var(--yazi);
+  -webkit-text-fill-color:var(--yazi);caret-color:var(--yazi);
   border-radius:9px;padding:11px;font-size:14px;margin-top:7px;font-family:inherit}
 textarea.gir{min-height:88px;resize:vertical}
 .katman{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;
@@ -2654,7 +2657,18 @@ function el(id){return document.getElementById(id)}
 function post(yol,gov){
   gov=gov||{}; gov.initData=(TG&&TG.initData)||"";
   return fetch(yol,{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(gov)}).then(function(r){return r.json()});
+    body:JSON.stringify(gov)}).then(function(r){
+      /* Eskiden doğrudan r.json() çağrılıyordu: Cloudflare 1102 gibi bir hata
+         sayfası (HTML) dönünce json() patlıyor, ekranda sebepsiz "hata"
+         yazıyordu. Şimdi önce metni okuyoruz; JSON değilse durum kodunu ve
+         ilk birkaç kelimeyi gösteriyoruz — asıl sebep görünür oluyor. */
+      return r.text().then(function(t){
+        var j=null;try{j=JSON.parse(t)}catch(e){}
+        if(j)return j;
+        var ozet=(t||"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,140);
+        return{ok:!1,mesaj:"⚠️ sunucu hatası (HTTP "+r.status+")"+(ozet?": "+ozet:"")};
+      });
+    });
 }
 /* TR takvimine göre "bugün mü?" — sinyalTs saniye cinsinden, +3 saat ofsetle
    gün numarasına çevrilip bugünün gün numarasıyla karşılaştırılıyor. */
@@ -5386,7 +5400,7 @@ function panelCiz(){
       '<div class="bilgi">Üye tablosu, CSV dışa aktarma, davet ağacı ve ayarlar tarayıcıda.</div>'+
       '<button class="dg ik" id="pTam">🌐 Tam paneli aç</button></div>';
     h+='<div class="kutu"><h3>🧪 Dip Backtest (Fibo)</h3>'+
-      '<div class="bilgi">571 sisteminin dip/derin dip sinyallerini geçmişe dönük ölçer — TP1=0.786 fibo çizgisi, TP2=doyum noktası.</div>'+
+      '<div class="bilgi">571 sisteminin dip/derin dip sinyallerini geçmişe dönük ölçer — TP1=doyumun hemen altındaki fibo çizgisi (786), TP2=doyum noktası.</div>'+
       '<button class="dg ik" id="pDbt">🧪 Dip Backtest\\'i aç</button></div>';
     el("govde").innerHTML=h;
     function id(x){return(el(x).value||"").replace(/\\D/g,"")}
