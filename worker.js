@@ -776,7 +776,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-22-c · 3 tarama modülü (mal · dip · ayı/boğa) · çoklu zaman dilimi";
+const WORKER_SURUM="2026-08-22-d · 3 tarama modülü · çoklu dilim · hayalet bar düzeltmesi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1479,11 +1479,20 @@ const MB_TF={
   "15DK":{ad:"15 dakika",ik:"⏱",  interval:"15m", range:"1mo"},
   "1SA" :{ad:"1 saat",   ik:"🕐", interval:"60m", range:"2y"},
   "4SA" :{ad:"4 saat",   ik:"🕓", interval:"60m", range:"2y", grupSaat:4},
-  "1G"  :{ad:"1 gün",    ik:"🗓",  interval:"1d",  range:"5y"},
-  "1HAF":{ad:"1 hafta",  ik:"📅", interval:"1wk", range:"10y"},
-  "1AY" :{ad:"1 ay",     ik:"🗂",  interval:"1mo", range:"max"}
+  "1G"  :{ad:"1 gün",    ik:"🗓",  interval:"1d",  range:"5y",  hayaletAt:!0},
+  "1HAF":{ad:"1 hafta",  ik:"📅", interval:"1wk", range:"10y", hayaletAt:!0},
+  "1AY" :{ad:"1 ay",     ik:"🗂",  interval:"1mo", range:"max", hayaletAt:!0}
 };
 const MB_TF_LISTE=["5DK","15DK","1SA","4SA","1G","1HAF","1AY"];
+/* ── HAYALET BAR ── Yahoo, borsanın KAPALI olduğu günler için de bar
+   üretiyor: hacim 0 ve O=H=L=C (fiyat kıpırdamamış, çünkü işlem yok).
+   TradingView'de böyle bir bar YOKTUR — tatil günü grafikte atlanır.
+   Bu dolgu barları hem bar sayımını kaydırıyor hem de ta.highest/lowest
+   pencerelerini bozup olmayan sinyal üretiyordu (GARAN günlükte 2026-05-27
+   /28/29 tatili yüzünden sahte bir MAL DAĞITIMI çıkıyordu).
+   YALNIZ gün ve üstü dilimlerde uygulanır: gün-içi düz bar, seansın
+   gerçekten işlem görmeyen bir aralığıdır ve TradingView onu gösterir. */
+const mbHayaletAt=m=>m.filter(b=>b.hacim>0||b.high!==b.low);
 const mbTfNormal=t=>MB_TF[t]?t:"1G";
 /* Seans açılışının gün içi saniyesi — VERİDEN türetilir, hiçbir yere
    09:30 yazılmaz. Her günün en erken barı bulunur, bunların EN SIK olanı
@@ -1535,7 +1544,8 @@ async function mbOlc(kod,tfKod,onbellek){
     if(onbellek)onbellek[ck]=ham;
   }
   if(!ham.length)return null;
-  const m=tf.grupSaat?mbGrupla(ham,tf.grupSaat):ham;
+  const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
+  const m=tf.grupSaat?mbGrupla(temiz,tf.grupSaat):temiz;
   const s=mbMotor(m);
   if(!s)return null;
   s.kod=kod;s.tf=mbTfNormal(tfKod);
