@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-23-f · tarama parti boyu düzeltildi · dilim şeridinde MAL yaşı";
+const WORKER_SURUM="2026-08-23-g · otomatik tazeleme · ölçüm önbelleği · paralel tarama";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2321,7 +2321,7 @@ function ykRaporHTML(o){
    Cloudflare alt-istek sınırı da Mini App bekleme süresi de zorlanmaz.
    Birikim DİLİM BAŞINA ayrı KV anahtarında tutulur (mbBirikim:1G gibi) —
    tek dev anahtar her turda baştan okunup yazılmasın diye. */
-const MB_DILIM_TABAN=8,MB_DILIM_TAVAN=60,MB_SURE_TAVAN_MS=1e4,MB_ES=5;
+const MB_DILIM_TABAN=8,MB_DILIM_TAVAN=60,MB_SURE_TAVAN_MS=1e4,MB_ES=12;
 /* Mini App isteğinin İÇİNDEN tetiklenen tarama küçük tutulur: o istek
    Cloudflare alt-istek bütçesini absorpsiyon ve KV işlemleriyle paylaşıyor. */
 const MB_ANLIK_AZAMI=12;
@@ -2335,7 +2335,30 @@ const MB_DOLDUR_AZAMI=40;
    en kötü 60 dış çağrı. Cloudflare'in ücretsiz plandaki sınırı 50 — istek
    komple düşüyor, hiçbir ölçüm dönmüyordu (ekranda "0/434 · 4 hata").
    12 hisse = en kötü 24 çağrı, sınırın rahat altında. */
-const MB_OLC_AZAMI=12;
+const MB_OLC_AZAMI=16;
+/* ⚡ ÖLÇÜM ÖNBELLEĞİ — hızın asıl kaynağı.
+   Kullanıcı aynı havuzu dakikada bir yeniden tarıyor; her seferinde 434
+   hisse için Yahoo'ya gitmek işkence. Ölçüm sonuçları isolate belleğinde
+   tutulur; aynı hisse-dilim yeniden istenirse ölçüm YENİDEN YAPILMAZ.
+   Süre dilime göre: 5 dakikalık bar 2 dakikada bayatlar, aylık bar 2 saatte.
+   KV kullanılmaz — bellek bedava ve anlık tutarlı. */
+const _mbOnbellek={};
+const MB_ONBELLEK_SURE={"5DK":12e4,"15DK":3e5,"1SA":9e5,"4SA":18e5,"1G":36e5,"1HAF":72e5,"1AY":72e5};
+function mbOnbellekAl(kod,tf){
+  const k=kod+"|"+tf,c=_mbOnbellek[k];
+  if(!c)return null;
+  if(Date.now()-c.ts>(MB_ONBELLEK_SURE[tf]||9e5)){delete _mbOnbellek[k];return null}
+  return c.veri;
+}
+function mbOnbellekKoy(kod,tf,veri){
+  _mbOnbellek[kod+"|"+tf]={ts:Date.now(),veri:veri};
+  /* bellek şişmesin: 6000 kaydı aşınca en eskileri at */
+  const anahtarlar=Object.keys(_mbOnbellek);
+  if(anahtarlar.length>6000){
+    anahtarlar.sort((a,b)=>_mbOnbellek[a].ts-_mbOnbellek[b].ts);
+    for(let i=0;i<1500;i++)delete _mbOnbellek[anahtarlar[i]];
+  }
+}
 /* Dilim başına tazelik eşiği — bakılan dilim bundan eskiyse önceliklendirilir.
    Hızlı dilim sık, yavaş dilim seyrek tazelenir; boşuna çekim yapılmaz. */
 const MB_TAZELIK={"5DK":6e5,"15DK":12e5,"1SA":36e5,"4SA":72e5,"1G":108e5,"1HAF":216e5,"1AY":216e5};
@@ -5546,10 +5569,33 @@ function mbCiz(){
     return;
   }
   mbCizYenile();
+  mbTazelemeKur();
   /* Sekmeye girildiğinde tarama KENDİLİĞİNDEN başlar — her seferinde
      düğmeye basmaya gerek yok. Ölçümler bellekte durduğu için ikinci
      girişte yeniden taramaz, yalnız eksik kalanları tamamlar. */
   mbOtomatikBaslat();
+}
+/* ⏱ OTOMATİK TAZELEME — kullanıcı elle "başlat"a basmasın diye.
+   Tarama bitince ölçümlerin yaşı takip edilir; seçili dilimlerin en
+   hızlısına göre bir süre sonra kendiliğinden yeniden taranır. Sunucudaki
+   ölçüm önbelleği sayesinde tazeleme çok ucuz. */
+var MB_TAZE_SURE={"5DK":12e4,"15DK":3e5,"1SA":9e5,"4SA":18e5,"1G":18e5,"1HAF":36e5,"1AY":36e5};
+var mbSonTarama=0, mbZamanlayici=null;
+function mbTazelemeKur(){
+  if(mbZamanlayici)return;
+  mbZamanlayici=setInterval(function(){
+    if(sekme!=="malboga"){return}
+    if(mbTaraDurum&&mbTaraDurum.suruyor)return;
+    if(!mbIst.tfler.length)return;
+    var enHizli=1e9;
+    for(var i=0;i<mbIst.tfler.length;i++){
+      var sr=MB_TAZE_SURE[mbIst.tfler[i]]||9e5;
+      if(sr<enHizli)enHizli=sr;
+    }
+    if(Date.now()-mbSonTarama<enHizli)return;
+    mbOlcum={};                    /* taze ölçüm iste */
+    mbTaraBaslat();
+  },20000);
 }
 function mbOtomatikBaslat(){
   if(mbTaraDurum&&mbTaraDurum.suruyor)return;
@@ -5691,34 +5737,58 @@ function mbTaraBaslat(){
   }
   mbTaraTur();
 }
+/* ⚡ PARALEL TARAMA — eskiden partiler tek tek, sırayla gidiyordu; her
+   parti bitmeden sonraki başlamıyordu. Artık aynı anda MB_KANAL tane
+   istek yolda oluyor. Sunucudaki ölçüm önbelleğiyle birlikte tekrar
+   taramalar neredeyse anında biter. */
+var MB_KANAL=3;
+function mbSiradakiParca(){
+  var d=mbTaraDurum;
+  while(d.tfIdx<mbIst.tfler.length){
+    var tf=mbIst.tfler[d.tfIdx];
+    if(d.idx<mbEvrenKod.length){
+      var parca=mbEvrenKod.slice(d.idx,d.idx+16);
+      d.idx+=parca.length;
+      return{tf:tf,kodlar:parca};
+    }
+    d.tfIdx++;d.idx=0;
+  }
+  return null;
+}
 function mbTaraTur(){
   var d=mbTaraDurum;
   if(!d||!d.suruyor||sekme!=="malboga")return;
-  /* sıradaki eksik parçayı bul */
-  while(d.tfIdx<mbIst.tfler.length){
-    d.tf=mbIst.tfler[d.tfIdx];
-    if(d.idx<mbEvrenKod.length)break;
-    d.tfIdx++;d.idx=0;
+  d.acik=d.acik||0;
+  /* boştaki kanalları doldur */
+  while(d.acik<MB_KANAL){
+    var is=mbSiradakiParca();
+    if(!is)break;
+    d.acik++;
+    (function(is2){
+      post("/api/malboga",{is:"olc",tf:is2.tf,kodlar:is2.kodlar}).then(function(r){
+        d.acik--;
+        if(!mbTaraDurum||!mbTaraDurum.suruyor)return;
+        if(r&&r.ok&&r.olcum){
+          if(!mbOlcum[is2.tf])mbOlcum[is2.tf]={};
+          for(var k in r.olcum)mbOlcum[is2.tf][k]=r.olcum[k];
+          if(r.onbellekten)d.onbellekten=(d.onbellekten||0)+r.onbellekten;
+        }else d.hata++;
+        mbCizYenile();
+        setTimeout(mbTaraTur,20);
+      }).catch(function(){
+        d.acik--;
+        if(!mbTaraDurum||!mbTaraDurum.suruyor)return;
+        d.hata++;
+        /* Başarısız parçayı geri koy ki ölçüm kaybolmasın */
+        if(d.hata<=40){d.tfIdx=mbIst.tfler.indexOf(is2.tf);
+          d.idx=Math.min(d.idx,mbEvrenKod.indexOf(is2.kodlar[0]))}
+        if(d.hata>40){d.suruyor=false;mbCizYenile();return}
+        setTimeout(mbTaraTur,1200);
+      });
+    })(is);
   }
-  if(d.tfIdx>=mbIst.tfler.length){       /* hepsi bitti */
-    d.suruyor=false;mbCizYenile();return;
-  }
-  var parca=mbEvrenKod.slice(d.idx,d.idx+12);
-  post("/api/malboga",{is:"olc",tf:d.tf,kodlar:parca}).then(function(r){
-    if(!mbTaraDurum||!mbTaraDurum.suruyor)return;
-    if(r&&r.ok&&r.olcum){
-      if(!mbOlcum[d.tf])mbOlcum[d.tf]={};
-      for(var k in r.olcum)mbOlcum[d.tf][k]=r.olcum[k];
-    }else d.hata++;
-    d.idx+=parca.length;
-    mbCizYenile();
-    setTimeout(mbTaraTur,60);
-  }).catch(function(){
-    if(!mbTaraDurum||!mbTaraDurum.suruyor)return;
-    d.hata++;
-    if(d.hata>25){d.suruyor=false;mbCizYenile();return}
-    setTimeout(mbTaraTur,1500);
-  });
+  /* iş kalmadı ve uçuşta istek yoksa bitti */
+  if(!d.acik&&d.tfIdx>=mbIst.tfler.length){d.suruyor=false;mbSonTarama=Date.now();mbCizYenile()}
 }
 function mbCizYenile(){mbD=mbPaketUret();mbGoster(mbD)}
 /* MAL hücresi — Pine tablosuyla aynı: toplama yaşı 5 barı geçtiyse "-" */
@@ -5824,8 +5894,8 @@ function mbGoster(v,yerel){
   h+='</div>';
   /* ── 5) DÜĞMELER ── */
   h+='<div class="sirala" style="flex-wrap:wrap;margin:8px 0">'+
-     '<button class="dg" id="mbTaraBtn" style="width:auto;padding:9px 16px">'+
-     ((mbTaraDurum&&mbTaraDurum.suruyor)?"⏹ Taramayı durdur":"🔎 Taramayı başlat")+'</button>'+
+     '<button class="'+((mbTaraDurum&&mbTaraDurum.suruyor)?"sir":"dg")+'" id="mbTaraBtn" style="width:auto;padding:9px 16px">'+
+     ((mbTaraDurum&&mbTaraDurum.suruyor)?"⏹ Durdur":"🔄 Şimdi tazele")+'</button>'+
      '</div>';
   /* ── tarama durumu ── */
   var ilr=mbIlerleme();
@@ -5842,15 +5912,14 @@ function mbGoster(v,yerel){
       '<div style="height:100%;width:'+yuz+'%;background:var(--yes);transition:width .25s"></div></div>'+
       '<div class="altbilgi" style="margin-top:6px;opacity:.7">Sekmede kaldığın sürece sürer. '+
       'Sonuçlar aşağıda dolarken de süzülür.</div></div>';
-  }else if(ilr.olculen===0&&mbIst.tfler.length){
-    h+='<div class="kutu" style="margin:8px 0;border-left:3px solid var(--sar)">'+
-      '<div class="altbilgi"><b>Henüz tarama yapılmadı.</b><br>'+
-      'Yukarıdan dilimleri ve şartları seç, sonra <b>🔎 Taramayı başlat</b> de. '+
-      mbIst.tfler.length+' dilim × '+(mbEvrenKod?mbEvrenKod.length:0)+' hisse taranacak.</div></div>';
   }else if(ilr.olculen<ilr.gereken&&mbIst.tfler.length){
     h+='<div class="kutu" style="margin:8px 0"><div class="altbilgi">'+
-      'Ölçülen: <b>'+ilr.olculen+'</b> / '+ilr.gereken+
-      ' — eksik kalanlar için tekrar <b>🔎 Taramayı başlat</b> diyebilirsin.</div></div>';
+      'Ölçülen: <b>'+ilr.olculen+'</b> / '+ilr.gereken+' — tarama birazdan tamamlanır.</div></div>';
+  }else if(ilr.olculen&&mbSonTarama){
+    var dk=Math.round((Date.now()-mbSonTarama)/60000);
+    h+='<div class="altbilgi" style="margin:6px 0;opacity:.65">'+
+      ilr.olculen+' ölçüm hazır · '+(dk<1?"az önce":dk+" dk önce")+' tarandı · '+
+      'kendiliğinden tazelenir</div>';
   }
   /* ── 6) TEK HİSSE ── */
   h+='<div class="kutu" style="margin:8px 0;padding:9px 11px">'+
@@ -5895,8 +5964,11 @@ function mbGoster(v,yerel){
       var dip=x.dip236?"⬇️⬇️⬇️":x.dip382?"⬇️⬇️":x.dip?"⬇️":"";
       /* Dilim şeridi — hangi dilimde ne durumda olduğu satırda görünür,
          böylece "acaba şu dilimde ayı mı" sorusu doğmaz. */
+      /* Şerit YALNIZ birden çok dilim seçiliyken anlamlı. Tek dilimde
+         alttaki MAL/AB satırıyla aynı şeyi tekrar ediyordu ve "35 t3" gibi
+         okunmaz görünüyordu. */
       var serit="";
-      if(x.tfDurum&&x.tfDurum.length){
+      if(x.tfDurum&&x.tfDurum.length>1&&mbIst.tfler.length>1){
         serit='<div style="display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 2px">'+
           x.tfDurum.map(function(d){
             if(d.yok)return '<span style="font-size:10px;padding:1px 4px;border-radius:4px;background:rgba(139,148,158,.18);color:#8b949e">'+E(d.tf)+' —</span>';
@@ -5905,13 +5977,15 @@ function mbGoster(v,yerel){
             var yz=d.gecti?"var(--yes)":"var(--kir)";
             /* MAL yaşı da yazılır: her dilimi TradingView ile doğrudan
                karşılaştırabilmek için. top=toplama, dağ=dağıtım. */
+            /* Okunur biçim:  1G 🐂12b · TOP 7b
+               "12b" = 12 bardır boğa · "TOP 7b" = 7 bar önce mal toplama */
             var mal="";
             if(d.topHam!==undefined&&d.dagHam!==undefined){
               var t=Number(d.topHam),g=Number(d.dagHam);
-              if(t<9999||g<9999)mal=" "+(t<=g?"t"+t:"d"+g);
+              if(t<9999||g<9999)mal=" · "+(t<=g?"TOP "+t:"DAĞ "+g)+"b";
             }
-            return '<span style="font-size:10px;padding:1px 4px;border-radius:4px;background:'+rk+';color:'+yz+';font-weight:700">'+
-              E(d.tf)+' '+im+E(String(d.rejYas===undefined?"":d.rejYas))+E(mal)+'</span>';
+            return '<span style="font-size:10px;padding:2px 5px;border-radius:4px;background:'+rk+';color:'+yz+';font-weight:700">'+
+              E(d.tf)+' '+im+E(String(d.rejYas===undefined?"":d.rejYas))+'b'+E(mal)+'</span>';
           }).join("")+'</div>';
       }
       return '<div class="satir" style="border-left-color:'+kenar+';align-items:flex-start">'+
@@ -5924,7 +5998,7 @@ function mbGoster(v,yerel){
           '<div style="margin:3px 0 2px"><span class="rozet" style="background:rgba(124,77,255,.22);color:#b39dff">'+
           'ayrıca '+x.digerTfler.map(function(t){return E(t)}).join(" · ")+'</span></div>':"")+
         '<div class="altbilgi" style="white-space:normal">'+
-        '<b style="color:'+mal.r+'">'+E(mal.t)+'</b> · <b style="color:'+ab.r+'">'+E(ab.t)+'</b>'+
+        '<b style="color:'+mal.r+'">MAL '+E(mal.t)+'</b> · <b style="color:'+ab.r+'">REJİM '+E(ab.t)+'</b>'+
         '</div></div>'+
         '<div class="sag"><div class="yuzde" style="color:'+kenar+';font-size:15px">'+E(String(x.fiyat))+'</div>'+
         '<div class="altbilgi">fiyat</div></div></div>';
@@ -7896,15 +7970,23 @@ if("/api/malboga"===$.pathname){
     const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[])
       .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,MB_OLC_AZAMI);
     const cikti={};
+    let onbellekten=0;
+    /* önce bellekte olanları topla — bunlar için ölçüm yapılmaz */
+    const kalan=[];
+    for(const kod of kodlar){
+      const c=mbOnbellekAl(kod,tf);
+      if(c){cikti[kod]=c;onbellekten++}else kalan.push(kod);
+    }
     let sira=0;
     const isci=async()=>{
-      while(sira<kodlar.length){
-        const kod=kodlar[sira++];
-        try{const r=await mbOlc(kod,tf,{});if(r){delete r.tf;cikti[kod]=r}}catch(_){}
+      while(sira<kalan.length){
+        const kod=kalan[sira++];
+        try{const r=await mbOlc(kod,tf,{});
+          if(r){delete r.tf;cikti[kod]=r;mbOnbellekKoy(kod,tf,r)}}catch(_){}
       }
     };
-    await Promise.all(Array.from({length:Math.min(MB_ES,kodlar.length)},isci));
-    return JS({ok:!0,tf:tf,olcum:cikti,istenen:kodlar.length});
+    await Promise.all(Array.from({length:Math.min(MB_ES,kalan.length)},isci));
+    return JS({ok:!0,tf:tf,olcum:cikti,istenen:kodlar.length,onbellekten:onbellekten});
   }
   /* ⏩ ELLE DOLDUR — arka plan taraması havuzu saatler içinde doldurur;
      kullanıcı beklemek istemezse bu uç seçili dilimleri hemen ilerletir.
