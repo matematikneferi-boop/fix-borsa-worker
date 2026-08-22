@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-22-h · yeşil kapanış sekmesi (uygulama içinde) · filtre alarmı";
+const WORKER_SURUM="2026-08-23-a · tarama kalıcılık hatası + filtre kesişimi düzeltildi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2304,12 +2304,27 @@ async function mbTfOku(A,tf){
   if(!v.sonuc||typeof v.sonuc!=="object")v.sonuc={};
   _mbBellek[tf]=v;return v;
 }
-async function mbTfYaz(A,tf,zorla){
+/* 🐞 DÜZELTİLEN HATA — "hep 20-25 hisse taranıyor, 434'e hiç ulaşmıyor"
+   Sonuçlar 10 dakikada bir yazılıyordu ama İMLEÇ her tur yazılıyordu.
+   Cloudflare her /push turunu başka bir isolate'de çalıştırabildiği için
+   bellekteki sonuçlar çoğu turda diske hiç inmeden yok oluyordu; imleç ise
+   yazıldığı için ilerlemeye devam ediyordu. Sonuç: imleç havuzu dolaşıp
+   bitiriyor, elde yalnızca son turun ~20 hissesi kalıyordu.
+   İKİSİ AYNI ANDA YAZILMALI — aksi hâlde ilerleme ile veri birbirinden
+   kopuyor. Artık her turda yazılıyor (turda 1 ek KV yazımı; imleç zaten
+   yazıldığı için maliyet iki katına çıkıyor, sıfırdan doğmuyor).
+   Her şey ölçülüp tazeyken tarama hiç çalışmaz, o yüzden yazma da durur. */
+async function mbTfYaz(A,tf){
   const v=_mbBellek[tf];if(!v||!A||!A.VERI)return;
-  const simdi=Date.now();
-  if(!zorla&&simdi-(_mbYazma[tf]||0)<MB_YAZMA_ARALIK)return;
-  _mbYazma[tf]=simdi;
+  _mbYazma[tf]=Date.now();
   await A.VERI.put("mbBirikim:"+tf,JSON.stringify(v),{expirationTtl:MB_BIRIKIM_TTL}).catch(()=>{});
+}
+/* Bu dilim tamamlandı mı: havuzun tamamı ölçülü ve hiçbiri bayat değil. */
+function mbTfTamam(bir,evrenSayi){
+  if(!bir||!bir.sonuc)return!1;
+  const n=Object.keys(bir.sonuc).length;
+  if(!evrenSayi||n<evrenSayi)return!1;
+  return (Date.now()-(bir.ts||0))<(MB_BAYAT_MS/2);
 }
 async function mbCalisiyorMu(A){
   try{return(await A.VERI.get("mbDurduruldu"))!=="1"}catch(_){return!0}
@@ -2320,7 +2335,7 @@ async function mbDurdurAyarla(A,dur){
 async function mbDilimOku(A){
   try{const v=Number(await A.VERI.get("mbDilimOgrenilen"));
     if(isFinite(v)&&v>=MB_DILIM_TABAN)return Math.min(MB_DILIM_TAVAN,Math.round(v))}catch(_){}
-  return 20;
+  return 40;                        /* 20→40: tam tur sayısı yarıya iner */
 }
 async function mbDilimYaz(A,v){
   const y=Math.max(MB_DILIM_TABAN,Math.min(MB_DILIM_TAVAN,Math.round(v)));
@@ -2340,9 +2355,24 @@ async function mbDilimTara(A,oncelikTf,azami){
   const evren=await mbEvren(A);               /* havuzun TAMAMI */
   if(!evren.length)return null;
   const imlec=await mbImlecOku(A);
-  const tfIdx=oncelikTf?Math.max(0,MB_TF_LISTE.indexOf(mbTfNormal(oncelikTf)))
+  let tfIdx=oncelikTf?Math.max(0,MB_TF_LISTE.indexOf(mbTfNormal(oncelikTf)))
                        :(Number(imlec.tf)||0)%MB_TF_LISTE.length;
-  const tf=MB_TF_LISTE[tfIdx];
+  let tf=MB_TF_LISTE[tfIdx];
+  /* Bu dilim baştan sona ölçülü ve tazeyse boşuna yeniden tarama:
+     sıradaki eksik dilime geç. Hepsi tamamsa hiç tarama yapma — böylece
+     havuz bir kez dolduktan sonra KV yazımı da kendiliğinden durur. */
+  if(!oncelikTf){
+    let atlandi=0;
+    while(atlandi<MB_TF_LISTE.length&&mbTfTamam(await mbTfOku(A,tf),evren.length)){
+      tfIdx=(tfIdx+1)%MB_TF_LISTE.length;tf=MB_TF_LISTE[tfIdx];atlandi++;
+      imlec.tf=tfIdx;imlec.kod=0;
+    }
+    if(atlandi>=MB_TF_LISTE.length){          /* yedi dilim de tamam */
+      _mbImlec=imlec;
+      try{await A.VERI.put("mbImlec",JSON.stringify(imlec))}catch(_){}
+      return _mbBellek[tf]||null;
+    }
+  }
   const bir=await mbTfOku(A,tf);              /* imleç için ÖNCE yüklenmeli */
   const kodIdx=oncelikTf?(Number(bir.imlec)||0):(Number(imlec.kod)||0);
   let dilim=await mbDilimOku(A);
@@ -2446,7 +2476,14 @@ function mbIstekNorm(gov){
   /* Alan YOKSA varsayılan, VARSA doğruluk değeri. (m.top!==false yazılsaydı
      istemciden gelen 0 "tikli" sayılırdı — JSON'da tip garantisi yok.) */
   const bl=(v,vars)=>v===undefined||v===null?vars:!!v;
+  /* 🐞 DÜZELTİLEN HATA — "filtreden su kaçıyor"
+     Eskiden her dilim AYRI süzülüp ayrı kart olarak listeleniyordu: 1 saatlik
+     kartı, 1 saatlikte boğa olan her hisseyi gösteriyordu — o hisse günlükte
+     ayı olsa bile. Yani sonuç BİRLEŞİM'di, kullanıcı ise KESİŞİM bekliyordu.
+     Artık varsayılan "hepsi": hisse, seçili dilimlerin HEPSİNDE şartı
+     tutmalı. Her satırda dilim dilim durum da yazılır, gizli kalan olmaz. */
   const ist={
+    kapsam:gov.kapsam==="herhangi"?"herhangi":"hepsi",
     tfler:tfler,
     mal:{acik:bl(m.acik,!1),top:bl(m.top,!0),dag:bl(m.dag,!1),temiz:bl(m.temiz,!1),
          sinirsiz:bl(m.sinirsiz,!1),n:mbYasNorm(m.n,5)},
@@ -2504,10 +2541,10 @@ async function mbModulTara(A,ist){
     if(hedef)await mbDilimTara(A,hedef,MB_ANLIK_AZAMI).catch(()=>{});
   }
   /* 2) her seçili dilimde süz */
-  const gecenHar={},gruplar=[];
+  const gecenHar={},gruplar={},har={};
   for(const tf of ist.tfler){
     const bir=_mbBellek[tf]||await mbTfOku(A,tf);
-    const sonuc=bir.sonuc||{};
+    const sonuc=bir.sonuc||{};har[tf]=sonuc;
     const liste=[];
     for(const kod of Object.keys(sonuc)){
       const x=sonuc[kod];
@@ -2516,23 +2553,54 @@ async function mbModulTara(A,ist){
     liste.sort((a,b)=>(mbTazelik(a)-mbTazelik(b))||(a.kod<b.kod?-1:1));
     gecenHar[tf]=new Set(liste.map(x=>x.kod));
     const n=Object.keys(sonuc).length;
-    gruplar.push({tf:tf,ad:MB_TF[tf].ad,ik:MB_TF[tf].ik,
+    gruplar[tf]={tf:tf,ad:MB_TF[tf].ad,ik:MB_TF[tf].ik,
       olculen:n,evren:bir.evren||n,kalan:Math.max(0,(bir.evren||n)-n),
       yas:bir.ts?Math.round((Date.now()-bir.ts)/6e4):null,
-      cikan:liste.length,liste:liste.slice(0,120)});
+      cikan:liste.length,liste:liste.slice(0,120)};
   }
-  /* 3) çapraz işaret — aynı hisse başka hangi seçili dilimlerde de çıktı */
-  for(const g of gruplar)
+  /* 3) bütün seçili dilimlerde birden geçenler = KESİŞİM */
+  let ortak=null;
+  for(const tf of ist.tfler)ortak=ortak===null?new Set(gecenHar[tf]):
+    new Set([...ortak].filter(k=>gecenHar[tf].has(k)));
+  const ortakListe=[...(ortak||[])].sort();
+  /* Bir hissenin seçili dilimlerdeki durumu — satırda gösterilir ki
+     "acaba şu dilimde ayı mı" sorusu hiç doğmasın. */
+  const durumSeridi=(kod)=>ist.tfler.map(tf=>{
+    const m=(har[tf]||{})[kod];
+    if(!m)return{tf:tf,yok:!0};
+    return{tf:tf,boga:!!m.boga,ayi:!!m.ayi,rejYas:m.rejYas,
+      topHam:m.topHam,dagHam:m.dagHam,dip:!!m.dip,
+      dip382:!!m.dip382,dip236:!!m.dip236,gecti:gecenHar[tf].has(kod)};
+  });
+  if(ist.kapsam==="hepsi"){
+    /* TEK liste: yalnız her dilimde tutan hisseler. Gösterilen ölçüm en
+       büyük seçili dilimden alınır (fiyat/rejim orada en anlamlı). */
+    const enBuyuk=ist.tfler[ist.tfler.length-1];
+    const kaynak=har[enBuyuk]||{};
+    const liste=ortakListe.map(kod=>Object.assign({kod:kod},kaynak[kod]||{},
+      {tfDurum:durumSeridi(kod),digerTfler:[]}))
+      .sort((a,b)=>(mbTazelik(a)-mbTazelik(b))||(a.kod<b.kod?-1:1));
+    const olculen=Math.min.apply(null,ist.tfler.map(t=>gruplar[t].olculen));
+    const evren=Math.max.apply(null,ist.tfler.map(t=>gruplar[t].evren));
+    return{kapsam:"hepsi",calisiyor:calisiyor,ortak:ortakListe,
+      dilimDurum:ist.tfler.map(t=>({tf:t,ad:gruplar[t].ad,ik:gruplar[t].ik,
+        olculen:gruplar[t].olculen,evren:gruplar[t].evren,cikan:gruplar[t].cikan,yas:gruplar[t].yas})),
+      gruplar:[{tf:"HEPSİ",ad:ist.tfler.join(" + ")+" dilimlerinin HEPSİNDE",ik:"🎯",
+        olculen:olculen,evren:evren,kalan:Math.max(0,evren-olculen),
+        yas:gruplar[enBuyuk].yas,cikan:liste.length,liste:liste.slice(0,150)}]};
+  }
+  /* "herhangi" kipi: eski davranış — dilim dilim ayrı kartlar */
+  const sirali=ist.tfler.map(t=>gruplar[t]);
+  for(const g of sirali)
     for(const x of g.liste){
       const d=[];
       for(const tf of ist.tfler)if(tf!==g.tf&&gecenHar[tf].has(x.kod))d.push(tf);
       x.digerTfler=d;
+      x.tfDurum=durumSeridi(x.kod);
     }
-  /* 4) bütün seçili dilimlerde birden çıkan hisseler — en güçlü kesişim */
-  let ortak=null;
-  for(const tf of ist.tfler)ortak=ortak===null?new Set(gecenHar[tf]):
-    new Set([...ortak].filter(k=>gecenHar[tf].has(k)));
-  return{gruplar:gruplar,ortak:[...(ortak||[])].sort(),calisiyor:calisiyor};
+  return{kapsam:"herhangi",gruplar:sirali,ortak:ortakListe,calisiyor:calisiyor,
+    dilimDurum:sirali.map(g=>({tf:g.tf,ad:g.ad,ik:g.ik,olculen:g.olculen,
+      evren:g.evren,cikan:g.cikan,yas:g.yas}))};
 }
 /* Zaman dilimi seçicisinin altında görünen sayaçlar (her dilimde kaç ölçüm var). */
 async function mbDilimDurum(A){
@@ -5332,6 +5400,7 @@ function absGoster(v){
 var mbD=null, mbTek=null, mbBekle=false;
 /* Açılış = TradingView varsayılanına yakın: günlükte son 5 barda mal toplanmış. */
 var mbIst={
+  kapsam:"hepsi",          /* hepsi = seçili dilimlerin HEPSİNDE tutsun */
   tfler:["1G"],
   mal:{acik:true, top:true, dag:false, temiz:true, sinirsiz:false, n:5},
   dip:{acik:false,kademe:"dip"},
@@ -5410,7 +5479,21 @@ function mbGoster(v,yerel){
     h+=mbCip('data-mbtf="'+E(t.tf)+'"',
       E(t.ik+" "+t.ad)+(t.olculen?' <span style="opacity:.72;font-size:11px">'+t.olculen+'</span>':""),
       mbIst.tfler.indexOf(t.tf)>=0)});
-  h+='</div></div>';
+  h+='</div>';
+  /* Birden çok dilim seçiliyken en kritik ayar: hepsinde mi, birinde mi? */
+  if(mbIst.tfler.length>1){
+    h+='<div class="altbilgi" style="margin:10px 0 5px;opacity:.85">Seçili '+mbIst.tfler.length+' dilimde şart nasıl aransın?</div>'+
+       '<div class="sirala" style="flex-wrap:wrap">'+
+       mbCip('data-mbkapsam="hepsi"','✅ HEPSİNDE tutsun',mbIst.kapsam==="hepsi")+
+       mbCip('data-mbkapsam="herhangi"','➕ HERHANGİ birinde',mbIst.kapsam==="herhangi")+
+       '</div>'+
+       '<div class="altbilgi" style="margin-top:5px;opacity:.7;white-space:normal">'+
+       (mbIst.kapsam==="hepsi"
+         ?"Hisse, seçtiğin dilimlerin <b>hepsinde</b> şartı tutmalı. Tek liste çıkar, her satırda dilim dilim durum yazar."
+         :"Hisse, dilimlerden <b>birinde</b> tutsa yeter. Her dilim ayrı kart olur — bir dilimde boğa olan hisse başka dilimde ayı olabilir.")+
+       '</div>';
+  }
+  h+='</div>';
   /* ── 2) MAL TARAMA ── */
   h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("mal","📦","MAL TARAMA",mbIst.mal.acik);
   if(mbIst.mal.acik){
@@ -5465,7 +5548,7 @@ function mbGoster(v,yerel){
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
   /* ── 8) HEPSİNDE ÇIKANLAR ── */
-  if(mbIst.tfler.length>1&&ortak.length){
+  if(mbIst.kapsam!=="hepsi"&&mbIst.tfler.length>1&&ortak.length){
     h+='<div class="kutu" style="margin:10px 0;border-left:3px solid #ffea00">'+
        '<div style="font-weight:800;font-size:14px;margin-bottom:5px">⭐ Seçili '+
        mbIst.tfler.length+' dilimin HEPSİNDE çıkanlar ('+ortak.length+')</div>'+
@@ -5488,11 +5571,26 @@ function mbGoster(v,yerel){
       var kenar=x.boga?"var(--yes)":(x.ayi?"var(--kir)":"var(--ciz)");
       var olay=(x.mt||x.md||x.bogaGec||x.ayiGec);
       var dip=x.dip236?"⬇️⬇️⬇️":x.dip382?"⬇️⬇️":x.dip?"⬇️":"";
+      /* Dilim şeridi — hangi dilimde ne durumda olduğu satırda görünür,
+         böylece "acaba şu dilimde ayı mı" sorusu doğmaz. */
+      var serit="";
+      if(x.tfDurum&&x.tfDurum.length){
+        serit='<div style="display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 2px">'+
+          x.tfDurum.map(function(d){
+            if(d.yok)return '<span style="font-size:10px;padding:1px 4px;border-radius:4px;background:rgba(139,148,158,.18);color:#8b949e">'+E(d.tf)+' —</span>';
+            var im=d.boga?"🐂":d.ayi?"🐻":"?";
+            var rk=d.gecti?"rgba(0,230,118,.20)":"rgba(248,81,73,.16)";
+            var yz=d.gecti?"var(--yes)":"var(--kir)";
+            return '<span style="font-size:10px;padding:1px 4px;border-radius:4px;background:'+rk+';color:'+yz+';font-weight:700">'+
+              E(d.tf)+' '+im+'</span>';
+          }).join("")+'</div>';
+      }
       return '<div class="satir" style="border-left-color:'+kenar+';align-items:flex-start">'+
         '<div class="sol"><div class="kod">'+E(x.kod)+
         (x.takipte?' <span class="rozet">⭐</span>':"")+
         (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀</span>':"")+
         (dip?' <span class="rozet">'+dip+'</span>':"")+'</div>'+
+        serit+
         ((x.digerTfler&&x.digerTfler.length)?
           '<div style="margin:3px 0 2px"><span class="rozet" style="background:rgba(124,77,255,.22);color:#b39dff">'+
           'ayrıca '+x.digerTfler.map(function(t){return E(t)}).join(" · ")+'</span></div>':"")+
@@ -5552,6 +5650,7 @@ function mbBagla(v,dilimler){
   var hp=el("mbTfHepsi");if(hp)hp.onclick=function(){tit();
     mbIst.tfler=(mbIst.tfler.length===dilimler.length)?[]:dilimler.map(function(t){return t.tf});
     mbUygula()};
+  T("[data-mbkapsam]",function(b){mbIst.kapsam=b.dataset.mbkapsam;mbUygula()});
   T("[data-mbmod]",function(b){
     var m=b.dataset.mbmod;mbIst[m].acik=!mbIst[m].acik;mbUygula()});
   T("[data-mbmalyon]",function(b){
