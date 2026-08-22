@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-23-a · tarama kalıcılık hatası + filtre kesişimi düzeltildi";
+const WORKER_SURUM="2026-08-23-b · elle doldurma · canlı sonuç + teşhis · panel sadeleşti";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2016,7 +2016,7 @@ const YK_AD=["D/D-786","D/D-618","D/D-382","D/D-236","DİKKAT AYI","D/D236","D/D
 const YK_BOLGE_AD=["0.0 altı","dip bölgesi","karar/direnç","güçlü D/D üstü"];
 const YK_DILIM=["1SA","4SA","1G"];      /* 15DK/5DK: yalnız 60 gün veri, dışarıda */
 const YK_PENCERE=4000;                  /* backtest için geniş pencere (canlı tarama 700 kullanır) */
-const YK_ASGARI=80;                     /* bir bölmede en az kaç gözlem */
+const YK_ASGARI=40;                     /* bir bölmede en az kaç gözlem */
 const YK_KALDIRAC=0.5;                  /* tabanı en az bu kadar geçmeli (yüzde puan) */
 
 function ykBant(o){if(!isFinite(o))return null;for(let i=0;i<YK_LV.length;i++)if(o<YK_LV[i])return i;return YK_LV.length}
@@ -2095,6 +2095,9 @@ function ykSayacBirlestir(A,B){
 async function ykKosu(kodlar,zamanKesim,hisseTek){
   const S=ykSayacYeni();
   const semboller=[];
+  /* TEŞHİS: gözlem 0 çıkarsa sebebini söyleyebilmek için hangi dilimde
+     veri gelmediğini sayıyoruz. Sessiz boş rapor en kötü hatadır. */
+  const teshis={veriYok:{},gozlemsiz:0,hata:0};
   let sira=0;
   const isci=async()=>{
     while(sira<kodlar.length){
@@ -2113,7 +2116,7 @@ async function ykKosu(kodlar,zamanKesim,hisseTek){
         for(const t of YK_DILIM){
           const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
           let m=onb[ck]||[];
-          if(!m.length){sr[t]=null;continue}
+          if(!m.length){sr[t]=null;teshis.veriYok[t]=(teshis.veriYok[t]||0)+1;continue}
           if(tf.hayaletAt)m=mbHayaletAt(m);
           if(tf.grupSaat)m=mbGrupla(m,tf.grupSaat);
           sr[t]=ykOranSeri(m);
@@ -2146,12 +2149,13 @@ async function ykKosu(kodlar,zamanKesim,hisseTek){
             kapKap!==null&&kapKap>0,kapKap);
           say++;
         }
+        if(!say)teshis.gozlemsiz++;
         semboller.push({kod:kod,gun:say});
-      }catch(e){semboller.push({kod:kod,hata:String((e&&e.message)||e)})}
+      }catch(e){teshis.hata++;semboller.push({kod:kod,hata:String((e&&e.message)||e)})}
     }
   };
   await Promise.all(Array.from({length:DBT_ES},isci));
-  return{sayac:S,semboller:semboller};
+  return{sayac:S,semboller:semboller,teshis:teshis};
 }
 /* Sayaçlardan rapor. alan: "g" gün içi · "k" kapanış→kapanış */
 function ykOzetle(S,alan){
@@ -2182,7 +2186,10 @@ function ykOzetle(S,alan){
     gecen:satirlar.filter(r=>r.gecti).length};
 }
 /* ── Yeşil Kapanış: iş akışı (parçalı tarama) + sayfalar ── */
-const YK_ADIM=16;                    /* bir adımda kaç hisse */
+/* Bir adımda kaç hisse. Her hisse 2 ayrı Yahoo çekimi yapıyor (60m ve 1d);
+   yfMumlar gerekirse ikinci sunucuyu da deniyor. 8 hisse = en kötü 32
+   alt-istek — Cloudflare'in ücretsiz plandaki 50 sınırının altında kalır. */
+const YK_ADIM=8;
 async function ykIsOku(A){
   if(!A.VERI)return null;
   try{const j=await A.VERI.get("ykIs");return j?JSON.parse(j):null}catch(_){return null}
@@ -2291,6 +2298,9 @@ const MB_DILIM_TABAN=8,MB_DILIM_TAVAN=60,MB_SURE_TAVAN_MS=1e4,MB_ES=5;
 /* Mini App isteğinin İÇİNDEN tetiklenen tarama küçük tutulur: o istek
    Cloudflare alt-istek bütçesini absorpsiyon ve KV işlemleriyle paylaşıyor. */
 const MB_ANLIK_AZAMI=12;
+/* Kullanıcı "şimdi doldur" derse bir istekte bu kadar hisse ölçülür.
+   24 hisse × 1 çekim = 24 alt-istek — ücretsiz plandaki 50 sınırının altı. */
+const MB_DOLDUR_AZAMI=24;
 /* Dilim başına tazelik eşiği — bakılan dilim bundan eskiyse önceliklendirilir.
    Hızlı dilim sık, yavaş dilim seyrek tazelenir; boşuna çekim yapılmaz. */
 const MB_TAZELIK={"5DK":6e5,"15DK":12e5,"1SA":36e5,"4SA":72e5,"1G":108e5,"1HAF":216e5,"1AY":216e5};
@@ -4183,7 +4193,6 @@ function backtestGoster(v){
      '</div>'+
      '<div class="btAc" style="margin:-2px 0 9px">Beklenti = isabet×ortalama kazanç + ıskalama×ortalama kayıp. '+
      'Her sinyalin matematiksel karşılığı. Artıysa sistem uzun vadede kazandırır.</div>';
-  if(v.dipbacktestUrl)h+='<button class="dg ik" id="btDbtBtn" style="margin-bottom:12px">🧪 Dip Backtest (Fibo) — 786 çizgisi ölçümü</button>';
 
   h+=btSat("Ölçülen sinyal",G.n+" <span class='btN'>("+G.hisse+" farklı hisse)</span>","", 
        "Aynı hisse aynı gün birden fazla dilimde kırdıysa tek sinyal sayıldı.");
@@ -4274,7 +4283,6 @@ function backtestGoster(v){
      'girmek mümkün olmadığı için böyle bir eğri gerçeği yansıtmaz.</div>';
 
   el("govde").innerHTML=h;
-  if(v.dipbacktestUrl){var _db=el("btDbtBtn");if(_db)_db.onclick=function(){tit();try{TG.openLink(v.dipbacktestUrl)}catch(e){location.href=v.dipbacktestUrl}}}
 }
 /* ═══════════════ 📋 TEMEL ANALİZ SAYFASI ═══════════════
    Sinyal listelerindeki hisselerin temel verisi tek ekranda. Veri
@@ -5527,9 +5535,20 @@ function mbGoster(v,yerel){
   /* ── 5) DÜĞMELER ── */
   h+='<div class="sirala" style="flex-wrap:wrap;margin:8px 0">'+
      '<button class="sir" id="mbYenile">🔄 Yenile</button>'+
+     (D.yon?'<button class="sir" id="mbDoldur">'+(mbDolduruyor?"⏹ Doldurmayı durdur":"⏩ Şimdi doldur")+'</button>':"")+
      (D.yon?'<button class="sir" id="mbDur">'+(calisiyor?"⏸ Durdur":"▶️ Sürdür")+'</button>':"")+
      (D.yon?'<button class="sir" id="mbEvrenBtn">🌍 Evreni yenile</button>':"")+
      '</div>';
+  /* ── doldurma sürüyorsa durumu göster ── */
+  if(mbDolduruyor){
+    var eks=(dilimler||[]).filter(function(t){return mbIst.tfler.indexOf(t.tf)>=0&&t.olculen<((v&&v.evrenBilgi&&v.evrenBilgi.sayi)||430)});
+    h+='<div class="kutu" style="margin:8px 0;border-left:3px solid var(--sar)">'+
+      '<div class="altbilgi">⏩ <b>Havuz dolduruluyor…</b> '+
+      (mbDoldurDilim?E(mbDoldurDilim)+" dilimi ilerliyor · ":"")+
+      eks.length+' dilim henüz tamam değil<br>'+
+      '<span style="opacity:.7">Sekmede kaldığın sürece sürer. Her turda '+
+      (mbDoldurSayac||0)+' tur tamamlandı.</span></div></div>';
+  }
   /* ── 6) TEK HİSSE ── */
   h+='<div class="kutu" style="margin:8px 0;padding:9px 11px">'+
      '<div style="display:flex;gap:6px">'+
@@ -5680,7 +5699,11 @@ function mbBagla(v,dilimler){
     inp.onkeydown=function(e2){if(e2.key==="Enter"){e2.preventDefault();uy()}};
     inp.onblur=uy;
   });
-  var yn=el("mbYenile");if(yn)yn.onclick=function(){tit();mbGetir()};
+  var yn=el("mbYenile");if(yn)yn.onclick=function(){tit();mbTazele()};
+  var dl=el("mbDoldur");
+  if(dl)dl.onclick=function(){tit();
+    if(mbDolduruyor){mbDolduruyor=false;mbGoster(v);return}
+    mbDolduruyor=true;mbDoldurSayac=0;mbDoldurTur()};
   var dd=el("mbDur");if(dd)dd.onclick=function(){tit();dd.disabled=true;
     var o={};for(var k in mbIst)o[k]=mbIst[k];o.dur=(!v||v.calisiyor!==false)?1:0;
     post("/api/malboga",o).then(function(v2){mbD=v2;mbGoster(v2)}).catch(function(){dd.disabled=false})};
@@ -5718,6 +5741,26 @@ function mbBagla(v,dilimler){
       .catch(function(){mbD=null;mbCiz()})};
   if(kb)kb.onclick=bak;
   if(ki)ki.onkeydown=function(e2){if(e2.key==="Enter")bak()};
+}
+/* ⏩ Havuzu elle doldurma döngüsü: her turda bir dilimi biraz ilerletir,
+   eksik dilim kalmayınca kendiliğinden durur ve listeyi tazeler. */
+var mbDolduruyor=false, mbDoldurSayac=0, mbDoldurDilim="";
+function mbDoldurTur(){
+  if(!mbDolduruyor||sekme!=="malboga")return;
+  var o={};for(var k in mbIst)o[k]=mbIst[k];o.doldur=1;
+  post("/api/malboga",o).then(function(r){
+    if(!mbDolduruyor)return;
+    mbDoldurSayac++;
+    mbDoldurDilim=(r&&r.dilim)||"";
+    if(r&&r.dilimler&&mbD)mbD.dilimler=r.dilimler;
+    if(!r||!r.dilim||r.eksik===0){        /* hepsi tamam */
+      mbDolduruyor=false;mbTazele();return;
+    }
+    if(mbD)mbGoster(mbD);
+    setTimeout(mbDoldurTur,150);
+  }).catch(function(){
+    if(mbDolduruyor)setTimeout(mbDoldurTur,2500);
+  });
 }
 /* Tek hissenin bütün dilimleri — Pine'daki TF/DURUM/MAL panelinin aynısı. */
 function mbTekGoster(v){
@@ -5779,6 +5822,17 @@ function ykAdim(){
     if(!v.tamamlandi&&sekme==="yesil")setTimeout(ykAdim,120);
   }).catch(function(){ykSuruyor=false;
     if(sekme==="yesil")setTimeout(ykAdim,2500)});
+}
+/* Neden veri gelmedi — sessiz boş rapor yerine açık sebep. */
+function ykTeshisHTML(v){
+  var t=v&&v.teshis;if(!t)return"";
+  var p=[];
+  if(t.veriYok)for(var k in t.veriYok)if(t.veriYok[k])p.push(E(k)+" verisi gelmedi: <b>"+t.veriYok[k]+"</b> hisse");
+  if(t.gozlemsiz)p.push("hiç gün üretmeyen hisse: <b>"+t.gozlemsiz+"</b>");
+  if(t.hata)p.push("çekim hatası: <b>"+t.hata+"</b>");
+  if(!p.length)return"";
+  return '<div class="altbilgi" style="margin-top:8px;padding:7px 9px;background:rgba(248,81,73,.10);'+
+    'border-radius:8px;white-space:normal">📋 '+p.join(" · ")+'</div>';
 }
 function ykYuz(v,o){return v===null||v===undefined||!isFinite(v)?"—":(v>0?"+":"")+v.toFixed(o===undefined?1:o)}
 /* Bir kurulum satırı — dört bölme kutucuk olarak gösterilir. */
@@ -5849,7 +5903,8 @@ function ykGoster(v){
       '<div style="height:9px;background:var(--ciz);border-radius:5px;overflow:hidden;margin-top:8px">'+
       '<div style="height:100%;width:'+p+'%;background:var(--yes);transition:width .3s"></div></div>'+
       '<div class="altbilgi" style="margin-top:7px;opacity:.7">Sekmede kaldığın sürece ilerler. '+
-      'Çıkıp geri gelirsen kaldığı yerden devam eder.</div>'+
+      'Çıkıp geri gelirsen kaldığı yerden devam eder. Sonuçlar aşağıda tarama sürerken de dolar.</div>'+
+      ykTeshisHTML(v)+
       '<button class="sir" id="ykIptal" style="margin-top:9px">✕ Taramayı iptal et</button></div>';
   }else{
     h+='<div class="kutu" style="margin:10px 0"><h3 style="margin:0 0 7px">▶ Yeni tarama</h3>'+
@@ -5861,8 +5916,9 @@ function ykGoster(v){
       '<button class="sir" id="ykHizli" style="margin-top:8px">⚡ Hızlı deneme (40 hisse)</button>'+
       '</div>';
   }
-  /* ── sonuçlar ── */
-  if(bitti){
+  /* ── sonuçlar ── (tarama sürerken de gösterilir) */
+  if(!suruyor&&!bitti){/* hiç iş yok — sonuç bölümü çizilmez */}
+  else if(v&&(v.gun||v.kap)){
     h+=ykBolum(v.gun,"gun","📈 Gün içi — sabah al, akşam sat",
       "Senin sorduğun ölçü bu: mumun yeşil kapanması. Sabah açılışta alıp akşam kapanışta satmak.");
     h+=ykBolum(v.kap,"kap","🌙 Kapanıştan kapanışa — akşam al, ertesi akşam sat",
@@ -5878,6 +5934,17 @@ function ykGoster(v){
     if(v.hatali&&v.hatali.length)
       h+='<div class="altbilgi" style="margin-top:10px;opacity:.6">veri alınamayan: '+
         v.hatali.map(function(k){return E(k)}).join(", ")+'</div>';
+  }else if(bitti){
+    /* Tarama bitti ama tek gözlem toplanamadı — sebebini söyle. */
+    h+='<div class="kutu" style="margin:10px 0;border-left:3px solid var(--kir)">'+
+      '<h3 style="margin:0 0 6px">⚠️ Hiç veri toplanamadı</h3>'+
+      '<div class="altbilgi" style="white-space:normal">Tarama bitti ama ölçülebilir tek bir '+
+      'hisse-günü çıkmadı. Bu neredeyse her zaman veri sağlayıcıdan kaynaklanır: '+
+      'çok sayıda hisse üst üste istenince Yahoo istekleri geri çevirmeye başlar.</div>'+
+      ykTeshisHTML(v)+
+      '<div class="altbilgi" style="margin-top:8px;white-space:normal">Ne yapmalı: birkaç dakika '+
+      'bekleyip <b>⚡ Hızlı deneme</b> ile tekrar dene. O çalışıyorsa sorun geçicidir, '+
+      'tam havuzu sonra tararsın.</div></div>';
   }
   el("govde").innerHTML=h;
   var t=el("ykTam");if(t)t.onclick=function(){tit();ykBaslat(false)};
@@ -6323,9 +6390,6 @@ function panelCiz(){
       '<button class="dg ik" id="pTam">🌐 Tam paneli aç</button></div>';
     h+='<div class="kutu"><h3>🟢 Yeşil Kapanış</h3>'+
       '<div class="bilgi">Hangi fibo basamağında ertesi gün yeşil kapanıyor — dört sınavlı araştırma. Uygulamanın içinde, 🟢 Yeşil Kapanış sekmesinde.</div></div>';
-    h+='<div class="kutu"><h3>🧪 Dip Backtest (Fibo)</h3>'+
-      '<div class="bilgi">571 sisteminin dip/derin dip sinyallerini geçmişe dönük ölçer — TP1=doyumun hemen altındaki fibo çizgisi (786), TP2=doyum noktası.</div>'+
-      '<button class="dg ik" id="pDbt">🧪 Dip Backtest\\'i aç</button></div>';
     el("govde").innerHTML=h;
     function id(x){return(el(x).value||"").replace(/\\D/g,"")}
     function calis(is,gov,kutu,btn){
@@ -6379,7 +6443,6 @@ function panelCiz(){
       catch(e){if(confirm("Tüm üyelere gönderilsin mi?"))g()}
     };
     el("pTam").onclick=function(){tit();try{TG.openLink(v.panelUrl)}catch(e){location.href=v.panelUrl}};
-    el("pDbt").onclick=function(){tit();try{TG.openLink(v.dipbacktestUrl)}catch(e){location.href=v.dipbacktestUrl}};
   });
 }
 try{
@@ -7390,6 +7453,23 @@ if("/api/malboga"===$.pathname){
     await mbAlarmFiltreSil(A);
     return JS({ok:!0,alarmSilindi:!0});
   }
+  /* ⏩ ELLE DOLDUR — arka plan taraması havuzu saatler içinde doldurur;
+     kullanıcı beklemek istemezse bu uç seçili dilimleri hemen ilerletir.
+     Bir istekte tek dilim × sınırlı hisse: alt-istek bütçesi taşmasın. */
+  if(gov&&gov.doldur){
+    const d=mbIstekNorm(gov);
+    let ilerleyen=null;
+    for(const tf of d.tfler){
+      const b=await mbTfOku(A,tf);
+      const ev=(await tamEvren(A)).length;
+      if(Object.keys(b.sonuc||{}).length<ev){ilerleyen=tf;break}
+    }
+    if(ilerleyen)await mbDilimTara(A,ilerleyen,MB_DOLDUR_AZAMI).catch(()=>{});
+    const durum=await mbDilimDurum(A).catch(()=>[]);
+    const ev=(await tamEvren(A).catch(()=>[])).length||0;
+    const eksik=durum.filter(x=>d.tfler.indexOf(x.tf)>=0&&x.olculen<ev).length;
+    return JS({ok:!0,dolduruldu:!0,dilim:ilerleyen,dilimler:durum,evren:ev,eksik:eksik});
+  }
   /* ÜÇ MODÜL × SEÇİLİ ZAMAN DİLİMLERİ */
   const ist=mbIstekNorm(gov);
   const paket=await mbModulTara(A,ist).catch(()=>null);
@@ -7532,17 +7612,24 @@ if("/api/yesil"===$.pathname){
   if(!job)return JS({ok:!0,yok:!0});
   if(is==="adim"&&!job.tamamlandi&&job.kuyruk.length){
     const grup=job.kuyruk.splice(0,YK_ADIM);
-    const{sayac,semboller}=await ykKosu(grup,job.zamanKesim,ykHisseTek(job.kodlar));
+    const{sayac,semboller,teshis}=await ykKosu(grup,job.zamanKesim,ykHisseTek(job.kodlar));
     job.sayac=ykSayacBirlestir(job.sayac,sayac);
     job.semboller=job.semboller.concat(semboller).slice(-600);
+    /* teşhisi biriktir — sonunda "neden boş" sorusunu cevaplayabilelim */
+    if(!job.teshis)job.teshis={veriYok:{},gozlemsiz:0,hata:0};
+    for(const k in teshis.veriYok)job.teshis.veriYok[k]=(job.teshis.veriYok[k]||0)+teshis.veriYok[k];
+    job.teshis.gozlemsiz+=teshis.gozlemsiz;job.teshis.hata+=teshis.hata;
     job.tamam+=grup.length;job.guncelleme=Date.now();
     if(!job.kuyruk.length)job.tamamlandi=!0;
     await ykIsYaz(A,job);
   }
   const t=job.sayac&&job.sayac.taban&&job.sayac.taban[0];
   const cvp={ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:!!job.tamamlandi,
-    gozlem:t?t.n:0,sure:Math.round((job.guncelleme-job.baslangic)/1000)};
-  if(job.tamamlandi||is==="rapor"){
+    gozlem:t?t.n:0,sure:Math.round((job.guncelleme-job.baslangic)/1000),
+    teshis:job.teshis||null};
+  /* Rapor HER adımda üretilir — kullanıcı sonucu beklemeden görsün, boş
+     kalıyorsa da hemen anlasın. Maliyeti yok: yalnız sayaçlar özetlenir. */
+  {
     const paket=(alan)=>{
       const o=ykOzetle(job.sayac,alan);
       if(!o.taban)return null;
