@@ -781,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-23-i · fibo bölge modülü (4 ana bölge) + pivot kırılım";
+const WORKER_SURUM="2026-08-23-j · ⚛ enerji kırılımı + 5 alarm yuvası + pivot/tarama onarımı";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1422,6 +1422,151 @@ function mbDurum571Seri(m){
   return mb571Seri(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)
     .map(x=>(x&&isFinite(x.doyum)&&isFinite(x.close))?(x.doyum>x.close?"BOĞA":"AYI"):null);
 }
+/* ── kütüphane:3200  ⚛ LATENT ENERGY REACTOR (enz_run + enz_scan) ──────
+   Pine'daki sıkışma-zonu motorunun birebir çevirisi. Fiyat dar bir bantta
+   sıkışırken "gizli enerji" birikir; bant kırılınca hareket başlar.
+   Pine ile aynı olması için üç ince nokta korundu:
+     · ta.atr(14) RMA'dır, SMA değil — ilk 14 barda seed, sonrası yumuşatma
+     · zon YALNIZCA barsIn tam olarak minBars'a EŞİT olduğu barda doğar
+       (>= değil; öyle olsaydı her barda yeni zon açılırdı)
+     · ağır hesaplar (ağırlık merkezi, ret sayıları, kurumsal iz) Pine'da
+       da sadece son barda çalışır — tarama için zaten yalnız o lazım */
+const EZ_MINBARS=8, EZ_ATRMULT=2.5;
+/* Pine ta.atr(14) — TR ilk barda high-low, sonra RMA (alpha=1/14) */
+function mbATR(m,n){
+  const out=new Array(m.length);let toplam=0,onceki=null;
+  for(let i=0;i<m.length;i++){
+    const tr=i===0?(m[0].high-m[0].low):
+      Math.max(m[i].high-m[i].low,Math.abs(m[i].high-m[i-1].close),Math.abs(m[i].low-m[i-1].close));
+    if(i<n-1){toplam+=tr;out[i]=null;continue}
+    if(i===n-1){toplam+=tr;onceki=toplam/n;out[i]=onceki;continue}
+    onceki=(onceki*(n-1)+tr)/n;out[i]=onceki;
+  }
+  return out;
+}
+/* Pine ta.sma(volume,20) — ilk 19 barda na */
+function mbHacimSMA(m,n){
+  const out=new Array(m.length);let s=0;
+  for(let i=0;i<m.length;i++){
+    s+=m[i].hacim||0;
+    if(i>=n)s-=m[i-n].hacim||0;
+    out[i]=i>=n-1?s/n:null;
+  }
+  return out;
+}
+function ezEnerji(dur,rngH,atr){
+  if(!(rngH>0)||!(atr>0)||!(dur>0))return 0;
+  const comp=Math.min((atr/rngH)*50,40);
+  const tsc=Math.min(dur*2,35);
+  const mat=dur>=30?15:dur>=20?10:dur>=15?5:0;
+  const tight=rngH<atr*0.5?10:rngH<atr*0.75?5:0;
+  return Math.min(Math.max(comp+tsc+mat+tight,5),100);
+}
+function ezEvre(dur){return dur<10?"Forming":dur<25?"Growth":dur<50?"Mature":"Exhaustion"}
+function ezKalite(e,inst,ev,guv){
+  const ps=ev==="Forming"?20:ev==="Growth"?50:ev==="Mature"?80:60;
+  return Math.min((e||0)*0.3+(inst||0)*0.25+ps*0.25+(guv||0)*0.2,100);
+}
+function mbEnerjiMotor(m,minBars,atrMult){
+  const n=m.length;if(n<25)return null;
+  minBars=minBars||EZ_MINBARS;atrMult=atrMult||EZ_ATRMULT;
+  const atr=mbATR(m,14),avol=mbHacimSMA(m,20),son=n-1;
+  let zones=[],aktif=null,rHigh=null,rLow=null,rStart=0,barsIn=0;
+  for(let i=0;i<n;i++){
+    const a=atr[i],b=m[i];
+    let lkH=null,lkL=null;
+    if(i>=4){lkH=-Infinity;lkL=Infinity;
+      for(let k=i-4;k<=i;k++){if(m[k].high>lkH)lkH=m[k].high;if(m[k].low<lkL)lkL=m[k].low}}
+    const sikisma=(lkH!==null&&a!==null&&(lkH-lkL)<a*atrMult);
+    let kirUp=!1,kirDn=!1;
+    /* 1) kırılım — geçen barın aktif zonuna göre */
+    if(aktif&&aktif.isActive&&a!==null){
+      if(b.close>aktif.top){
+        kirUp=!0;aktif.isActive=!1;aktif.isBroken=!0;aktif.breakDir="Bullish";aktif.endBar=i;
+        const rsk=aktif.top-(aktif.bottom-a*0.5);
+        aktif.entryPrice=aktif.top;aktif.slPrice=aktif.bottom-a*0.5;
+        aktif.tp1Price=aktif.top+rsk;aktif.tp2Price=aktif.top+rsk*1.5;aktif.tp3Price=aktif.top+rsk*2;
+      }else if(b.close<aktif.bottom){
+        kirDn=!0;aktif.isActive=!1;aktif.isBroken=!0;aktif.breakDir="Bearish";aktif.endBar=i;
+        const rsk2=(aktif.top+a*0.5)-aktif.bottom;
+        aktif.entryPrice=aktif.bottom;aktif.slPrice=aktif.top+a*0.5;
+        aktif.tp1Price=aktif.bottom-rsk2;aktif.tp2Price=aktif.bottom-rsk2*1.5;aktif.tp3Price=aktif.bottom-rsk2*2;
+      }
+    }
+    /* 2) bant birikimi */
+    if(sikisma){
+      if(rHigh===null){rHigh=lkH;rLow=lkL;rStart=i-4;barsIn=5}
+      else if(b.high<=rHigh+a*0.1&&b.low>=rLow-a*0.1){
+        rHigh=Math.max(rHigh,b.high);rLow=Math.min(rLow,b.low);barsIn++;
+      }else{rHigh=null;rLow=null;barsIn=0}
+    }else{rHigh=null;rLow=null;barsIn=0}
+    /* 3) yeni zon — barsIn TAM minBars olduğu barda, bir kez */
+    if(barsIn===minBars&&rHigh!==null){
+      const z={startBar:rStart,endBar:i,top:rHigh,bottom:rLow,isActive:!0,isBroken:!1,
+        breakDir:"",touchesTop:0,touchesBottom:0,energy:null,phase:"",direction:"",
+        dirConfidence:null,breakoutQuality:null,gravityCenter:null,instFootprint:null,
+        entryPrice:null,slPrice:null,tp1Price:null,tp2Price:null,tp3Price:null};
+      if(aktif&&aktif.isActive)aktif.isActive=!1;
+      aktif=z;zones.push(z);while(zones.length>10)zones.shift();
+    }
+    /* 4) aktif zonu güncelle */
+    if(aktif&&aktif.isActive&&!kirUp&&!kirDn){
+      const dur=i-aktif.startBar,rngH=aktif.top-aktif.bottom,tol=rngH*0.1;
+      if(b.high<=aktif.top+tol&&b.low>=aktif.bottom-tol){
+        aktif.endBar=i;
+        aktif.energy=ezEnerji(dur,rngH,a);
+        aktif.phase=ezEvre(dur);
+        if(i===son){                       /* Pine: yalnız last_bar_index */
+          const lb=Math.min(i-aktif.startBar,500);
+          let sw=0,sv=0,tt=0,tb=0,ac=0,tv=0;
+          const av=avol[i];
+          for(let k=0;k<lb;k++){
+            const c=m[i-k];
+            const mp=(c.high+c.low+c.close)/3;
+            if(mp<=aktif.top&&mp>=aktif.bottom){sw+=mp*(c.hacim||0);sv+=(c.hacim||0)}
+            if(c.high>=aktif.top-tol&&c.high<=aktif.top+tol&&c.close<c.high-tol)tt++;
+            if(c.low>=aktif.bottom-tol&&c.low<=aktif.bottom+tol&&c.close>c.low+tol)tb++;
+            if(c.high<=aktif.top&&c.low>=aktif.bottom&&av!==null&&(c.hacim||0)>av*2){ac++;tv+=(c.hacim||0)}
+          }
+          aktif.gravityCenter=sv>0?sw/sv:(aktif.top+aktif.bottom)/2;
+          aktif.touchesTop=tt;aktif.touchesBottom=tb;
+          const ar=lb>0?ac/lb*100:0,vi=(av>0&&ac>0)?tv/(av*ac):0;
+          aktif.instFootprint=Math.min(ar*0.5+Math.min(vi*10,50),100);
+          const rng=aktif.top-aktif.bottom,mid=(aktif.top+aktif.bottom)/2;
+          const gb=(aktif.gravityCenter-mid)/(rng/2);
+          const tbv=(tt>0||tb>0)?(tb-tt)/Math.max(tt+tb,1):0;
+          const cb=gb*0.6+tbv*0.4;
+          aktif.direction=cb>0.1?"Bullish":cb<-0.1?"Bearish":"Neutral";
+          aktif.dirConfidence=Math.min(Math.abs(cb)*100+50,100);
+          aktif.breakoutQuality=ezKalite(aktif.energy,aktif.instFootprint,aktif.phase,aktif.dirConfidence);
+        }
+      }
+    }
+  }
+  return{aktif:aktif,zones:zones,atr:atr[son]};
+}
+/* kütüphane:3420  export enz_scan — sembol başına skaler özet */
+const EZ_Y2=v=>(v===null||v===undefined||!isFinite(v))?null:Math.round(v*100)/100;
+const EZ_Y1=v=>(v===null||v===undefined||!isFinite(v))?null:Math.round(v*10)/10;
+function mbEnerjiTara(m){
+  const bos={ezAct:0,ezIns:0,ezAge:9999,ezTop:null,ezBot:null,ezEn:null,ezBq:null,
+             ezDir:0,ezMes:null,ezTp1:null,ezEvre:""};
+  let r=null;
+  try{r=mbEnerjiMotor(m,EZ_MINBARS,EZ_ATRMULT)}catch(_){return bos}
+  if(!r||!r.aktif)return bos;
+  const z=r.aktif,son=m.length-1,kap=m[son].close;
+  const o={ezAct:0,ezIns:0,ezAge:9999,ezTop:EZ_Y2(z.top),ezBot:EZ_Y2(z.bottom),
+           ezEn:EZ_Y1(z.energy),ezBq:EZ_Y1(z.breakoutQuality),
+           ezDir:z.direction==="Bullish"?1:z.direction==="Bearish"?-1:0,
+           ezMes:null,ezTp1:null,ezEvre:z.phase||""};
+  if(z.isActive){o.ezAct=1;if(kap<=z.top&&kap>=z.bottom)o.ezIns=1}
+  if(z.isBroken&&z.breakDir==="Bullish")o.ezAge=son-z.endBar;
+  if(z.tp1Price!==null&&isFinite(z.tp1Price))o.ezTp1=EZ_Y2(z.tp1Price);
+  else if(isFinite(r.atr))o.ezTp1=EZ_Y2(z.top+(z.top-(z.bottom-r.atr*0.5)));
+  if(z.top!==null&&kap>0)o.ezMes=EZ_Y2(Math.abs(z.top-kap)/kap*100);
+  return o;
+}
+
 /* ── 6.2:1787 f_mal_scan_motor + 6.2:1794 f_mal_boga_scan_motor +
       6.2:1736 tf_panel_func  →  hepsi tek geçişte ────────────────────── */
 function mbMotor(mumlar){
@@ -1480,7 +1625,11 @@ function mbMotor(mumlar){
   let oran=null;
   if(lv&&isFinite(lv.stop)&&isFinite(lv.s786)&&isFinite(lv.close)&&lv.s786!==lv.stop)
     oran=Math.round(((lv.close-lv.stop)/((lv.s786-lv.stop)/0.786))*1000)/1000;
+  /* ⚛ enerji kırılımı — Pine enz_scan ile birebir */
+  const ez=mbEnerjiTara(m);
   return{bar:m.length,mt:mt,md:md,dip382:dip382,dip236:dip236,oran:oran,
+    ezAct:ez.ezAct,ezIns:ez.ezIns,ezAge:ez.ezAge,ezTop:ez.ezTop,ezBot:ez.ezBot,
+    ezEn:ez.ezEn,ezBq:ez.ezBq,ezDir:ez.ezDir,ezMes:ez.ezMes,ezTp1:ez.ezTp1,ezEvre:ez.ezEvre,
     top:top_yas,dag:dag_yas,topHam:top_raw,dagHam:dag_raw,
     boga:boga,ayi:ayi,bogaGec:boga_gec,ayiGec:ayi_gec,
     rej:rej,rejYas:rej_yas,sonYas:son_yas,
@@ -2606,7 +2755,7 @@ function mbIstekNorm(gov){
   let tfler=(Array.isArray(gov.tfler)?gov.tfler:[]).filter(t=>MB_TF[t]);
   if(!tfler.length)tfler=["1G"];
   tfler=MB_TF_LISTE.filter(t=>tfler.indexOf(t)>=0);        /* sabit sıra */
-  const m=gov.mal||{},d=gov.dip||{},a=gov.ab||{};
+  const m=gov.mal||{},d=gov.dip||{},a=gov.ab||{},ez=gov.enerji||{},bo=gov.bolge||{},pv=gov.pivot||{};
   /* Alan YOKSA varsayılan, VARSA doğruluk değeri. (m.top!==false yazılsaydı
      istemciden gelen 0 "tikli" sayılırdı — JSON'da tip garantisi yok.) */
   const bl=(v,vars)=>v===undefined||v===null?vars:!!v;
@@ -2623,14 +2772,104 @@ function mbIstekNorm(gov){
          sinirsiz:bl(m.sinirsiz,!1),n:mbYasNorm(m.n,5)},
     dip:{acik:bl(d.acik,!1),kademe:MB_DIP_KADEME[d.kademe]?d.kademe:"dip"},
     ab :{acik:bl(a.acik,!1),boga:bl(a.boga,!0),ayi:bl(a.ayi,!1),
-         sinirsiz:bl(a.sinirsiz,!1),n:mbYasNorm(a.n,5)}
+         sinirsiz:bl(a.sinirsiz,!1),n:mbYasNorm(a.n,5)},
+    /* ⚛ Enerji — 6.2:177 show_enz_tarama ile aynı tikler ve varsayılanlar */
+    enerji:{acik:bl(ez.acik,!1),olustu:bl(ez.olustu,!0),icinde:bl(ez.icinde,!0),
+            b0:bl(ez.b0,!0),b1:bl(ez.b1,!1),
+            mesafeAcik:bl(ez.mesafeAcik,!0),mesafe:mbSayiNorm(ez.mesafe,5,0.1,30)},
+    /* 🪜 Fibo bölgesi */
+    bolge:{acik:bl(bo.acik,!1),
+           secili:(Array.isArray(bo.secili)?bo.secili:[]).filter(v=>MB_BOLGE_S[v])},
+    /* 📈 Pivot kırılım */
+    pivot:{acik:bl(pv.acik,!1),
+           dilimler:(Array.isArray(pv.dilimler)?pv.dilimler:[]).filter(v=>MB_PIVOT_S[v]),
+           kirdi:bl(pv.kirdi,!0),yakin:bl(pv.yakin,!1),uzerinde:bl(pv.uzerinde,!1),
+           yuzde:mbSayiNorm(pv.yuzde,3,0.1,50)}
   };
+  if(!ist.bolge.secili.length)ist.bolge.acik=!1;
+  if(!ist.pivot.dilimler.length)ist.pivot.dilimler=["KISA","ORTA","UZUN"];
+  if(!ist.pivot.kirdi&&!ist.pivot.yakin&&!ist.pivot.uzerinde)ist.pivot.acik=!1;
   /* Bir modülde hiç yön tikli değilse o modül anlamsız kalır — kapat. */
   if(!ist.mal.top&&!ist.mal.dag)ist.mal.acik=!1;
   if(!ist.ab.boga&&!ist.ab.ayi)ist.ab.acik=!1;
   return ist;
 }
 const MB_DIP_KADEME={dip:1,dip382:1,dip236:1};
+/* 🪜 Dört ana fibo bölgesi — istemcideki MB_BOLGE ile birebir aynı sınırlar */
+const MB_BOLGE_S={b1:[0.0,0.618],b2:[0.618,1.0],b3:[1.0,1.618],b4:[1.618,2.618]};
+const MB_PIVOT_S={KISA:"potansiyel",ORTA:"fibo",UZUN:"uzunvade"};
+const MB_PIVOT_ADAY={KISA:"adayOrta",ORTA:"adayOrtaVade",UZUN:"adayUzun"};
+function mbSayiNorm(v,vars,alt,ust){
+  const n=Number(v);
+  if(!isFinite(n))return vars;
+  return Math.min(ust,Math.max(alt,n));
+}
+function mbBolgeGectiS(oran,ist){
+  if(!ist.bolge||!ist.bolge.acik)return!0;
+  if(oran===null||oran===undefined||!isFinite(oran))return!1;
+  for(const id of ist.bolge.secili){
+    const b=MB_BOLGE_S[id];
+    if(b&&oran>=b[0]&&oran<b[1])return!0;
+  }
+  return!1;
+}
+/* ⚛ 6.2:2903 — enerji süzgeci. Hiç durum tikli değilse durum şartı aranmaz
+   (Pine'daki _ez_status_any davranışı), mesafe şartı yine de uygulanır. */
+function mbEnerjiGectiS(x,ist){
+  const e=ist.enerji;
+  if(!e||!e.acik)return!0;
+  const durumVar=e.olustu||e.icinde||e.b0||e.b1;
+  let uydu=!durumVar;
+  if(!uydu){
+    if(e.olustu&&Number(x.ezAct)>0.5)uydu=!0;
+    if(!uydu&&e.icinde&&Number(x.ezIns)>0.5)uydu=!0;
+    if(!uydu&&e.b0&&Number(x.ezAge)===0)uydu=!0;
+    if(!uydu&&e.b1&&Number(x.ezAge)===1)uydu=!0;
+  }
+  if(!uydu)return!1;
+  if(e.mesafeAcik&&!(x.ezMes!==null&&x.ezMes!==undefined&&Number(x.ezMes)<=e.mesafe))return!1;
+  return!0;
+}
+/* 📈 Pivot kırılım — uygulamadaki mbPivotGecti ile aynı kurallar, ama
+   kartlar sunucuda g(A) ile okunur. Harita tur başına bir kez kurulur. */
+let _mbPivotHar=null,_mbPivotTs=0;
+async function mbPivotHaritasiS(A){
+  if(_mbPivotHar&&Date.now()-_mbPivotTs<6e4)return _mbPivotHar;
+  let K={};
+  try{const v=await g(A);K=(v&&v.kartlar)||{}}catch(_){K={}}
+  const har={};
+  for(const ad of Object.keys(MB_PIVOT_S)){
+    for(const x of (K[MB_PIVOT_S[ad]]||[])){
+      if(!x||!x.kod)continue;
+      if(!har[x.kod])har[x.kod]={};
+      const giris=Number(x.giris),fiyat=Number(x.fiyat);
+      har[x.kod][ad]={tip:"kirdi",sonBar:!!x.canli,
+        uzerinde:(giris>0&&fiyat>0)?(fiyat>=giris):!!x.canli,yuzde:null};
+    }
+    for(const x of (K[MB_PIVOT_ADAY[ad]]||[])){
+      if(!x||!x.kod)continue;
+      if(!har[x.kod])har[x.kod]={};
+      if(har[x.kod][ad]&&har[x.kod][ad].tip==="kirdi")continue;
+      har[x.kod][ad]={tip:"aday",sonBar:!1,uzerinde:!1,
+        yuzde:(x.tetikYuzde===null||x.tetikYuzde===undefined)?null:Number(x.tetikYuzde)};
+    }
+  }
+  _mbPivotHar=har;_mbPivotTs=Date.now();
+  return har;
+}
+function mbPivotGectiS(kod,ist,har){
+  const p=ist.pivot;
+  if(!p||!p.acik)return!0;
+  const h=har&&har[kod];
+  if(!h)return!1;
+  for(const d of p.dilimler){
+    const x=h[d];if(!x)continue;
+    if(p.kirdi&&x.tip==="kirdi"&&x.sonBar)return!0;
+    if(p.uzerinde&&x.tip==="kirdi"&&x.uzerinde)return!0;
+    if(p.yakin&&x.tip==="aday"&&x.yuzde!==null&&Math.abs(x.yuzde)<=p.yuzde)return!0;
+  }
+  return!1;
+}
 
 /* Tek ölçüm (x) tek dilimde modüllerden geçiyor mu?
    MODÜLLER ARASI = VE (hepsi tutmalı, tikliyse zaten istenmiştir).
@@ -2644,6 +2883,8 @@ function mbModulGecti(x,ist){
     if(!ok)return!1;
   }
   if(ist.dip.acik&&!x[ist.dip.kademe])return!1;
+  if(!mbBolgeGectiS(x.oran,ist))return!1;
+  if(!mbEnerjiGectiS(x,ist))return!1;
   if(ist.ab.acik){
     const N=ist.ab.sinirsiz?1e9:ist.ab.n;
     let ok=!1;
@@ -2772,22 +3013,54 @@ async function mbDilimDurum(A){
 const MB_ALARM_ANAHTAR="mbAlarmFiltre";
 const MB_ALARM_GUN="mbAlarmGun";
 const MB_ALARM_AZAMI=12;            /* tek mesajda en fazla kaç hisse */
+const MB_ALARM_YUVA=5;              /* en fazla kaç ayrı filtre alarmı */
+const MB_BOLGE_AD={b1:"dikkat ayı→boğa",b2:"boğa→karar",b3:"karar→direnç",b4:"direnç→güçlü D/D"};
 
-async function mbAlarmFiltreOku(A){
-  try{const h=A&&A.VERI&&await A.VERI.get(MB_ALARM_ANAHTAR);
-    if(h){const j=JSON.parse(h);if(j&&j.ist)return j}}catch(_){}
-  return null;
+/* ── BEŞ YUVA ──────────────────────────────────────────────────────────
+   Eskiden tek filtre vardı; yeni filtre kurmak eskisini siliyordu. Artık
+   en fazla MB_ALARM_YUVA (5) ayrı filtre aynı anda kurulu kalabilir ve her
+   biri BAĞIMSIZ çalışır: kendi "gördüklerim" hafızası, kendi bildirimi.
+   Eski tek-filtre kaydı okunurken kendiliğinden 1. yuvaya taşınır. */
+async function mbAlarmListeOku(A){
+  let ham=null;
+  try{const h=A&&A.VERI&&await A.VERI.get(MB_ALARM_ANAHTAR);if(h)ham=JSON.parse(h)}catch(_){}
+  if(!ham)return[];
+  /* v1 (tek filtre) → v2 (liste) göçü */
+  if(!Array.isArray(ham.liste)){
+    if(ham.ist)return[{id:"a1",ist:ham.ist,ts:ham.ts||Date.now(),kuran:ham.kuran||""}];
+    return[];
+  }
+  return ham.liste.filter(x=>x&&x.ist).slice(0,MB_ALARM_YUVA);
 }
-async function mbAlarmFiltreYaz(A,ist,uid){
-  if(!A||!A.VERI)return null;
-  const kayit={ist:ist,ts:Date.now(),kuran:String(uid||"")};
-  await A.VERI.put(MB_ALARM_ANAHTAR,JSON.stringify(kayit)).catch(()=>{});
-  return kayit;
+async function mbAlarmListeYaz(A,liste){
+  if(!A||!A.VERI)return[];
+  const kirp=liste.slice(0,MB_ALARM_YUVA);
+  await A.VERI.put(MB_ALARM_ANAHTAR,JSON.stringify({v:2,liste:kirp})).catch(()=>{});
+  return kirp;
 }
-async function mbAlarmFiltreSil(A){
-  try{if(A&&A.VERI){await A.VERI.delete(MB_ALARM_ANAHTAR);await A.VERI.delete(MB_ALARM_GUN)}}catch(_){}
+/* Yeni yuva ekle ya da var olanı değiştir. Dönen: {liste,yuva} */
+async function mbAlarmYuvaYaz(A,ist,uid,id){
+  const liste=await mbAlarmListeOku(A);
+  const kayit={id:String(id||("a"+Date.now().toString(36))),ist:ist,
+               ts:Date.now(),kuran:String(uid||"")};
+  const yer=liste.findIndex(x=>x.id===kayit.id);
+  if(yer>=0)liste[yer]=kayit;
+  else{
+    if(liste.length>=MB_ALARM_YUVA)return{dolu:!0,liste:liste};
+    liste.push(kayit);
+  }
+  return{liste:await mbAlarmListeYaz(A,liste),yuva:kayit};
 }
-/* Günlük "bildirdim" hafızası — anahtar: KOD|DİLİM */
+async function mbAlarmYuvaSil(A,id){
+  if(!A||!A.VERI)return[];
+  if(!id){                                  /* hepsi */
+    try{await A.VERI.delete(MB_ALARM_ANAHTAR);await A.VERI.delete(MB_ALARM_GUN)}catch(_){}
+    return[];
+  }
+  const liste=(await mbAlarmListeOku(A)).filter(x=>x.id!==id);
+  return await mbAlarmListeYaz(A,liste);
+}
+/* Günlük "bildirdim" hafızası — anahtar: YUVA|KOD|DİLİM */
 async function mbAlarmGecmisi(A){
   const bugun=onayDonemi();
   try{const h=await A.VERI.get(MB_ALARM_GUN);
@@ -2820,64 +3093,113 @@ function mbFiltreOzet(ist){
     const y=[];if(ist.ab.boga)y.push("🐂 boğa");if(ist.ab.ayi)y.push("🐻 ayı");
     p.push(y.join("/")+(ist.ab.sinirsiz?"":" ≤"+ist.ab.n+"B"));
   }
+  if(ist.bolge&&ist.bolge.acik)p.push("🪜 "+ist.bolge.secili.map(v=>MB_BOLGE_AD[v]||v).join("/"));
+  if(ist.enerji&&ist.enerji.acik){
+    const y=[];
+    if(ist.enerji.olustu)y.push("oluştu");if(ist.enerji.icinde)y.push("içinde");
+    if(ist.enerji.b0)y.push("0B");if(ist.enerji.b1)y.push("1B");
+    p.push("⚛ "+(y.join("/")||"her durum")+
+      (ist.enerji.mesafeAcik?" ≤%"+ist.enerji.mesafe:""));
+  }
+  if(ist.pivot&&ist.pivot.acik){
+    const y=[];
+    if(ist.pivot.kirdi)y.push("son bar");if(ist.pivot.yakin)y.push("≤%"+ist.pivot.yuzde);
+    if(ist.pivot.uzerinde)y.push("üzerinde");
+    p.push("📈 "+ist.pivot.dilimler.join("/")+" "+y.join("/"));
+  }
   return p.join(" · ")||"(koşul yok)";
 }
 /* Filtrenin ŞU ANKİ eşleşmeleri — birikimden, ek çekim yok.
    Dönen: {anahtarlar:Set, satirlar:[{kod,tf,fiyat,...}]} */
-async function mbAlarmEslesme(A,ist){
+async function mbAlarmEslesme(A,ist,yuvaId){
   const anahtarlar=[],satirlar=[];
+  const on=yuvaId?(yuvaId+"|"):"";
+  const har=(ist.pivot&&ist.pivot.acik)?await mbPivotHaritasiS(A).catch(()=>({})):null;
+  /* "hepsi" kapsamı: hisse seçili dilimlerin HEPSİNDE tutmalı. Uygulamadaki
+     kesişim kuralının aynısı — alarm ekranda görünenden farklı davranmasın. */
+  const sayac={};
   for(const tf of ist.tfler){
     const bir=_mbBellek[tf]||await mbTfOku(A,tf);
     const sonuc=bir.sonuc||{};
     for(const kod of Object.keys(sonuc)){
       const x=sonuc[kod];
       if(!mbModulGecti(x,ist))continue;
-      anahtarlar.push(kod+"|"+tf);
+      if(har&&!mbPivotGectiS(kod,ist,har))continue;
+      sayac[kod]=(sayac[kod]||0)+1;
+      anahtarlar.push(on+kod+"|"+tf);
       satirlar.push({kod:kod,tf:tf,fiyat:x.fiyat,topHam:x.topHam,dagHam:x.dagHam,
-        boga:x.boga,ayi:x.ayi,rejYas:x.rejYas,dip:x.dip,taze:mbTazelik(x)});
+        boga:x.boga,ayi:x.ayi,rejYas:x.rejYas,dip:x.dip,taze:mbTazelik(x),
+        ezAge:x.ezAge,ezMes:x.ezMes,oran:x.oran});
     }
+  }
+  if(ist.kapsam==="hepsi"&&ist.tfler.length>1){
+    const tam=ist.tfler.length;
+    return{anahtarlar:anahtarlar.filter(a=>sayac[a.slice(on.length).split("|")[0]]>=tam),
+           satirlar:satirlar.filter(x=>sayac[x.kod]>=tam)};
   }
   return{anahtarlar:anahtarlar,satirlar:satirlar};
 }
-/* Kaydederken tohumla: o anki eşleşmeler "bildirildi" sayılsın. */
-async function mbAlarmTohumla(A,ist){
-  const e=await mbAlarmEslesme(A,ist);
-  await mbAlarmGecmisiYaz(A,{gun:onayDonemi(),anahtarlar:e.anahtarlar});
+/* Kaydederken tohumla: o anki eşleşmeler "bildirildi" sayılsın.
+   🐞 Eskiden bütün hafızayı EZİYORDU — beşinci yuva kurulunca diğer dört
+   yuvanın "gördüm" listesi siliniyor, hepsi baştan sel gibi bildiriyordu.
+   Artık yalnız KENDİ yuvasının anahtarları eklenir. */
+async function mbAlarmTohumla(A,ist,yuvaId){
+  const e=await mbAlarmEslesme(A,ist,yuvaId);
+  const g=await mbAlarmGecmisi(A);
+  const set=new Set(g.anahtarlar);
+  for(const a of e.anahtarlar)set.add(a);
+  await mbAlarmGecmisiYaz(A,{gun:onayDonemi(),anahtarlar:[...set]});
   return e.anahtarlar.length;
 }
-/* Her /push turunda çalışır. Yeni girenleri bulur ve bildirir. */
+/* Her /push turunda çalışır. Kurulu HER yuva için listeye yeni girenleri
+   bulur ve bildirir. Yuvalar birbirini etkilemez. */
 async function mbAlarmTara(A){
   if(!A||!A.VERI||!A.BOT_TOKEN)return;
-  const kayit=await mbAlarmFiltreOku(A);
-  if(!kayit)return;                                  /* filtre kurulmamış */
+  const yuvalar=await mbAlarmListeOku(A);
+  if(!yuvalar.length)return;                         /* filtre kurulmamış */
   if(!mbSeansIci())return;                           /* seans dışı */
-  const ist=mbIstekNorm(kayit.ist);
-  if(!ist.mal.acik&&!ist.dip.acik&&!ist.ab.acik)return;
-  const e=await mbAlarmEslesme(A,ist);
   const gecmis=await mbAlarmGecmisi(A);
   const bilinen=new Set(gecmis.anahtarlar);
-  const yeni=e.satirlar.filter(s=>!bilinen.has(s.kod+"|"+s.tf));
-  if(!yeni.length)return;
-  /* En taze olay önce; mesaj kalabalık olmasın diye tavan var. */
-  yeni.sort((a,b)=>(a.taze-b.taze)||(a.kod<b.kod?-1:1));
-  const gosterilen=yeni.slice(0,MB_ALARM_AZAMI);
-  /* Dilim dilim grupla */
-  const grup={};
-  for(const s of gosterilen){(grup[s.tf]=grup[s.tf]||[]).push(s)}
-  let metin="🔔 <b>TARAMA ALARMI</b>\n<i>"+mbFiltreOzet(ist)+"</i>\n";
-  for(const tf of ist.tfler){
-    const g=grup[tf];if(!g||!g.length)continue;
-    metin+="\n"+(MB_TF[tf]?MB_TF[tf].ik+" <b>"+MB_TF[tf].ad+"</b>":tf)+"\n";
-    for(const s of g){
-      const mal=s.topHam<=s.dagHam?("TOP "+(s.topHam>999?"-":s.topHam+"B")):("DAĞ "+(s.dagHam>999?"-":s.dagHam+"B"));
-      metin+="• <b>"+s.kod+"</b>  "+s.fiyat+"  ·  "+mal+"  ·  "+
-        (s.boga?"🐂":s.ayi?"🐻":"?")+s.rejYas+"B"+(s.dip?"  ⬇️":"")+"\n";
+  const parcalar=[];
+  let eklendi=0;
+  for(let yi=0;yi<yuvalar.length;yi++){
+    const yuva=yuvalar[yi];
+    const ist=mbIstekNorm(yuva.ist);
+    if(!mbFiltreVarMi(ist))continue;
+    const e=await mbAlarmEslesme(A,ist,yuva.id).catch(()=>null);
+    if(!e)continue;
+    const yeni=e.satirlar.filter((sx,i)=>!bilinen.has(e.anahtarlar[i]));
+    /* Hafızaya YENİLERİN HEPSİ yazılır (mesajda gösterilmeyenler dahil) —
+       yoksa tavanın altında kalanlar her turda tekrar "yeni" sayılırdı. */
+    for(let i=0;i<e.anahtarlar.length;i++)
+      if(!bilinen.has(e.anahtarlar[i])){bilinen.add(e.anahtarlar[i]);
+        gecmis.anahtarlar.push(e.anahtarlar[i]);eklendi++}
+    if(!yeni.length)continue;
+    /* En taze olay önce; mesaj kalabalık olmasın diye tavan var. */
+    yeni.sort((a,b)=>(a.taze-b.taze)||(a.kod<b.kod?-1:1));
+    const gosterilen=yeni.slice(0,MB_ALARM_AZAMI);
+    const grup={};
+    for(const sx of gosterilen){(grup[sx.tf]=grup[sx.tf]||[]).push(sx)}
+    let m="🔔 <b>ALARM "+(yi+1)+"/"+yuvalar.length+"</b>\n<i>"+mbFiltreOzet(ist)+"</i>\n";
+    for(const tf of ist.tfler){
+      const gg=grup[tf];if(!gg||!gg.length)continue;
+      m+="\n"+(MB_TF[tf]?MB_TF[tf].ik+" <b>"+MB_TF[tf].ad+"</b>":tf)+"\n";
+      for(const sx of gg){
+        const mal=sx.topHam<=sx.dagHam?("TOP "+(sx.topHam>999?"-":sx.topHam+"B")):("DAĞ "+(sx.dagHam>999?"-":sx.dagHam+"B"));
+        m+="• <b>"+sx.kod+"</b>  "+sx.fiyat+"  ·  "+mal+"  ·  "+
+          (sx.boga?"🐂":sx.ayi?"🐻":"?")+sx.rejYas+"B"+(sx.dip?"  ⬇️":"")+
+          (ist.enerji.acik&&sx.ezMes!==null&&sx.ezMes!==undefined?
+            "  ·  ⚛"+(sx.ezAge===0?"0B↑":sx.ezAge===1?"1B↑":"%"+sx.ezMes):"")+"\n";
+      }
     }
+    while(m.slice(-1)==="\n")m=m.slice(0,-1);
+    if(yeni.length>gosterilen.length)
+      m+="\n<i>…ve "+(yeni.length-gosterilen.length)+" hisse daha.</i>";
+    parcalar.push(m);
   }
-  while(metin.slice(-1)==="\n")metin=metin.slice(0,-1);   /* son bloğun fazla satır sonu */
-  if(yeni.length>gosterilen.length)
-    metin+="\n<i>…ve "+(yeni.length-gosterilen.length)+" hisse daha.</i>";
-  metin+="\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
+  if(eklendi)await mbAlarmGecmisiYaz(A,gecmis);
+  if(!parcalar.length)return;
+  const metin=parcalar.join("\n\n──────────\n\n")+"\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
   /* 1) KANAL — tek istek, abone sayısından bağımsız */
   const kanal=String((A.ALARM_KANAL||"")).trim();
   if(kanal)await b(A.BOT_TOKEN,"sendMessage",{chat_id:kanal,text:metin,
@@ -2888,11 +3210,40 @@ async function mbAlarmTara(A){
     await alarmKuyrugaKoy(A,metin,kullanicilar);
     await alarmKuyrukBosalt(A);
   }
-  /* Hafızaya YENİLERİN HEPSİ yazılır (mesajda gösterilmeyenler dahil) —
-     yoksa tavanın altında kalanlar her turda tekrar "yeni" sayılırdı. */
-  for(const s of yeni)gecmis.anahtarlar.push(s.kod+"|"+s.tf);
-  await mbAlarmGecmisiYaz(A,gecmis);
   saglikArtir("mbAlarm");
+}
+/* Kurulu alarmların ihtiyaç duyduğu dilimlerden EN EKSİK olanı önce ilerlet.
+   Alarm yoksa eski davranış (yedi dilim sırayla) aynen sürer. */
+async function mbAlarmOncelikliTara(A){
+  const yuvalar=await mbAlarmListeOku(A).catch(()=>[]);
+  if(!yuvalar.length)return mbDilimTara(A);
+  const gerekli=[];
+  for(const y of yuvalar)for(const t of mbIstekNorm(y.ist).tfler)
+    if(gerekli.indexOf(t)<0)gerekli.push(t);
+  if(!gerekli.length)return mbDilimTara(A);
+  const evrenSayi=(await mbEvren(A)).length||1;
+  let hedef=null,enAz=1e9;
+  for(const t of gerekli){
+    const b=await mbTfOku(A,t);
+    const n=Object.keys((b&&b.sonuc)||{}).length;
+    if(n<enAz){enAz=n;hedef=t}
+  }
+  /* Alarmın bütün dilimleri doluysa sıradaki dilimlere dön — havuz taze kalsın. */
+  if(hedef&&enAz>=evrenSayi)return mbDilimTara(A);
+  return mbDilimTara(A,hedef);
+}
+/* Bir filtrede gerçekten aranan bir şey var mı? */
+function mbFiltreVarMi(ist){
+  return!!(ist.mal.acik||ist.dip.acik||ist.ab.acik||
+           (ist.bolge&&ist.bolge.acik)||(ist.enerji&&ist.enerji.acik)||
+           (ist.pivot&&ist.pivot.acik));
+}
+/* Alarm ekranı için özet — kaç yuva dolu, hangi filtreler kurulu. */
+async function mbAlarmOzetListe(A){
+  const yuvalar=await mbAlarmListeOku(A).catch(()=>[]);
+  return{yuva:MB_ALARM_YUVA,seans:mbSeansIci(),
+    liste:yuvalar.map(y=>{const i2=mbIstekNorm(y.ist);
+      return{id:y.id,ozet:mbFiltreOzet(i2),tfler:i2.tfler,ts:y.ts}})};
 }
 
 /* ---------- B) 🔐 İMZALI PANEL ANAHTARI ----------
@@ -5552,6 +5903,17 @@ function absGoster(v){
    dilimler de yazar. Bu sekmede üst sekme şeridi gizlenir — tüm dikey
    alan taramaya kalır. */
 var mbD=null, mbTek=null, mbBekle=false;
+/* Alarm listesi paketten AYRI gelir: tarama artık uygulamada yürüdüğü için
+   sunucu paketi üretmiyor, alarm bilgisi de o pakette taşınamıyor. */
+var mbAlarmD=null, mbAlarmIstendi=false;
+function mbAlarmCek(zorla){
+  if(mbAlarmIstendi&&!zorla)return;
+  mbAlarmIstendi=true;
+  post("/api/malboga",{is:"alarmListe"}).then(function(r){
+    mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
+    if(sekme==="malboga")mbCizYenile();
+  }).catch(function(){mbAlarmD={yuva:5,seans:false,liste:[]}});
+}
 /* Açılış = TradingView varsayılanına yakın: günlükte son 5 barda mal toplanmış. */
 var mbIst={
   kapsam:"hepsi",          /* hepsi = seçili dilimlerin HEPSİNDE tutsun */
@@ -5560,6 +5922,7 @@ var mbIst={
   dip:{acik:false,kademe:"dip"},
   pivot:{acik:false,dilimler:["KISA","ORTA","UZUN"],kirdi:true,yakin:false,uzerinde:false,yuzde:3},
   bolge:{acik:false,secili:["b2"]},
+  enerji:{acik:false,olustu:true,icinde:true,b0:true,b1:false,mesafeAcik:true,mesafe:5},
   ab :{acik:false,boga:true, ayi:false, sinirsiz:false, n:5}
 };
 var MB_BAR=[0,1,2,3,4];
@@ -5578,6 +5941,7 @@ function mbCiz(){
     return;
   }
   mbCizYenile();
+  mbAlarmCek();
   mbTazelemeKur();
   /* Sekmeye girildiğinde tarama KENDİLİĞİNDEN başlar — her seferinde
      düğmeye basmaya gerek yok. Ölçümler bellekte durduğu için ikinci
@@ -5607,7 +5971,9 @@ function mbTazelemeKur(){
   },20000);
 }
 function mbOtomatikBaslat(){
-  if(mbTaraDurum&&mbTaraDurum.suruyor)return;
+  /* Tarama "sürüyor" görünüyorsa gerçekten sürüyor mu bak: sekme dışında
+     durmuş olabilir. Nöbetçiyi kur ve döngüyü ittir. */
+  if(mbTaraDurum&&mbTaraDurum.suruyor){mbNobetciKur();mbTaraTur();return}
   if(!mbIst.tfler.length)return;
   var ilr=mbIlerleme();
   if(ilr.gereken&&ilr.olculen>=ilr.gereken)return;   /* zaten tamam */
@@ -5648,6 +6014,49 @@ function mbBolgeBul(oran){
   }
   return null;    /* dört ana bölgenin dışında (0.0 altı ya da güçlü D/D üstü) */
 }
+/* ═══ ⚛ ENERJİ KIRILIMI ═════════════════════════════════════════════
+   6.2'deki "⚛ Enerji Taraması" bölümünün karşılığı. Sunucu her ölçümde
+   Pine'daki enz_scan çıktısını da veriyor (ezAct/ezIns/ezAge/ezMes…);
+   burada yalnız süzülür — ek istek yok.
+     Oluştu  : ortada aktif bir sıkışma zonu var
+     İçinde  : fiyat o zonun İÇİNDE (henüz kırmadı)
+     0B ↑    : zonu SON BARDA yukarı kırdı
+     1B ↑    : bir bar önce yukarı kırdı
+     Mesafe  : fiyat zonun üst çizgisine %X'ten yakın
+   Pine'daki gibi: hiç durum tiki yoksa durum aranmaz, yalnız mesafe. */
+var MB_EZ_DURUM=[["olustu","Oluştu","aktif sıkışma zonu var"],
+                 ["icinde","İçinde","fiyat zonun içinde"],
+                 ["b0","0B ↑","son barda yukarı kırdı"],
+                 ["b1","1B ↑","bir bar önce kırdı"]];
+var MB_EZ_MESAFE=[1,2,3,5,10];
+function mbEnerjiGecti(x,ist){
+  var e=ist.enerji;
+  if(!e||!e.acik)return true;
+  var durumVar=(e.olustu||e.icinde||e.b0||e.b1);
+  var uydu=!durumVar;
+  if(!uydu){
+    if(e.olustu&&Number(x.ezAct)>0.5)uydu=true;
+    if(!uydu&&e.icinde&&Number(x.ezIns)>0.5)uydu=true;
+    if(!uydu&&e.b0&&Number(x.ezAge)===0)uydu=true;
+    if(!uydu&&e.b1&&Number(x.ezAge)===1)uydu=true;
+  }
+  if(!uydu)return false;
+  if(e.mesafeAcik&&!(x.ezMes!=null&&Number(x.ezMes)<=e.mesafe))return false;
+  return true;
+}
+/* Satırdaki ⚛ hücresi — Pine tablosundaki ENERJİ sütununun karşılığı */
+function mbEnerjiRozet(x,ist){
+  if(!ist.enerji||!ist.enerji.acik)return "";
+  var durum=Number(x.ezAge)===0?"0B↑":Number(x.ezAge)===1?"1B↑":
+            Number(x.ezIns)>0.5?"İçinde":Number(x.ezAct)>0.5?"Zon":null;
+  if(!durum)return "";
+  var rk=durum==="0B↑"?"#00e676":durum==="1B↑"?"#69f0ae":durum==="İçinde"?"#FFD700":"#FF9800";
+  var par='<span style="color:'+rk+';font-weight:800">⚛ '+durum+'</span>';
+  if(x.ezMes!=null)par+=' · üst çizgiye %'+Number(x.ezMes).toFixed(1);
+  if(x.ezEn!=null)par+=' · güç %'+Math.round(Number(x.ezEn));
+  if(x.ezTp1!=null)par+=' · GFH '+Number(x.ezTp1).toFixed(2);
+  return '<div style="font-size:10px;margin:3px 0 2px;opacity:.95">'+par+'</div>';
+}
 var MB_PIVOT_DILIM=[["KISA","potansiyel","adayOrta","1 saat","📊"],
                     ["ORTA","fibo","adayOrtaVade","4 saat","📐"],
                     ["UZUN","uzunvade","adayUzun","1 gün","🗓"]];
@@ -5660,7 +6069,7 @@ function mbPivotHaritasi(){
   if(mbPivotHar&&mbPivotDamga===damga)return mbPivotHar;
   var har={};
   var K=(D&&D.kartlar)||{};
-  var simdi=Math.floor(Date.now()/1000);
+  var simdi=Math.floor(Date.now()/1000);   /* sinyal yaşı gösterimi için */
   MB_PIVOT_DILIM.forEach(function(p){
     var ad=p[0], kirListe=K[p[1]]||[], adayListe=K[p[2]]||[];
     var bar=MB_PIVOT_BAR[ad]||86400;
@@ -5668,13 +6077,17 @@ function mbPivotHaritasi(){
       if(!x||!x.kod)return;
       if(!har[x.kod])har[x.kod]={};
       var ts=Number(x.sinyalTs)||0;
-      /* Son barda mı kırdı: canlı (bar kapanmadı) ya da sinyal bir bar
-         süresi kadar taze. 1,5 kat pay bırakıldı — tarama turu gecikebilir. */
-      var sonBar=!!x.canli||(ts>0&&(simdi-ts)<=bar*1.5);
-      var ust=(x.kirilim!=null&&x.fiyat!=null)?(Number(x.fiyat)>=Number(x.kirilim)):null;
-      har[x.kod][ad]={tip:"kirdi",kirilim:x.kirilim,fiyat:x.fiyat,
-        yuzde:x.kirilimYuzde,kalite:x.kalite,canli:!!x.canli,ts:ts,
-        sonBar:sonBar,uzerinde:ust===null?sonBar:ust};
+      /* SON BAR = uygulamanın "⚡ canlı" rozetiyle BİREBİR aynı ölçüt.
+         Tahmin yok: kart canlıysa kırılım şu anki barda olmuştur. */
+      var sonBar=!!x.canli;
+      /* KIRILAN SEVİYE = giriş fiyatı (pivot kartında alan adı budur).
+         Fiyat o seviyenin üstündeyse hisse hâlâ kırılımın üzerinde. */
+      var giris=Number(x.giris),fiyat=Number(x.fiyat);
+      var ust=(giris>0&&fiyat>0)?(fiyat>=giris):sonBar;
+      har[x.kod][ad]={tip:"kirdi",kirilim:(giris>0?giris:null),fiyat:(fiyat>0?fiyat:null),
+        yuzde:(giris>0&&fiyat>0)?((giris-fiyat)/fiyat*100):null,
+        kalite:x.kalite,canli:!!x.canli,ts:ts,bar:bar,
+        sonBar:sonBar,uzerinde:ust};
     });
     adayListe.forEach(function(x){
       if(!x||!x.kod)return;
@@ -5682,7 +6095,8 @@ function mbPivotHaritasi(){
       /* Kırılmış kaydı varsa adayla ezme — kırılım daha ileri bir durum */
       if(har[x.kod][ad]&&har[x.kod][ad].tip==="kirdi")return;
       har[x.kod][ad]={tip:"aday",kirilim:x.tetik,fiyat:x.fiyat,
-        yuzde:x.tetikYuzde,kalite:x.kalite,canli:false,ts:Number(x.sinyalTs)||0,
+        yuzde:(x.tetikYuzde===null||x.tetikYuzde===undefined)?null:Number(x.tetikYuzde),
+        kalite:x.kalite,canli:false,ts:Number(x.sinyalTs)||0,bar:bar,
         sonBar:false,uzerinde:false};
     });
   });
@@ -5718,9 +6132,10 @@ function mbPivotRozet(kod,ist){
   dilimler.forEach(function(ad){
     var d=h[ad];if(!d)return;
     var im,rk;
-    if(d.tip==="kirdi"&&d.sonBar){im="⚡ son bar";rk="var(--yes)"}
-    else if(d.tip==="kirdi"&&d.uzerinde){im="✅ üzerinde";rk="var(--yes)"}
-    else if(d.tip==="kirdi"){im="kırdı";rk="#8b949e"}
+    var ustu=(d.yuzde!=null&&d.tip==="kirdi")?(" %"+Math.abs(Number(d.yuzde)).toFixed(1)):"";
+    if(d.tip==="kirdi"&&d.sonBar){im="⚡ son bar"+ustu;rk="var(--yes)"}
+    else if(d.tip==="kirdi"&&d.uzerinde){im="✅ üzerinde"+ustu;rk="var(--yes)"}
+    else if(d.tip==="kirdi"){im="kırdı"+ustu;rk="#8b949e"}
     else if(d.yuzde!=null){im="🎯 %"+Math.abs(Number(d.yuzde)).toFixed(1)+" kaldı";rk="var(--sar)"}
     else return;
     par.push('<span style="font-size:10px;padding:2px 5px;border-radius:4px;'+
@@ -5762,6 +6177,7 @@ function mbGectiMi(x,ist,kod){
     var bl=mbBolgeBul(x.oran);
     if(!bl||ist.bolge.secili.indexOf(bl.id)<0)return false;
   }
+  if(!mbEnerjiGecti(x,ist))return false;
   if(ist.ab.acik){
     var M=ist.ab.sinirsiz?1e9:ist.ab.n, ok2=false;
     if(ist.ab.boga)ok2=ok2||(!!x.boga&&x.rejYas<=M);
@@ -5844,75 +6260,125 @@ function mbPaketUret(){
   return v;
 }
 /* ── Tarama döngüsü ── */
+var MB_KANAL=3;              /* aynı anda yolda kaç istek */
+var MB_PARCA=16;             /* bir istekte kaç hisse (sunucu tavanı 16) */
+var MB_ISTEK_ZAMAN=20000;    /* bir parça bu kadar sürerse askıda sayılır */
+var MB_HATA_TAVAN=60;        /* bu kadar hatadan sonra tarama durur */
+var mbNobetci=null;
+
+function mbKuyrukKur(){
+  var k=[];
+  for(var i=0;i<mbIst.tfler.length;i++){
+    var tf=mbIst.tfler[i];
+    /* Zaten ölçülmüş hisseleri yeniden isteme — tazeleme mbOlcum'u boşaltır */
+    var var_=mbOlcum[tf]||{};
+    var eksik=[];
+    for(var j=0;j<mbEvrenKod.length;j++){
+      var kod=mbEvrenKod[j];
+      if(!var_[kod])eksik.push(kod);
+    }
+    for(var b=0;b<eksik.length;b+=MB_PARCA)
+      k.push({tf:tf,kodlar:eksik.slice(b,b+MB_PARCA)});
+  }
+  return k;
+}
 function mbTaraBaslat(){
-  if(mbTaraDurum&&mbTaraDurum.suruyor){mbTaraDurum.suruyor=false;mbCizYenile();return}
+  if(mbTaraDurum&&mbTaraDurum.suruyor){mbTaraDurum.suruyor=false;mbNobetciKapat();mbCizYenile();return}
   if(!mbIst.tfler.length){mbCizYenile();return}
-  mbTaraDurum={suruyor:true,tf:mbIst.tfler[0],idx:0,tfIdx:0,baslangic:Date.now(),hata:0};
   if(!mbEvrenKod){
     el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
     post("/api/malboga",{is:"evren"}).then(function(r){
       if(!r||!r.ok||!r.kodlar||!r.kodlar.length){
         mbTaraDurum=null;el("govde").innerHTML='<div class="bos">Hisse listesi alınamadı.</div>';return}
       mbEvrenKod=r.kodlar;mbEvrenKaynak=r.kaynak||"";
-      mbTaraTur();
+      mbTaraBaslat();
     }).catch(function(){mbTaraDurum=null;
       el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
     return;
   }
+  mbTaraDurum={suruyor:true,tf:mbIst.tfler[0],baslangic:Date.now(),hata:0,
+               acik:0,onbellekten:0,kuyruk:mbKuyrukKur(),ucusta:[],sonHareket:Date.now()};
+  mbNobetciKur();
   mbTaraTur();
 }
-/* ⚡ PARALEL TARAMA — eskiden partiler tek tek, sırayla gidiyordu; her
-   parti bitmeden sonraki başlamıyordu. Artık aynı anda MB_KANAL tane
-   istek yolda oluyor. Sunucudaki ölçüm önbelleğiyle birlikte tekrar
-   taramalar neredeyse anında biter. */
-var MB_KANAL=3;
-function mbSiradakiParca(){
-  var d=mbTaraDurum;
-  while(d.tfIdx<mbIst.tfler.length){
-    var tf=mbIst.tfler[d.tfIdx];
-    if(d.idx<mbEvrenKod.length){
-      var parca=mbEvrenKod.slice(d.idx,d.idx+16);
-      d.idx+=parca.length;
-      return{tf:tf,kodlar:parca};
+/* ⏱ NÖBETÇİ — askıda kalan parçaları kuyruğa geri koyar ve döngüyü iter.
+   İkinci görevi: kullanıcı sekmeden çıkıp döndüğünde taramayı sürdürmek. */
+function mbNobetciKur(){
+  if(mbNobetci)return;
+  mbNobetci=setInterval(function(){
+    var d=mbTaraDurum;
+    if(!d||!d.suruyor){mbNobetciKapat();return}
+    if(sekme!=="malboga")return;          /* sekme dışında bekle, iptal etme */
+    var simdi=Date.now(),kurtarilan=0;
+    for(var i=d.ucusta.length-1;i>=0;i--){
+      if(simdi-d.ucusta[i].ts>MB_ISTEK_ZAMAN){
+        var u=d.ucusta.splice(i,1)[0];
+        u.olu=true;                        /* geç gelen cevap sayılmasın */
+        d.kuyruk.push({tf:u.tf,kodlar:u.kodlar});
+        d.acik=Math.max(0,d.acik-1);
+        d.hata++;kurtarilan++;
+      }
     }
-    d.tfIdx++;d.idx=0;
-  }
-  return null;
+    if(kurtarilan)mbCizYenile();
+    /* Hiçbir kanal yolda değilse ama iş varsa döngü ölmüş demektir — ittir. */
+    if(d.acik===0&&d.kuyruk.length)mbTaraTur();
+    else if(d.acik===0&&!d.kuyruk.length){d.suruyor=false;mbSonTarama=Date.now();
+      mbNobetciKapat();mbCizYenile()}
+  },4000);
 }
+function mbNobetciKapat(){if(mbNobetci){clearInterval(mbNobetci);mbNobetci=null}}
 function mbTaraTur(){
   var d=mbTaraDurum;
-  if(!d||!d.suruyor||sekme!=="malboga")return;
-  d.acik=d.acik||0;
-  /* boştaki kanalları doldur */
-  while(d.acik<MB_KANAL){
-    var is=mbSiradakiParca();
-    if(!is)break;
-    d.acik++;
-    (function(is2){
+  if(!d||!d.suruyor)return;
+  /* Sekme dışındayken YENİ istek açma ama taramayı da iptal etme —
+     nöbetçi, sekmeye dönülünce kaldığı yerden sürdürür. */
+  if(sekme!=="malboga")return;
+  while(d.acik<MB_KANAL&&d.kuyruk.length){
+    var is=d.kuyruk.shift();
+    d.acik++;d.tf=is.tf;
+    var kayit={tf:is.tf,kodlar:is.kodlar,ts:Date.now(),olu:false};
+    d.ucusta.push(kayit);
+    (function(is2,kyt){
+      var bitir=function(){
+        if(kyt.olu)return true;            /* nöbetçi çoktan kurtardı */
+        kyt.olu=true;
+        var y=d.ucusta.indexOf(kyt);if(y>=0)d.ucusta.splice(y,1);
+        d.acik=Math.max(0,d.acik-1);
+        d.sonHareket=Date.now();
+        return false;
+      };
       post("/api/malboga",{is:"olc",tf:is2.tf,kodlar:is2.kodlar}).then(function(r){
-        d.acik--;
+        if(bitir())return;
         if(!mbTaraDurum||!mbTaraDurum.suruyor)return;
         if(r&&r.ok&&r.olcum){
           if(!mbOlcum[is2.tf])mbOlcum[is2.tf]={};
           for(var k in r.olcum)mbOlcum[is2.tf][k]=r.olcum[k];
           if(r.onbellekten)d.onbellekten=(d.onbellekten||0)+r.onbellekten;
-        }else d.hata++;
+          /* Sunucu istenenlerin hepsini döndürmediyse eksikler kuyruğa döner */
+          var eksik=[];
+          for(var i2=0;i2<is2.kodlar.length;i2++)
+            if(!mbOlcum[is2.tf][is2.kodlar[i2]])eksik.push(is2.kodlar[i2]);
+          if(eksik.length&&d.hata<MB_HATA_TAVAN){d.hata++;d.kuyruk.push({tf:is2.tf,kodlar:eksik})}
+        }else{
+          d.hata++;
+          if(d.hata<MB_HATA_TAVAN)d.kuyruk.push({tf:is2.tf,kodlar:is2.kodlar});
+        }
         mbCizYenile();
         setTimeout(mbTaraTur,20);
       }).catch(function(){
-        d.acik--;
+        if(bitir())return;
         if(!mbTaraDurum||!mbTaraDurum.suruyor)return;
         d.hata++;
-        /* Başarısız parçayı geri koy ki ölçüm kaybolmasın */
-        if(d.hata<=40){d.tfIdx=mbIst.tfler.indexOf(is2.tf);
-          d.idx=Math.min(d.idx,mbEvrenKod.indexOf(is2.kodlar[0]))}
-        if(d.hata>40){d.suruyor=false;mbCizYenile();return}
-        setTimeout(mbTaraTur,1200);
+        /* Başarısız parça KUYRUĞA GERİ — imleç geri sarma yok, kayıp yok. */
+        if(d.hata<MB_HATA_TAVAN){d.kuyruk.push({tf:is2.tf,kodlar:is2.kodlar});
+          mbCizYenile();setTimeout(mbTaraTur,1200);
+        }else{d.suruyor=false;mbNobetciKapat();mbCizYenile()}
       });
-    })(is);
+    })(is,kayit);
   }
   /* iş kalmadı ve uçuşta istek yoksa bitti */
-  if(!d.acik&&d.tfIdx>=mbIst.tfler.length){d.suruyor=false;mbSonTarama=Date.now();mbCizYenile()}
+  if(!d.acik&&!d.kuyruk.length){d.suruyor=false;mbSonTarama=Date.now();
+    mbNobetciKapat();mbCizYenile()}
 }
 function mbCizYenile(){mbD=mbPaketUret();mbGoster(mbD)}
 /* MAL hücresi — Pine tablosuyla aynı: toplama yaşı 5 barı geçtiyse "-" */
@@ -6031,6 +6497,33 @@ function mbGoster(v,yerel){
     h+='</div>';
   }
   h+='</div>';
+  /* ── 4c) ⚛ ENERJİ KIRILIMI ── */
+  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("enerji","⚛","ENERJİ KIRILIMI",mbIst.enerji.acik);
+  if(mbIst.enerji.acik){
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
+       'Fiyat dar bir bantta sıkıştıkça enerji birikir; bant kırılınca hareket başlar. '+
+       'TradingView’deki ⚛ Enerji Taraması ile aynı motor.</div>';
+    h+='<div class="sirala" style="flex-wrap:wrap">';
+    MB_EZ_DURUM.forEach(function(d){
+      h+=mbCip('data-mbez="'+d[0]+'" title="'+E(d[2])+'"',d[1],!!mbIst.enerji[d[0]]);
+    });
+    h+='</div>';
+    h+='<div class="sirala" style="flex-wrap:wrap;margin-top:9px">'+
+       mbCip('data-mbezm="0"','📏 Mesafe şartı',mbIst.enerji.mesafeAcik);
+    if(mbIst.enerji.mesafeAcik){
+      MB_EZ_MESAFE.forEach(function(n){
+        h+=mbCip('data-mbezy="'+n+'"','≤%'+n,mbIst.enerji.mesafe===n)});
+      h+='<input id="mbEZSerbest" type="number" min="0.1" max="30" step="0.5" placeholder="elle" '+
+         'value="'+(MB_EZ_MESAFE.indexOf(mbIst.enerji.mesafe)<0?E(String(mbIst.enerji.mesafe)):"")+'" '+
+         'style="width:78px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);'+
+         'border-radius:7px;padding:5px 7px;font-size:13px;text-align:right">';
+    }
+    h+='</div>';
+    if(!(mbIst.enerji.olustu||mbIst.enerji.icinde||mbIst.enerji.b0||mbIst.enerji.b1))
+      h+='<div class="altbilgi" style="margin-top:7px;color:var(--sar);white-space:normal">'+
+         'Hiç durum seçili değil — yalnız mesafe şartı aranıyor (TradingView’de de böyle).</div>';
+  }
+  h+='</div>';
   /* ── 4b) PİVOT KIRILIM ── */
   h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("pivot","📈","PİVOT KIRILIM",mbIst.pivot.acik);
   if(mbIst.pivot.acik){
@@ -6075,7 +6568,8 @@ function mbGoster(v,yerel){
       '<div class="altbilgi"><b>🔎 Taranıyor…</b> şu an '+E(mbTaraDurum.tf)+' dilimi<br>'+
       ilr.olculen+' / '+ilr.gereken+' ölçüm · '+gecen+' sn'+
       (kalanSn!==null?' · yaklaşık '+kalanSn+' sn kaldı':'')+
-      (mbTaraDurum.hata?' · <span style="color:var(--kir)">'+mbTaraDurum.hata+' hata</span>':'')+'</div>'+
+      (mbTaraDurum.kuyruk?' · '+mbTaraDurum.kuyruk.length+' parça sırada':'')+
+      (mbTaraDurum.hata?' · <span style="color:var(--kir)">'+mbTaraDurum.hata+' yeniden deneme</span>':'')+'</div>'+
       '<div style="height:8px;background:var(--ciz);border-radius:5px;overflow:hidden;margin-top:7px">'+
       '<div style="height:100%;width:'+yuz+'%;background:var(--yes);transition:width .25s"></div></div>'+
       '<div class="altbilgi" style="margin-top:6px;opacity:.7">Sekmede kaldığın sürece sürer. '+
@@ -6097,10 +6591,11 @@ function mbGoster(v,yerel){
      '<button class="dg" id="mbKodBtn" style="width:auto;padding:7px 14px">🔎 Bak</button></div></div>';
   /* ── 7) HİÇ MODÜL AÇIK DEĞİLSE ── */
   var acikSayi=(mbIst.mal.acik?1:0)+(mbIst.dip.acik?1:0)+(mbIst.ab.acik?1:0)+
-               (mbIst.pivot.acik?1:0)+(mbIst.bolge.acik?1:0);
+    (mbIst.bolge.acik?1:0)+(mbIst.pivot.acik?1:0)+(mbIst.enerji.acik?1:0);
   if(!acikSayi){
     h+='<div class="bos"><b>Hiç modül açık değil</b><br><br>'+
-       'Yukarıdaki üç modülden en az birinin sağındaki <b>○</b> tikine dokun.</div>';
+       'Yukarıdaki altı modülden (📦 mal · ⬇️ dip · 🐂🐻 ayı/boğa · 🪜 fibo bölgesi · '+
+       '⚛ enerji · 📈 pivot) en az birinin sağındaki <b>○</b> tikine dokun.</div>';
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
   if(!mbIst.tfler.length){
@@ -6162,6 +6657,7 @@ function mbGoster(v,yerel){
         (x.takipte?' <span class="rozet">⭐</span>':"")+
         (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀</span>':"")+
         (dip?' <span class="rozet">'+dip+'</span>':"")+'</div>'+
+        mbEnerjiRozet(x,mbIst)+
         (function(){var bl=mbBolgeBul(x.oran);
           return bl?'<div style="margin:4px 0 2px"><span style="font-size:10px;padding:2px 5px;'+
             'border-radius:4px;background:rgba(124,77,255,.15);color:#b39dff;font-weight:700">'+
@@ -6178,26 +6674,43 @@ function mbGoster(v,yerel){
         '<div class="altbilgi">fiyat</div></div></div>';
     }).join("");
   });
-  /* ── 10) 🔔 FİLTREYİ ALARMA GÖNDER ──
+  /* ── 10) 🔔 FİLTRE ALARMI (5 YUVA) ──
      Sonuçların hemen altında: ekranda ne görüyorsan onu alarma bağlarsın. */
-  var al=(v&&v.alarm)||null;
-  h+='<div class="kutu" style="margin:14px 0 0;border-left:3px solid '+(al?"var(--yes)":"var(--ciz)")+'">'+
-     '<div style="font-weight:800;font-size:14px;margin-bottom:6px">🔔 Filtre alarmı</div>';
-  if(al){
-    h+='<div class="altbilgi" style="margin-bottom:7px">Şu an kurulu: <b>'+E(al.ozet)+'</b>'+
-       '<br>dilimler: <b>'+al.tfler.map(function(t){return E(t)}).join(" · ")+'</b>'+
-       '<br>'+(al.seans?"🟢 seans açık — listeye yeni giren hisseler bildirilir"
-                       :"🌙 seans kapalı — bildirim seans açılınca sürer")+'</div>';
+  var alL=(mbAlarmD&&mbAlarmD.liste)||[];
+  var alYuva=(mbAlarmD&&mbAlarmD.yuva)||5;
+  h+='<div class="kutu" style="margin:14px 0 0;border-left:3px solid '+
+     (alL.length?"var(--yes)":"var(--ciz)")+'">'+
+     '<div style="font-weight:800;font-size:14px;margin-bottom:6px">🔔 Filtre alarmı '+
+     '<span style="opacity:.6;font-weight:600;font-size:12px">'+alL.length+' / '+alYuva+' yuva dolu</span></div>';
+  if(mbAlarmD===null){
+    h+='<div class="altbilgi" style="opacity:.6">alarm listesi alınıyor…</div>';
+  }else if(alL.length){
+    h+='<div class="altbilgi" style="margin-bottom:7px">'+
+       (mbAlarmD.seans?"🟢 Seans açık — listeye <b>yeni giren</b> hisseler bildiriliyor."
+                      :"🌙 Seans kapalı — bildirim seans açılınca sürer.")+'</div>';
+    alL.forEach(function(a,i){
+      h+='<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;'+
+         (i?'border-top:1px solid var(--ciz)':'')+'">'+
+         '<div style="flex:1;min-width:0">'+
+         '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+E(a.ozet)+'</div>'+
+         '<div class="altbilgi" style="opacity:.7">'+a.tfler.map(function(t){return E(t)}).join(" · ")+'</div>'+
+         '</div>'+
+         (D.yon?'<button class="sir" data-mbalsil="'+E(a.id)+'" '+
+           'style="padding:4px 9px;font-size:12px;flex:0 0 auto">🚫</button>':"")+
+         '</div>';
+    });
   }else{
-    h+='<div class="altbilgi" style="margin-bottom:7px">Kurulu alarm yok. '+
-       'Yukarıdaki tikleri istediğin gibi ayarla, sonra bu filtreyi alarma bağla — '+
-       'seans içinde listeye <b>yeni giren</b> hisseler sana ve süper üyelere bildirim olarak gider.</div>';
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal">Kurulu alarm yok. '+
+       'Yukarıdaki tikleri istediğin gibi ayarla, sonra bu filtreyi alarma ekle — '+
+       'seans içinde listeye <b>yeni giren</b> hisseler sana ve süper üyelere bildirim olarak gider. '+
+       'En fazla <b>'+alYuva+'</b> ayrı filtre aynı anda kurulu kalabilir.</div>';
   }
   if(D.yon){
-    h+='<div class="sirala" style="flex-wrap:wrap">'+
-       '<button class="dg" id="mbAlarmKur" style="width:auto;padding:8px 14px">'+
-       (al?"🔁 Alarmı bu filtreyle değiştir":"🔔 Bu filtreyi alarma gönder")+'</button>'+
-       (al?'<button class="sir" id="mbAlarmSil">🚫 Alarmı kaldır</button>':"")+'</div>'+
+    h+='<div class="sirala" style="flex-wrap:wrap;margin-top:6px">'+
+       '<button class="dg" id="mbAlarmKur" style="width:auto;padding:8px 14px"'+
+       (alL.length>=alYuva?' disabled':'')+'>'+
+       (alL.length>=alYuva?"🔔 Yuvalar dolu":"🔔 Bu filtreyi alarma ekle ("+(alL.length+1)+". yuva)")+'</button>'+
+       (alL.length>1?'<button class="sir" id="mbAlarmHepsi">🚫 Hepsini kaldır</button>':"")+'</div>'+
        '<div class="altbilgi" id="mbAlarmDurum" style="margin-top:6px"></div>';
   }else{
     h+='<div class="altbilgi" style="opacity:.6">Alarm filtresini yalnız yönetici kurar.</div>';
@@ -6236,6 +6749,19 @@ function mbBagla(v,dilimler){
     mbUygula()});
   T("[data-mbtemiz]",function(){mbIst.mal.temiz=!mbIst.mal.temiz;mbUygula()});
   T("[data-mbkademe]",function(b){mbIst.dip.kademe=b.dataset.mbkademe;mbUygula()});
+  T("[data-mbez]",function(b){
+    var k=b.dataset.mbez;
+    mbIst.enerji[k]=!mbIst.enerji[k];mbUygula();
+  });
+  T("[data-mbezm]",function(){mbIst.enerji.mesafeAcik=!mbIst.enerji.mesafeAcik;mbUygula()});
+  T("[data-mbezy]",function(b){mbIst.enerji.mesafe=Number(b.dataset.mbezy);mbUygula()});
+  (function(){
+    var ez=el("mbEZSerbest");
+    if(ez)ez.onchange=function(){
+      var n=Number(ez.value);
+      if(isFinite(n)&&n>=0.1&&n<=30){mbIst.enerji.mesafe=n;mbUygula()}
+    };
+  })();
   T("[data-mbbolge]",function(b){
     var id=b.dataset.mbbolge,i=mbIst.bolge.secili.indexOf(id);
     if(i>=0)mbIst.bolge.secili.splice(i,1);else mbIst.bolge.secili.push(id);
@@ -6289,26 +6815,35 @@ function mbBagla(v,dilimler){
     post("/api/malboga",o).then(function(v2){mbD=v2;mbGoster(v2)})
       .catch(function(){ev.disabled=false;ev.textContent="🌍 Evreni yenile"})};
   var ak=el("mbAlarmKur");
-  if(ak)ak.onclick=function(){tit();ak.disabled=true;ak.textContent="⏳ kuruluyor…";
+  if(ak)ak.onclick=function(){tit();ak.disabled=true;ak.textContent="⏳ ekleniyor…";
     var o={};for(var k in mbIst)o[k]=mbIst[k];o.alarmKur=1;
     post("/api/malboga",o).then(function(r){
       ak.disabled=false;
       if(r&&r.ok){
+        mbAlarmD=r.alarm||mbAlarmD;
+        mbCizYenile();
         var dv=el("mbAlarmDurum");
-        if(dv)dv.innerHTML='✅ Alarm kuruldu. Şu anki <b>'+(r.tohum||0)+'</b> eşleşme '+
-          '“görülmüş” sayıldı; bundan sonra listeye <b>yeni girenler</b> bildirilecek.';
-        mbGetir();
+        if(dv)dv.innerHTML='✅ Alarm eklendi. Şu anki <b>'+(r.tohum||0)+'</b> eşleşme '+
+          '"görülmüş" sayıldı; bundan sonra listeye <b>yeni girenler</b> bildirilecek.';
       }else{
-        ak.textContent="🔔 Bu filtreyi alarma gönder";
-        var dv2=el("mbAlarmDurum");if(dv2)dv2.textContent="⚠️ "+((r&&r.hata)||"kurulamadı");
+        if(r&&r.alarm)mbAlarmD=r.alarm;
+        mbCizYenile();
+        var dv2=el("mbAlarmDurum");if(dv2)dv2.textContent="⚠️ "+((r&&r.hata)||"eklenemedi");
       }
-    }).catch(function(){ak.disabled=false;ak.textContent="🔔 Bu filtreyi alarma gönder";
+    }).catch(function(){ak.disabled=false;
       var dv3=el("mbAlarmDurum");if(dv3)dv3.textContent="⚠️ bağlantı hatası"});
   };
-  var as=el("mbAlarmSil");
-  if(as)as.onclick=function(){tit();as.disabled=true;
-    post("/api/malboga",{alarmSil:1}).then(function(){mbGetir()})
-      .catch(function(){as.disabled=false})};
+  T("[data-mbalsil]",function(b){
+    b.disabled=true;b.textContent="…";
+    post("/api/malboga",{alarmSil:1,alarmId:b.dataset.mbalsil}).then(function(r){
+      if(r&&r.alarm)mbAlarmD=r.alarm;mbCizYenile();
+    }).catch(function(){b.disabled=false;b.textContent="🚫"});
+  });
+  var ah=el("mbAlarmHepsi");
+  if(ah)ah.onclick=function(){tit();ah.disabled=true;
+    post("/api/malboga",{alarmSil:1,alarmId:true}).then(function(r){
+      mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};mbCizYenile();
+    }).catch(function(){ah.disabled=false})};
   var kb=el("mbKodBtn"),ki=el("mbKod");
   var bak=function(){var k=String((ki&&ki.value)||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
     if(k.length<3)return;tit();
@@ -6375,6 +6910,18 @@ function mbTekGoster(v){
       (x.doyum!=null?'<br>doyum <b>'+E(String(x.doyum))+'</b> · stop '+E(String(x.stop))+
         ' · 786 '+E(String(x.s786))+(x.s382!=null?' · 382 '+E(String(x.s382)):"")+
         (x.s236!=null?' · 236 '+E(String(x.s236)):""):"")+
+      /* ⚛ Enerji — TradingView’deki ⚛ sütununun aynısı; tek hisse ekranında
+         dilim dilim görünsün ki TV ile karşılaştırılabilsin. */
+      (function(){
+        var d=Number(x.ezAge)===0?"0B↑":Number(x.ezAge)===1?"1B↑":
+              Number(x.ezIns)>0.5?"İçinde":Number(x.ezAct)>0.5?"Zon":null;
+        if(!d)return "";
+        return '<br>⚛ <b>'+d+'</b>'+
+          (x.ezBot!=null?' · zon '+E(String(x.ezBot))+'–'+E(String(x.ezTop)):"")+
+          (x.ezMes!=null?' · üste %'+E(String(x.ezMes)):"")+
+          (x.ezEn!=null?' · güç %'+E(String(Math.round(x.ezEn))):"")+
+          (x.ezTp1!=null?' · GFH '+E(String(x.ezTp1)):"");
+      })()+
       '<br><span style="opacity:.6">'+x.bar+' bar · fiyat '+E(String(x.fiyat))+'</span></div></div>'+
       '<div class="sag"><div class="yuzde" style="color:'+kenar+';font-size:20px">'+(x.boga?"🐂":x.ayi?"🐻":"?")+'</div>'+
       '<div class="altbilgi">'+(x.durum===1?"topluyor":x.durum===-1?"dağıtıyor":"—")+'</div></div></div>';
@@ -7691,7 +8238,7 @@ q.waitUntil(kilitli(A,"absDilim",50,()=>absDilimTara(A,[])).catch(()=>{})),
 /* 🐂🐻 MAL+AYI/BOĞA: her turda bir zaman diliminden bir dilim hisse
    ilerler; havuz bitince sıradaki zaman dilimine geçilir. Böylece yedi
    dilimin tamamı sırayla ve sürekli tazelenir. */
-q.waitUntil(kilitli(A,"mbDilim",50,()=>mbDilimTara(A)).catch(()=>{})),
+q.waitUntil(kilitli(A,"mbDilim",50,()=>mbAlarmOncelikliTara(A)).catch(()=>{})),
 /* 🔔 Kurulu tarama filtresi varsa listeye YENİ girenleri bildir.
    mbDilimTara'dan sonra sıraya girer ki o turun taze ölçümünü görsün. */
 q.waitUntil(kilitli(A,"mbAlarm",50,()=>mbAlarmTara(A)).catch(()=>{})),
@@ -8133,21 +8680,25 @@ if("/api/malboga"===$.pathname){
     return JS({ok:!0,tek:r,sozluk:sozluk});
   }
   /* 🔔 FİLTREYİ ALARMA GÖNDER / KALDIR — yalnız yönetici. */
+  if(gov&&gov.is==="alarmListe"){
+    return JS({ok:!0,alarm:await mbAlarmOzetListe(A)});
+  }
   if(gov&&gov.alarmKur){
     if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
     const kur=mbIstekNorm(gov);
-    if(!kur.mal.acik&&!kur.dip.acik&&!kur.ab.acik)
-      return JS({ok:!1,hata:"önce en az bir modül aç"},400);
+    if(!mbFiltreVarMi(kur))return JS({ok:!1,hata:"önce en az bir modül aç"},400);
     if(!kur.tfler.length)return JS({ok:!1,hata:"önce zaman dilimi seç"},400);
-    await mbAlarmFiltreYaz(A,kur,uid);
-    const tohum=await mbAlarmTohumla(A,kur).catch(()=>0);
-    return JS({ok:!0,alarmKuruldu:!0,tohum:tohum,
-      alarm:{ozet:mbFiltreOzet(kur),tfler:kur.tfler,ts:Date.now()}});
+    const r=await mbAlarmYuvaYaz(A,kur,uid,gov.alarmId);
+    if(r.dolu)return JS({ok:!1,hata:"beş yuva da dolu — önce birini kaldır",
+      alarm:await mbAlarmOzetListe(A)},400);
+    const tohum=await mbAlarmTohumla(A,kur,r.yuva.id).catch(()=>0);
+    return JS({ok:!0,alarmKuruldu:!0,tohum:tohum,yuvaId:r.yuva.id,
+      alarm:await mbAlarmOzetListe(A)});
   }
   if(gov&&gov.alarmSil){
     if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
-    await mbAlarmFiltreSil(A);
-    return JS({ok:!0,alarmSilindi:!0});
+    await mbAlarmYuvaSil(A,gov.alarmId===true?null:(gov.alarmId||null));
+    return JS({ok:!0,alarmSilindi:!0,alarm:await mbAlarmOzetListe(A)});
   }
   /* ⚡ DOĞRUDAN ÖLÇÜM — KV'YE HİÇ DOKUNMAZ
      Üç tur boyunca KV üzerinden biriktirmeyi düzeltmeye çalıştık; her
@@ -8222,9 +8773,7 @@ if("/api/malboga"===$.pathname){
   const dilimler=await mbDilimDurum(A).catch(()=>[]);
   let evrenBilgi={sayi:0,kaynak:"okunamadı",rapor:null};
   try{const ev=await tamEvren(A);evrenBilgi={sayi:ev.length,kaynak:ev.kaynak,rapor:YON?ev.rapor:null}}catch(_){}
-  const ak=await mbAlarmFiltreOku(A).catch(()=>null);
-  const alarm=ak?{ozet:mbFiltreOzet(mbIstekNorm(ak.ist)),tfler:mbIstekNorm(ak.ist).tfler,
-                  ts:ak.ts,seans:mbSeansIci()}:null;
+  const alarm=await mbAlarmOzetListe(A).catch(()=>null);
   if(!paket)return JS({ok:!0,sozluk:sozluk,dilimler:dilimler,evrenBilgi:evrenBilgi,
     ist:ist,gruplar:[],ortak:[],calisiyor:!0,alarm:alarm});
   const fav=await X(A,uid),pf=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf)]);
