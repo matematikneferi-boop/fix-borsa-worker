@@ -4033,7 +4033,10 @@ function ciz(){
   }else{
     if(basYazi)basYazi.style.display="none";
     if(sekAdi){sekAdi.style.display="";sekAdi.textContent=ekranAdi()}
-    if(araS)araS.style.display="none";
+    /* Formasyon sekmesinde de arama kutusu görünsün — hisse ismi yazıp
+       Enter'a basınca detay(kod) açılır, o da kümülatif hedef kutusunu
+       zaten gösteriyor. Diğer sekmelerde eskisi gibi gizli kalır. */
+    if(araS)araS.style.display=(sekme==="kama"?"":"none");
     el("serit").innerHTML="";el("hotSerit").innerHTML="";
   }
   sekCiz();
@@ -4536,23 +4539,6 @@ function kamaGoster(){
   });
   else l.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
   var h='';
-  /* "ONAY ALANLAR" ÖZETİ: kullanıcı hiçbir filtreye dokunmadan da, üst
-     direncini/desteğini kırıp onay almış hisseleri görsün diye — seçili
-     süzgeçten bağımsız olarak HER ZAMAN üstte, en fazla 8 tanesi. */
-  var onayAlanlar=tum.filter(function(x){return x.onaylandi===true})
-    .sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
-  if(onayAlanlar.length){
-    h+='<div class="pzEt">✅ Onay noktasını kıranlar ('+onayAlanlar.length+')</div>';
-    h+=onayAlanlar.slice(0,8).map(function(x){
-      var renk=x.yon==="al"?"#3fb950":(x.yon==="sat"?"#f85149":"#d29922");
-      var ikon=x.yon==="al"?"📈":"📉";
-      return '<div class="satir" data-kod="'+E(x.kod)+'" data-l="'+E(x.tf)+'" data-form="1" style="border-left-color:'+renk+'">'+
-        '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
-        '<div class="altbilgi">'+ikon+' '+E(x.tip)+' · '+E(x.tf||"")+
-        (x.bugunOnay?' · <span class="rozetKucuk" style="color:#3fb950;border-color:#3fb950">🆕 Bugün</span>':'')+
-        '</div></div><div class="sag"><div class="yuzde so">kalite <b>%'+x.kalite+'</b></div></div></div>';
-    }).join("");
-  }
   if(tum.length){
     /* Dilim + tip filtreleri birbirini, durum/mesafe kendini süzer —
        her satır kendi ekseninde sayar, diğerlerini sabit tutar. Her grubun
