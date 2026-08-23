@@ -413,8 +413,7 @@ function desenSinirDuzelt(d){
    Yönler asla karıştırılıp tek bir sayıya indirilmez — biri "al" derken
    diğeri "sat" diyorsa iki ayrı ortalama döner, çelişki gizlenmez. */
 function formasyonKumulatif(p){
-  if(!p)return{tanik:"p-yok"};
-  if(!Array.isArray(p.dilimler)||!p.dilimler.length)return{tanik:"dilimler-yok",dilimSayisi:0};
+  if(!p||!Array.isArray(p.dilimler)||!p.dilimler.length)return null;
   var fiyat=(typeof p.fiyat==="number")?p.fiyat:null;
   var gruplar={al:[],sat:[]};
   p.dilimler.forEach(function(d){
@@ -436,8 +435,7 @@ function formasyonKumulatif(p){
     };
   }
   var al=ozet("al"),sat=ozet("sat");
-  if(!al&&!sat)return{tanik:"hepsi-elendi",dilimSayisi:p.dilimler.length,
-    dilimler:p.dilimler.map(function(d){return(d&&d.tf)+":"+(d&&d.yon)+":hedef="+(d&&d.hedef)}),fiyat:fiyat};
+  if(!al&&!sat)return null;
   return{al:al,sat:sat,fiyat:fiyat};
 }
 /* Fiyat, kırılım seviyesini yön yönünde geçmiş mi ("onay aldı") ? */
@@ -5810,15 +5808,26 @@ function grafikCiz(kod,ad,deneme,yukseklik){
           var uyari=(ku.al&&ku.sat)?'<div class="btAc" style="margin-top:7px;color:#d29922">⚠️ Dilimler çelişiyor — bazıları AL, bazıları SAT diyor. İki ortalama da ayrı ayrı gösteriliyor, birleştirilmedi.</div>':"";
           kk.innerHTML='<div class="kutu"><h3>🧮 Kümülatif hedef (tüm dilimler)</h3>'+
             satir(ku.al)+satir(ku.sat)+uyari+'</div>';
-        }else if(ku&&ku.tanik){
-          /* GEÇİCİ TEŞHİS: kutu neden boş kaldığını gösterir — sorun
-             çözülünce bu blok kaldırılacak. */
-          var aciklama=ku.tanik==="p-yok"?"bu hisse formasyon.json'da yok":
-            ku.tanik==="dilimler-yok"?"bu hissede hiçbir dilimde formasyon bulunamadı":
-            "toplam "+ku.dilimSayisi+" dilimde formasyon var ama hepsi geçersiz/tamamlanmış sayıldı: "+((ku.dilimler||[]).join(" · "));
-          kk.innerHTML='<div class="kutu" style="opacity:.7"><h3>🧮 Kümülatif hedef</h3>'+
-            '<div class="btAc">🔧 '+E(aciklama)+(ku.fiyat!=null?(" · fiyat: "+ku.fiyat):"")+'</div></div>';
-        }else{kk.innerHTML=""}
+        }else{
+          /* Hiçbir dilimde net/aktif formasyon yoksa kutu boş kalmasın diye
+             — ama yalan formasyon UYDURMADAN — elimizdeki mum verisinden
+             sade bir trend özeti çıkarılır: son 20 mum başına göre fiyat
+             yüzde kaç değişmiş. Bu bir formasyon iddiası değil, dürüst bir
+             "şu an net bir şekil yok, ama genel yön bu" notudur. */
+          var trend="";
+          if(veri.length>=20){
+            var ref=veri[veri.length-20].close,son=veri[veri.length-1].close;
+            if(ref>0){
+              var yzd2=Math.round((son-ref)/ref*1000)/10;
+              var rk2=yzd2>=0?"#3fb950":"#f85149";
+              trend='<div class="btAc">Son 20 mumda fiyat <b style="color:'+rk2+'">'+
+                (yzd2>=0?"+":"")+yzd2+'%</b> — net bir formasyon şekli oluşmadı, bu sadece genel yön.</div>';
+            }
+          }
+          kk.innerHTML='<div class="kutu" style="opacity:.85"><h3>🧮 Kümülatif hedef</h3>'+
+            '<div class="btAc">Şu an hiçbir zaman diliminde aktif/net bir formasyon hedefi yok.</div>'+
+            trend+'</div>';
+        }
       }
       chart.timeScale().fitContent();
       var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
