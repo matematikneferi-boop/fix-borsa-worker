@@ -3676,7 +3676,7 @@ function splashKapat(){
 var TG=window.Telegram&&window.Telegram.WebApp;
 try{TG.ready();TG.expand();if(TG.setHeaderColor)TG.setHeaderColor("#0e1116");
     if(TG.setBackgroundColor)TG.setBackgroundColor("#0e1116")}catch(e){}
-function tit(){try{TG.HapticFeedback.impactOccurred("light")}catch(e){}}
+function tit(){try{TG.HapticFeedback.impactOccurred("light")}catch(e){}try{if(typeof temizleAcikGrafikler==="function")temizleAcikGrafikler()}catch(e){}}
 /* ═══════ 🎖️ YENİ ÖLÇÜ ROZETLERİ ═══════
    Dört ölçü de "iyi/kötü" değil, BAĞLAM taşır. O yüzden rozetler eşiğin
    iki yanını farklı renkte gösterir ve nötr bölgede hiç görünmez —
@@ -5297,7 +5297,9 @@ function portfoyPerformansGrafikCiz(gunluk){
     if(!seri){kutu.innerHTML='<p class="bilgi">Grafik kütüphanesi bu sürümde alan serisi oluşturamadı.</p>';return}
     seri.setData(gunluk.map(function(x){return{time:x.gun,value:x.deger}}));
     chart.timeScale().fitContent();
-    window.addEventListener("resize",function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}});
+    var pfBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
+    window.addEventListener("resize",pfBoyutla);
+    grafikKaydet(chart,pfBoyutla);
   }catch(e){kutu.innerHTML='<p class="bilgi">Grafik çizilemedi.</p>'}
 }
 /* 📜 GERÇEKLEŞEN K/Z GEÇMİŞİ: kapanan (kısmi/tam satılan) pozisyonların
@@ -5656,6 +5658,28 @@ function detay(kod,ad){
     };
   });
 }
+/* GRAFİK TEMİZLİĞİ: createChart() her çağrıldığında bir canvas + kalıcı bir
+   window "resize" dinleyicisi yaratıyor. Panel kapatma kodu eskiden yalnız
+   K.innerHTML="" yapıyordu — bu DOM'u söker ama chart nesnesini/dinleyiciyi
+   ASLA temizlemez. Formasyon kartları arasında çok gezinince bu birikiyor;
+   mobil WebView'lerin canvas/GPU context sınırı aşılınca eski grafikler
+   JS'e hiçbir hata vermeden sessizce boyanmaz oluyor (veri/rozet/yorum
+   doğru gelmeye devam eder, sadece canvas boş kalır — tam da bu yüzden
+   "birden bire" bozuluyormuş gibi görünüyordu). Her createChart() burada
+   kayda giriyor; her panel geçişinden önce temizleAcikGrafikler() ile eski
+   olanlar düzgünce remove() ediliyor. */
+window._acikGrafikler=window._acikGrafikler||[];
+function grafikKaydet(chart,resizeFn){
+  window._acikGrafikler.push({chart:chart,resizeFn:resizeFn});
+}
+function temizleAcikGrafikler(){
+  var liste=window._acikGrafikler||[];
+  liste.forEach(function(g){
+    try{if(g.resizeFn)window.removeEventListener("resize",g.resizeFn)}catch(e){}
+    try{if(g.chart&&g.chart.remove)g.chart.remove()}catch(e){}
+  });
+  window._acikGrafikler=[];
+}
 /* MUM GRAFİĞİ: detay() paneli içinde ayrı, engellemeyen bir çağrı — detay
    metni beklemeden kendi hızında gelir. CDN veya veri yoksa sessizce bir
    uyarı yazar, panelin geri kalanını hiçbir şekilde etkilemez. */
@@ -5723,6 +5747,7 @@ function grafikCiz(kod,ad,deneme,yukseklik){
       chart.timeScale().fitContent();
       var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
       window.addEventListener("resize",yenidenBoyutla);
+      grafikKaydet(chart,yenidenBoyutla);
     }catch(e){
       /* Sessiz kalmak en kötüsü: sebebi yaz ki ne olduğu anlaşılsın. */
       var k2=el("mumKutu");
