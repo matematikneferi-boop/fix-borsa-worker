@@ -413,7 +413,8 @@ function desenSinirDuzelt(d){
    Yönler asla karıştırılıp tek bir sayıya indirilmez — biri "al" derken
    diğeri "sat" diyorsa iki ayrı ortalama döner, çelişki gizlenmez. */
 function formasyonKumulatif(p){
-  if(!p||!Array.isArray(p.dilimler)||!p.dilimler.length)return null;
+  if(!p)return{tanik:"p-yok"};
+  if(!Array.isArray(p.dilimler)||!p.dilimler.length)return{tanik:"dilimler-yok",dilimSayisi:0};
   var fiyat=(typeof p.fiyat==="number")?p.fiyat:null;
   var gruplar={al:[],sat:[]};
   p.dilimler.forEach(function(d){
@@ -435,7 +436,8 @@ function formasyonKumulatif(p){
     };
   }
   var al=ozet("al"),sat=ozet("sat");
-  if(!al&&!sat)return null;
+  if(!al&&!sat)return{tanik:"hepsi-elendi",dilimSayisi:p.dilimler.length,
+    dilimler:p.dilimler.map(function(d){return(d&&d.tf)+":"+(d&&d.yon)+":hedef="+(d&&d.hedef)}),fiyat:fiyat};
   return{al:al,sat:sat,fiyat:fiyat};
 }
 /* Fiyat, kırılım seviyesini yön yönünde geçmiş mi ("onay aldı") ? */
@@ -5808,6 +5810,14 @@ function grafikCiz(kod,ad,deneme,yukseklik){
           var uyari=(ku.al&&ku.sat)?'<div class="btAc" style="margin-top:7px;color:#d29922">⚠️ Dilimler çelişiyor — bazıları AL, bazıları SAT diyor. İki ortalama da ayrı ayrı gösteriliyor, birleştirilmedi.</div>':"";
           kk.innerHTML='<div class="kutu"><h3>🧮 Kümülatif hedef (tüm dilimler)</h3>'+
             satir(ku.al)+satir(ku.sat)+uyari+'</div>';
+        }else if(ku&&ku.tanik){
+          /* GEÇİCİ TEŞHİS: kutu neden boş kaldığını gösterir — sorun
+             çözülünce bu blok kaldırılacak. */
+          var aciklama=ku.tanik==="p-yok"?"bu hisse formasyon.json'da yok":
+            ku.tanik==="dilimler-yok"?"bu hissede hiçbir dilimde formasyon bulunamadı":
+            "toplam "+ku.dilimSayisi+" dilimde formasyon var ama hepsi geçersiz/tamamlanmış sayıldı: "+((ku.dilimler||[]).join(" · "));
+          kk.innerHTML='<div class="kutu" style="opacity:.7"><h3>🧮 Kümülatif hedef</h3>'+
+            '<div class="btAc">🔧 '+E(aciklama)+(ku.fiyat!=null?(" · fiyat: "+ku.fiyat):"")+'</div></div>';
         }else{kk.innerHTML=""}
       }
       chart.timeScale().fitContent();
