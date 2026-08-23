@@ -3290,8 +3290,11 @@ async function mbAlarmTara(A){
   const kanal=String((A.ALARM_KANAL||"")).trim();
   if(kanal)await b(A.BOT_TOKEN,"sendMessage",{chat_id:kanal,text:metin,
     parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
-  /* 2) ÖZEL MESAJ — yönetici + süper üyeler, mevcut kuyruk altyapısıyla */
-  const kullanicilar=await alarmKullanicilari(A).catch(()=>[]);
+  /* 2) ÖZEL MESAJ — GEÇİCİ: kullanıcı isteğiyle şimdilik YALNIZ yöneticiye
+     gidiyor (süper üyelere gitmiyor). Genel "Anlık Alarm" (kısa trade
+     kırılımı) sistemi bundan etkilenmesin diye ayrı, kendi listesini
+     kullanıyor — alarmKullanicilari()'e dokunulmadı. */
+  const kullanicilar=[...new Set([...e,...(EK_YON?[...EK_YON]:[])])];
   if(kullanicilar.length){
     await alarmKuyrugaKoy(A,metin,kullanicilar);
     await alarmKuyrukBosalt(A);
@@ -3881,7 +3884,7 @@ function ekranAdi(){
   if(sekme==="hata")return"🩺 Hatalar";
   if(sekme==="sag")return"🛡 Sistem";
   if(sekme==="abs")return"🌊 Absorpsiyon";
-  if(sekme==="malboga")return"🐂🐻 Mal + Ayı/Boğa";
+  if(sekme==="malboga")return"🔎 Hisse Taraması";
   if(sekme==="yesil")return"🟢 Yeşil Kapanış";
   if(sekme==="rot")return"🔄 Sektör Rotasyonu";
   if(sekme==="perf")return"📈 Performans";
@@ -3979,6 +3982,10 @@ function onayCiz(){
 }
 function sekCiz(){
   var s=[];
+  /* 🔝 ÖNCELİKLİ İKİ SEKME: Formasyon ve Hisse Taraması artık şeridin en
+     başında — Ana Menü'nün hemen altında ilk görülen iki düğme bunlar. */
+  s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon'+(D.super?"":" 🔒")+'</button>');
+  s.push('<button class="sek'+(sekme==="malboga"?" on":"")+'" data-r="nötr" data-s="malboga">🔎 Hisse Taraması'+(D.super?"":" 🔒")+'</button>');
   ["potansiyel","fibo","uzunvade"].forEach(function(k){
     var t=TF[k],n=(D.kartlar&&D.kartlar[k]&&D.kartlar[k].length)||0;
     s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
@@ -3990,7 +3997,6 @@ function sekCiz(){
      sıklıkta sorulan bir sorudur — o yüzden görünür yerde. */
   s.push('<button class="sek'+(sekme==="temel"?" on":"")+'" data-r="nötr" data-s="temel">📋 Temel</button>');
   s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar'+(D.super?"":" 🔒")+'</button>');
-  s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="alarm"?" on":"")+'" data-r="nötr" data-s="alarm">🔔 Anlık Alarm'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="rot"?" on":"")+'" data-r="nötr" data-s="rot">🔄 Rotasyon</button>');
   /* 📈 PERFORMANS SEKMESİ KAPALI (kullanıcı kararı 19/08).
@@ -4005,7 +4011,6 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
-  s.push('<button class="sek'+(sekme==="malboga"?" on":"")+'" data-r="nötr" data-s="malboga">🐂 Mal+Ayı/Boğa'+(D.super?"":" 🔒")+'</button>');
   if(D&&D.yon)s.push('<button class="sek'+(sekme==="yesil"?" on":"")+'" data-r="nötr" data-s="yesil">🟢 Yeşil Kapanış 🔐</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
@@ -4449,11 +4454,16 @@ var kamaD=null, kamaTararken=false;
 function kamaCiz(){
   if(!D.super){
     el("govde").innerHTML='<div class="kilit"><div class="buyuk">🔒</div>'+
-      "<h2>Süper Üyelik gerekli</h2>"+
-      "<p>Formasyon taraması, klasik grafik formasyonlarını (üçgen, bayrak, omuz-baş-omuz vb.) kırılım oluşmadan tespit eder.</p>"+
+      "<h2>📐 Formasyon — Süper Üyelik gerekli</h2>"+
+      '<p style="text-align:left">Bu ekran, <b>400+ BIST hissesini</b> klasik grafik formasyonları için sürekli tarar — üçgen, bayrak, omuz-baş-omuz, kama ve daha fazlası. Sen bakmadan, kırılım daha oluşmadan hangi hissenin hangi formasyonun içinde olduğunu görürsün.</p>'+
+      '<p style="text-align:left"><b>Süper Üyelikte neler açılır?</b><br>'+
+      '📐 Her hissenin aktif formasyonu + grafik üzerinde çizilmiş kırılım seviyeleri<br>'+
+      '🧮 O hissenin <b>tüm zaman dilimlerindeki</b> formasyonlarının birleştirilmiş (kümülatif) hedefi — tek tek bakmana gerek kalmaz<br>'+
+      '🔓 Onay (kırılım) ve 🚫 iptal seviyeleri, hedefe kalan yüzde ile birlikte<br>'+
+      '🎯 Formasyon henüz kırılmadan hazırlanmış hedefler — piyasa hareket etmeden sen pozisyon planlarsın</p>'+
       "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
-      '<button class="dg" id="davetGit">📤 Sistemi paylaş</button></div>';
-    el("davetGit").onclick=function(){tit();sekme="davet";ciz()};
+      '<button class="dg" id="davetGit">📤 Sistemi paylaş, hemen aç</button></div>';
+    var dg0=el("davetGit");if(dg0)dg0.onclick=function(){tit();sekme="davet";ciz()};
     return;
   }
   if(kamaD){kamaGoster();return}
@@ -6114,10 +6124,17 @@ var MB_KADEME=[["dip","⬇️ Dip bölgesi"],["dip382","⬇️⬇️ Derin (382 
 function mbCiz(){
   if(!D.super){
     el("govde").innerHTML='<div class="kilit"><div class="buyuk">🔒</div>'+
-      "<h2>Süper Üyelik gerekli</h2>"+
-      "<p>Mal toplama/dağıtım ve Ayı/Boğa rejim taraması Süper Üyelere özeldir.</p>"+
+      "<h2>🔎 Hisse Taraması — Süper Üyelik gerekli</h2>"+
+      '<p style="text-align:left">Bu ekran, sistemin en derin tarama motoru: hisseler <b>kurumsal para akışına</b> göre sınıflanır — kim topluyor, kim dağıtıyor, piyasa şu an "boğa" mı "ayı" rejiminde mi. Manuel yapmaya kalksan saatler sürer, burada saniyeler içinde tüm evren taranır.</p>'+
+      '<p style="text-align:left"><b>Süper Üyelikte neler açılır?</b><br>'+
+      '📦 Mal toplama / dağıtım taraması — büyük oyuncu bir hissede sessizce topluyor mu, dağıtıyor mu<br>'+
+      '🐂🐻 Ayı/Boğa rejim takibi — rejime yeni geçenler ayrı vurgulanır<br>'+
+      '⬇️ Dip bölgesi taraması (derin dip / en dip kademeleri dahil)<br>'+
+      '🪜 Seviye bölgesi filtreleri — hisse hangi bölgede, o bölgeden çıkarsa ne olur<br>'+
+      '🔔 Kendi filtrenle <b>kişisel alarm kur</b> — kriterlerine uyan hisse çıktığı an özelden haber gelir<br>'+
+      '🔎 Tek hisse sorgulama — herhangi bir kodu yazıp anında bu derinlikte bak</p>'+
       "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
-      '<button class="dg" id="davetGit">📤 Sistemi paylaş</button></div>';
+      '<button class="dg" id="davetGit">📤 Sistemi paylaş, hemen aç</button></div>';
     var dg=el("davetGit");if(dg)dg.onclick=function(){tit();sekme="davet";ciz()};
     return;
   }
