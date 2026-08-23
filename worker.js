@@ -1,5 +1,5 @@
-const e=new Set(["6819672343"]),t="kolayfix",a="11.7";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
-;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null,oTS=0;const c=new Set(["potansiyel","fibo","uzunvade","haftalik","aday","adayOrta","adayOrtaVade","adayUzun","adayHafta"]),EM=new Set(["menu","davet","bilgi"]),d=t=>e.has(String(t));let BUN=null,KVSON=0
+const e=new Set(["6819672343"]),t="kolayfix",a="12.0";let n="",i=t;const r=()=>n+"/panel?key="+encodeURIComponent(i),s=(e,a)=>{const n=a.searchParams.get("key")
+;return!!n&&(n===(e.PUSH_KEY||t)||n===(e.PANEL_KEY||e.PUSH_KEY||t))},l="https://liste.local/veri";let o=null,oTS=0;const c=new Set(["potansiyel","fibo","uzunvade","haftalik","aday","adayOrta","adayOrtaVade","adayUzun","adayHafta"]),EM=new Set(["menu","davet","bilgi"]),d=t=>{const _s=String(t);return e.has(_s)||(EK_YON&&EK_YON.has(_s))};let BUN=null,KVSON=0
 ;const DAVET_METIN="📈 Fix Borsa Sinyal botunu kullanıyorum, hisse sinyallerini buradan takip ediyorum. Aşağıdaki bağlantıdan sen de katılabilirsin:"
 ;async function botAd(e){if(BUN)return BUN;if(e.VERI){const c=await e.VERI.get("botuser");if(c)return BUN=c}if(!e.BOT_TOKEN)return null
 ;const r=await b(e.BOT_TOKEN,"getMe",{}),u=r&&r.result&&r.result.username;return u?(BUN=u,e.VERI&&await e.VERI.put("botuser",u).catch(()=>{}),u):null}
@@ -36,6 +36,11 @@ const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kır
 /* Ortam (env) referansı: sayaç yazan yardımcıların imzasını değiştirmemek
    için her istekte tazelenir. Aynı isolate içinde geçerlidir. */
 let ORTAM=null;
+/* 👑 EK YÖNETİCİ(LER): Cloudflare → Settings → Variables kısmına ADMIN_IDS
+   adında bir değişken ekleyip kendi Telegram numaranı (ör: 123456789,987654321)
+   yazarsan, kod hiç değişmeden sen de yönetici sayılırsın — panel/backtest/
+   sistem sekmeleri şifresiz, doğrudan Telegram kimliğinle açılır. */
+let EK_YON=null;
 
 /* ---------- 📊 SAĞLIK SAYAÇLARI ----------
    Bellekte tutulur, en fazla 60 saniyede bir KV'ye yazılır (KV günlük yazma
@@ -285,7 +290,7 @@ const YF_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML
    ekler. Grafik ile "Şimdi" fiyatı hep aynı kaynağı göstersin diye. */
 async function yfMumCek(host,kod,interval,range){interval=interval||"1d";range=range||"6mo"
 ;const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range="+range+"&interval="+interval+"&_="+Date.now()
-;let res;try{res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store"})}catch(e){return{hata:"fetch istisnası: "+(e&&e.message||e)}}
+;let res;try{const _ac=new AbortController();const _to=setTimeout(()=>_ac.abort(),8000);try{res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store",signal:_ac.signal})}finally{clearTimeout(_to)}}catch(e){return{hata:"fetch istisnası (zaman aşımı olabilir): "+(e&&e.message||e)}}
 ;if(!res.ok)return{hata:"HTTP "+res.status+" ("+host+")"};const j=await res.json().catch(()=>null)
 ;if(!j)return{hata:"JSON parse edilemedi ("+host+")"}
 ;const rz=j&&j.chart&&j.chart.result&&j.chart.result[0];if(!rz||!rz.timestamp)return{hata:"Yahoo hatası: "+JSON.stringify((j.chart&&j.chart.error)||j).slice(0,200)}
@@ -776,7 +781,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-22-d · 3 tarama modülü · çoklu dilim · hayalet bar düzeltmesi";
+const WORKER_SURUM="2026-08-23-j · ⚛ enerji kırılımı + 5 alarm yuvası + pivot/tarama onarımı";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1334,24 +1339,36 @@ function mb571Seri(m,depth,lowTh,upTh,rev){
   const high=m.map(x=>x.high),low=m.map(x=>x.low),zaman=m.map(x=>x.time);
   let pivotsH=[],pivotsL=[],lastH=null,lastL=null;
   let isHighLast=false,startPrice=NaN,endPrice=NaN,offset=NaN,diff=NaN;
+  /* ⚡ HIZ: projeksiyon (isHighLast/startPrice/endPrice/offset) YALNIZCA
+     pivot dizilerinden hesaplanır — o barın fiyatına hiç bakmaz. Yani
+     pivot dizisi değişmediyse sonuç da değişmez. Eskiden her bar dizinin
+     tam kopyası alınıp döngü baştan çalışıyordu (700 bar × ~200 pivot).
+     Artık yalnız pivot eklendiği/değiştiği barda çalışır — pivotlar 5-15
+     barda bir oluştuğu için ~10 kat az iş. SONUÇ BİREBİR AYNI.
+     Not: yukarıdaki blok isHighLast'i her bar yazıyor ama orijinalde
+     hemen ardından döngü onu ezip yeniden hesaplıyordu; döngüyü atladığımız
+     barlarda "yerlesik" değeri geri konur ki davranış aynı kalsın. */
+  let yerlesikIHL=false;
   const cikti=new Array(n);
   for(let i=0;i<n;i++){
     let H=mbPivot571(high,zaman,i,uzun,true);
     let L=mbPivot571(low ,zaman,i,uzun,false);
+    let degisti=false;
     const cH=pivotsH.length,cL=pivotsL.length;
     if(cH>0&&cL>0){
       lastH=pivotsH[cH-1];lastL=pivotsL[cL-1];
       isHighLast=lastH.t>lastL.t;
-      if(isHighLast){if(H){if(H.p>lastH.p)pivotsH[cH-1]=H;H=null}}
-      else          {if(L){if(L.p<lastL.p)pivotsL[cL-1]=L;L=null}}
+      if(isHighLast){if(H){if(H.p>lastH.p){pivotsH[cH-1]=H;degisti=true}H=null}}
+      else          {if(L){if(L.p<lastL.p){pivotsL[cL-1]=L;degisti=true}L=null}}
     }
-    if(H)pivotsH.push(H);
-    if(L)pivotsL.push(L);
+    if(H){pivotsH.push(H);degisti=true}
+    if(L){pivotsL.push(L);degisti=true}
     /* PERF FIX (kütüphanedeki yorumun aynısı): son 200 pivot yeter, sonuç
        değişmez — algoritma yalnız en SONDAKİ pivotlardan geriye bakar. */
-    if(pivotsH.length>200)pivotsH.shift();
-    if(pivotsL.length>200)pivotsL.shift();
-    if(pivotsH.length>0&&pivotsL.length>0){
+    if(pivotsH.length>200){pivotsH.shift();degisti=true}
+    if(pivotsL.length>200){pivotsL.shift();degisti=true}
+    if(!degisti)isHighLast=yerlesikIHL;
+    if(degisti&&pivotsH.length>0&&pivotsL.length>0){
       const hc=pivotsH.slice(),lc=pivotsL.slice();
       let kilit=0;
       while(hc.length>0&&lc.length>0){
@@ -1387,6 +1404,7 @@ function mb571Seri(m,depth,lowTh,upTh,rev){
         offset=(isHighLast?-1:1)*Math.abs(offset);
         break;
       }
+      yerlesikIHL=isHighLast;      /* döngü atlanan barlarda buradan okunur */
     }
     diff=(isHighLast?-1:1)*Math.abs(startPrice-endPrice);
     if(isFinite(diff)&&isFinite(endPrice)&&isFinite(offset)){
@@ -1404,6 +1422,177 @@ function mbDurum571Seri(m){
   return mb571Seri(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)
     .map(x=>(x&&isFinite(x.doyum)&&isFinite(x.close))?(x.doyum>x.close?"BOĞA":"AYI"):null);
 }
+/* ── kütüphane:3200  ⚛ LATENT ENERGY REACTOR (enz_run + enz_scan) ──────
+   Pine'daki sıkışma-zonu motorunun birebir çevirisi. Fiyat dar bir bantta
+   sıkışırken "gizli enerji" birikir; bant kırılınca hareket başlar.
+   Pine ile aynı olması için üç ince nokta korundu:
+     · ta.atr(14) RMA'dır, SMA değil — ilk 14 barda seed, sonrası yumuşatma
+     · zon YALNIZCA barsIn tam olarak minBars'a EŞİT olduğu barda doğar
+       (>= değil; öyle olsaydı her barda yeni zon açılırdı)
+     · ağır hesaplar (ağırlık merkezi, ret sayıları, kurumsal iz) Pine'da
+       da sadece son barda çalışır — tarama için zaten yalnız o lazım */
+const EZ_MINBARS=8, EZ_ATRMULT=2.5;
+/* Pine ta.atr(14) — TR ilk barda high-low, sonra RMA (alpha=1/14) */
+function mbATR(m,n){
+  const out=new Array(m.length);let toplam=0,onceki=null;
+  for(let i=0;i<m.length;i++){
+    const tr=i===0?(m[0].high-m[0].low):
+      Math.max(m[i].high-m[i].low,Math.abs(m[i].high-m[i-1].close),Math.abs(m[i].low-m[i-1].close));
+    if(i<n-1){toplam+=tr;out[i]=null;continue}
+    if(i===n-1){toplam+=tr;onceki=toplam/n;out[i]=onceki;continue}
+    onceki=(onceki*(n-1)+tr)/n;out[i]=onceki;
+  }
+  return out;
+}
+/* Pine ta.sma(volume,20) — ilk 19 barda na */
+function mbHacimSMA(m,n){
+  const out=new Array(m.length);let s=0;
+  for(let i=0;i<m.length;i++){
+    s+=m[i].hacim||0;
+    if(i>=n)s-=m[i-n].hacim||0;
+    out[i]=i>=n-1?s/n:null;
+  }
+  return out;
+}
+function ezEnerji(dur,rngH,atr){
+  if(!(rngH>0)||!(atr>0)||!(dur>0))return 0;
+  const comp=Math.min((atr/rngH)*50,40);
+  const tsc=Math.min(dur*2,35);
+  const mat=dur>=30?15:dur>=20?10:dur>=15?5:0;
+  const tight=rngH<atr*0.5?10:rngH<atr*0.75?5:0;
+  return Math.min(Math.max(comp+tsc+mat+tight,5),100);
+}
+function ezEvre(dur){return dur<10?"Forming":dur<25?"Growth":dur<50?"Mature":"Exhaustion"}
+/* _enz_gravity + _enz_touches + _enz_inst + _enz_direction + _enz_quality —
+   Pine'da hepsi tek bir "son bar" bloğunda çalışır, burada da öyle.
+   cBar: aktif zon için son bar, kırılmış zon için zonun bittiği bar. */
+function ezAgirOlc(m,avol,z,cBar){
+  const rngH=z.top-z.bottom,tol=rngH*0.1;
+  const lb=Math.min(cBar-z.startBar,500);
+  let sw=0,sv=0,tt=0,tb=0,ac=0,tv=0;
+  const av=avol[cBar];
+  for(let k=0;k<lb;k++){
+    const c=m[cBar-k];
+    const mp=(c.high+c.low+c.close)/3;
+    if(mp<=z.top&&mp>=z.bottom){sw+=mp*(c.hacim||0);sv+=(c.hacim||0)}
+    if(c.high>=z.top-tol&&c.high<=z.top+tol&&c.close<c.high-tol)tt++;
+    if(c.low>=z.bottom-tol&&c.low<=z.bottom+tol&&c.close>c.low+tol)tb++;
+    if(c.high<=z.top&&c.low>=z.bottom&&av!==null&&(c.hacim||0)>av*2){ac++;tv+=(c.hacim||0)}
+  }
+  z.gravityCenter=sv>0?sw/sv:(z.top+z.bottom)/2;
+  z.touchesTop=tt;z.touchesBottom=tb;
+  const ar=lb>0?ac/lb*100:0,vi=(av>0&&ac>0)?tv/(av*ac):0;
+  z.instFootprint=Math.min(ar*0.5+Math.min(vi*10,50),100);
+  const mid=(z.top+z.bottom)/2;
+  const gb=(z.gravityCenter-mid)/(rngH/2);
+  const tbv=(tt>0||tb>0)?(tb-tt)/Math.max(tt+tb,1):0;
+  const cb=gb*0.6+tbv*0.4;
+  z.direction=cb>0.1?"Bullish":cb<-0.1?"Bearish":"Neutral";
+  z.dirConfidence=Math.min(Math.abs(cb)*100+50,100);
+  z.breakoutQuality=ezKalite(z.energy,z.instFootprint,z.phase,z.dirConfidence);
+}
+function ezKalite(e,inst,ev,guv){
+  const ps=ev==="Forming"?20:ev==="Growth"?50:ev==="Mature"?80:60;
+  return Math.min((e||0)*0.3+(inst||0)*0.25+ps*0.25+(guv||0)*0.2,100);
+}
+function mbEnerjiMotor(m,minBars,atrMult){
+  const n=m.length;if(n<25)return null;
+  minBars=minBars||EZ_MINBARS;atrMult=atrMult||EZ_ATRMULT;
+  const atr=mbATR(m,14),avol=mbHacimSMA(m,20),son=n-1;
+  let zones=[],aktif=null,rHigh=null,rLow=null,rStart=0,barsIn=0;
+  for(let i=0;i<n;i++){
+    const a=atr[i],b=m[i];
+    let lkH=null,lkL=null;
+    if(i>=4){lkH=-Infinity;lkL=Infinity;
+      for(let k=i-4;k<=i;k++){if(m[k].high>lkH)lkH=m[k].high;if(m[k].low<lkL)lkL=m[k].low}}
+    const sikisma=(lkH!==null&&a!==null&&(lkH-lkL)<a*atrMult);
+    let kirUp=!1,kirDn=!1;
+    /* 1) kırılım — geçen barın aktif zonuna göre */
+    if(aktif&&aktif.isActive&&a!==null){
+      if(b.close>aktif.top){
+        kirUp=!0;aktif.isActive=!1;aktif.isBroken=!0;aktif.breakDir="Bullish";aktif.endBar=i;
+        const rsk=aktif.top-(aktif.bottom-a*0.5);
+        aktif.entryPrice=aktif.top;aktif.slPrice=aktif.bottom-a*0.5;
+        aktif.tp1Price=aktif.top+rsk;aktif.tp2Price=aktif.top+rsk*1.5;aktif.tp3Price=aktif.top+rsk*2;
+      }else if(b.close<aktif.bottom){
+        kirDn=!0;aktif.isActive=!1;aktif.isBroken=!0;aktif.breakDir="Bearish";aktif.endBar=i;
+        const rsk2=(aktif.top+a*0.5)-aktif.bottom;
+        aktif.entryPrice=aktif.bottom;aktif.slPrice=aktif.top+a*0.5;
+        aktif.tp1Price=aktif.bottom-rsk2;aktif.tp2Price=aktif.bottom-rsk2*1.5;aktif.tp3Price=aktif.bottom-rsk2*2;
+      }
+    }
+    /* 2) bant birikimi */
+    if(sikisma){
+      if(rHigh===null){rHigh=lkH;rLow=lkL;rStart=i-4;barsIn=5}
+      else if(b.high<=rHigh+a*0.1&&b.low>=rLow-a*0.1){
+        rHigh=Math.max(rHigh,b.high);rLow=Math.min(rLow,b.low);barsIn++;
+      }else{rHigh=null;rLow=null;barsIn=0}
+    }else{rHigh=null;rLow=null;barsIn=0}
+    /* 3) yeni zon — barsIn TAM minBars olduğu barda, bir kez */
+    if(barsIn===minBars&&rHigh!==null){
+      const z={startBar:rStart,endBar:i,top:rHigh,bottom:rLow,isActive:!0,isBroken:!1,
+        breakDir:"",touchesTop:0,touchesBottom:0,energy:null,phase:"",direction:"",
+        dirConfidence:null,breakoutQuality:null,gravityCenter:null,instFootprint:null,
+        entryPrice:null,slPrice:null,tp1Price:null,tp2Price:null,tp3Price:null};
+      if(aktif&&aktif.isActive)aktif.isActive=!1;
+      aktif=z;zones.push(z);while(zones.length>10)zones.shift();
+    }
+    /* 4) aktif zonu güncelle */
+    if(aktif&&aktif.isActive&&!kirUp&&!kirDn){
+      const dur=i-aktif.startBar,rngH=aktif.top-aktif.bottom,tol=rngH*0.1;
+      if(b.high<=aktif.top+tol&&b.low>=aktif.bottom-tol){
+        aktif.endBar=i;
+        aktif.energy=ezEnerji(dur,rngH,a);
+        aktif.phase=ezEvre(dur);
+        if(i===son)ezAgirOlc(m,avol,aktif,i);   /* Pine: yalnız last_bar_index */
+      }
+    }
+  }
+  /* ⚠️ PINE'DAN AYRILAN TEK NOKTA — bilerek:
+     Pine ağır ölçüleri yalnız AKTİF zon için ve yalnız son barda yapar;
+     zon kırıldıysa güç/kalite/kurumsal iz alanları boş (na) kalır. Bu,
+     "0B kırdı VE kalitesi ≥60" gibi bir süzgeci imkânsız kılıyordu.
+     Kırılmış zon için aynı hesaplar zonun KENDİ ömrü üzerinden (startBar →
+     endBar) yapılır. Aktif zon yolu bir satır bile değişmedi, dolayısıyla
+     TradingView'in gösterdiği hiçbir sayı bundan etkilenmez; yalnız orada
+     boş kalan yere sayı gelir. */
+  if(aktif&&!aktif.isActive&&aktif.isBroken&&aktif.breakoutQuality===null&&
+     aktif.endBar>aktif.startBar){
+    if(aktif.energy===null)aktif.energy=ezEnerji(aktif.endBar-aktif.startBar,
+      aktif.top-aktif.bottom,atr[aktif.endBar]);
+    if(!aktif.phase)aktif.phase=ezEvre(aktif.endBar-aktif.startBar);
+    ezAgirOlc(m,avol,aktif,aktif.endBar);
+  }
+  return{aktif:aktif,zones:zones,atr:atr[son]};
+}
+/* kütüphane:3420  export enz_scan — sembol başına skaler özet */
+const EZ_Y2=v=>(v===null||v===undefined||!isFinite(v))?null:Math.round(v*100)/100;
+const EZ_Y1=v=>(v===null||v===undefined||!isFinite(v))?null:Math.round(v*10)/10;
+function mbEnerjiTara(m){
+  const bos={ezAct:0,ezIns:0,ezAge:9999,ezTop:null,ezBot:null,ezEn:null,ezBq:null,
+             ezDir:0,ezMes:null,ezTp1:null,ezEvre:"",ezInst:null,ezUst:0};
+  let r=null;
+  try{r=mbEnerjiMotor(m,EZ_MINBARS,EZ_ATRMULT)}catch(_){return bos}
+  if(!r||!r.aktif)return bos;
+  const z=r.aktif,son=m.length-1,kap=m[son].close;
+  const o={ezAct:0,ezIns:0,ezAge:9999,ezTop:EZ_Y2(z.top),ezBot:EZ_Y2(z.bottom),
+           ezEn:EZ_Y1(z.energy),ezBq:EZ_Y1(z.breakoutQuality),
+           ezInst:EZ_Y1(z.instFootprint),
+           ezDir:z.direction==="Bullish"?1:z.direction==="Bearish"?-1:0,
+           /* 🐞 MESAFENİN YÖNÜ — Pine _mes'i mutlak değer verdiği için
+              "üst çizgiyi %2,8 GEÇTİ" ile "üst çizgiye %2,8 KALDI" aynı
+              sayıya düşüyordu; ekranda ikisi de "kaldı" gibi okunuyordu.
+              Sayı Pine ile aynı kalır (süzgeç bozulmasın), yönü ezUst söyler. */
+           ezUst:(kap>z.top?1:0),
+           ezMes:null,ezTp1:null,ezEvre:z.phase||""};
+  if(z.isActive){o.ezAct=1;if(kap<=z.top&&kap>=z.bottom)o.ezIns=1}
+  if(z.isBroken&&z.breakDir==="Bullish")o.ezAge=son-z.endBar;
+  if(z.tp1Price!==null&&isFinite(z.tp1Price))o.ezTp1=EZ_Y2(z.tp1Price);
+  else if(isFinite(r.atr))o.ezTp1=EZ_Y2(z.top+(z.top-(z.bottom-r.atr*0.5)));
+  if(z.top!==null&&kap>0)o.ezMes=EZ_Y2(Math.abs(z.top-kap)/kap*100);
+  return o;
+}
+
 /* ── 6.2:1787 f_mal_scan_motor + 6.2:1794 f_mal_boga_scan_motor +
       6.2:1736 tf_panel_func  →  hepsi tek geçişte ────────────────────── */
 function mbMotor(mumlar){
@@ -1455,7 +1644,19 @@ function mbMotor(mumlar){
      da 236'nın altına sarkmışsa daha derindedir. */
   const dip382=!!(dip&&isFinite(lv.s382)&&lv.close<lv.s382);
   const dip236=!!(dip&&isFinite(lv.s236)&&lv.close<lv.s236);
-  return{bar:m.length,mt:mt,md:md,dip382:dip382,dip236:dip236,
+  /* MERDİVENDEKİ KONUM — fiyat 0.0 çizgisinden kaç "birim" yukarıda.
+     Birim, Pine'daki _diff ile aynı: (786 çizgisi − 0.0 çizgisi) / 0.786.
+     Bölge taraması bu tek sayıdan türetilir; 0.618 = BOĞA, 1.0 = KARAR
+     YERİ, 1.618 = DİRENÇ, 2.618 = GÜÇLÜ D/D çizgileri. */
+  let oran=null;
+  if(lv&&isFinite(lv.stop)&&isFinite(lv.s786)&&isFinite(lv.close)&&lv.s786!==lv.stop)
+    oran=Math.round(((lv.close-lv.stop)/((lv.s786-lv.stop)/0.786))*1000)/1000;
+  /* ⚛ enerji kırılımı — Pine enz_scan ile birebir */
+  const ez=mbEnerjiTara(m);
+  return{bar:m.length,mt:mt,md:md,dip382:dip382,dip236:dip236,oran:oran,
+    ezAct:ez.ezAct,ezIns:ez.ezIns,ezAge:ez.ezAge,ezTop:ez.ezTop,ezBot:ez.ezBot,
+    ezEn:ez.ezEn,ezBq:ez.ezBq,ezInst:ez.ezInst,ezUst:ez.ezUst,
+    ezDir:ez.ezDir,ezMes:ez.ezMes,ezTp1:ez.ezTp1,ezEvre:ez.ezEvre,
     top:top_yas,dag:dag_yas,topHam:top_raw,dagHam:dag_raw,
     boga:boga,ayi:ayi,bogaGec:boga_gec,ayiGec:ayi_gec,
     rej:rej,rejYas:rej_yas,sonYas:son_yas,
@@ -1565,35 +1766,860 @@ async function mbTekHisse(kod){
    (bkz. tamEvren). Böylece 121 sınırı iki tarafta birden kalktı. */
 async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
 
+/* ═══════════════════ 🧪 DİP BACKTEST — yalnız yönetici görür ═══════════════
+   Soru: "dip / derin dip (382 altı) / en dip (236 altı)" sinyalleri fiilen
+   ne kadar işe yarıyor? Ve asıl soru: BİRDEN ÇOK ZAMAN DİLİMİ AYNI ANDA
+   dipteyken başarı yükseliyor mu — yükseliyorsa ne kadar?
+
+   HEDEFLER (571 fibo merdiveninden, TradingView'deki etiketlerin aynısı):
+     TP1 = GÜÇLÜ D/D        → 2.618 uzantısı
+     TP2 = ÇOK GÜÇLÜ D/D    → 3.618 uzantısı
+     stop = 0.0 çizgisi ("DİKKAT AYI") altına KAPANIŞ
+   Doyum noktası (4.236) hedef olarak kullanılmaz — çok uzakta kalıyor,
+   ölçümü anlamsızlaştırıyordu. Yine de raporda mesafesi gösterilir.
+
+   Kapanışla değerlendirilir (fitil sayılmaz). Dip formülü mbMotor ile
+   BİREBİR AYNI — tek fark: mbMotor yalnız son barı üretir, burada her bar. */
+const DBT_UFUK=200;                 /* TP'ye ulaşma için ileri taranacak azami bar */
+/* ⚡ HIZ AYARLARI — ölçüm: sürenin %93'ü Yahoo çekimi, %7'si hesap.
+   Yani hız = eşzamanlı çekim sayısı. Bir adımda 24 hisse × en çok 3 ayrı
+   çekim = 72 alt-istek; Cloudflare ücretli planın 1000 sınırının çok
+   altında, ücretsiz planın 50 sınırını aşar (o durumda DBT_ADIM_BOYUT'u
+   12'ye çek). */
+const DBT_ES=10;                    /* aynı anda kaç hisse çekilsin */
+const DBT_SEVIYE=["dip","dip382","dip236"];
+const DBT_SEVIYE_AD={dip:"dip bölgesi",dip382:"derin dip",dip236:"en dip"};
+/* Fibo merdiveni — Pine'daki _lvls/_lbl_t dizileriyle aynı oranlar */
+const DBT_TP1_ORAN=2.618, DBT_TP2_ORAN=3.618, DBT_DOYUM_ORAN=4.236;
+/* STOP ÇİZGİSİ — 0.0'ın kaç birim ALTI. Merdivende 0.0'ın altındaki
+   çizgiler de "D/D" etiketli: -0.236 / -0.382 / -0.618 / -0.786.
+   ÖLÇÜLDÜ (30 hisse · 4 dilim · 3069 giriş, TP1 sabit):
+     0.0    → ort +0.5% · kazanan %23 · stop %75
+     -0.236 → ort +0.9% · kazanan %30 · stop %65
+     -0.382 → ort +0.9% · kazanan %35 · stop %59
+     -0.618 → ort +1.3% · kazanan %40 · stop %50
+     -0.786 → ort +1.7% · kazanan %44 · stop %43
+   0.0 çizgisi normal dalgalanmanın İÇİNDE kalıyor, giriş daha nefes
+   almadan stop oluyordu. -0.382 orta yol: kazanan oranı %23'ten %35'e
+   çıkıyor, risk hâlâ tanımlı. Değeri değiştirip yeniden koşabilirsin. */
+const DBT_STOP_ORAN=0.382;
+/* Zaman dilimi büyüklük sırası — "üst dilim uyumu" bunu kullanır */
+const DBT_TF_SIRA={"5DK":1,"15DK":2,"1SA":3,"4SA":4,"1G":5,"1HAF":6,"1AY":7};
+
+function dbtSeriUret(mumlar){
+  if(!mumlar||mumlar.length<30)return null;
+  const m=mumlar.slice(-MB_PENCERE);
+  const uzun=Math.floor(MB_DEPTH/2);
+  const lv=mb571Seri(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV);
+  const out=new Array(m.length);
+  for(let i=0;i<m.length;i++){
+    const x=lv[i];
+    if(!x||i<uzun||!isFinite(x.stop)||!isFinite(x.s236)||!isFinite(x.s382)||
+       !isFinite(x.s786)||!isFinite(x.close)||!isFinite(x.doyum)){out[i]=null;continue}
+    const dip=x.stop<x.close&&x.close<x.s786&&x.doyum>x.close;
+    /* Merdivenin birim adımı: 0.0 ile 0.786 arasındaki mesafeden türetilir
+       (Pine'da _diff = (s786 - s0)/0.786 ile birebir aynı). */
+    const birim=(x.s786-x.stop)/0.786;
+    out[i]={time:m[i].time,close:x.close,stop:x.stop,s236:x.s236,s382:x.s382,s786:x.s786,
+      doyum:x.doyum,
+      birim:birim,
+      tp1:x.stop+birim*DBT_TP1_ORAN,      /* GÜÇLÜ D/D */
+      tp2:x.stop+birim*DBT_TP2_ORAN,      /* ÇOK GÜÇLÜ D/D */
+      dip:!!dip,dip382:!!(dip&&x.close<x.s382),dip236:!!(dip&&x.close<x.s236)};
+  }
+  return out;
+}
+/* Bir barın dip derinliği: 0 yok · 1 dip · 2 derin · 3 en dip */
+const dbtDerinlik=b=>!b?0:(b.dip236?3:b.dip382?2:b.dip?1:0);
+
+/* Her seviye için false→true geçişi = "yeni giriş". Aynı dip bölgesinde
+   kaldığı sürece tekrar sayılmaz — yoksa aynı sinyal onlarca kez girer. */
+function dbtGirisleriBul(seri,seviyeler){
+  const cikti=[];
+  for(const sv of (seviyeler&&seviyeler.length?seviyeler:DBT_SEVIYE)){
+    let onceki=!1;
+    for(let i=0;i<seri.length;i++){
+      const b=seri[i],su=!!(b&&b[sv]);
+      if(su&&!onceki)cikti.push({i:i,seviye:sv,time:b.time});
+      onceki=su;
+    }
+  }
+  return cikti;
+}
+/* Bir girişin ileriye dönük sonucu.
+   GERÇEKLEŞEN GETİRİ tek bir kurala göre hesaplanır — raporun can damarı:
+     · önce TP1'e değdiyse   → TP1'de çık
+     · önce stop'a düştüyse  → stop barında çık
+     · ikisi de olmadıysa    → ufuk sonunda çık
+   Böylece her giriş TEK bir sayıya iner, ortalaması da "bu kurulumu her
+   seferinde alsaydım ortalama ne kazanırdım" sorusunun cevabı olur. */
+function dbtSonucOlc(seri,girisIdx){
+  const b0=seri[girisIdx];if(!b0)return null;
+  const giris=b0.close,tp1=b0.tp1,tp2=b0.tp2;
+  const stopSev=b0.stop-b0.birim*DBT_STOP_ORAN;   /* 0.0'ın DBT_STOP_ORAN kadar altı */
+  let tp1Bar=null,tp2Bar=null,stopBar=null,enYuksek=0;
+  let gerceklesen=null,cikisTip=null,cikisBar=null;
+  const son=Math.min(seri.length-1,girisIdx+DBT_UFUK);
+  for(let j=girisIdx+1;j<=son;j++){
+    const b=seri[j];if(!b||!isFinite(b.close))continue;
+    const getiri=100*(b.close/giris-1);
+    if(getiri>enYuksek)enYuksek=getiri;
+    if(tp1Bar===null&&b.close>=tp1){tp1Bar=j-girisIdx;
+      if(gerceklesen===null){gerceklesen=getiri;cikisTip="tp1";cikisBar=tp1Bar}}
+    if(tp2Bar===null&&b.close>=tp2)tp2Bar=j-girisIdx;
+    if(stopBar===null&&b.close<stopSev){stopBar=j-girisIdx;
+      if(gerceklesen===null){gerceklesen=getiri;cikisTip="stop";cikisBar=stopBar}}
+    if(gerceklesen!==null&&tp2Bar!==null)break;
+  }
+  const ufukGetiri=son>girisIdx&&seri[son]?100*(seri[son].close/giris-1):0;
+  if(gerceklesen===null){gerceklesen=ufukGetiri;cikisTip="ufuk";cikisBar=son-girisIdx}
+  return{giris:giris,tp1:tp1,tp2:tp2,stop:stopSev,
+    tp1Uzak:100*(tp1/giris-1),tp2Uzak:100*(tp2/giris-1),
+    doyumUzak:100*(b0.doyum/giris-1),stopUzak:100*(stopSev/giris-1),
+    tp1Bar:tp1Bar,tp2Bar:tp2Bar,stopBar:stopBar,
+    gerceklesen:gerceklesen,cikisTip:cikisTip,cikisBar:cikisBar,
+    enYuksekGetiri:enYuksek,ufukGetiri:ufukGetiri};
+}
+/* Havuz × seçili dilimler: her hisse için her dilimin serisini çıkarır,
+   girişleri bulur, sonuçları ölçer ve GİRİŞ ANINDA diğer seçili
+   dilimlerin dip durumunu ("uyum") kaydeder.
+
+   ⚡ İki hız düzeltmesi:
+   1) Aynı hissenin farklı dilimleri AYNI ANDA çekilir; aynı interval+range
+      birden fazla dilimde geçiyorsa (1SA ve 4SA ikisi de 60m) tek çekilir.
+   2) Uyum aramasında her giriş için diğer serinin başından taranıyordu
+      (giriş sayısı × 700 bar). Girişler zaman sırasında olduğu için artık
+      dilim başına tek bir İMLEÇ ileri kaydırılıyor — toplam maliyet
+      giriş sayısı + bar sayısı. */
+async function dbtKosu(kodlar,dilimler,seviyeler){
+  const tumSonuclar=[],semboller=[];
+  const ES=DBT_ES;let sira=0;
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      const kod=kodlar[sira++];
+      try{
+        const ckListe=[],ckGorulen={};
+        for(const t of dilimler){
+          const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
+          if(!ckGorulen[ck]){ckGorulen[ck]=!0;ckListe.push({ck:ck,interval:tf.interval,range:tf.range})}
+        }
+        const onbellek={};
+        await Promise.all(ckListe.map(async x=>{
+          const r=await yfMumlar(kod,x.interval,x.range);
+          onbellek[x.ck]=(r&&r.veri)||[];
+        }));
+        const serilerTf={};
+        for(const t of dilimler){
+          const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
+          const ham=onbellek[ck]||[];
+          if(!ham.length){serilerTf[t]=null;continue}
+          const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
+          const m=tf.grupSaat?mbGrupla(temiz,tf.grupSaat):temiz;
+          serilerTf[t]=dbtSeriUret(m);
+        }
+        let hisseGiris=0;
+        for(const t of dilimler){
+          const seri=serilerTf[t];if(!seri)continue;
+          const girisler=dbtGirisleriBul(seri,seviyeler);
+          /* Girişler seviye seviye üretildiği için zamanı sıfırlanıyor;
+             imleç tekniği için tek sıraya dizip zamana göre sıralıyoruz. */
+          girisler.sort((a,b)=>a.time-b.time);
+          const imlec={};for(const t2 of dilimler)imlec[t2]=-1;
+          for(const gi of girisler){
+            const sonuc=dbtSonucOlc(seri,gi.i);if(!sonuc)continue;
+            let uyumSayisi=0,ustUyum=0,derinUyum=0;const uyumDetay=[];
+            for(const t2 of dilimler){
+              if(t2===t)continue;
+              const seri2=serilerTf[t2];
+              let k=imlec[t2];
+              if(seri2){
+                while(k+1<seri2.length&&seri2[k+1]&&seri2[k+1].time<=gi.time)k++;
+                /* null barları atlarken imleci bozma: yalnız ilerlet */
+                while(k+1<seri2.length&&!seri2[k+1])k++;
+                imlec[t2]=k;
+              }
+              const b2=(seri2&&k>=0)?seri2[k]:null;
+              const durum=dbtDerinlik(b2);
+              if(durum>0){
+                uyumSayisi++;
+                if((DBT_TF_SIRA[t2]||0)>(DBT_TF_SIRA[t]||0))ustUyum++;
+                if(durum>=2)derinUyum++;
+              }
+              uyumDetay.push({tf:t2,durum:durum});
+            }
+            tumSonuclar.push(Object.assign({kod:kod,tf:t,seviye:gi.seviye,time:gi.time,
+              uyumSayisi:uyumSayisi,ustUyum:ustUyum,derinUyum:derinUyum,
+              uyumDetay:uyumDetay},sonuc));
+            hisseGiris++;
+          }
+        }
+        semboller.push({kod:kod,giris:hisseGiris});
+      }catch(e){semboller.push({kod:kod,hata:String((e&&e.message)||e)})}
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(ES,kodlar.length)},isci));
+  return{sonuclar:tumSonuclar,semboller:semboller};
+}
+/* Rapor özeti. Tek karar sayısı: ORTALAMA GERÇEKLEŞEN GETİRİ.
+   "Bu kurulumu her gördüğümde alsaydım, ortalama ne kazanırdım?"
+   TP1 isabet oranı tek başına yanıltıcı (isabet yüksek ama stoplar büyükse
+   sistem yine zarar ettirir), o yüzden sıralama hep bu sayıya göre. */
+function dbtGrupOlc(liste){
+  const n=liste.length;if(!n)return null;
+  const ort=a=>a.length?a.reduce((s,v)=>s+v,0)/a.length:null;
+  const tp1=liste.filter(x=>x.tp1Bar!==null);
+  const tp2=liste.filter(x=>x.tp2Bar!==null);
+  const stop=liste.filter(x=>x.cikisTip==="stop");
+  const kazanan=liste.filter(x=>x.gerceklesen>0);
+  return{n:n,
+    tp1Oran:100*tp1.length/n, tp2Oran:100*tp2.length/n, stopOran:100*stop.length/n,
+    basariOran:100*kazanan.length/n,
+    ortGetiri:ort(liste.map(x=>x.gerceklesen)),          /* ← ana sayı */
+    ortBar:ort(liste.map(x=>x.cikisBar)),
+    tp1OrtBar:ort(tp1.map(x=>x.tp1Bar)),
+    ortTp1Uzak:ort(liste.map(x=>x.tp1Uzak)),
+    ortTp2Uzak:ort(liste.map(x=>x.tp2Uzak)),
+    ortDoyumUzak:ort(liste.map(x=>x.doyumUzak)),
+    ortStopUzak:ort(liste.map(x=>x.stopUzak)),
+    ortEnYuksek:ort(liste.map(x=>x.enYuksekGetiri))};
+}
+const DBT_ASGARI=25;   /* bu sayının altındaki gruplar "az örnek" sayılır */
+
+function dbtOzetle(sonuclar){
+  const grupla=(anahtarFn)=>{
+    const g={};for(const x of sonuclar){const k=anahtarFn(x);if(k===null)continue;(g[k]=g[k]||[]).push(x)}
+    return g;
+  };
+  /* 1) dilim × seviye */
+  const g1=grupla(x=>x.tf+"|"+x.seviye);
+  const temel=Object.keys(g1).map(k=>{
+    const [tf,seviye]=k.split("|");
+    return Object.assign({tf:tf,seviye:seviye},dbtGrupOlc(g1[k]));
+  }).sort((a,b)=>b.ortGetiri-a.ortGetiri);
+  /* 2) UYUM — kaç dilim aynı anda dipte (asıl soru) */
+  const g2=grupla(x=>String(x.uyumSayisi));
+  const uyum=Object.keys(g2).map(k=>Object.assign({uyum:Number(k)},dbtGrupOlc(g2[k])))
+    .sort((a,b)=>a.uyum-b.uyum);
+  /* 3) ÜST DİLİM UYUMU — girişin dilimindEN BÜYÜK dilimler de dipte mi */
+  const g3=grupla(x=>String(x.ustUyum));
+  const ust=Object.keys(g3).map(k=>Object.assign({ust:Number(k)},dbtGrupOlc(g3[k])))
+    .sort((a,b)=>a.ust-b.ust);
+  /* 4) tam kombinasyon: dilim × seviye × uyum — "en iyi kurulum" buradan */
+  const g4=grupla(x=>x.tf+"|"+x.seviye+"|"+x.uyumSayisi);
+  const kombo=Object.keys(g4).map(k=>{
+    const [tf,seviye,u]=k.split("|");
+    return Object.assign({tf:tf,seviye:seviye,uyum:Number(u)},dbtGrupOlc(g4[k]));
+  }).filter(r=>r.n>=DBT_ASGARI).sort((a,b)=>b.ortGetiri-a.ortGetiri);
+  /* 5) genel */
+  const genel=dbtGrupOlc(sonuclar);
+  /* 6) uyumun etkisi tek cümlede: 0 uyum vs en yüksek uyum */
+  let uyumEtki=null;
+  const u0=uyum.filter(r=>r.uyum===0)[0];
+  const uMax=uyum.filter(r=>r.n>=DBT_ASGARI).slice(-1)[0];
+  if(u0&&uMax&&uMax.uyum>0)
+    uyumEtki={dusuk:u0,yuksek:uMax,fark:uMax.ortGetiri-u0.ortGetiri,
+      katsayi:u0.ortGetiri!==0?uMax.ortGetiri/Math.abs(u0.ortGetiri):null};
+  return{genel:genel,temel:temel,uyum:uyum,ust:ust,kombo:kombo,uyumEtki:uyumEtki,
+    enIyi:kombo[0]||null};
+}
+const DBT_STIL='<style>body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.5 system-ui,-apple-system,sans-serif;padding:16px 14px 60px}h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:22px 0 8px;color:#8b949e}.a{color:#8b949e;font-size:13px}table{border-collapse:collapse;width:100%;margin-top:6px;font-size:13px}th,td{padding:6px 8px;text-align:right;border-bottom:1px solid #21262d;white-space:nowrap}th{color:#8b949e;font-weight:600;text-align:right}td:first-child,th:first-child{text-align:left}.iy{color:#3fb950}.kt{color:#f85149}input,textarea,button{background:#161b22;border:1px solid #272e37;color:#e6edf3;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box}textarea{width:100%;min-height:70px}button{background:#388bfd;border:none;font-weight:700;cursor:pointer;margin-top:10px}label{display:block;margin-top:12px;font-size:13px;color:#8b949e}.wrap{overflow-x:auto}.kur{background:#22171a;border:1px solid #6b2b2b;border-radius:12px;padding:13px;margin-top:12px}</style>';
+const DBT_ADIM_BOYUT=24;              /* her "adım" isteğinde kaç hisse (10→24: adım sayısı yarıdan aza indi) */
+async function dbtIsOku(A){
+  if(!A.VERI)return null;
+  try{const j=await A.VERI.get("dbtIs");return j?JSON.parse(j):null}catch(_){return null}
+}
+async function dbtIsYaz(A,job){
+  if(!A.VERI)return;
+  try{await A.VERI.put("dbtIs",JSON.stringify(job),{expirationTtl:86400})}catch(_){}
+}
+function dbtIlerlemeHTML(anahtar){
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest — tüm hisseler</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🧪 Dip Backtest — tüm hisseler taranıyor</h1>'+
+  '<div class="kur" style="border-color:#272e37;background:#161b22"><div id="ilerYazi" class="a">başlıyor…</div>'+
+  '<div style="background:#0d1117;border:1px solid #272e37;border-radius:8px;height:14px;margin-top:8px;overflow:hidden">'+
+  '<div id="ilerBar" style="background:#388bfd;height:100%;width:0%"></div></div></div>'+
+  '<div class="a" style="margin-top:10px">Bu sayfayı açık bırak — bitince otomatik olarak sonuç raporuna geçecek. Sekmeyi kapatırsan iş KV üzerinde kalmaya devam eder, /dipbacktest/rapor adresinden sonradan bakabilirsin.</div>'+
+  '<script>'+
+  'var key='+JSON.stringify(anahtar||'')+';'+
+  'function adim(){fetch("/dipbacktest/adim?key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(v){'+
+  'if(!v||!v.ok){document.getElementById("ilerYazi").textContent="hata — sayfayı yenile";return}'+
+  'var pct=v.toplam?Math.round(100*v.tamam/v.toplam):0;'+
+  'document.getElementById("ilerBar").style.width=pct+"%";'+
+  'document.getElementById("ilerYazi").textContent=v.tamam+" / "+v.toplam+" hisse tarandı ("+pct+"%)"+(v.toplamGiris?" · "+v.toplamGiris+" giriş bulundu":"");'+
+  'if(v.tamamlandi){location.href="/dipbacktest/rapor?key="+encodeURIComponent(key)}else{setTimeout(adim,250)}'+
+  '}).catch(function(){setTimeout(adim,2000)})}'+
+  'adim();'+
+  '</script></body></html>';
+}
+
+function dbtFormHTML(anahtar,kod,tf,is){
+  const seviyeKutu=(deger,etiket)=>'<label style="display:inline-flex;align-items:center;gap:6px;margin:6px 12px 0 0;font-size:13px;color:#e6edf3"><input type="checkbox" name="sv" value="'+deger+'" checked style="width:auto">'+etiket+'</label>';
+  let devamKutu='';
+  if(is&&!is.tamamlandi&&is.toplam)
+    devamKutu='<div class="kur" style="border-color:#1f6feb;background:#0d1b2e"><b>⏳ Sürmekte olan tam-havuz taraması var</b><div class="a" style="margin-top:4px">'+is.tamam+' / '+is.toplam+' hisse tarandı.</div>'+
+      '<a class="a" style="color:#388bfd;display:inline-block;margin-top:6px" href="/dipbacktest/rapor?key='+encodeURIComponent(anahtar||'')+'">→ ilerlemeyi / şu ana kadarki sonucu aç</a></div>';
+  else if(is&&is.tamamlandi)
+    devamKutu='<div class="a" style="margin-top:10px">Son tam-havuz taraması bitti (' +is.tamam+' hisse). <a href="/dipbacktest/rapor?key='+encodeURIComponent(anahtar||'')+'" style="color:#388bfd">sonucu aç</a></div>';
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🧪 Dip Backtest</h1><div class="a">571 sisteminin dip / derin dip (382 altı) / en dip (236 altı) sinyallerini geçmişe dönük ölçer. Hedefler fibo merdiveninden: <b>TP1 = GÜÇLÜ D/D (2.618)</b>, <b>TP2 = ÇOK GÜÇLÜ D/D (3.618)</b>. Doyum noktası (4.236) hedef olarak kullanılmaz — çok uzakta kalıyor. Bu sayfayı yalnız sen görebiliyorsun.</div>'+
+  devamKutu+
+  '<form method="get" action="/dipbacktest">'+
+  '<input type="hidden" name="key" value="'+(anahtar||'').replace(/"/g,'')+'">'+
+  '<label>Dip modelleri</label>'+
+  seviyeKutu('dip','⬇️ Dip bölgesi')+seviyeKutu('dip382','⬇️⬇️ Derin (382 altı)')+seviyeKutu('dip236','⬇️⬇️⬇️ En dip (236 altı)')+
+  '<label>Zaman dilimleri (virgülle)</label><input name="tf" value="'+(tf||'15DK,1SA,4SA,1G')+'" style="width:100%">'+
+  '<label style="display:flex;align-items:center;gap:8px;margin-top:14px"><input type="checkbox" name="evren" value="1" style="width:auto">🌍 <b>Sistemde kayıtlı tüm hisseler</b> (430+, havuzun tamamı — birkaç dakika sürer, arka planda parça parça taranır)</label>'+
+  '<label>Hisse kodları (yukarıdaki kutu işaretliyse bu alan yok sayılır; boş bırakırsan havuzdan ilk 25 alınır, virgülle ayır)</label>'+
+  '<textarea name="kod" placeholder="THYAO, ASELS, GARAN...">'+(kod||'')+'</textarea>'+
+  '<input type="hidden" name="git" value="1"><button type="submit">▶ Çalıştır</button></form>'+
+  '<div class="a" style="margin-top:10px">"Tüm hisseler" işaretli değilse: Cloudflare alt-istek bütçesi yüzünden tek istekte azami 40 hisse × seçilen dilim taranır.</div>'+
+  '</body></html>';
+}
+function dbtSayi(v,ondalik){return v===null||v===undefined||!isFinite(v)?'—':v.toFixed(ondalik===undefined?1:ondalik)}
+function dbtYuzde(v,ond){return v===null||v===undefined||!isFinite(v)?'—':(v>0?'+':'')+v.toFixed(ond===undefined?1:ond)+'%'}
+function dbtRenk(v,esik){return v===null||!isFinite(v)?'':(v>=(esik===undefined?0:esik)?' class="iy"':' class="kt"')}
+function dbtSvAd(s){return DBT_SEVIYE_AD[s]||s}
+/* Ortalama getiriye göre 0-100 arası bir çubuk — göz tek bakışta sıralasın */
+function dbtCubuk(v,enBuyuk){
+  const g=Math.max(0,Math.min(1,(v||0)/(enBuyuk||1)));
+  return '<div style="background:#21262d;border-radius:3px;height:6px;width:70px;display:inline-block;vertical-align:middle;overflow:hidden">'+
+    '<div style="background:'+(v>=0?'#3fb950':'#f85149')+';height:100%;width:'+(g*100).toFixed(0)+'%"></div></div>';
+}
+function dbtRaporHTML(o){
+  const z=o.ozet||{};
+  const g=z.genel||{};
+  /* ── başlık kartı: ne ölçüldü ── */
+  const aciklama='<div class="kur" style="border-color:#272e37;background:#161b22">'+
+    '<b>Ne ölçüldü?</b><div class="a" style="margin-top:5px;line-height:1.7">'+
+    '<b>Giriş</b> — fiyatın dip bölgesine <i>ilk girdiği</i> bar (kapanış). Bölgede kaldığı sürece tekrar sayılmaz.<br>'+
+    '<b>TP1</b> — GÜÇLÜ D/D çizgisi (fibo 2.618) · <b>TP2</b> — ÇOK GÜÇLÜ D/D çizgisi (3.618)<br>'+
+    '<b>Stop</b> — 0.0 çizgisinin <b>'+DBT_STOP_ORAN+' birim altına</b> kapanış (0.0 = "DİKKAT AYI"). '+
+    'Tam 0.0 çizgisi normal dalgalanmanın içinde kaldığı için giriş nefes almadan stop oluyordu.<br>'+
+    '<b>Gerçekleşen getiri</b> — önce TP1 geldiyse orada, önce stop geldiyse orada, hiçbiri gelmediyse '+DBT_UFUK+'. barda çıkılmış sayılır. Tablolardaki <b>ort. getiri</b> bunun ortalamasıdır: '+
+    '<i>"bu kurulumu her gördüğümde alsaydım ortalama ne kazanırdım"</i>.</div></div>';
+  /* ── en iyi kurulum ── */
+  let enIyiHtml='';
+  if(z.enIyi){
+    const e=z.enIyi;
+    enIyiHtml='<div class="kur" style="border-color:#238636;background:#0f2016">'+
+      '<div style="font-size:16px;font-weight:700;margin-bottom:4px">⭐ En iyi kurulum</div>'+
+      '<div style="font-size:15px"><b>'+e.tf+'</b> · '+dbtSvAd(e.seviye)+' · <b>'+e.uyum+' dilim uyumlu</b></div>'+
+      '<div class="a" style="margin-top:6px;line-height:1.8">'+
+      e.n+' giriş · ortalama <b class="iy">'+dbtYuzde(e.ortGetiri)+'</b> · '+
+      'kazançla biten %'+dbtSayi(e.basariOran,0)+'<br>'+
+      'TP1 isabet %'+dbtSayi(e.tp1Oran,0)+' (ort. '+dbtSayi(e.tp1OrtBar,0)+' bar) · '+
+      'stop %'+dbtSayi(e.stopOran,0)+' · ort. çıkış '+dbtSayi(e.ortBar,0)+' bar</div></div>';
+  }
+  /* ── uyum etkisi: tek cümle ── */
+  let etkiHtml='';
+  if(z.uyumEtki){
+    const u=z.uyumEtki;
+    etkiHtml='<div class="kur" style="border-color:#1f6feb;background:#0d1b2e">'+
+      '<b>🔗 Uyumun etkisi</b><div class="a" style="margin-top:5px;line-height:1.7">'+
+      'Hiçbir dilim uyumlu değilken ortalama <b'+dbtRenk(u.dusuk.ortGetiri)+'>'+dbtYuzde(u.dusuk.ortGetiri)+'</b> ('+u.dusuk.n+' giriş)<br>'+
+      '<b>'+u.yuksek.uyum+' dilim</b> aynı anda dipteyken ortalama <b'+dbtRenk(u.yuksek.ortGetiri)+'>'+dbtYuzde(u.yuksek.ortGetiri)+'</b> ('+u.yuksek.n+' giriş)<br>'+
+      '<b>Fark: '+dbtYuzde(u.fark)+'</b></div></div>';
+  }
+  /* ── uyum tablosu ── */
+  const uyumEn=Math.max(...(z.uyum||[]).map(r=>r.ortGetiri||0),0.01);
+  const uyumHtml=(z.uyum||[]).map(r=>
+    '<tr><td><b>'+r.uyum+' dilim</b></td><td>'+r.n+'</td>'+
+    '<td'+dbtRenk(r.ortGetiri)+'><b>'+dbtYuzde(r.ortGetiri)+'</b> '+dbtCubuk(r.ortGetiri,uyumEn)+'</td>'+
+    '<td>%'+dbtSayi(r.basariOran,0)+'</td><td>%'+dbtSayi(r.tp1Oran,0)+'</td>'+
+    '<td>%'+dbtSayi(r.stopOran,0)+'</td><td>'+dbtSayi(r.ortBar,0)+'</td>'+
+    (r.n<DBT_ASGARI?'<td class="a">az örnek</td>':'<td></td>')+'</tr>').join('');
+  /* ── üst dilim uyumu ── */
+  const ustHtml=(z.ust||[]).map(r=>
+    '<tr><td><b>'+r.ust+' üst dilim</b></td><td>'+r.n+'</td>'+
+    '<td'+dbtRenk(r.ortGetiri)+'><b>'+dbtYuzde(r.ortGetiri)+'</b></td>'+
+    '<td>%'+dbtSayi(r.basariOran,0)+'</td><td>%'+dbtSayi(r.tp1Oran,0)+'</td>'+
+    '<td>%'+dbtSayi(r.stopOran,0)+'</td>'+
+    (r.n<DBT_ASGARI?'<td class="a">az örnek</td>':'<td></td>')+'</tr>').join('');
+  /* ── kombinasyon sıralaması (ilk 20) ── */
+  const komboEn=Math.max(...(z.kombo||[]).map(r=>r.ortGetiri||0),0.01);
+  const komboHtml=(z.kombo||[]).slice(0,20).map((r,i)=>
+    '<tr><td>'+(i+1)+'. <b>'+r.tf+'</b> · '+dbtSvAd(r.seviye)+' · uyum '+r.uyum+'</td>'+
+    '<td>'+r.n+'</td><td'+dbtRenk(r.ortGetiri)+'><b>'+dbtYuzde(r.ortGetiri)+'</b> '+dbtCubuk(r.ortGetiri,komboEn)+'</td>'+
+    '<td>%'+dbtSayi(r.basariOran,0)+'</td><td>%'+dbtSayi(r.tp1Oran,0)+'</td>'+
+    '<td>%'+dbtSayi(r.stopOran,0)+'</td><td>'+dbtSayi(r.ortBar,0)+'</td></tr>').join('');
+  /* ── dilim × seviye ── */
+  const temelHtml=(z.temel||[]).map(r=>
+    '<tr><td><b>'+r.tf+'</b> · '+dbtSvAd(r.seviye)+'</td><td>'+r.n+'</td>'+
+    '<td'+dbtRenk(r.ortGetiri)+'><b>'+dbtYuzde(r.ortGetiri)+'</b></td>'+
+    '<td>%'+dbtSayi(r.basariOran,0)+'</td><td>%'+dbtSayi(r.tp1Oran,0)+'</td>'+
+    '<td>%'+dbtSayi(r.stopOran,0)+'</td><td>'+dbtYuzde(r.ortTp1Uzak,0)+'</td>'+
+    '<td>'+dbtYuzde(r.ortStopUzak,0)+'</td><td>'+dbtYuzde(r.ortDoyumUzak,0)+'</td></tr>').join('');
+  const semHtml=(o.semboller||[]).filter(s=>s.hata).map(s=>s.kod).join(', ');
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dip Backtest sonuçları</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🧪 Dip Backtest sonuçları</h1>'+
+  '<div class="a">'+o.kodlar.length+' hisse · '+o.dilimler.join(' · ')+' · <b>'+o.toplamGiris+'</b> giriş · '+o.sure+' sn</div>'+
+  (g.n?'<div class="a" style="margin-top:3px">Genel ortalama: <b'+dbtRenk(g.ortGetiri)+'>'+dbtYuzde(g.ortGetiri)+'</b>'+
+      ' · kazançla biten %'+dbtSayi(g.basariOran,0)+' · TP1 %'+dbtSayi(g.tp1Oran,0)+' · stop %'+dbtSayi(g.stopOran,0)+'</div>':'')+
+  enIyiHtml+etkiHtml+
+  '<h2>🔗 Kaç dilim aynı anda dipteydi?</h2>'+
+  '<div class="a">Asıl soru bu: uyum arttıkça sonuç düzeliyor mu? Satırlar aşağı indikçe getiri yükseliyorsa uyum işe yarıyor demektir.</div>'+
+  '<div class="wrap"><table><tr><th>uyum</th><th>giriş</th><th>ort. getiri</th><th>kazanan</th><th>TP1</th><th>stop</th><th>ort. bar</th><th></th></tr>'+uyumHtml+'</table></div>'+
+  '<h2>⬆️ Üst dilimler de dipte miydi?</h2>'+
+  '<div class="a">Girişin diliminden BÜYÜK kaç dilim aynı anda dipteydi (ör. 1SA girişinde 4SA ve 1G).</div>'+
+  '<div class="wrap"><table><tr><th>üst uyum</th><th>giriş</th><th>ort. getiri</th><th>kazanan</th><th>TP1</th><th>stop</th><th></th></tr>'+ustHtml+'</table></div>'+
+  '<h2>🏆 En iyi 20 kurulum</h2>'+
+  '<div class="a">dilim × dip derinliği × uyum — en az '+DBT_ASGARI+' giriş olanlar, ortalama getiriye göre.</div>'+
+  '<div class="wrap"><table><tr><th>kurulum</th><th>giriş</th><th>ort. getiri</th><th>kazanan</th><th>TP1</th><th>stop</th><th>ort. bar</th></tr>'+komboHtml+'</table></div>'+
+  '<h2>📋 Dilim × dip derinliği</h2>'+
+  '<div class="wrap"><table><tr><th>kurulum</th><th>giriş</th><th>ort. getiri</th><th>kazanan</th><th>TP1</th><th>stop</th><th>TP1 uzaklık</th><th>stop uzaklık</th><th>doyum uzaklık</th></tr>'+temelHtml+'</table></div>'+
+  (semHtml?'<h2>⚠️ Veri alınamayan hisseler</h2><div class="a">'+semHtml+'</div>':'')+
+  '<div class="a" style="margin-top:16px"><a href="/dipbacktest?key='+encodeURIComponent(o.anahtar||'')+'" style="color:#388bfd">← yeni koşum</a></div>'+
+  '</body></html>';
+}
+
+/* ═══════════════ 🟢 YEŞİL KAPANIŞ ARAŞTIRMASI ═══════════════════════════
+   Soru: hisse hangi zaman diliminde fibo merdiveninin hangi basamak
+   aralığındayken ertesi günü YEŞİL kapatıyor?
+
+   KURULUM — ileriye bakma YOK:
+     · Durum, D gününün barı AÇILMADAN önceki son barlardan okunur.
+     · Sonuç iki türlü ölçülür:
+         GÜN İÇİ        : açılışta al, kapanışta sat  (= "yeşil mum")
+         KAPANIŞ→KAPANIŞ: kapanışta al, ertesi kapanışta sat (geceyi de alır)
+
+   AŞIRI UYDURMAYA KARŞI DÖRT BÖLME:
+   Yüzlerce kombinasyon denenince rastgele veride bile parlak sonuç çıkar.
+   Bu yüzden her kombinasyon DÖRT bağımsız bölmede birden sınanır:
+     zaman: eski yarı / yeni yarı   (rejim değişince de tutuyor mu?)
+     hisse: tek sıra / çift sıra    (birkaç hisseye mi özgü?)
+   Dördünde de TABANI geçmeyen kurulum gürültü sayılır ve listeye girmez.
+   Taban = o bölmedeki genel yeşil oranı; kaldıraç = kurulum − taban.
+
+   ÖLÇEK: 430 hisse × ~450 gün = ~190 bin gözlem. Ham gözlemi saklamak KV'yi
+   patlatırdı; onun yerine kombinasyon × bölme başına SAYAÇ biriktirilir
+   (175 kombinasyon × 5 bölme = 875 sayaç, birkaç KB). */
+const YK_LV=[-0.786,-0.618,-0.382,-0.236,0.0,0.236,0.382,0.5,0.618,0.786,1.0,1.272,1.618,2.618,3.618,4.236];
+const YK_AD=["D/D-786","D/D-618","D/D-382","D/D-236","DİKKAT AYI","D/D236","D/D382","Hazırlık",
+  "BOĞA","ZAYIF D/D","KARAR YERİ","KÜÇÜK DİRENÇ","DİRENÇ","GÜÇLÜ D/D","ÇOK GÜÇLÜ D/D","DOYUM"];
+const YK_BOLGE_AD=["0.0 altı","dip bölgesi","karar/direnç","güçlü D/D üstü"];
+const YK_DILIM=["1SA","4SA","1G"];      /* 15DK/5DK: yalnız 60 gün veri, dışarıda */
+const YK_PENCERE=4000;                  /* backtest için geniş pencere (canlı tarama 700 kullanır) */
+const YK_ASGARI=40;                     /* bir bölmede en az kaç gözlem */
+const YK_KALDIRAC=0.5;                  /* tabanı en az bu kadar geçmeli (yüzde puan) */
+
+function ykBant(o){if(!isFinite(o))return null;for(let i=0;i<YK_LV.length;i++)if(o<YK_LV[i])return i;return YK_LV.length}
+function ykBantAd(b){return b===null?"?":b===0?"< "+YK_AD[0]:b===YK_LV.length?"> "+YK_AD[15]:YK_AD[b-1]+" → "+YK_AD[b]}
+function ykBolge(o){if(!isFinite(o))return null;return o<0?0:o<0.786?1:o<1.618?2:3}
+/* Her bar için merdivendeki konum (0.0 çizgisinden kaç birim yukarıda) */
+function ykOranSeri(m){
+  const s=m.slice(-YK_PENCERE);
+  const lv=mb571Seri(s,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV);
+  const out=new Array(s.length);
+  for(let i=0;i<s.length;i++){
+    const x=lv[i];
+    if(!x||!isFinite(x.stop)||!isFinite(x.s786)||x.s786===x.stop){out[i]=null;continue}
+    out[i]={time:s[i].time,oran:(x.close-x.stop)/((x.s786-x.stop)/0.786)};
+  }
+  return out;
+}
+/* Kombinasyon listesi — hepsi tek yerde tanımlı, rapor da bunu kullanır. */
+function ykKombinasyonlar(){
+  const c=[];
+  for(const t of YK_DILIM)for(let b=0;b<=YK_LV.length;b++)
+    c.push({id:"B|"+t+"|"+b,ad:t+" · "+ykBantAd(b),tur:"bant"});
+  for(const t of YK_DILIM)for(let z=0;z<4;z++)
+    c.push({id:"Z|"+t+"|"+z,ad:t+" · "+YK_BOLGE_AD[z],tur:"bölge"});
+  for(let i=0;i<YK_DILIM.length;i++)for(let j=i+1;j<YK_DILIM.length;j++)
+    for(let z1=0;z1<4;z1++)for(let z2=0;z2<4;z2++)
+      c.push({id:"P|"+YK_DILIM[i]+"|"+z1+"|"+YK_DILIM[j]+"|"+z2,
+        ad:YK_DILIM[i]+" ["+YK_BOLGE_AD[z1]+"] + "+YK_DILIM[j]+" ["+YK_BOLGE_AD[z2]+"]",tur:"ikili"});
+  for(let z1=0;z1<4;z1++)for(let z2=0;z2<4;z2++)for(let z3=0;z3<4;z3++)
+    c.push({id:"U|"+z1+"|"+z2+"|"+z3,
+      ad:"1SA ["+YK_BOLGE_AD[z1]+"] + 4SA ["+YK_BOLGE_AD[z2]+"] + 1G ["+YK_BOLGE_AD[z3]+"]",tur:"üçlü"});
+  return c;
+}
+/* Bir gözlemin hangi kombinasyonlara girdiği */
+function ykEslesenler(d){
+  const out=[];
+  for(const t of YK_DILIM){out.push("B|"+t+"|"+d[t].bant);out.push("Z|"+t+"|"+d[t].bolge)}
+  for(let i=0;i<YK_DILIM.length;i++)for(let j=i+1;j<YK_DILIM.length;j++)
+    out.push("P|"+YK_DILIM[i]+"|"+d[YK_DILIM[i]].bolge+"|"+YK_DILIM[j]+"|"+d[YK_DILIM[j]].bolge);
+  out.push("U|"+d["1SA"].bolge+"|"+d["4SA"].bolge+"|"+d["1G"].bolge);
+  return out;
+}
+/* Boş sayaç kabı. bolme: 0 genel · 1 zaman-eski · 2 zaman-yeni · 3 hisse-tek · 4 hisse-çift */
+/* 🐞 DÜZELTİLEN ÇÖKME — sayaçlar DİZİ idi ve yalnız 0-4 indisleri
+   doluyordu (seyrek dizi). JSON'a yazılıp geri okununca boşluklar null
+   OLARAK geliyor; birleştirme sırasında null.n okunmaya çalışılınca
+   istek çöküyordu. Rapor üretilirken patladığı için ekran boşalıyordu.
+   Nesne kullanmak bu sınıf hatayı kökten kaldırır. */
+function ykSayacYeni(){return{taban:{},komb:{}}}
+function ykSayacEkle(S,anahtar,bolmeler,yesilG,getiriG,yesilK,getiriK){
+  const kutu=(hedef,b)=>{
+    if(!hedef[b])hedef[b]={n:0,gY:0,gT:0,kN:0,kY:0,kT:0};
+    return hedef[b];
+  };
+  for(const b of bolmeler){
+    const t=kutu(S.taban,b);
+    t.n++;if(yesilG)t.gY++;t.gT+=getiriG;
+    if(getiriK!==null){t.kN++;if(yesilK)t.kY++;t.kT+=getiriK}
+  }
+  for(const a of anahtar){
+    if(!S.komb[a])S.komb[a]={};
+    for(const b of bolmeler){
+      const c=kutu(S.komb[a],b);
+      c.n++;if(yesilG)c.gY++;c.gT+=getiriG;
+      if(getiriK!==null){c.kN++;if(yesilK)c.kY++;c.kT+=getiriK}
+    }
+  }
+}
+function ykSayacBirlestir(A,B){
+  if(!B)return A;
+  if(!A.taban)A.taban={};if(!A.komb)A.komb={};
+  const kat=(h,k)=>{
+    if(!k)return;
+    for(const b in k){
+      const kay=k[b];
+      if(!kay)continue;                       /* JSON'dan gelen null boşluk */
+      if(!h[b])h[b]={n:0,gY:0,gT:0,kN:0,kY:0,kT:0};
+      for(const alan of ["n","gY","gT","kN","kY","kT"])
+        h[b][alan]+=Number(kay[alan])||0;
+    }
+  };
+  kat(A.taban,B.taban);
+  for(const a in B.komb){if(!A.komb[a])A.komb[a]={};kat(A.komb[a],B.komb[a])}
+  return A;
+}
+/* Bir grup hisseyi tarar, sayaç üretir. zamanKesim: bu damgadan öncesi "eski". */
+async function ykKosu(kodlar,zamanKesim,hisseTek){
+  const S=ykSayacYeni();
+  const semboller=[];
+  /* TEŞHİS: gözlem 0 çıkarsa sebebini söyleyebilmek için hangi dilimde
+     veri gelmediğini sayıyoruz. Sessiz boş rapor en kötü hatadır. */
+  const teshis={veriYok:{},gozlemsiz:0,hata:0};
+  let sira=0;
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      const kod=kodlar[sira++];
+      try{
+        const ckListe=[],gor={};
+        for(const t of YK_DILIM){
+          const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
+          if(!gor[ck]){gor[ck]=!0;ckListe.push({ck:ck,interval:tf.interval,range:tf.range})}
+        }
+        const onb={};
+        await Promise.all(ckListe.map(async x=>{
+          const r=await yfMumlar(kod,x.interval,x.range);onb[x.ck]=(r&&r.veri)||[];
+        }));
+        const sr={};
+        for(const t of YK_DILIM){
+          const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
+          let m=onb[ck]||[];
+          if(!m.length){sr[t]=null;teshis.veriYok[t]=(teshis.veriYok[t]||0)+1;continue}
+          if(tf.hayaletAt)m=mbHayaletAt(m);
+          if(tf.grupSaat)m=mbGrupla(m,tf.grupSaat);
+          sr[t]=ykOranSeri(m);
+        }
+        const gtf=MB_TF["1G"];
+        let gm=mbHayaletAt(onb[gtf.interval+"|"+gtf.range]||[]).slice(-YK_PENCERE);
+        const imlec={};for(const t of YK_DILIM)imlec[t]=-1;
+        let say=0;
+        const tekMi=hisseTek(kod);
+        for(let i=1;i<gm.length-1;i++){
+          const g=gm[i];
+          if(!(g.open>0)||!(g.close>0))continue;
+          const durum={};let eksik=!1;
+          for(const t of YK_DILIM){
+            const s2=sr[t];if(!s2){eksik=!0;break}
+            let k=imlec[t];
+            while(k+1<s2.length&&s2[k+1]&&s2[k+1].time<g.time)k++;
+            while(k+1<s2.length&&!s2[k+1])k++;
+            imlec[t]=k;
+            const b2=k>=0?s2[k]:null;
+            if(!b2){eksik=!0;break}
+            durum[t]={bant:ykBant(b2.oran),bolge:ykBolge(b2.oran)};
+          }
+          if(eksik)continue;
+          const yarin=gm[i+1];
+          const gunIci=100*(g.close/g.open-1);
+          const kapKap=(yarin&&yarin.close>0)?100*(yarin.close/g.close-1):null;
+          const bolmeler=[0, g.time<zamanKesim?1:2, tekMi?3:4];
+          ykSayacEkle(S,ykEslesenler(durum),bolmeler,gunIci>0,gunIci,
+            kapKap!==null&&kapKap>0,kapKap);
+          say++;
+        }
+        if(!say)teshis.gozlemsiz++;
+        semboller.push({kod:kod,gun:say});
+      }catch(e){teshis.hata++;semboller.push({kod:kod,hata:String((e&&e.message)||e)})}
+    }
+  };
+  await Promise.all(Array.from({length:DBT_ES},isci));
+  return{sayac:S,semboller:semboller,teshis:teshis};
+}
+/* Sayaçlardan rapor. alan: "g" gün içi · "k" kapanış→kapanış */
+function ykOzetle(S,alan){
+  const oku=(kutu,b)=>{
+    const c=kutu&&kutu[b];
+    if(!c||typeof c!=="object")return null;
+    const n=alan==="g"?c.n:c.kN;
+    if(!n)return null;
+    return{n:n,yesil:100*(alan==="g"?c.gY:c.kY)/n,ort:(alan==="g"?c.gT:c.kT)/n};
+  };
+  const taban={};for(let b=0;b<=4;b++)taban[b]=oku(S.taban,b);
+  if(!taban[0])return{taban:null,satirlar:[],denenen:0,gecen:0};
+  const adlar={};for(const c of ykKombinasyonlar())adlar[c.id]={ad:c.ad,tur:c.tur};
+  const satirlar=[];let denenen=0;
+  for(const id in S.komb){
+    const kutu=S.komb[id];
+    const g=oku(kutu,0);if(!g||g.n<YK_ASGARI*2)continue;
+    const b=[1,2,3,4].map(x=>oku(kutu,x));
+    if(b.some(x=>!x||x.n<YK_ASGARI))continue;
+    denenen++;
+    const k=b.map((x,i)=>x.yesil-taban[i+1].yesil);
+    const enAz=Math.min.apply(null,k);
+    satirlar.push({id:id,ad:(adlar[id]||{}).ad||id,tur:(adlar[id]||{}).tur||"",
+      n:g.n,yesil:g.yesil,ort:g.ort,kaldirac:g.yesil-taban[0].yesil,
+      bolmeler:k,enAz:enAz,gecti:enAz>=YK_KALDIRAC});
+  }
+  satirlar.sort((x,y)=>y.enAz-x.enAz);
+  return{taban:taban[0],satirlar:satirlar,denenen:denenen,
+    gecen:satirlar.filter(r=>r.gecti).length};
+}
+/* ── Yeşil Kapanış: iş akışı (parçalı tarama) + sayfalar ── */
+/* Bir adımda kaç hisse. Her hisse 2 ayrı Yahoo çekimi yapıyor (60m ve 1d);
+   yfMumlar gerekirse ikinci sunucuyu da deniyor. 8 hisse = en kötü 32
+   alt-istek — Cloudflare'in ücretsiz plandaki 50 sınırının altında kalır. */
+const YK_ADIM=20;
+/* 🐞 DÜZELTİLEN HATA — "tarama biterken ekrandaki her şey silindi"
+   Cloudflare KV ANLIK TUTARLI DEĞİLDİR: yazdıktan hemen sonra okursan
+   eski değeri alabilirsin. Tarama adımları 120 ms arayla oku-değiştir-yaz
+   yaptığı için son adım çoğu kez ESKİ işi okuyor, "bitti" damgasını ona
+   basıp geri yazıyordu — o ana kadar biriken bütün sayaçlar siliniyordu.
+   ÇÖZÜM: iş bellekte de tutulur ve iki kopyadan DAHA İLERİDE olanı kazanır.
+   Böylece aynı isolate içinde hiçbir adım kaybolmaz; KV yalnız yedek olur. */
+let _ykBellek=null;
+async function ykIsOku(A){
+  let kv=null;
+  if(A&&A.VERI){try{const j=await A.VERI.get("ykIs");kv=j?JSON.parse(j):null}catch(_){}}
+  if(_ykBellek&&kv&&_ykBellek.baslangic===kv.baslangic)
+    return (Number(_ykBellek.tamam)||0)>=(Number(kv.tamam)||0)?_ykBellek:kv;
+  if(_ykBellek&&!kv&&_ykBellek.tamam<_ykBellek.toplam)return _ykBellek;
+  _ykBellek=kv;
+  return kv;
+}
+async function ykIsYaz(A,job){
+  _ykBellek=job;                       /* önce bellek — kayıp olmasın */
+  if(!A||!A.VERI)return;
+  try{await A.VERI.put("ykIs",JSON.stringify(job),{expirationTtl:172800})}catch(_){}
+}
+function ykIsSil(){_ykBellek=null}
+const ykHisseTek=(kodlar)=>{
+  const har={};kodlar.forEach((k,i)=>har[k]=(i%2===0));
+  return k=>!!har[k];
+};
+function ykYuzde(v,o){return v===null||v===undefined||!isFinite(v)?"—":(v>0?"+":"")+v.toFixed(o===undefined?1:o)}
+function ykFormHTML(anahtar,is){
+  let devam="";
+  if(is&&!is.tamamlandi&&is.toplam)
+    devam='<div class="kur" style="border-color:#1f6feb;background:#0d1b2e"><b>⏳ Süren tarama var</b>'+
+      '<div class="a" style="margin-top:4px">'+is.tamam+' / '+is.toplam+' hisse.</div>'+
+      '<a class="a" style="color:#388bfd;display:inline-block;margin-top:6px" href="/yesil/rapor?key='+encodeURIComponent(anahtar||'')+'">→ ilerlemeyi aç</a></div>';
+  else if(is&&is.tamamlandi)
+    devam='<div class="a" style="margin-top:10px">Son tarama bitti ('+is.tamam+' hisse). '+
+      '<a href="/yesil/rapor?key='+encodeURIComponent(anahtar||'')+'" style="color:#388bfd">sonucu aç</a></div>';
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yeşil Kapanış Araştırması</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🟢 Yeşil Kapanış Araştırması</h1>'+
+  '<div class="a">Hisse, fibo merdiveninin hangi basamak aralığındayken ertesi günü <b>yeşil</b> kapatıyor? '+
+  'Yüzlerce kombinasyon denenir ve her biri <b>dört bağımsız bölmede</b> (zaman: eski/yeni yarı · hisse: tek/çift sıra) '+
+  'ayrı ayrı sınanır. Dördünde de tabanı geçmeyen kurulum gürültü sayılıp elenir.</div>'+
+  devam+
+  '<form method="get" action="/yesil">'+
+  '<input type="hidden" name="key" value="'+(anahtar||'').replace(/"/g,'')+'">'+
+  '<label style="display:flex;align-items:center;gap:8px;margin-top:14px"><input type="checkbox" name="evren" value="1" checked style="width:auto">🌍 <b>Havuzun tamamı</b> (430+ hisse · birkaç dakika)</label>'+
+  '<label>Ya da hisse kodları (virgülle · boş bırakırsan havuzdan ilk 40)</label>'+
+  '<textarea name="kod" placeholder="THYAO, ASELS, GARAN..."></textarea>'+
+  '<input type="hidden" name="git" value="1"><button type="submit">▶ Başlat</button></form>'+
+  '<div class="a" style="margin-top:12px">Ölçülen iki sonuç: <b>gün içi</b> (açılışta al, kapanışta sat) ve '+
+  '<b>kapanış→kapanış</b> (kapanışta al, ertesi kapanışta sat — geceyi de alır). '+
+  'Durum her zaman gün <i>açılmadan önce</i> okunur, ileriye bakma yoktur.</div>'+
+  '</body></html>';
+}
+function ykIlerlemeHTML(anahtar){
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yeşil Kapanış — taranıyor</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🟢 Yeşil Kapanış — taranıyor</h1>'+
+  '<div class="kur" style="border-color:#272e37;background:#161b22"><div id="y" class="a">başlıyor…</div>'+
+  '<div style="background:#0d1117;border:1px solid #272e37;border-radius:8px;height:14px;margin-top:8px;overflow:hidden">'+
+  '<div id="c" style="background:#3fb950;height:100%;width:0%"></div></div></div>'+
+  '<div class="a" style="margin-top:10px">Sayfayı açık bırak; bitince rapora geçer. Kapatırsan iş devam eder, /yesil/rapor adresinden bakabilirsin.</div>'+
+  '<script>var key='+JSON.stringify(anahtar||'')+';'+
+  'function a(){fetch("/yesil/adim?key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(v){'+
+  'if(!v||!v.ok){document.getElementById("y").textContent="hata — sayfayı yenile";return}'+
+  'var p=v.toplam?Math.round(100*v.tamam/v.toplam):0;'+
+  'document.getElementById("c").style.width=p+"%";'+
+  'document.getElementById("y").textContent=v.tamam+" / "+v.toplam+" hisse ("+p+"%)"+(v.gozlem?" · "+v.gozlem+" hisse-günü":"");'+
+  'if(v.tamamlandi){location.href="/yesil/rapor?key="+encodeURIComponent(key)}else{setTimeout(a,250)}'+
+  '}).catch(function(){setTimeout(a,2000)})}a();</script></body></html>';
+}
+function ykTabloHTML(o,baslik,aciklama){
+  if(!o.taban)return '<h2>'+baslik+'</h2><div class="a">yeterli veri yok</div>';
+  const gecen=o.satirlar.filter(r=>r.gecti);
+  const satir=(r)=>'<tr><td>'+E2(r.ad)+'</td><td>'+r.n+'</td>'+
+    '<td class="'+(r.yesil>=o.taban.yesil?'iy':'kt')+'"><b>%'+r.yesil.toFixed(0)+'</b></td>'+
+    '<td class="'+(r.kaldirac>0?'iy':'kt')+'"><b>'+ykYuzde(r.kaldirac)+'</b></td>'+
+    r.bolmeler.map(v=>'<td class="'+(v>0?'iy':'kt')+'">'+ykYuzde(v)+'</td>').join('')+
+    '<td class="'+(r.ort>0?'iy':'kt')+'">'+ykYuzde(r.ort,2)+'</td></tr>';
+  const bas='<div class="wrap"><table><tr><th>kurulum</th><th>n</th><th>yeşil</th><th>kaldıraç</th>'+
+    '<th>zaman<br>eski</th><th>zaman<br>yeni</th><th>hisse<br>tek</th><th>hisse<br>çift</th><th>ort.<br>getiri</th></tr>';
+  return '<h2>'+baslik+'</h2>'+
+    '<div class="a">'+aciklama+'<br>TABAN: yeşil <b>%'+o.taban.yesil.toFixed(1)+'</b> · ortalama <b>'+
+    ykYuzde(o.taban.ort,3)+'%</b> ('+o.taban.n+' hisse-günü). '+
+    '<b>Kaldıraç</b> = kurulumun tabandan farkı (yüzde puan). Dört bölme sütunu da artıysa kurulum sağlamdır.</div>'+
+    '<div class="kur" style="border-color:'+(gecen.length?'#238636':'#6b2b2b')+';background:'+(gecen.length?'#0f2016':'#22171a')+'">'+
+    '<b>'+o.denenen+' kombinasyon denendi · dört bölmenin dördünü geçen: '+gecen.length+'</b>'+
+    '<div class="a" style="margin-top:4px">Saf gürültüden beklenen yanlış-pozitif ≈ '+
+    Math.round(o.denenen*0.06)+'. Bunun belirgin üstündeyse gerçek sinyal var demektir.</div></div>'+
+    (gecen.length?bas+gecen.slice(0,25).map(satir).join('')+'</table></div>':'')+
+    '<div class="a" style="margin-top:10px;opacity:.7">— elenenler dahil ilk 15 (karşılaştırma için) —</div>'+
+    bas+o.satirlar.slice(0,15).map(satir).join('')+'</table></div>';
+}
+function E2(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function ykRaporHTML(o){
+  const g=ykOzetle(o.sayac,"g"), k=ykOzetle(o.sayac,"k");
+  const hata=(o.semboller||[]).filter(s=>s.hata);
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yeşil Kapanış sonuçları</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🟢 Yeşil Kapanış sonuçları</h1>'+
+  '<div class="a">'+o.toplam+' hisse · '+(g.taban?g.taban.n:0)+' hisse-günü · '+o.sure+' sn</div>'+
+  '<div class="kur" style="border-color:#272e37;background:#161b22"><b>Nasıl okunur?</b>'+
+  '<div class="a" style="margin-top:5px;line-height:1.7">'+
+  'Durum, gün <b>açılmadan önce</b> okunur — ileriye bakma yok.<br>'+
+  '<b>Kaldıraç</b>, kurulumun taban yeşil oranından farkıdır. Taban zaten %45 ise %48 çıkan bir kural sadece +3 puan katıyor demektir.<br>'+
+  'Dört bölme sütunu (zaman eski/yeni, hisse tek/çift) <b>ayrı ayrı</b> hesaplanır. Bir kurulum yalnız birinde parlıyorsa tesadüftür.</div></div>'+
+  ykTabloHTML(g,'📈 Gün içi — açılışta al, kapanışta sat',
+    'Bu, senin sorduğun "günü yeşil kapatsın" ölçüsü: mumun yeşil olması.')+
+  ykTabloHTML(k,'🌙 Kapanış → kapanış — kapanışta al, ertesi kapanışta sat',
+    'Gecelik boşluğu da alır. İki tabanı karşılaştır: fark, gün içi ile gecenin farklı davrandığını gösterir.')+
+  (hata.length?'<h2>⚠️ Veri alınamayan</h2><div class="a">'+hata.map(s=>E2(s.kod)).join(', ')+'</div>':'')+
+  '<div class="a" style="margin-top:16px"><a href="/yesil?key='+encodeURIComponent(o.anahtar||'')+'" style="color:#388bfd">← yeni koşum</a></div>'+
+  '</body></html>';
+}
+
 /* ── TÜM HAVUZ × TÜM DİLİM — PARÇALI, KALDIĞI YERDEN DEVAM EDEN TARAMA ──
    Absorpsiyon taramasındaki desenin aynısı: her /push turunda bir DİLİM
    ilerler, sonuçlar KV'de birikir, imleç nerede kalındığını tutar. Böylece
    Cloudflare alt-istek sınırı da Mini App bekleme süresi de zorlanmaz.
    Birikim DİLİM BAŞINA ayrı KV anahtarında tutulur (mbBirikim:1G gibi) —
    tek dev anahtar her turda baştan okunup yazılmasın diye. */
-const MB_DILIM_TABAN=8,MB_DILIM_TAVAN=60,MB_SURE_TAVAN_MS=1e4,MB_ES=5;
+const MB_DILIM_TABAN=8,MB_DILIM_TAVAN=60,MB_SURE_TAVAN_MS=1e4,MB_ES=12;
 /* Mini App isteğinin İÇİNDEN tetiklenen tarama küçük tutulur: o istek
    Cloudflare alt-istek bütçesini absorpsiyon ve KV işlemleriyle paylaşıyor. */
 const MB_ANLIK_AZAMI=12;
+/* Kullanıcı "şimdi doldur" derse bir istekte bu kadar hisse ölçülür.
+   24 hisse × 1 çekim = 24 alt-istek — ücretsiz plandaki 50 sınırının altı. */
+const MB_DOLDUR_AZAMI=40;
+/* Uygulamanın tek istekte isteyebileceği en fazla hisse. 30 hisse = 30
+   dış çağrı; Cloudflare'in ücretsiz plandaki 50 sınırının altında kalır. */
+/* 🐞 "tarama hata veriyor, can çekişiyor" — parti 30 hisseydi. Her hisse
+   1 Yahoo çekimi yapıyor, çekim başarısız olursa ikinci sunucu deneniyor:
+   en kötü 60 dış çağrı. Cloudflare'in ücretsiz plandaki sınırı 50 — istek
+   komple düşüyor, hiçbir ölçüm dönmüyordu (ekranda "0/434 · 4 hata").
+   12 hisse = en kötü 24 çağrı, sınırın rahat altında. */
+const MB_OLC_AZAMI=16;
+/* ⚡ ÖLÇÜM ÖNBELLEĞİ — hızın asıl kaynağı.
+   Kullanıcı aynı havuzu dakikada bir yeniden tarıyor; her seferinde 434
+   hisse için Yahoo'ya gitmek işkence. Ölçüm sonuçları isolate belleğinde
+   tutulur; aynı hisse-dilim yeniden istenirse ölçüm YENİDEN YAPILMAZ.
+   Süre dilime göre: 5 dakikalık bar 2 dakikada bayatlar, aylık bar 2 saatte.
+   KV kullanılmaz — bellek bedava ve anlık tutarlı. */
+const _mbOnbellek={};
+const MB_ONBELLEK_SURE={"5DK":12e4,"15DK":3e5,"1SA":9e5,"4SA":18e5,"1G":36e5,"1HAF":72e5,"1AY":72e5};
+function mbOnbellekAl(kod,tf){
+  const k=kod+"|"+tf,c=_mbOnbellek[k];
+  if(!c)return null;
+  if(Date.now()-c.ts>(MB_ONBELLEK_SURE[tf]||9e5)){delete _mbOnbellek[k];return null}
+  return c.veri;
+}
+function mbOnbellekKoy(kod,tf,veri){
+  _mbOnbellek[kod+"|"+tf]={ts:Date.now(),veri:veri};
+  /* bellek şişmesin: 6000 kaydı aşınca en eskileri at */
+  const anahtarlar=Object.keys(_mbOnbellek);
+  if(anahtarlar.length>6000){
+    anahtarlar.sort((a,b)=>_mbOnbellek[a].ts-_mbOnbellek[b].ts);
+    for(let i=0;i<1500;i++)delete _mbOnbellek[anahtarlar[i]];
+  }
+}
 /* Dilim başına tazelik eşiği — bakılan dilim bundan eskiyse önceliklendirilir.
    Hızlı dilim sık, yavaş dilim seyrek tazelenir; boşuna çekim yapılmaz. */
 const MB_TAZELIK={"5DK":6e5,"15DK":12e5,"1SA":36e5,"4SA":72e5,"1G":108e5,"1HAF":216e5,"1AY":216e5};
 const MB_BIRIKIM_TTL=21600,MB_YAZMA_ARALIK=6e5,MB_BAYAT_MS=216e5; /* 6 saat */
 const _mbBellek={};let _mbYazma={},_mbImlec=null;
 
-async function mbTfOku(A,tf){
-  if(_mbBellek[tf])return _mbBellek[tf];
-  let v={ts:0,sonuc:{}};
-  try{const h=A&&A.VERI&&await A.VERI.get("mbBirikim:"+tf);if(h)v=JSON.parse(h)||v}catch(_){}
-  if(!v.sonuc||typeof v.sonuc!=="object")v.sonuc={};
+async function mbTfOku(A,tf,parcalarla){
+  if(_mbBellek[tf]&&!parcalarla)return _mbBellek[tf];
+  let v=_mbBellek[tf];
+  if(!v){
+    v={ts:0,sonuc:{}};
+    try{const h=A&&A.VERI&&await A.VERI.get("mbBirikim:"+tf);if(h)v=JSON.parse(h)||v}catch(_){}
+    if(!v.sonuc||typeof v.sonuc!=="object")v.sonuc={};
+  }
+  if(parcalarla)await mbParcalariKat(A,tf,v);
   _mbBellek[tf]=v;return v;
 }
-async function mbTfYaz(A,tf,zorla){
+/* 🐞 DÜZELTİLEN HATA — "hep 20-25 hisse taranıyor, 434'e hiç ulaşmıyor"
+   Sonuçlar 10 dakikada bir yazılıyordu ama İMLEÇ her tur yazılıyordu.
+   Cloudflare her /push turunu başka bir isolate'de çalıştırabildiği için
+   bellekteki sonuçlar çoğu turda diske hiç inmeden yok oluyordu; imleç ise
+   yazıldığı için ilerlemeye devam ediyordu. Sonuç: imleç havuzu dolaşıp
+   bitiriyor, elde yalnızca son turun ~20 hissesi kalıyordu.
+   İKİSİ AYNI ANDA YAZILMALI — aksi hâlde ilerleme ile veri birbirinden
+   kopuyor. Artık her turda yazılıyor (turda 1 ek KV yazımı; imleç zaten
+   yazıldığı için maliyet iki katına çıkıyor, sıfırdan doğmuyor).
+   Her şey ölçülüp tazeyken tarama hiç çalışmaz, o yüzden yazma da durur. */
+async function mbTfYaz(A,tf){
   const v=_mbBellek[tf];if(!v||!A||!A.VERI)return;
-  const simdi=Date.now();
-  if(!zorla&&simdi-(_mbYazma[tf]||0)<MB_YAZMA_ARALIK)return;
-  _mbYazma[tf]=simdi;
+  _mbYazma[tf]=Date.now();
   await A.VERI.put("mbBirikim:"+tf,JSON.stringify(v),{expirationTtl:MB_BIRIKIM_TTL}).catch(()=>{});
+}
+/* ── PARÇALI YAZMA — KV gecikmesine karşı asıl çözüm ────────────────────
+   Tek büyük harita üzerinde oku-değiştir-yaz yapmak KV'de veri kaybettirir:
+   iki istek arka arkaya gelince ikincisi birincinin yazdığını görmeden
+   üstüne yazar. "Havuz 434'e bir türlü ulaşmıyor" sorununun kökü buydu.
+   Doldurma sırasında her istek KENDİ parçasına yazar (mbP:DİLİM:NO) —
+   iki istek asla aynı anahtara dokunmaz, dolayısıyla hiçbir ölçüm kaybolmaz.
+   Parçalar okuma anında ana birikimle birleştirilir; doldurma bitince
+   tek seferde ana birikime katılıp silinirler. */
+async function mbParcaYaz(A,tf,no,yeni){
+  if(!A||!A.VERI||!yeni||!Object.keys(yeni).length)return;
+  try{await A.VERI.put("mbP:"+tf+":"+no,JSON.stringify(yeni),{expirationTtl:MB_BIRIKIM_TTL})}catch(_){}
+}
+async function mbParcalariKat(A,tf,bir){
+  if(!A||!A.VERI)return bir;
+  try{
+    const l=await A.VERI.list({prefix:"mbP:"+tf+":"});
+    if(!l||!l.keys||!l.keys.length)return bir;
+    for(const k of l.keys){
+      try{const h=await A.VERI.get(k.name);if(!h)continue;
+        const v=JSON.parse(h);
+        for(const kod in v)if(!bir.sonuc[kod]||(v[kod].ts||0)>(bir.sonuc[kod].ts||0))bir.sonuc[kod]=v[kod];
+      }catch(_){}
+    }
+    bir.parca=l.keys.length;
+  }catch(_){}
+  return bir;
+}
+/* Parçaları ana birikime kalıcı olarak katar ve siler. */
+async function mbParcalariBirlestir(A,tf){
+  const bir=await mbTfOku(A,tf);
+  await mbParcalariKat(A,tf,bir);
+  bir.ts=Date.now();bir.olculen=Object.keys(bir.sonuc).length;
+  _mbBellek[tf]=bir;
+  await mbTfYaz(A,tf);
+  try{
+    const l=await A.VERI.list({prefix:"mbP:"+tf+":"});
+    for(const k of (l&&l.keys)||[])await A.VERI.delete(k.name).catch(()=>{});
+  }catch(_){}
+  return bir;
+}
+/* Bu dilim tamamlandı mı: havuzun tamamı ölçülü ve hiçbiri bayat değil. */
+function mbTfTamam(bir,evrenSayi){
+  if(!bir||!bir.sonuc)return!1;
+  const n=Object.keys(bir.sonuc).length;
+  if(!evrenSayi||n<evrenSayi)return!1;
+  return (Date.now()-(bir.ts||0))<(MB_BAYAT_MS/2);
 }
 async function mbCalisiyorMu(A){
   try{return(await A.VERI.get("mbDurduruldu"))!=="1"}catch(_){return!0}
@@ -1604,7 +2630,7 @@ async function mbDurdurAyarla(A,dur){
 async function mbDilimOku(A){
   try{const v=Number(await A.VERI.get("mbDilimOgrenilen"));
     if(isFinite(v)&&v>=MB_DILIM_TABAN)return Math.min(MB_DILIM_TAVAN,Math.round(v))}catch(_){}
-  return 20;
+  return 40;                        /* 20→40: tam tur sayısı yarıya iner */
 }
 async function mbDilimYaz(A,v){
   const y=Math.max(MB_DILIM_TABAN,Math.min(MB_DILIM_TAVAN,Math.round(v)));
@@ -1618,17 +2644,40 @@ async function mbImlecOku(A){
 }
 /* Bir dilim tarar. oncelikTf verilirse imleç yerine o dilimden devam eder —
    kullanıcı bir dilimi açtığında o dilim öne alınsın diye. */
-async function mbDilimTara(A,oncelikTf,azami){
+/* 🐞 Aynı KV tutarlılık sorunu burada da vardı: her doldurma isteği imleci
+   KV'den okuyordu, okuma bayat gelince tarama hep aynı 20-25 hisseyi
+   yeniden ölçüyor, havuz bir türlü dolmuyordu.
+   ÇÖZÜM: doldurma sırasında imleci İSTEMCİ taşır (disImlec) — sunucu her
+   cevapta nerede kaldığını söyler, istemci bir sonraki istekte geri verir.
+   Böylece ilerleme KV'nin gecikmesinden tamamen bağımsız olur. */
+async function mbDilimTara(A,oncelikTf,azami,disImlec){
   if(!A||!A.VERI)return null;
   if(!(await mbCalisiyorMu(A)))return null;
   const evren=await mbEvren(A);               /* havuzun TAMAMI */
   if(!evren.length)return null;
   const imlec=await mbImlecOku(A);
-  const tfIdx=oncelikTf?Math.max(0,MB_TF_LISTE.indexOf(mbTfNormal(oncelikTf)))
+  let tfIdx=oncelikTf?Math.max(0,MB_TF_LISTE.indexOf(mbTfNormal(oncelikTf)))
                        :(Number(imlec.tf)||0)%MB_TF_LISTE.length;
-  const tf=MB_TF_LISTE[tfIdx];
+  let tf=MB_TF_LISTE[tfIdx];
+  /* Bu dilim baştan sona ölçülü ve tazeyse boşuna yeniden tarama:
+     sıradaki eksik dilime geç. Hepsi tamamsa hiç tarama yapma — böylece
+     havuz bir kez dolduktan sonra KV yazımı da kendiliğinden durur. */
+  if(!oncelikTf){
+    let atlandi=0;
+    while(atlandi<MB_TF_LISTE.length&&mbTfTamam(await mbTfOku(A,tf),evren.length)){
+      tfIdx=(tfIdx+1)%MB_TF_LISTE.length;tf=MB_TF_LISTE[tfIdx];atlandi++;
+      imlec.tf=tfIdx;imlec.kod=0;
+    }
+    if(atlandi>=MB_TF_LISTE.length){          /* yedi dilim de tamam */
+      _mbImlec=imlec;
+      try{await A.VERI.put("mbImlec",JSON.stringify(imlec))}catch(_){}
+      return _mbBellek[tf]||null;
+    }
+  }
   const bir=await mbTfOku(A,tf);              /* imleç için ÖNCE yüklenmeli */
-  const kodIdx=oncelikTf?(Number(bir.imlec)||0):(Number(imlec.kod)||0);
+  const kodIdx=(disImlec!==undefined&&disImlec!==null&&Number(disImlec)>=0)
+    ?Number(disImlec)
+    :(oncelikTf?(Number(bir.imlec)||0):(Number(imlec.kod)||0));
   let dilim=await mbDilimOku(A);
   if(azami>0)dilim=Math.min(dilim,azami);
   const bas=kodIdx%evren.length;
@@ -1654,6 +2703,13 @@ async function mbDilimTara(A,oncelikTf,azami){
   /* Bayat ölçümleri at */
   const kes=Date.now()-MB_BAYAT_MS;
   for(const k of Object.keys(bir.sonuc))if(Number(bir.sonuc[k].ts||0)<kes)delete bir.sonuc[k];
+  /* DOLDURMA KİPİ: bu turun ölçümlerini kendi parçasına yaz, ana haritaya
+     dokunma. Böylece eşzamanlı istekler birbirinin verisini ezemez. */
+  if(disImlec!==undefined&&disImlec!==null&&Number(disImlec)>=0){
+    const yeniler={};
+    for(const kod of kodlar)if(bir.sonuc[kod])yeniler[kod]=bir.sonuc[kod];
+    await mbParcaYaz(A,tf,Math.floor(bas/Math.max(1,dilim)),yeniler);
+  }
   const yeniKod=(bas+islenen)%evren.length;
   bir.imlec=yeniKod;bir.ts=Date.now();bir.evren=evren.length;bir.kaynak=evren.kaynak||"";
   bir.olculen=Object.keys(bir.sonuc).length;
@@ -1726,24 +2782,121 @@ function mbIstekNorm(gov){
   let tfler=(Array.isArray(gov.tfler)?gov.tfler:[]).filter(t=>MB_TF[t]);
   if(!tfler.length)tfler=["1G"];
   tfler=MB_TF_LISTE.filter(t=>tfler.indexOf(t)>=0);        /* sabit sıra */
-  const m=gov.mal||{},d=gov.dip||{},a=gov.ab||{};
+  const m=gov.mal||{},d=gov.dip||{},a=gov.ab||{},ez=gov.enerji||{},bo=gov.bolge||{},pv=gov.pivot||{};
   /* Alan YOKSA varsayılan, VARSA doğruluk değeri. (m.top!==false yazılsaydı
      istemciden gelen 0 "tikli" sayılırdı — JSON'da tip garantisi yok.) */
   const bl=(v,vars)=>v===undefined||v===null?vars:!!v;
+  /* 🐞 DÜZELTİLEN HATA — "filtreden su kaçıyor"
+     Eskiden her dilim AYRI süzülüp ayrı kart olarak listeleniyordu: 1 saatlik
+     kartı, 1 saatlikte boğa olan her hisseyi gösteriyordu — o hisse günlükte
+     ayı olsa bile. Yani sonuç BİRLEŞİM'di, kullanıcı ise KESİŞİM bekliyordu.
+     Artık varsayılan "hepsi": hisse, seçili dilimlerin HEPSİNDE şartı
+     tutmalı. Her satırda dilim dilim durum da yazılır, gizli kalan olmaz. */
   const ist={
+    kapsam:gov.kapsam==="herhangi"?"herhangi":"hepsi",
     tfler:tfler,
     mal:{acik:bl(m.acik,!1),top:bl(m.top,!0),dag:bl(m.dag,!1),temiz:bl(m.temiz,!1),
          sinirsiz:bl(m.sinirsiz,!1),n:mbYasNorm(m.n,5)},
     dip:{acik:bl(d.acik,!1),kademe:MB_DIP_KADEME[d.kademe]?d.kademe:"dip"},
     ab :{acik:bl(a.acik,!1),boga:bl(a.boga,!0),ayi:bl(a.ayi,!1),
-         sinirsiz:bl(a.sinirsiz,!1),n:mbYasNorm(a.n,5)}
+         sinirsiz:bl(a.sinirsiz,!1),n:mbYasNorm(a.n,5)},
+    /* ⚛ Enerji — 6.2:177 show_enz_tarama ile aynı tikler ve varsayılanlar */
+    enerji:{acik:bl(ez.acik,!1),olustu:bl(ez.olustu,!0),icinde:bl(ez.icinde,!0),
+            b0:bl(ez.b0,!0),b1:bl(ez.b1,!1),
+            mesafeAcik:bl(ez.mesafeAcik,!0),mesafe:mbSayiNorm(ez.mesafe,5,0.1,30)},
+    /* 🪜 Fibo bölgesi */
+    bolge:{acik:bl(bo.acik,!1),
+           secili:(Array.isArray(bo.secili)?bo.secili:[]).filter(v=>MB_BOLGE_S[v])},
+    /* 📈 Pivot kırılım */
+    pivot:{acik:bl(pv.acik,!1),
+           dilimler:(Array.isArray(pv.dilimler)?pv.dilimler:[]).filter(v=>MB_PIVOT_S[v]),
+           kirdi:bl(pv.kirdi,!0),yakin:bl(pv.yakin,!1),uzerinde:bl(pv.uzerinde,!1),
+           yuzde:mbSayiNorm(pv.yuzde,3,0.1,50)}
   };
+  if(!ist.bolge.secili.length)ist.bolge.acik=!1;
+  if(!ist.pivot.dilimler.length)ist.pivot.dilimler=["KISA","ORTA","UZUN"];
+  if(!ist.pivot.kirdi&&!ist.pivot.yakin&&!ist.pivot.uzerinde)ist.pivot.acik=!1;
   /* Bir modülde hiç yön tikli değilse o modül anlamsız kalır — kapat. */
   if(!ist.mal.top&&!ist.mal.dag)ist.mal.acik=!1;
   if(!ist.ab.boga&&!ist.ab.ayi)ist.ab.acik=!1;
   return ist;
 }
 const MB_DIP_KADEME={dip:1,dip382:1,dip236:1};
+/* 🪜 Dört ana fibo bölgesi — istemcideki MB_BOLGE ile birebir aynı sınırlar */
+const MB_BOLGE_S={b1:[0.0,0.618],b2:[0.618,1.0],b3:[1.0,1.618],b4:[1.618,2.618]};
+const MB_PIVOT_S={KISA:"potansiyel",ORTA:"fibo",UZUN:"uzunvade"};
+const MB_PIVOT_ADAY={KISA:"adayOrta",ORTA:"adayOrtaVade",UZUN:"adayUzun"};
+function mbSayiNorm(v,vars,alt,ust){
+  const n=Number(v);
+  if(!isFinite(n))return vars;
+  return Math.min(ust,Math.max(alt,n));
+}
+function mbBolgeGectiS(oran,ist){
+  if(!ist.bolge||!ist.bolge.acik)return!0;
+  if(oran===null||oran===undefined||!isFinite(oran))return!1;
+  for(const id of ist.bolge.secili){
+    const b=MB_BOLGE_S[id];
+    if(b&&oran>=b[0]&&oran<b[1])return!0;
+  }
+  return!1;
+}
+/* ⚛ 6.2:2903 — enerji süzgeci. Hiç durum tikli değilse durum şartı aranmaz
+   (Pine'daki _ez_status_any davranışı), mesafe şartı yine de uygulanır. */
+function mbEnerjiGectiS(x,ist){
+  const e=ist.enerji;
+  if(!e||!e.acik)return!0;
+  const durumVar=e.olustu||e.icinde||e.b0||e.b1;
+  let uydu=!durumVar;
+  if(!uydu){
+    if(e.olustu&&Number(x.ezAct)>0.5)uydu=!0;
+    if(!uydu&&e.icinde&&Number(x.ezIns)>0.5)uydu=!0;
+    if(!uydu&&e.b0&&Number(x.ezAge)===0)uydu=!0;
+    if(!uydu&&e.b1&&Number(x.ezAge)===1)uydu=!0;
+  }
+  if(!uydu)return!1;
+  if(e.mesafeAcik&&!(x.ezMes!==null&&x.ezMes!==undefined&&Number(x.ezMes)<=e.mesafe))return!1;
+  return!0;
+}
+/* 📈 Pivot kırılım — uygulamadaki mbPivotGecti ile aynı kurallar, ama
+   kartlar sunucuda g(A) ile okunur. Harita tur başına bir kez kurulur. */
+let _mbPivotHar=null,_mbPivotTs=0;
+async function mbPivotHaritasiS(A){
+  if(_mbPivotHar&&Date.now()-_mbPivotTs<6e4)return _mbPivotHar;
+  let K={};
+  try{const v=await g(A);K=(v&&v.kartlar)||{}}catch(_){K={}}
+  const har={};
+  for(const ad of Object.keys(MB_PIVOT_S)){
+    for(const x of (K[MB_PIVOT_S[ad]]||[])){
+      if(!x||!x.kod)continue;
+      if(!har[x.kod])har[x.kod]={};
+      const giris=Number(x.giris),fiyat=Number(x.fiyat);
+      har[x.kod][ad]={tip:"kirdi",sonBar:!!x.canli,
+        uzerinde:(giris>0&&fiyat>0)?(fiyat>=giris):!!x.canli,yuzde:null};
+    }
+    for(const x of (K[MB_PIVOT_ADAY[ad]]||[])){
+      if(!x||!x.kod)continue;
+      if(!har[x.kod])har[x.kod]={};
+      if(har[x.kod][ad]&&har[x.kod][ad].tip==="kirdi")continue;
+      har[x.kod][ad]={tip:"aday",sonBar:!1,uzerinde:!1,
+        yuzde:(x.tetikYuzde===null||x.tetikYuzde===undefined)?null:Number(x.tetikYuzde)};
+    }
+  }
+  _mbPivotHar=har;_mbPivotTs=Date.now();
+  return har;
+}
+function mbPivotGectiS(kod,ist,har){
+  const p=ist.pivot;
+  if(!p||!p.acik)return!0;
+  const h=har&&har[kod];
+  if(!h)return!1;
+  for(const d of p.dilimler){
+    const x=h[d];if(!x)continue;
+    if(p.kirdi&&x.tip==="kirdi"&&x.sonBar)return!0;
+    if(p.uzerinde&&x.tip==="kirdi"&&x.uzerinde)return!0;
+    if(p.yakin&&x.tip==="aday"&&x.yuzde!==null&&Math.abs(x.yuzde)<=p.yuzde)return!0;
+  }
+  return!1;
+}
 
 /* Tek ölçüm (x) tek dilimde modüllerden geçiyor mu?
    MODÜLLER ARASI = VE (hepsi tutmalı, tikliyse zaten istenmiştir).
@@ -1757,6 +2910,8 @@ function mbModulGecti(x,ist){
     if(!ok)return!1;
   }
   if(ist.dip.acik&&!x[ist.dip.kademe])return!1;
+  if(!mbBolgeGectiS(x.oran,ist))return!1;
+  if(!mbEnerjiGectiS(x,ist))return!1;
   if(ist.ab.acik){
     const N=ist.ab.sinirsiz?1e9:ist.ab.n;
     let ok=!1;
@@ -1788,10 +2943,10 @@ async function mbModulTara(A,ist){
     if(hedef)await mbDilimTara(A,hedef,MB_ANLIK_AZAMI).catch(()=>{});
   }
   /* 2) her seçili dilimde süz */
-  const gecenHar={},gruplar=[];
+  const gecenHar={},gruplar={},har={};
   for(const tf of ist.tfler){
-    const bir=_mbBellek[tf]||await mbTfOku(A,tf);
-    const sonuc=bir.sonuc||{};
+    const bir=await mbTfOku(A,tf,!0);          /* parçalar dahil */
+    const sonuc=bir.sonuc||{};har[tf]=sonuc;
     const liste=[];
     for(const kod of Object.keys(sonuc)){
       const x=sonuc[kod];
@@ -1800,23 +2955,54 @@ async function mbModulTara(A,ist){
     liste.sort((a,b)=>(mbTazelik(a)-mbTazelik(b))||(a.kod<b.kod?-1:1));
     gecenHar[tf]=new Set(liste.map(x=>x.kod));
     const n=Object.keys(sonuc).length;
-    gruplar.push({tf:tf,ad:MB_TF[tf].ad,ik:MB_TF[tf].ik,
+    gruplar[tf]={tf:tf,ad:MB_TF[tf].ad,ik:MB_TF[tf].ik,
       olculen:n,evren:bir.evren||n,kalan:Math.max(0,(bir.evren||n)-n),
       yas:bir.ts?Math.round((Date.now()-bir.ts)/6e4):null,
-      cikan:liste.length,liste:liste.slice(0,120)});
+      cikan:liste.length,liste:liste.slice(0,120)};
   }
-  /* 3) çapraz işaret — aynı hisse başka hangi seçili dilimlerde de çıktı */
-  for(const g of gruplar)
+  /* 3) bütün seçili dilimlerde birden geçenler = KESİŞİM */
+  let ortak=null;
+  for(const tf of ist.tfler)ortak=ortak===null?new Set(gecenHar[tf]):
+    new Set([...ortak].filter(k=>gecenHar[tf].has(k)));
+  const ortakListe=[...(ortak||[])].sort();
+  /* Bir hissenin seçili dilimlerdeki durumu — satırda gösterilir ki
+     "acaba şu dilimde ayı mı" sorusu hiç doğmasın. */
+  const durumSeridi=(kod)=>ist.tfler.map(tf=>{
+    const m=(har[tf]||{})[kod];
+    if(!m)return{tf:tf,yok:!0};
+    return{tf:tf,boga:!!m.boga,ayi:!!m.ayi,rejYas:m.rejYas,
+      topHam:m.topHam,dagHam:m.dagHam,dip:!!m.dip,
+      dip382:!!m.dip382,dip236:!!m.dip236,gecti:gecenHar[tf].has(kod)};
+  });
+  if(ist.kapsam==="hepsi"){
+    /* TEK liste: yalnız her dilimde tutan hisseler. Gösterilen ölçüm en
+       büyük seçili dilimden alınır (fiyat/rejim orada en anlamlı). */
+    const enBuyuk=ist.tfler[ist.tfler.length-1];
+    const kaynak=har[enBuyuk]||{};
+    const liste=ortakListe.map(kod=>Object.assign({kod:kod},kaynak[kod]||{},
+      {tfDurum:durumSeridi(kod),digerTfler:[]}))
+      .sort((a,b)=>(mbTazelik(a)-mbTazelik(b))||(a.kod<b.kod?-1:1));
+    const olculen=Math.min.apply(null,ist.tfler.map(t=>gruplar[t].olculen));
+    const evren=Math.max.apply(null,ist.tfler.map(t=>gruplar[t].evren));
+    return{kapsam:"hepsi",calisiyor:calisiyor,ortak:ortakListe,
+      dilimDurum:ist.tfler.map(t=>({tf:t,ad:gruplar[t].ad,ik:gruplar[t].ik,
+        olculen:gruplar[t].olculen,evren:gruplar[t].evren,cikan:gruplar[t].cikan,yas:gruplar[t].yas})),
+      gruplar:[{tf:"HEPSİ",ad:ist.tfler.join(" + ")+" dilimlerinin HEPSİNDE",ik:"🎯",
+        olculen:olculen,evren:evren,kalan:Math.max(0,evren-olculen),
+        yas:gruplar[enBuyuk].yas,cikan:liste.length,liste:liste.slice(0,150)}]};
+  }
+  /* "herhangi" kipi: eski davranış — dilim dilim ayrı kartlar */
+  const sirali=ist.tfler.map(t=>gruplar[t]);
+  for(const g of sirali)
     for(const x of g.liste){
       const d=[];
       for(const tf of ist.tfler)if(tf!==g.tf&&gecenHar[tf].has(x.kod))d.push(tf);
       x.digerTfler=d;
+      x.tfDurum=durumSeridi(x.kod);
     }
-  /* 4) bütün seçili dilimlerde birden çıkan hisseler — en güçlü kesişim */
-  let ortak=null;
-  for(const tf of ist.tfler)ortak=ortak===null?new Set(gecenHar[tf]):
-    new Set([...ortak].filter(k=>gecenHar[tf].has(k)));
-  return{gruplar:gruplar,ortak:[...(ortak||[])].sort(),calisiyor:calisiyor};
+  return{kapsam:"herhangi",gruplar:sirali,ortak:ortakListe,calisiyor:calisiyor,
+    dilimDurum:sirali.map(g=>({tf:g.tf,ad:g.ad,ik:g.ik,olculen:g.olculen,
+      evren:g.evren,cikan:g.cikan,yas:g.yas}))};
 }
 /* Zaman dilimi seçicisinin altında görünen sayaçlar (her dilimde kaç ölçüm var). */
 async function mbDilimDurum(A){
@@ -1828,6 +3014,263 @@ async function mbDilimDurum(A){
       yas:b.ts?Math.round((Date.now()-b.ts)/6e4):null});
   }
   return out;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   🔔 FİLTRE ALARMI — "bu taramayı seans içinde bana bildir"
+   ══════════════════════════════════════════════════════════════════════
+   Yönetici ekranda modülleri/dilimleri ayarlar ve "Bu filtreyi alarma
+   gönder" der. Filtre KV'ye yazılır; her /push turunda arka planda
+   yeniden ölçülür ve LİSTEYE YENİ GİREN hisseler bildirim olarak gider.
+   Alıcılar: alarmKullanicilari() — yönetici + süper üyeler (mevcut alarm
+   akışının aynı süzgeci).
+
+   TASARIM KARARLARI:
+   1) Alarm YENİ GİRENLERİ bildirir, listenin tamamını değil. Aksi hâlde
+      aynı hisse her turda tekrar tekrar gelirdi.
+   2) Filtre kaydedilirken o anki eşleşmeler "görülmüş" sayılır (tohumlama).
+      Yoksa kaydettiğin anda 200 hisselik bir sel gelirdi. Kayıttan
+      SONRA listeye girenler bildirilir.
+   3) Yalnız SEANS İÇİNDE çalışır (BIST 09:30-18:10, hafta içi). Kapalıyken
+      ölçüm zaten değişmiyor, boşuna bildirim gitmesin.
+   4) Hafıza günlüktür: ertesi gün sıfırlanır, aynı hisse yeni günde
+      yeniden bildirilebilir.
+   5) Yahoo'ya EK ÇAĞRI YAPMAZ — birikimdeki ölçümleri süzer. Ölçümleri
+      tazeleyen zaten mbDilimTara'dır. */
+const MB_ALARM_ANAHTAR="mbAlarmFiltre";
+const MB_ALARM_GUN="mbAlarmGun";
+const MB_ALARM_AZAMI=12;            /* tek mesajda en fazla kaç hisse */
+const MB_ALARM_YUVA=5;              /* en fazla kaç ayrı filtre alarmı */
+const MB_BOLGE_AD={b1:"dikkat ayı→boğa",b2:"boğa→karar",b3:"karar→direnç",b4:"direnç→güçlü D/D"};
+
+/* ── BEŞ YUVA ──────────────────────────────────────────────────────────
+   Eskiden tek filtre vardı; yeni filtre kurmak eskisini siliyordu. Artık
+   en fazla MB_ALARM_YUVA (5) ayrı filtre aynı anda kurulu kalabilir ve her
+   biri BAĞIMSIZ çalışır: kendi "gördüklerim" hafızası, kendi bildirimi.
+   Eski tek-filtre kaydı okunurken kendiliğinden 1. yuvaya taşınır. */
+async function mbAlarmListeOku(A){
+  let ham=null;
+  try{const h=A&&A.VERI&&await A.VERI.get(MB_ALARM_ANAHTAR);if(h)ham=JSON.parse(h)}catch(_){}
+  if(!ham)return[];
+  /* v1 (tek filtre) → v2 (liste) göçü */
+  if(!Array.isArray(ham.liste)){
+    if(ham.ist)return[{id:"a1",ist:ham.ist,ts:ham.ts||Date.now(),kuran:ham.kuran||""}];
+    return[];
+  }
+  return ham.liste.filter(x=>x&&x.ist).slice(0,MB_ALARM_YUVA);
+}
+async function mbAlarmListeYaz(A,liste){
+  if(!A||!A.VERI)return[];
+  const kirp=liste.slice(0,MB_ALARM_YUVA);
+  await A.VERI.put(MB_ALARM_ANAHTAR,JSON.stringify({v:2,liste:kirp})).catch(()=>{});
+  return kirp;
+}
+/* Yeni yuva ekle ya da var olanı değiştir. Dönen: {liste,yuva} */
+async function mbAlarmYuvaYaz(A,ist,uid,id){
+  const liste=await mbAlarmListeOku(A);
+  const kayit={id:String(id||("a"+Date.now().toString(36))),ist:ist,
+               ts:Date.now(),kuran:String(uid||"")};
+  const yer=liste.findIndex(x=>x.id===kayit.id);
+  if(yer>=0)liste[yer]=kayit;
+  else{
+    if(liste.length>=MB_ALARM_YUVA)return{dolu:!0,liste:liste};
+    liste.push(kayit);
+  }
+  return{liste:await mbAlarmListeYaz(A,liste),yuva:kayit};
+}
+async function mbAlarmYuvaSil(A,id){
+  if(!A||!A.VERI)return[];
+  if(!id){                                  /* hepsi */
+    try{await A.VERI.delete(MB_ALARM_ANAHTAR);await A.VERI.delete(MB_ALARM_GUN)}catch(_){}
+    return[];
+  }
+  const liste=(await mbAlarmListeOku(A)).filter(x=>x.id!==id);
+  return await mbAlarmListeYaz(A,liste);
+}
+/* Günlük "bildirdim" hafızası — anahtar: YUVA|KOD|DİLİM */
+async function mbAlarmGecmisi(A){
+  const bugun=onayDonemi();
+  try{const h=await A.VERI.get(MB_ALARM_GUN);
+    if(h){const j=JSON.parse(h);if(j&&j.gun===bugun&&Array.isArray(j.anahtarlar))return j}}catch(_){}
+  return{gun:bugun,anahtarlar:[]};
+}
+async function mbAlarmGecmisiYaz(A,g){
+  g.anahtarlar=g.anahtarlar.slice(-4000);
+  try{await A.VERI.put(MB_ALARM_GUN,JSON.stringify(g),{expirationTtl:172800})}catch(_){}
+}
+/* BIST seansı: hafta içi 09:30-18:10 (İstanbul). Yahoo barları da bu
+   aralıkta değişiyor; dışında ölçüm sabit kaldığı için alarm da susar. */
+function mbSeansIci(){
+  const ist=new Date(Date.now()+108e5);          /* UTC+3 */
+  const gun=ist.getUTCDay();                     /* 0 Pazar · 6 Cumartesi */
+  if(gun===0||gun===6)return!1;
+  const dk=ist.getUTCHours()*60+ist.getUTCMinutes();
+  return dk>=570&&dk<=1090;                      /* 09:30 - 18:10 */
+}
+/* Filtreyi tek satırda özetler — bildirimde hangi tarama olduğu belli olsun. */
+function mbFiltreOzet(ist){
+  const p=[];
+  if(ist.mal.acik){
+    const y=[];if(ist.mal.top)y.push("toplama");if(ist.mal.dag)y.push("dağıtım");
+    p.push("📦 "+y.join("/")+(ist.mal.temiz?" (temiz)":"")+
+      (ist.mal.sinirsiz?"":" ≤"+ist.mal.n+"B"));
+  }
+  if(ist.dip.acik)p.push("⬇️ "+(ist.dip.kademe==="dip236"?"en dip":ist.dip.kademe==="dip382"?"derin dip":"dip"));
+  if(ist.ab.acik){
+    const y=[];if(ist.ab.boga)y.push("🐂 boğa");if(ist.ab.ayi)y.push("🐻 ayı");
+    p.push(y.join("/")+(ist.ab.sinirsiz?"":" ≤"+ist.ab.n+"B"));
+  }
+  if(ist.bolge&&ist.bolge.acik)p.push("🪜 "+ist.bolge.secili.map(v=>MB_BOLGE_AD[v]||v).join("/"));
+  if(ist.enerji&&ist.enerji.acik){
+    const y=[];
+    if(ist.enerji.olustu)y.push("oluştu");if(ist.enerji.icinde)y.push("içinde");
+    if(ist.enerji.b0)y.push("0B");if(ist.enerji.b1)y.push("1B");
+    p.push("⚛ "+(y.join("/")||"her durum")+
+      (ist.enerji.mesafeAcik?" ≤%"+ist.enerji.mesafe:""));
+  }
+  if(ist.pivot&&ist.pivot.acik){
+    const y=[];
+    if(ist.pivot.kirdi)y.push("son bar");if(ist.pivot.yakin)y.push("≤%"+ist.pivot.yuzde);
+    if(ist.pivot.uzerinde)y.push("üzerinde");
+    p.push("📈 "+ist.pivot.dilimler.join("/")+" "+y.join("/"));
+  }
+  return p.join(" · ")||"(koşul yok)";
+}
+/* Filtrenin ŞU ANKİ eşleşmeleri — birikimden, ek çekim yok.
+   Dönen: {anahtarlar:Set, satirlar:[{kod,tf,fiyat,...}]} */
+async function mbAlarmEslesme(A,ist,yuvaId){
+  const anahtarlar=[],satirlar=[];
+  const on=yuvaId?(yuvaId+"|"):"";
+  const har=(ist.pivot&&ist.pivot.acik)?await mbPivotHaritasiS(A).catch(()=>({})):null;
+  /* "hepsi" kapsamı: hisse seçili dilimlerin HEPSİNDE tutmalı. Uygulamadaki
+     kesişim kuralının aynısı — alarm ekranda görünenden farklı davranmasın. */
+  const sayac={};
+  for(const tf of ist.tfler){
+    const bir=_mbBellek[tf]||await mbTfOku(A,tf);
+    const sonuc=bir.sonuc||{};
+    for(const kod of Object.keys(sonuc)){
+      const x=sonuc[kod];
+      if(!mbModulGecti(x,ist))continue;
+      if(har&&!mbPivotGectiS(kod,ist,har))continue;
+      sayac[kod]=(sayac[kod]||0)+1;
+      anahtarlar.push(on+kod+"|"+tf);
+      satirlar.push({kod:kod,tf:tf,fiyat:x.fiyat,topHam:x.topHam,dagHam:x.dagHam,
+        boga:x.boga,ayi:x.ayi,rejYas:x.rejYas,dip:x.dip,taze:mbTazelik(x),
+        ezAge:x.ezAge,ezMes:x.ezMes,oran:x.oran});
+    }
+  }
+  if(ist.kapsam==="hepsi"&&ist.tfler.length>1){
+    const tam=ist.tfler.length;
+    return{anahtarlar:anahtarlar.filter(a=>sayac[a.slice(on.length).split("|")[0]]>=tam),
+           satirlar:satirlar.filter(x=>sayac[x.kod]>=tam)};
+  }
+  return{anahtarlar:anahtarlar,satirlar:satirlar};
+}
+/* Kaydederken tohumla: o anki eşleşmeler "bildirildi" sayılsın.
+   🐞 Eskiden bütün hafızayı EZİYORDU — beşinci yuva kurulunca diğer dört
+   yuvanın "gördüm" listesi siliniyor, hepsi baştan sel gibi bildiriyordu.
+   Artık yalnız KENDİ yuvasının anahtarları eklenir. */
+async function mbAlarmTohumla(A,ist,yuvaId){
+  const e=await mbAlarmEslesme(A,ist,yuvaId);
+  const g=await mbAlarmGecmisi(A);
+  const set=new Set(g.anahtarlar);
+  for(const a of e.anahtarlar)set.add(a);
+  await mbAlarmGecmisiYaz(A,{gun:onayDonemi(),anahtarlar:[...set]});
+  return e.anahtarlar.length;
+}
+/* Her /push turunda çalışır. Kurulu HER yuva için listeye yeni girenleri
+   bulur ve bildirir. Yuvalar birbirini etkilemez. */
+async function mbAlarmTara(A){
+  if(!A||!A.VERI||!A.BOT_TOKEN)return;
+  const yuvalar=await mbAlarmListeOku(A);
+  if(!yuvalar.length)return;                         /* filtre kurulmamış */
+  if(!mbSeansIci())return;                           /* seans dışı */
+  const gecmis=await mbAlarmGecmisi(A);
+  const bilinen=new Set(gecmis.anahtarlar);
+  const parcalar=[];
+  let eklendi=0;
+  for(let yi=0;yi<yuvalar.length;yi++){
+    const yuva=yuvalar[yi];
+    const ist=mbIstekNorm(yuva.ist);
+    if(!mbFiltreVarMi(ist))continue;
+    const e=await mbAlarmEslesme(A,ist,yuva.id).catch(()=>null);
+    if(!e)continue;
+    const yeni=e.satirlar.filter((sx,i)=>!bilinen.has(e.anahtarlar[i]));
+    /* Hafızaya YENİLERİN HEPSİ yazılır (mesajda gösterilmeyenler dahil) —
+       yoksa tavanın altında kalanlar her turda tekrar "yeni" sayılırdı. */
+    for(let i=0;i<e.anahtarlar.length;i++)
+      if(!bilinen.has(e.anahtarlar[i])){bilinen.add(e.anahtarlar[i]);
+        gecmis.anahtarlar.push(e.anahtarlar[i]);eklendi++}
+    if(!yeni.length)continue;
+    /* En taze olay önce; mesaj kalabalık olmasın diye tavan var. */
+    yeni.sort((a,b)=>(a.taze-b.taze)||(a.kod<b.kod?-1:1));
+    const gosterilen=yeni.slice(0,MB_ALARM_AZAMI);
+    const grup={};
+    for(const sx of gosterilen){(grup[sx.tf]=grup[sx.tf]||[]).push(sx)}
+    let m="🔔 <b>ALARM "+(yi+1)+"/"+yuvalar.length+"</b>\n<i>"+mbFiltreOzet(ist)+"</i>\n";
+    for(const tf of ist.tfler){
+      const gg=grup[tf];if(!gg||!gg.length)continue;
+      m+="\n"+(MB_TF[tf]?MB_TF[tf].ik+" <b>"+MB_TF[tf].ad+"</b>":tf)+"\n";
+      for(const sx of gg){
+        const mal=sx.topHam<=sx.dagHam?("TOP "+(sx.topHam>999?"-":sx.topHam+"B")):("DAĞ "+(sx.dagHam>999?"-":sx.dagHam+"B"));
+        m+="• <b>"+sx.kod+"</b>  "+sx.fiyat+"  ·  "+mal+"  ·  "+
+          (sx.boga?"🐂":sx.ayi?"🐻":"?")+sx.rejYas+"B"+(sx.dip?"  ⬇️":"")+
+          (ist.enerji.acik&&sx.ezMes!==null&&sx.ezMes!==undefined?
+            "  ·  ⚛"+(sx.ezAge===0?"0B↑":sx.ezAge===1?"1B↑":"%"+sx.ezMes):"")+"\n";
+      }
+    }
+    while(m.slice(-1)==="\n")m=m.slice(0,-1);
+    if(yeni.length>gosterilen.length)
+      m+="\n<i>…ve "+(yeni.length-gosterilen.length)+" hisse daha.</i>";
+    parcalar.push(m);
+  }
+  if(eklendi)await mbAlarmGecmisiYaz(A,gecmis);
+  if(!parcalar.length)return;
+  const metin=parcalar.join("\n\n──────────\n\n")+"\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
+  /* 1) KANAL — tek istek, abone sayısından bağımsız */
+  const kanal=String((A.ALARM_KANAL||"")).trim();
+  if(kanal)await b(A.BOT_TOKEN,"sendMessage",{chat_id:kanal,text:metin,
+    parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
+  /* 2) ÖZEL MESAJ — yönetici + süper üyeler, mevcut kuyruk altyapısıyla */
+  const kullanicilar=await alarmKullanicilari(A).catch(()=>[]);
+  if(kullanicilar.length){
+    await alarmKuyrugaKoy(A,metin,kullanicilar);
+    await alarmKuyrukBosalt(A);
+  }
+  saglikArtir("mbAlarm");
+}
+/* Kurulu alarmların ihtiyaç duyduğu dilimlerden EN EKSİK olanı önce ilerlet.
+   Alarm yoksa eski davranış (yedi dilim sırayla) aynen sürer. */
+async function mbAlarmOncelikliTara(A){
+  const yuvalar=await mbAlarmListeOku(A).catch(()=>[]);
+  if(!yuvalar.length)return mbDilimTara(A);
+  const gerekli=[];
+  for(const y of yuvalar)for(const t of mbIstekNorm(y.ist).tfler)
+    if(gerekli.indexOf(t)<0)gerekli.push(t);
+  if(!gerekli.length)return mbDilimTara(A);
+  const evrenSayi=(await mbEvren(A)).length||1;
+  let hedef=null,enAz=1e9;
+  for(const t of gerekli){
+    const b=await mbTfOku(A,t);
+    const n=Object.keys((b&&b.sonuc)||{}).length;
+    if(n<enAz){enAz=n;hedef=t}
+  }
+  /* Alarmın bütün dilimleri doluysa sıradaki dilimlere dön — havuz taze kalsın. */
+  if(hedef&&enAz>=evrenSayi)return mbDilimTara(A);
+  return mbDilimTara(A,hedef);
+}
+/* Bir filtrede gerçekten aranan bir şey var mı? */
+function mbFiltreVarMi(ist){
+  return!!(ist.mal.acik||ist.dip.acik||ist.ab.acik||
+           (ist.bolge&&ist.bolge.acik)||(ist.enerji&&ist.enerji.acik)||
+           (ist.pivot&&ist.pivot.acik));
+}
+/* Alarm ekranı için özet — kaç yuva dolu, hangi filtreler kurulu. */
+async function mbAlarmOzetListe(A){
+  const yuvalar=await mbAlarmListeOku(A).catch(()=>[]);
+  return{yuva:MB_ALARM_YUVA,seans:mbSeansIci(),
+    liste:yuvalar.map(y=>{const i2=mbIstekNorm(y.ist);
+      return{id:y.id,ozet:mbFiltreOzet(i2),tfler:i2.tfler,ts:y.ts}})};
 }
 
 /* ---------- B) 🔐 İMZALI PANEL ANAHTARI ----------
@@ -1910,10 +3353,12 @@ void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  �
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Fix Borsa Sinyal</title>
+<meta name="color-scheme" content="dark">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js';document.head.appendChild(s)"></script>
 <style>
 :root{
+  color-scheme:dark;
   --bg:#0e1116; --kart:#161b22; --kart2:#1c2330; --ciz:#262d38;
   --yazi:#e6edf3; --soluk:#8b949e; --mavi:#388bfd;
   --yes:#3fb950; --kir:#f85149; --sar:#d29922; --mor:#a371f7;
@@ -2014,6 +3459,7 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .dg.ik{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi)}
 .dg.kirmizi{background:var(--kir)}
 .gir{width:100%;background:var(--bg);border:1px solid var(--ciz);color:var(--yazi);
+  -webkit-text-fill-color:var(--yazi);caret-color:var(--yazi);
   border-radius:9px;padding:11px;font-size:14px;margin-top:7px;font-family:inherit}
 textarea.gir{min-height:88px;resize:vertical}
 .katman{position:fixed;inset:0;z-index:60;background:var(--bg);overflow-y:auto;
@@ -2377,6 +3823,7 @@ function ekranAdi(){
   if(sekme==="sag")return"🛡 Sistem";
   if(sekme==="abs")return"🌊 Absorpsiyon";
   if(sekme==="malboga")return"🐂🐻 Mal + Ayı/Boğa";
+  if(sekme==="yesil")return"🟢 Yeşil Kapanış";
   if(sekme==="rot")return"🔄 Sektör Rotasyonu";
   if(sekme==="perf")return"📈 Performans";
   if(sekme==="davet")return"📤 Davet";
@@ -2424,7 +3871,18 @@ function el(id){return document.getElementById(id)}
 function post(yol,gov){
   gov=gov||{}; gov.initData=(TG&&TG.initData)||"";
   return fetch(yol,{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(gov)}).then(function(r){return r.json()});
+    body:JSON.stringify(gov)}).then(function(r){
+      /* Eskiden doğrudan r.json() çağrılıyordu: Cloudflare 1102 gibi bir hata
+         sayfası (HTML) dönünce json() patlıyor, ekranda sebepsiz "hata"
+         yazıyordu. Şimdi önce metni okuyoruz; JSON değilse durum kodunu ve
+         ilk birkaç kelimeyi gösteriyoruz — asıl sebep görünür oluyor. */
+      return r.text().then(function(t){
+        var j=null;try{j=JSON.parse(t)}catch(e){}
+        if(j)return j;
+        var ozet=(t||"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,140);
+        return{ok:!1,mesaj:"⚠️ sunucu hatası (HTTP "+r.status+")"+(ozet?": "+ozet:"")};
+      });
+    });
 }
 /* TR takvimine göre "bugün mü?" — sinyalTs saniye cinsinden, +3 saat ofsetle
    gün numarasına çevrilip bugünün gün numarasıyla karşılaştırılıyor. */
@@ -2489,6 +3947,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
   s.push('<button class="sek'+(sekme==="malboga"?" on":"")+'" data-r="nötr" data-s="malboga">🐂 Mal+Ayı/Boğa</button>');
+  if(D&&D.yon)s.push('<button class="sek'+(sekme==="yesil"?" on":"")+'" data-r="nötr" data-s="yesil">🟢 Yeşil Kapanış 🔐</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="sag"?" on":"")+'" data-r="nötr" data-s="sag">🛡 Sistem</button>');
@@ -2532,6 +3991,7 @@ function ciz(){
   if(sekme==="sag")return saglikCiz();
   if(sekme==="abs")return absCiz();
   if(sekme==="malboga")return mbCiz();
+  if(sekme==="yesil")return ykCiz();
   if(sekme==="rot")return rotCiz();
   if(sekme==="perf")return perfCiz();
   if(sekme==="kama")return kamaCiz();
@@ -3828,9 +5288,13 @@ function portfoyPerformansGrafikCiz(gunluk){
       timeScale:{timeVisible:false,secondsVisible:false},
       rightPriceScale:{borderVisible:false}
     });
-    var seri=chart.addSeries(LightweightCharts.AreaSeries,{
+    var alanAyar={
       lineColor:"#388bfd",topColor:"rgba(56,139,253,0.35)",bottomColor:"rgba(56,139,253,0.02)",lineWidth:2
-    });
+    };
+    var seri=null;
+    if(chart.addSeries&&LightweightCharts.AreaSeries)seri=chart.addSeries(LightweightCharts.AreaSeries,alanAyar);
+    else if(chart.addAreaSeries)seri=chart.addAreaSeries(alanAyar);
+    if(!seri){kutu.innerHTML='<p class="bilgi">Grafik kütüphanesi bu sürümde alan serisi oluşturamadı.</p>';return}
     seri.setData(gunluk.map(function(x){return{time:x.gun,value:x.deger}}));
     chart.timeScale().fitContent();
     window.addEventListener("resize",function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}});
@@ -4216,10 +5680,20 @@ function grafikCiz(kod,ad,deneme,yukseklik){
         timeScale:{timeVisible:saatlik,secondsVisible:false},
         rightPriceScale:{borderVisible:false}
       });
-      var seri=chart.addSeries(LightweightCharts.CandlestickSeries,{
-        upColor:"#3fb950",downColor:"#f85149",borderVisible:false,
-        wickUpColor:"#3fb950",wickDownColor:"#f85149"
-      });
+      /* Grafik kütüphanesinin iki farklı sürüm API'si var:
+           v5 → chart.addSeries(LightweightCharts.CandlestickSeries,…)
+           v4 → chart.addCandlestickSeries(…)
+         CDN hangi sürümü verirse versin çalışsın diye ikisi de deneniyor.
+         Eskiden yalnız v5 yolu vardı; CDN v4 döndürdüğünde grafik sessizce
+         boş kalıyordu (yalnız köşedeki logo görünüyordu). */
+      var mumAyar={upColor:"#3fb950",downColor:"#f85149",borderVisible:false,
+        wickUpColor:"#3fb950",wickDownColor:"#f85149"};
+      var seri=null;
+      if(chart.addSeries&&LightweightCharts.CandlestickSeries)
+        seri=chart.addSeries(LightweightCharts.CandlestickSeries,mumAyar);
+      else if(chart.addCandlestickSeries)
+        seri=chart.addCandlestickSeries(mumAyar);
+      if(!seri){kutu.innerHTML='<p class="bilgi">Grafik kütüphanesi bu sürümde mum serisi oluşturamadı.</p>';return}
       seri.setData(veri.map(function(b){return{time:b.time,open:b.open,high:b.high,low:b.low,close:b.close}}));
       var rz=el("desenRozet"),yr=el("desenYorum"),d=v&&v.desen;
       var sonFiyat=veri.length?veri[veri.length-1].close:null;
@@ -4228,9 +5702,12 @@ function grafikCiz(kod,ad,deneme,yukseklik){
         /* Pine gibi: P1-P3 / P2-P4 arası DÜZ çizgi, sonrası NOKTALI uzatma. */
         var cizgi=function(nokta,stil){
           if(!nokta||nokta.length<2)return;
-          var s=chart.addSeries(LightweightCharts.LineSeries,{color:renk,lineWidth:2,lineStyle:stil,
-            crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false});
-          s.setData(nokta);
+          var ay={color:renk,lineWidth:2,lineStyle:stil,
+            crosshairMarkerVisible:false,lastValueVisible:false,priceLineVisible:false};
+          var s=null;
+          if(chart.addSeries&&LightweightCharts.LineSeries)s=chart.addSeries(LightweightCharts.LineSeries,ay);
+          else if(chart.addLineSeries)s=chart.addLineSeries(ay);
+          if(s)s.setData(nokta);
         };
         cizgi(d.ust,0);cizgi(d.alt,0);cizgi(d.ustUz,2);cizgi(d.altUz,2);
         if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk+';border-color:'+renk+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+"</span>";
@@ -4247,7 +5724,12 @@ function grafikCiz(kod,ad,deneme,yukseklik){
       var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
       window.addEventListener("resize",yenidenBoyutla);
     }catch(e){
-      var k2=el("mumKutu"); if(k2)k2.innerHTML='<p class="bilgi">Grafik çizilemedi.</p>';
+      /* Sessiz kalmak en kötüsü: sebebi yaz ki ne olduğu anlaşılsın. */
+      var k2=el("mumKutu");
+      if(k2)k2.innerHTML='<p class="bilgi">Grafik çizilemedi.<br>'+
+        '<span style="font-size:11px;opacity:.7">'+E(String((e&&e.message)||e)).slice(0,160)+
+        '<br>kütüphane: '+(window.LightweightCharts?(LightweightCharts.version?LightweightCharts.version():"yüklü"):"YOK")+
+        ' · mum: '+(((v&&v.mumlar)||[]).length)+'</span></p>';
     }
   }).catch(function(){var k2=el("mumKutu"); if(k2)k2.innerHTML='<p class="bilgi">Grafik verisi alınamadı.</p>'});
 }
@@ -4448,11 +5930,26 @@ function absGoster(v){
    dilimler de yazar. Bu sekmede üst sekme şeridi gizlenir — tüm dikey
    alan taramaya kalır. */
 var mbD=null, mbTek=null, mbBekle=false;
+/* Alarm listesi paketten AYRI gelir: tarama artık uygulamada yürüdüğü için
+   sunucu paketi üretmiyor, alarm bilgisi de o pakette taşınamıyor. */
+var mbAlarmD=null, mbAlarmIstendi=false;
+function mbAlarmCek(zorla){
+  if(mbAlarmIstendi&&!zorla)return;
+  mbAlarmIstendi=true;
+  post("/api/malboga",{is:"alarmListe"}).then(function(r){
+    mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
+    if(sekme==="malboga")mbCizYenile();
+  }).catch(function(){mbAlarmD={yuva:5,seans:false,liste:[]}});
+}
 /* Açılış = TradingView varsayılanına yakın: günlükte son 5 barda mal toplanmış. */
 var mbIst={
+  kapsam:"hepsi",          /* hepsi = seçili dilimlerin HEPSİNDE tutsun */
   tfler:["1G"],
   mal:{acik:true, top:true, dag:false, temiz:true, sinirsiz:false, n:5},
   dip:{acik:false,kademe:"dip"},
+  pivot:{acik:false,dilimler:["KISA","ORTA","UZUN"],kirdi:true,yakin:false,uzerinde:false,yuzde:3},
+  bolge:{acik:false,secili:["b2"]},
+  enerji:{acik:false,olustu:true,icinde:true,b0:true,b1:false,mesafeAcik:true,mesafe:5},
   ab :{acik:false,boga:true, ayi:false, sinirsiz:false, n:5}
 };
 var MB_BAR=[0,1,2,3,4];
@@ -4460,18 +5957,457 @@ var MB_KADEME=[["dip","⬇️ Dip bölgesi"],["dip382","⬇️⬇️ Derin (382 
 
 function mbCiz(){
   if(mbTek){mbTekGoster(mbTek);return}
-  if(mbD){mbGoster(mbD);return}
-  el("govde").innerHTML='<div class="yukleniyor">taranıyor… (ilk açılış 10-20 sn sürebilir)</div>';
-  mbGetir();
+  /* Ölçümler uygulamanın belleğinde; hiç tarama yapılmadıysa boş paketle
+     çizeriz ve kullanıcı "Taramayı başlat" der. */
+  if(!mbEvrenKod){
+    el("govde").innerHTML='<div class="yukleniyor">hazırlanıyor…</div>';
+    post("/api/malboga",{is:"evren"}).then(function(r){
+      if(r&&r.ok&&r.kodlar){mbEvrenKod=r.kodlar;mbEvrenKaynak=r.kaynak||""}
+      mbCizYenile();mbOtomatikBaslat();
+    }).catch(function(){mbCizYenile()});
+    return;
+  }
+  mbCizYenile();
+  mbAlarmCek();
+  mbTazelemeKur();
+  /* Sekmeye girildiğinde tarama KENDİLİĞİNDEN başlar — her seferinde
+     düğmeye basmaya gerek yok. Ölçümler bellekte durduğu için ikinci
+     girişte yeniden taramaz, yalnız eksik kalanları tamamlar. */
+  mbOtomatikBaslat();
 }
-function mbGetir(){
-  mbBekle=true;
-  post("/api/malboga",mbIst).then(function(v){mbBekle=false;mbD=v;mbGoster(v)})
-    .catch(function(){mbBekle=false;el("govde").innerHTML='<div class="bos">Tarama alınamadı. Birazdan tekrar dene.</div>'});
+/* ⏱ OTOMATİK TAZELEME — kullanıcı elle "başlat"a basmasın diye.
+   Tarama bitince ölçümlerin yaşı takip edilir; seçili dilimlerin en
+   hızlısına göre bir süre sonra kendiliğinden yeniden taranır. Sunucudaki
+   ölçüm önbelleği sayesinde tazeleme çok ucuz. */
+var MB_TAZE_SURE={"5DK":12e4,"15DK":3e5,"1SA":9e5,"4SA":18e5,"1G":18e5,"1HAF":36e5,"1AY":36e5};
+var mbSonTarama=0, mbZamanlayici=null;
+function mbTazelemeKur(){
+  if(mbZamanlayici)return;
+  mbZamanlayici=setInterval(function(){
+    if(sekme!=="malboga"){return}
+    if(mbTaraDurum&&mbTaraDurum.suruyor)return;
+    if(!mbIst.tfler.length)return;
+    var enHizli=1e9;
+    for(var i=0;i<mbIst.tfler.length;i++){
+      var sr=MB_TAZE_SURE[mbIst.tfler[i]]||9e5;
+      if(sr<enHizli)enHizli=sr;
+    }
+    if(Date.now()-mbSonTarama<enHizli)return;
+    mbOlcum={};                    /* taze ölçüm iste */
+    mbTaraBaslat();
+  },20000);
+}
+function mbOtomatikBaslat(){
+  /* Tarama "sürüyor" görünüyorsa gerçekten sürüyor mu bak: sekme dışında
+     durmuş olabilir. Nöbetçiyi kur ve döngüyü ittir. */
+  if(mbTaraDurum&&mbTaraDurum.suruyor){mbNobetciKur();mbTaraTur();return}
+  if(!mbIst.tfler.length)return;
+  var ilr=mbIlerleme();
+  if(ilr.gereken&&ilr.olculen>=ilr.gereken)return;   /* zaten tamam */
+  mbTaraBaslat();
 }
 /* Tik değişti → seçimi hemen boya, sonucu tazele. */
-function mbUygula(){ if(mbD)mbGoster(mbD,true); mbGetir(); }
+function mbUygula(){ mbCizYenile(); }
+function mbTazele(){ mbCizYenile(); }   /* eski çağrı adları için */
+function mbGetir(){ mbCizYenile(); }
 
+/* ═══ 📈 PİVOT KIRILIM MODÜLÜ ═══════════════════════════════════════════
+   Pivot kırılım taraması zaten sistemde var: KISA (1 saat), ORTA (4 saat),
+   UZUN (1 gün) listeleri ve bunların aday listeleri. Bu modül o veriyi
+   YENİDEN ÖLÇMEZ — uygulamada zaten yüklü olan kartları süzer, dolayısıyla
+   sunucuya tek istek bile gitmez, sonuç anında çıkar.
+   Üç durum:
+     ⚡ son barda kırdı      — kırılım en son barda oldu
+     🎯 kırılıma %X kaldı    — henüz kırmadı ama yakın (aday listesi)
+     ✅ kırılımın üzerinde   — kırmış ve fiyat hâlâ seviyenin üstünde */
+/* ═══ 🪜 FİBO BÖLGELERİ ═══════════════════════════════════════════════
+   Merdivenin dört ana bölgesi — sınırlar TradingView'deki çizgi adlarının
+   birebir karşılığı:
+     🟠 DİKKAT AYI → BOĞA      0.0   – 0.618   dip bölgesi, toparlanma
+     🟢 BOĞA → KARAR YERİ      0.618 – 1.0     boğaya geçmiş, karara yürüyor
+     🔵 KARAR YERİ → DİRENÇ    1.0   – 1.618   kararı geçmiş, dirence yürüyor
+     🟣 DİRENÇ → GÜÇLÜ D/D     1.618 – 2.618   direnci geçmiş, güçlü bölge */
+var MB_BOLGE=[
+  {id:"b1",ik:"🟠",ad:"DİKKAT AYI → BOĞA",alt:0.0,ust:0.618},
+  {id:"b2",ik:"🟢",ad:"BOĞA → KARAR YERİ",alt:0.618,ust:1.0},
+  {id:"b3",ik:"🔵",ad:"KARAR YERİ → DİRENÇ",alt:1.0,ust:1.618},
+  {id:"b4",ik:"🟣",ad:"DİRENÇ → GÜÇLÜ D/D",alt:1.618,ust:2.618}
+];
+function mbBolgeBul(oran){
+  if(oran===null||oran===undefined||!isFinite(oran))return null;
+  for(var i=0;i<MB_BOLGE.length;i++){
+    var b=MB_BOLGE[i];
+    if(oran>=b.alt&&oran<b.ust)return b;
+  }
+  return null;    /* dört ana bölgenin dışında (0.0 altı ya da güçlü D/D üstü) */
+}
+/* ═══ ⚛ ENERJİ KIRILIMI ═════════════════════════════════════════════
+   6.2'deki "⚛ Enerji Taraması" bölümünün karşılığı. Sunucu her ölçümde
+   Pine'daki enz_scan çıktısını da veriyor (ezAct/ezIns/ezAge/ezMes…);
+   burada yalnız süzülür — ek istek yok.
+     Oluştu  : ortada aktif bir sıkışma zonu var
+     İçinde  : fiyat o zonun İÇİNDE (henüz kırmadı)
+     0B ↑    : zonu SON BARDA yukarı kırdı
+     1B ↑    : bir bar önce yukarı kırdı
+     Mesafe  : fiyat zonun üst çizgisine %X'ten yakın
+   Pine'daki gibi: hiç durum tiki yoksa durum aranmaz, yalnız mesafe. */
+var MB_EZ_DURUM=[["olustu","Oluştu","aktif sıkışma zonu var"],
+                 ["icinde","İçinde","fiyat zonun içinde"],
+                 ["b0","0B ↑","son barda yukarı kırdı"],
+                 ["b1","1B ↑","bir bar önce kırdı"]];
+var MB_EZ_MESAFE=[1,2,3,5,10];
+function mbEnerjiGecti(x,ist){
+  var e=ist.enerji;
+  if(!e||!e.acik)return true;
+  var durumVar=(e.olustu||e.icinde||e.b0||e.b1);
+  var uydu=!durumVar;
+  if(!uydu){
+    if(e.olustu&&Number(x.ezAct)>0.5)uydu=true;
+    if(!uydu&&e.icinde&&Number(x.ezIns)>0.5)uydu=true;
+    if(!uydu&&e.b0&&Number(x.ezAge)===0)uydu=true;
+    if(!uydu&&e.b1&&Number(x.ezAge)===1)uydu=true;
+  }
+  if(!uydu)return false;
+  if(e.mesafeAcik&&!(x.ezMes!=null&&Number(x.ezMes)<=e.mesafe))return false;
+  return true;
+}
+/* Satırdaki ⚛ hücresi — Pine tablosundaki ENERJİ sütununun karşılığı */
+function mbEnerjiRozet(x,ist){
+  if(!ist.enerji||!ist.enerji.acik)return "";
+  var durum=Number(x.ezAge)===0?"0B↑":Number(x.ezAge)===1?"1B↑":
+            Number(x.ezIns)>0.5?"İçinde":Number(x.ezAct)>0.5?"Zon":null;
+  if(!durum)return "";
+  var rk=durum==="0B↑"?"#00e676":durum==="1B↑"?"#69f0ae":durum==="İçinde"?"#FFD700":"#FF9800";
+  var par='<span style="color:'+rk+';font-weight:800">⚛ '+durum+'</span>';
+  if(x.ezMes!=null)par+=' · üst çizgiye %'+Number(x.ezMes).toFixed(1);
+  if(x.ezEn!=null)par+=' · güç %'+Math.round(Number(x.ezEn));
+  if(x.ezTp1!=null)par+=' · GFH '+Number(x.ezTp1).toFixed(2);
+  return '<div style="font-size:10px;margin:3px 0 2px;opacity:.95">'+par+'</div>';
+}
+var MB_PIVOT_DILIM=[["KISA","potansiyel","adayOrta","1 saat","📊"],
+                    ["ORTA","fibo","adayOrtaVade","4 saat","📐"],
+                    ["UZUN","uzunvade","adayUzun","1 gün","🗓"]];
+/* Bir barın saniyesi — "son barda kırdı" bununla ölçülür */
+var MB_PIVOT_BAR={KISA:3600,ORTA:14400,UZUN:86400};
+var mbPivotHar=null, mbPivotDamga=0;
+function mbPivotHaritasi(){
+  /* D.kartlar değişmediyse yeniden kurma */
+  var damga=(D&&D.guncelleme)||"";
+  if(mbPivotHar&&mbPivotDamga===damga)return mbPivotHar;
+  var har={};
+  var K=(D&&D.kartlar)||{};
+  var simdi=Math.floor(Date.now()/1000);   /* sinyal yaşı gösterimi için */
+  MB_PIVOT_DILIM.forEach(function(p){
+    var ad=p[0], kirListe=K[p[1]]||[], adayListe=K[p[2]]||[];
+    var bar=MB_PIVOT_BAR[ad]||86400;
+    kirListe.forEach(function(x){
+      if(!x||!x.kod)return;
+      if(!har[x.kod])har[x.kod]={};
+      var ts=Number(x.sinyalTs)||0;
+      /* SON BAR = uygulamanın "⚡ canlı" rozetiyle BİREBİR aynı ölçüt.
+         Tahmin yok: kart canlıysa kırılım şu anki barda olmuştur. */
+      var sonBar=!!x.canli;
+      /* KIRILAN SEVİYE = giriş fiyatı (pivot kartında alan adı budur).
+         Fiyat o seviyenin üstündeyse hisse hâlâ kırılımın üzerinde. */
+      var giris=Number(x.giris),fiyat=Number(x.fiyat);
+      var ust=(giris>0&&fiyat>0)?(fiyat>=giris):sonBar;
+      har[x.kod][ad]={tip:"kirdi",kirilim:(giris>0?giris:null),fiyat:(fiyat>0?fiyat:null),
+        yuzde:(giris>0&&fiyat>0)?((giris-fiyat)/fiyat*100):null,
+        kalite:x.kalite,canli:!!x.canli,ts:ts,bar:bar,
+        sonBar:sonBar,uzerinde:ust};
+    });
+    adayListe.forEach(function(x){
+      if(!x||!x.kod)return;
+      if(!har[x.kod])har[x.kod]={};
+      /* Kırılmış kaydı varsa adayla ezme — kırılım daha ileri bir durum */
+      if(har[x.kod][ad]&&har[x.kod][ad].tip==="kirdi")return;
+      har[x.kod][ad]={tip:"aday",kirilim:x.tetik,fiyat:x.fiyat,
+        yuzde:(x.tetikYuzde===null||x.tetikYuzde===undefined)?null:Number(x.tetikYuzde),
+        kalite:x.kalite,canli:false,ts:Number(x.sinyalTs)||0,bar:bar,
+        sonBar:false,uzerinde:false};
+    });
+  });
+  mbPivotHar=har;mbPivotDamga=damga;
+  return har;
+}
+/* Bir hisse pivot şartını sağlıyor mu? Seçili dilimlerden HERHANGİ birinde
+   seçili durumlardan HERHANGİ biri tutuyorsa geçer. */
+function mbPivotGecti(kod,ist){
+  var p=ist.pivot;
+  if(!p||!p.acik)return true;
+  var har=mbPivotHaritasi();
+  var h=har[kod];
+  if(!h)return false;
+  var dilimler=(p.dilimler&&p.dilimler.length)?p.dilimler:["KISA","ORTA","UZUN"];
+  for(var i=0;i<dilimler.length;i++){
+    var d=h[dilimler[i]];
+    if(!d)continue;
+    if(p.kirdi&&d.tip==="kirdi"&&d.sonBar)return true;
+    if(p.uzerinde&&d.tip==="kirdi"&&d.uzerinde)return true;
+    if(p.yakin&&d.tip==="aday"&&d.yuzde!=null&&Math.abs(Number(d.yuzde))<=p.yuzde)return true;
+  }
+  return false;
+}
+/* Satırda gösterilecek kısa özet */
+function mbPivotRozet(kod,ist){
+  var p=ist.pivot;
+  if(!p||!p.acik)return "";
+  var har=mbPivotHaritasi(), h=har[kod];
+  if(!h)return "";
+  var dilimler=(p.dilimler&&p.dilimler.length)?p.dilimler:["KISA","ORTA","UZUN"];
+  var par=[];
+  dilimler.forEach(function(ad){
+    var d=h[ad];if(!d)return;
+    var im,rk;
+    var ustu=(d.yuzde!=null&&d.tip==="kirdi")?(" %"+Math.abs(Number(d.yuzde)).toFixed(1)):"";
+    if(d.tip==="kirdi"&&d.sonBar){im="⚡ son bar"+ustu;rk="var(--yes)"}
+    else if(d.tip==="kirdi"&&d.uzerinde){im="✅ üzerinde"+ustu;rk="var(--yes)"}
+    else if(d.tip==="kirdi"){im="kırdı"+ustu;rk="#8b949e"}
+    else if(d.yuzde!=null){im="🎯 %"+Math.abs(Number(d.yuzde)).toFixed(1)+" kaldı";rk="var(--sar)"}
+    else return;
+    par.push('<span style="font-size:10px;padding:2px 5px;border-radius:4px;'+
+      'background:rgba(124,77,255,.15);color:'+rk+';font-weight:700">'+E(ad)+' '+im+'</span>');
+  });
+  return par.length?'<div style="display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 2px">'+par.join("")+'</div>':"";
+}
+/* ═══ TARAMAYI UYGULAMA YÜRÜTÜR ═══════════════════════════════════════
+   Ölçümler burada, uygulamanın belleğinde birikir. Sunucudan yalnız
+   "şu hisseleri ölç" diye ham sonuç istenir. KV, isolate ve arka plan
+   turu denklemden çıktığı için havuzun tamamı her zaman taranabilir.
+   Süzme de burada yapılır — sonuç anında, sunucuya gitmeden değişir. */
+var mbOlcum={};          /* dilim → kod → ölçüm */
+var mbEvrenKod=null;     /* havuzdaki bütün kodlar */
+var mbEvrenKaynak="";
+var mbTaraDurum=null;    /* {suruyor,tf,idx,olculen,toplam,baslangic} */
+
+function mbOlcumSay(tf){return mbOlcum[tf]?Object.keys(mbOlcum[tf]).length:0}
+/* Seçili dilimlerde toplam kaç ölçüm gerekiyor / kaçı var */
+function mbIlerleme(){
+  var ger=0,var_=0;
+  var n=mbEvrenKod?mbEvrenKod.length:0;
+  for(var i=0;i<mbIst.tfler.length;i++){ger+=n;var_+=mbOlcumSay(mbIst.tfler[i])}
+  return{gereken:ger,olculen:var_};
+}
+/* Sunucudaki mbModulGecti ile AYNI kurallar — tek kaynak olması için
+   birebir aynı sırayla yazıldı. */
+function mbGectiMi(x,ist,kod){
+  if(!x)return false;
+  if(ist.pivot&&ist.pivot.acik&&kod&&!mbPivotGecti(kod,ist))return false;
+  if(ist.mal.acik){
+    var N=ist.mal.sinirsiz?1e9:ist.mal.n, ok=false;
+    if(ist.mal.top)ok=ok||(ist.mal.temiz?(x.topHam<=N&&x.topHam<x.dagHam):x.topHam<=N);
+    if(ist.mal.dag)ok=ok||(x.dagHam<=N);
+    if(!ok)return false;
+  }
+  if(ist.dip.acik&&!x[ist.dip.kademe])return false;
+  if(ist.bolge&&ist.bolge.acik){
+    var bl=mbBolgeBul(x.oran);
+    if(!bl||ist.bolge.secili.indexOf(bl.id)<0)return false;
+  }
+  if(!mbEnerjiGecti(x,ist))return false;
+  if(ist.ab.acik){
+    var M=ist.ab.sinirsiz?1e9:ist.ab.n, ok2=false;
+    if(ist.ab.boga)ok2=ok2||(!!x.boga&&x.rejYas<=M);
+    if(ist.ab.ayi) ok2=ok2||(!!x.ayi &&x.rejYas<=M);
+    if(!ok2)return false;
+  }
+  return true;
+}
+function mbTazelikSay(x){return Math.min(Number(x.topHam),Number(x.dagHam),Number(x.rejYas))}
+/* Bellekteki ölçümlerden ekranın beklediği paketi üretir — böylece çizim
+   kodunun tamamı olduğu gibi kalır. */
+function mbPaketUret(){
+  var TFAD={"5DK":["5 dakika","⚡"],"15DK":["15 dakika","⏱"],"1SA":["1 saat","🕐"],
+    "4SA":["4 saat","🕓"],"1G":["1 gün","🗓"],"1HAF":["1 hafta","📅"],"1AY":["1 ay","🗂"]};
+  var SIRA=["5DK","15DK","1SA","4SA","1G","1HAF","1AY"];
+  var evren=mbEvrenKod?mbEvrenKod.length:0;
+  var dilimler=SIRA.map(function(t){return{tf:t,ad:TFAD[t][0],ik:TFAD[t][1],
+    olculen:mbOlcumSay(t),evren:evren,yas:null}});
+  var sozluk={tfler:SIRA.map(function(t){return{tf:t,ad:TFAD[t][0],ik:TFAD[t][1]}})};
+  var v={ok:true,sozluk:sozluk,dilimler:dilimler,calisiyor:true,
+    evrenBilgi:{sayi:evren,kaynak:mbEvrenKaynak},ortak:[],gruplar:[]};
+  if(!mbIst.tfler.length)return v;
+  /* dilim dilim geçenler */
+  var gecen={},har={};
+  mbIst.tfler.forEach(function(t){
+    var h=mbOlcum[t]||{};har[t]=h;
+    var set={};
+    for(var k in h)if(mbGectiMi(h[k],mbIst,k))set[k]=true;
+    gecen[t]=set;
+  });
+  /* kesişim */
+  var ortak=null;
+  mbIst.tfler.forEach(function(t){
+    if(ortak===null){ortak={};for(var k in gecen[t])ortak[k]=true}
+    else{var y={};for(var k2 in ortak)if(gecen[t][k2])y[k2]=true;ortak=y}
+  });
+  var ortakListe=Object.keys(ortak||{}).sort();
+  v.ortak=ortakListe;
+  function serit(kod){
+    return mbIst.tfler.map(function(t){
+      var m=har[t][kod];
+      if(!m)return{tf:t,yok:true};
+      return{tf:t,boga:!!m.boga,ayi:!!m.ayi,rejYas:m.rejYas,topHam:m.topHam,
+        dagHam:m.dagHam,dip:!!m.dip,dip382:!!m.dip382,dip236:!!m.dip236,gecti:!!gecen[t][kod]};
+    });
+  }
+  if(mbIst.kapsam==="hepsi"){
+    /* 🐞 Satırdaki MAL / A-B değerleri EN BÜYÜK seçili dilimden gelir.
+       Eskiden bu hiçbir yerde yazmıyordu; kullanıcı 7 dilim seçince satırda
+       AYLIK değerleri görüp TradingView'in günlüğüyle karşılaştırıyor ve
+       "tutmuyor" diyordu. Artık hangi dilim olduğu satırda yazıyor. */
+    var enBuyuk=mbIst.tfler[mbIst.tfler.length-1];
+    var kaynak=har[enBuyuk]||{};
+    var liste=ortakListe.map(function(k){
+      var o={kod:k};var m=kaynak[k]||{};
+      for(var a in m)o[a]=m[a];
+      o.tfDurum=serit(k);o.digerTfler=[];return o;
+    }).sort(function(a,b){return (mbTazelikSay(a)-mbTazelikSay(b))||(a.kod<b.kod?-1:1)});
+    var olculen=Math.min.apply(null,mbIst.tfler.map(function(t){return mbOlcumSay(t)}));
+    v.kapsam="hepsi";
+    v.kaynakTf=enBuyuk;
+    v.gruplar=[{tf:"HEPSİ",ad:mbIst.tfler.join(" + ")+" dilimlerinin HEPSİNDE"+
+      (mbIst.tfler.length>1?" · satırdaki MAL/AB değerleri "+enBuyuk+" diliminden":""),ik:"🎯",
+      olculen:olculen,evren:evren,kalan:Math.max(0,evren-olculen),yas:null,
+      cikan:liste.length,liste:liste.slice(0,150)}];
+    return v;
+  }
+  v.kapsam="herhangi";
+  v.gruplar=mbIst.tfler.map(function(t){
+    var liste=Object.keys(gecen[t]).map(function(k){
+      var o={kod:k},m=har[t][k];
+      for(var a in m)o[a]=m[a];
+      o.tfDurum=serit(k);
+      o.digerTfler=mbIst.tfler.filter(function(t2){return t2!==t&&gecen[t2][k]});
+      return o;
+    }).sort(function(a,b){return (mbTazelikSay(a)-mbTazelikSay(b))||(a.kod<b.kod?-1:1)});
+    return{tf:t,ad:TFAD[t][0],ik:TFAD[t][1],olculen:mbOlcumSay(t),evren:evren,
+      kalan:Math.max(0,evren-mbOlcumSay(t)),yas:null,cikan:liste.length,liste:liste.slice(0,120)};
+  });
+  return v;
+}
+/* ── Tarama döngüsü ── */
+var MB_KANAL=3;              /* aynı anda yolda kaç istek */
+var MB_PARCA=16;             /* bir istekte kaç hisse (sunucu tavanı 16) */
+var MB_ISTEK_ZAMAN=20000;    /* bir parça bu kadar sürerse askıda sayılır */
+var MB_HATA_TAVAN=60;        /* bu kadar hatadan sonra tarama durur */
+var mbNobetci=null;
+
+function mbKuyrukKur(){
+  var k=[];
+  for(var i=0;i<mbIst.tfler.length;i++){
+    var tf=mbIst.tfler[i];
+    /* Zaten ölçülmüş hisseleri yeniden isteme — tazeleme mbOlcum'u boşaltır */
+    var var_=mbOlcum[tf]||{};
+    var eksik=[];
+    for(var j=0;j<mbEvrenKod.length;j++){
+      var kod=mbEvrenKod[j];
+      if(!var_[kod])eksik.push(kod);
+    }
+    for(var b=0;b<eksik.length;b+=MB_PARCA)
+      k.push({tf:tf,kodlar:eksik.slice(b,b+MB_PARCA)});
+  }
+  return k;
+}
+function mbTaraBaslat(){
+  if(mbTaraDurum&&mbTaraDurum.suruyor){mbTaraDurum.suruyor=false;mbNobetciKapat();mbCizYenile();return}
+  if(!mbIst.tfler.length){mbCizYenile();return}
+  if(!mbEvrenKod){
+    el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
+    post("/api/malboga",{is:"evren"}).then(function(r){
+      if(!r||!r.ok||!r.kodlar||!r.kodlar.length){
+        mbTaraDurum=null;el("govde").innerHTML='<div class="bos">Hisse listesi alınamadı.</div>';return}
+      mbEvrenKod=r.kodlar;mbEvrenKaynak=r.kaynak||"";
+      mbTaraBaslat();
+    }).catch(function(){mbTaraDurum=null;
+      el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
+    return;
+  }
+  mbTaraDurum={suruyor:true,tf:mbIst.tfler[0],baslangic:Date.now(),hata:0,
+               acik:0,onbellekten:0,kuyruk:mbKuyrukKur(),ucusta:[],sonHareket:Date.now()};
+  mbNobetciKur();
+  mbTaraTur();
+}
+/* ⏱ NÖBETÇİ — askıda kalan parçaları kuyruğa geri koyar ve döngüyü iter.
+   İkinci görevi: kullanıcı sekmeden çıkıp döndüğünde taramayı sürdürmek. */
+function mbNobetciKur(){
+  if(mbNobetci)return;
+  mbNobetci=setInterval(function(){
+    var d=mbTaraDurum;
+    if(!d||!d.suruyor){mbNobetciKapat();return}
+    if(sekme!=="malboga")return;          /* sekme dışında bekle, iptal etme */
+    var simdi=Date.now(),kurtarilan=0;
+    for(var i=d.ucusta.length-1;i>=0;i--){
+      if(simdi-d.ucusta[i].ts>MB_ISTEK_ZAMAN){
+        var u=d.ucusta.splice(i,1)[0];
+        u.olu=true;                        /* geç gelen cevap sayılmasın */
+        d.kuyruk.push({tf:u.tf,kodlar:u.kodlar});
+        d.acik=Math.max(0,d.acik-1);
+        d.hata++;kurtarilan++;
+      }
+    }
+    if(kurtarilan)mbCizYenile();
+    /* Hiçbir kanal yolda değilse ama iş varsa döngü ölmüş demektir — ittir. */
+    if(d.acik===0&&d.kuyruk.length)mbTaraTur();
+    else if(d.acik===0&&!d.kuyruk.length){d.suruyor=false;mbSonTarama=Date.now();
+      mbNobetciKapat();mbCizYenile()}
+  },4000);
+}
+function mbNobetciKapat(){if(mbNobetci){clearInterval(mbNobetci);mbNobetci=null}}
+function mbTaraTur(){
+  var d=mbTaraDurum;
+  if(!d||!d.suruyor)return;
+  /* Sekme dışındayken YENİ istek açma ama taramayı da iptal etme —
+     nöbetçi, sekmeye dönülünce kaldığı yerden sürdürür. */
+  if(sekme!=="malboga")return;
+  while(d.acik<MB_KANAL&&d.kuyruk.length){
+    var is=d.kuyruk.shift();
+    d.acik++;d.tf=is.tf;
+    var kayit={tf:is.tf,kodlar:is.kodlar,ts:Date.now(),olu:false};
+    d.ucusta.push(kayit);
+    (function(is2,kyt){
+      var bitir=function(){
+        if(kyt.olu)return true;            /* nöbetçi çoktan kurtardı */
+        kyt.olu=true;
+        var y=d.ucusta.indexOf(kyt);if(y>=0)d.ucusta.splice(y,1);
+        d.acik=Math.max(0,d.acik-1);
+        d.sonHareket=Date.now();
+        return false;
+      };
+      post("/api/malboga",{is:"olc",tf:is2.tf,kodlar:is2.kodlar}).then(function(r){
+        if(bitir())return;
+        if(!mbTaraDurum||!mbTaraDurum.suruyor)return;
+        if(r&&r.ok&&r.olcum){
+          if(!mbOlcum[is2.tf])mbOlcum[is2.tf]={};
+          for(var k in r.olcum)mbOlcum[is2.tf][k]=r.olcum[k];
+          if(r.onbellekten)d.onbellekten=(d.onbellekten||0)+r.onbellekten;
+          /* Sunucu istenenlerin hepsini döndürmediyse eksikler kuyruğa döner */
+          var eksik=[];
+          for(var i2=0;i2<is2.kodlar.length;i2++)
+            if(!mbOlcum[is2.tf][is2.kodlar[i2]])eksik.push(is2.kodlar[i2]);
+          if(eksik.length&&d.hata<MB_HATA_TAVAN){d.hata++;d.kuyruk.push({tf:is2.tf,kodlar:eksik})}
+        }else{
+          d.hata++;
+          if(d.hata<MB_HATA_TAVAN)d.kuyruk.push({tf:is2.tf,kodlar:is2.kodlar});
+        }
+        mbCizYenile();
+        setTimeout(mbTaraTur,20);
+      }).catch(function(){
+        if(bitir())return;
+        if(!mbTaraDurum||!mbTaraDurum.suruyor)return;
+        d.hata++;
+        /* Başarısız parça KUYRUĞA GERİ — imleç geri sarma yok, kayıp yok. */
+        if(d.hata<MB_HATA_TAVAN){d.kuyruk.push({tf:is2.tf,kodlar:is2.kodlar});
+          mbCizYenile();setTimeout(mbTaraTur,1200);
+        }else{d.suruyor=false;mbNobetciKapat();mbCizYenile()}
+      });
+    })(is,kayit);
+  }
+  /* iş kalmadı ve uçuşta istek yoksa bitti */
+  if(!d.acik&&!d.kuyruk.length){d.suruyor=false;mbSonTarama=Date.now();
+    mbNobetciKapat();mbCizYenile()}
+}
+function mbCizYenile(){mbD=mbPaketUret();mbGoster(mbD)}
 /* MAL hücresi — Pine tablosuyla aynı: toplama yaşı 5 barı geçtiyse "-" */
 function mbMalHucre(x){
   if(x.top<9999)return{t:(x.top===0?"TOP☀":"TOP")+" "+x.top+"B",r:x.top<=2?"var(--yes)":"#40E0D0"};
@@ -4528,7 +6464,21 @@ function mbGoster(v,yerel){
     h+=mbCip('data-mbtf="'+E(t.tf)+'"',
       E(t.ik+" "+t.ad)+(t.olculen?' <span style="opacity:.72;font-size:11px">'+t.olculen+'</span>':""),
       mbIst.tfler.indexOf(t.tf)>=0)});
-  h+='</div></div>';
+  h+='</div>';
+  /* Birden çok dilim seçiliyken en kritik ayar: hepsinde mi, birinde mi? */
+  if(mbIst.tfler.length>1){
+    h+='<div class="altbilgi" style="margin:10px 0 5px;opacity:.85">Seçili '+mbIst.tfler.length+' dilimde şart nasıl aransın?</div>'+
+       '<div class="sirala" style="flex-wrap:wrap">'+
+       mbCip('data-mbkapsam="hepsi"','✅ HEPSİNDE tutsun',mbIst.kapsam==="hepsi")+
+       mbCip('data-mbkapsam="herhangi"','➕ HERHANGİ birinde',mbIst.kapsam==="herhangi")+
+       '</div>'+
+       '<div class="altbilgi" style="margin-top:5px;opacity:.7;white-space:normal">'+
+       (mbIst.kapsam==="hepsi"
+         ?"Hisse, seçtiğin dilimlerin <b>hepsinde</b> şartı tutmalı. Tek liste çıkar, her satırda dilim dilim durum yazar."
+         :"Hisse, dilimlerden <b>birinde</b> tutsa yeter. Her dilim ayrı kart olur — bir dilimde boğa olan hisse başka dilimde ayı olabilir.")+
+       '</div>';
+  }
+  h+='</div>';
   /* ── 2) MAL TARAMA ── */
   h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("mal","📦","MAL TARAMA",mbIst.mal.acik);
   if(mbIst.mal.acik){
@@ -4559,12 +6509,107 @@ function mbGoster(v,yerel){
     h+=mbYasSatir("ab",mbIst.ab);
   }
   h+='</div>';
+  /* ── 3b) FİBO BÖLGESİ ── */
+  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("bolge","🪜","FİBO BÖLGESİ",mbIst.bolge.acik);
+  if(mbIst.bolge.acik){
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
+       'Fiyat merdivenin hangi ana bölgesinde? Sınırlar TradingView’deki çizgi adlarının aynısı.</div>'+
+       '<div style="display:flex;flex-direction:column;gap:5px">';
+    MB_BOLGE.forEach(function(b){
+      var ac=mbIst.bolge.secili.indexOf(b.id)>=0;
+      h+='<button class="sir'+(ac?" on":"")+'" data-mbbolge="'+b.id+'" '+
+         'style="text-align:left;'+(ac?"background:var(--yes);color:#04140a;font-weight:800":"")+'">'+
+         b.ik+' '+E(b.ad)+' <span style="opacity:.65;font-size:11px">('+b.alt+' – '+b.ust+')</span></button>';
+    });
+    h+='</div>';
+  }
+  h+='</div>';
+  /* ── 4c) ⚛ ENERJİ KIRILIMI ── */
+  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("enerji","⚛","ENERJİ KIRILIMI",mbIst.enerji.acik);
+  if(mbIst.enerji.acik){
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
+       'Fiyat dar bir bantta sıkıştıkça enerji birikir; bant kırılınca hareket başlar. '+
+       'TradingView’deki ⚛ Enerji Taraması ile aynı motor.</div>';
+    h+='<div class="sirala" style="flex-wrap:wrap">';
+    MB_EZ_DURUM.forEach(function(d){
+      h+=mbCip('data-mbez="'+d[0]+'" title="'+E(d[2])+'"',d[1],!!mbIst.enerji[d[0]]);
+    });
+    h+='</div>';
+    h+='<div class="sirala" style="flex-wrap:wrap;margin-top:9px">'+
+       mbCip('data-mbezm="0"','📏 Mesafe şartı',mbIst.enerji.mesafeAcik);
+    if(mbIst.enerji.mesafeAcik){
+      MB_EZ_MESAFE.forEach(function(n){
+        h+=mbCip('data-mbezy="'+n+'"','≤%'+n,mbIst.enerji.mesafe===n)});
+      h+='<input id="mbEZSerbest" type="number" min="0.1" max="30" step="0.5" placeholder="elle" '+
+         'value="'+(MB_EZ_MESAFE.indexOf(mbIst.enerji.mesafe)<0?E(String(mbIst.enerji.mesafe)):"")+'" '+
+         'style="width:78px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);'+
+         'border-radius:7px;padding:5px 7px;font-size:13px;text-align:right">';
+    }
+    h+='</div>';
+    if(!(mbIst.enerji.olustu||mbIst.enerji.icinde||mbIst.enerji.b0||mbIst.enerji.b1))
+      h+='<div class="altbilgi" style="margin-top:7px;color:var(--sar);white-space:normal">'+
+         'Hiç durum seçili değil — yalnız mesafe şartı aranıyor (TradingView’de de böyle).</div>';
+  }
+  h+='</div>';
+  /* ── 4b) PİVOT KIRILIM ── */
+  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("pivot","📈","PİVOT KIRILIM",mbIst.pivot.acik);
+  if(mbIst.pivot.acik){
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
+       'Sistemin pivot kırılım listelerini süzer — yeniden ölçüm yapmaz, anında sonuç verir.</div>';
+    h+='<div class="sirala" style="flex-wrap:wrap">';
+    MB_PIVOT_DILIM.forEach(function(p){
+      h+=mbCip('data-mbpd="'+p[0]+'"',p[4]+' '+p[0]+' <span style="opacity:.7;font-size:11px">'+p[3]+'</span>',
+        mbIst.pivot.dilimler.indexOf(p[0])>=0);
+    });
+    h+='</div>';
+    h+='<div class="altbilgi" style="margin:9px 0 5px;opacity:.8">Hangi durum?</div>'+
+       '<div class="sirala" style="flex-wrap:wrap">'+
+       mbCip('data-mbpdurum="kirdi"','⚡ Son barda kırdı',mbIst.pivot.kirdi)+
+       mbCip('data-mbpdurum="yakin"','🎯 Kırılıma yakın',mbIst.pivot.yakin)+
+       mbCip('data-mbpdurum="uzerinde"','✅ Kırılımın üzerinde',mbIst.pivot.uzerinde)+
+       '</div>';
+    if(mbIst.pivot.yakin){
+      h+='<div class="altbilgi" style="margin:9px 0 5px;opacity:.8">Kırılıma en fazla yüzde kaç kalmış?</div>'+
+         '<div class="sirala" style="flex-wrap:wrap">';
+      [1,2,3,5,10].forEach(function(n){
+        h+=mbCip('data-mbpy="'+n+'"','%'+n,mbIst.pivot.yuzde===n)});
+      h+='<input id="mbPYSerbest" type="number" min="0.1" max="50" step="0.5" placeholder="elle" '+
+         'value="'+([1,2,3,5,10].indexOf(mbIst.pivot.yuzde)<0?E(String(mbIst.pivot.yuzde)):"")+'" '+
+         'style="width:78px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);'+
+         'border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>';
+    }
+  }
+  h+='</div>';
   /* ── 5) DÜĞMELER ── */
   h+='<div class="sirala" style="flex-wrap:wrap;margin:8px 0">'+
-     '<button class="sir" id="mbYenile">🔄 Yenile</button>'+
-     (D.yon?'<button class="sir" id="mbDur">'+(calisiyor?"⏸ Durdur":"▶️ Sürdür")+'</button>':"")+
-     (D.yon?'<button class="sir" id="mbEvrenBtn">🌍 Evreni yenile</button>':"")+
+     '<button class="'+((mbTaraDurum&&mbTaraDurum.suruyor)?"sir":"dg")+'" id="mbTaraBtn" style="width:auto;padding:9px 16px">'+
+     ((mbTaraDurum&&mbTaraDurum.suruyor)?"⏹ Durdur":"🔄 Şimdi tazele")+'</button>'+
      '</div>';
+  /* ── tarama durumu ── */
+  var ilr=mbIlerleme();
+  if(mbTaraDurum&&mbTaraDurum.suruyor){
+    var yuz=ilr.gereken?Math.min(100,Math.round(100*ilr.olculen/ilr.gereken)):0;
+    var gecen=Math.round((Date.now()-mbTaraDurum.baslangic)/1000);
+    var kalanSn=ilr.olculen>20?Math.round(gecen*(ilr.gereken-ilr.olculen)/ilr.olculen):null;
+    h+='<div class="kutu" style="margin:8px 0;border-left:3px solid var(--sar)">'+
+      '<div class="altbilgi"><b>🔎 Taranıyor…</b> şu an '+E(mbTaraDurum.tf)+' dilimi<br>'+
+      ilr.olculen+' / '+ilr.gereken+' ölçüm · '+gecen+' sn'+
+      (kalanSn!==null?' · yaklaşık '+kalanSn+' sn kaldı':'')+
+      (mbTaraDurum.kuyruk?' · '+mbTaraDurum.kuyruk.length+' parça sırada':'')+
+      (mbTaraDurum.hata?' · <span style="color:var(--kir)">'+mbTaraDurum.hata+' yeniden deneme</span>':'')+'</div>'+
+      '<div style="height:8px;background:var(--ciz);border-radius:5px;overflow:hidden;margin-top:7px">'+
+      '<div style="height:100%;width:'+yuz+'%;background:var(--yes);transition:width .25s"></div></div>'+
+      '<div class="altbilgi" style="margin-top:6px;opacity:.7">Sekmede kaldığın sürece sürer. '+
+      'Sonuçlar aşağıda dolarken de süzülür.</div></div>';
+  }else if(ilr.olculen<ilr.gereken&&mbIst.tfler.length){
+    h+='<div class="kutu" style="margin:8px 0"><div class="altbilgi">'+
+      'Ölçülen: <b>'+ilr.olculen+'</b> / '+ilr.gereken+' — tarama birazdan tamamlanır.</div></div>';
+  }else if(ilr.olculen&&mbSonTarama){
+    var dk=Math.round((Date.now()-mbSonTarama)/60000);
+    h+='<div class="altbilgi" style="margin:6px 0;opacity:.65">'+
+      ilr.olculen+' ölçüm hazır · '+(dk<1?"az önce":dk+" dk önce")+' tarandı · '+
+      'kendiliğinden tazelenir</div>';
+  }
   /* ── 6) TEK HİSSE ── */
   h+='<div class="kutu" style="margin:8px 0;padding:9px 11px">'+
      '<div style="display:flex;gap:6px">'+
@@ -4572,10 +6617,12 @@ function mbGoster(v,yerel){
      'style="flex:1;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:7px 9px;font-size:14px;text-transform:uppercase">'+
      '<button class="dg" id="mbKodBtn" style="width:auto;padding:7px 14px">🔎 Bak</button></div></div>';
   /* ── 7) HİÇ MODÜL AÇIK DEĞİLSE ── */
-  var acikSayi=(mbIst.mal.acik?1:0)+(mbIst.dip.acik?1:0)+(mbIst.ab.acik?1:0);
+  var acikSayi=(mbIst.mal.acik?1:0)+(mbIst.dip.acik?1:0)+(mbIst.ab.acik?1:0)+
+    (mbIst.bolge.acik?1:0)+(mbIst.pivot.acik?1:0)+(mbIst.enerji.acik?1:0);
   if(!acikSayi){
     h+='<div class="bos"><b>Hiç modül açık değil</b><br><br>'+
-       'Yukarıdaki üç modülden en az birinin sağındaki <b>○</b> tikine dokun.</div>';
+       'Yukarıdaki altı modülden (📦 mal · ⬇️ dip · 🐂🐻 ayı/boğa · 🪜 fibo bölgesi · '+
+       '⚛ enerji · 📈 pivot) en az birinin sağındaki <b>○</b> tikine dokun.</div>';
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
   if(!mbIst.tfler.length){
@@ -4583,7 +6630,7 @@ function mbGoster(v,yerel){
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
   /* ── 8) HEPSİNDE ÇIKANLAR ── */
-  if(mbIst.tfler.length>1&&ortak.length){
+  if(mbIst.kapsam!=="hepsi"&&mbIst.tfler.length>1&&ortak.length){
     h+='<div class="kutu" style="margin:10px 0;border-left:3px solid #ffea00">'+
        '<div style="font-weight:800;font-size:14px;margin-bottom:5px">⭐ Seçili '+
        mbIst.tfler.length+' dilimin HEPSİNDE çıkanlar ('+ortak.length+')</div>'+
@@ -4606,22 +6653,97 @@ function mbGoster(v,yerel){
       var kenar=x.boga?"var(--yes)":(x.ayi?"var(--kir)":"var(--ciz)");
       var olay=(x.mt||x.md||x.bogaGec||x.ayiGec);
       var dip=x.dip236?"⬇️⬇️⬇️":x.dip382?"⬇️⬇️":x.dip?"⬇️":"";
+      /* Dilim şeridi — hangi dilimde ne durumda olduğu satırda görünür,
+         böylece "acaba şu dilimde ayı mı" sorusu doğmaz. */
+      /* Şerit YALNIZ birden çok dilim seçiliyken anlamlı. Tek dilimde
+         alttaki MAL/AB satırıyla aynı şeyi tekrar ediyordu ve "35 t3" gibi
+         okunmaz görünüyordu. */
+      var serit="";
+      if(x.tfDurum&&x.tfDurum.length>1&&mbIst.tfler.length>1){
+        serit='<div style="display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 2px">'+
+          x.tfDurum.map(function(d){
+            if(d.yok)return '<span style="font-size:10px;padding:1px 4px;border-radius:4px;background:rgba(139,148,158,.18);color:#8b949e">'+E(d.tf)+' —</span>';
+            var im=d.boga?"🐂":d.ayi?"🐻":"?";
+            var rk=d.gecti?"rgba(0,230,118,.20)":"rgba(248,81,73,.16)";
+            var yz=d.gecti?"var(--yes)":"var(--kir)";
+            /* MAL yaşı da yazılır: her dilimi TradingView ile doğrudan
+               karşılaştırabilmek için. top=toplama, dağ=dağıtım. */
+            /* Okunur biçim:  1G 🐂12b · TOP 7b
+               "12b" = 12 bardır boğa · "TOP 7b" = 7 bar önce mal toplama */
+            var mal="";
+            if(d.topHam!==undefined&&d.dagHam!==undefined){
+              var t=Number(d.topHam),g=Number(d.dagHam);
+              if(t<9999||g<9999)mal=" · "+(t<=g?"TOP "+t:"DAĞ "+g)+"b";
+            }
+            return '<span style="font-size:10px;padding:2px 5px;border-radius:4px;background:'+rk+';color:'+yz+';font-weight:700">'+
+              E(d.tf)+' '+im+E(String(d.rejYas===undefined?"":d.rejYas))+'b'+E(mal)+'</span>';
+          }).join("")+'</div>';
+      }
       return '<div class="satir" style="border-left-color:'+kenar+';align-items:flex-start">'+
         '<div class="sol"><div class="kod">'+E(x.kod)+
         (x.takipte?' <span class="rozet">⭐</span>':"")+
         (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀</span>':"")+
         (dip?' <span class="rozet">'+dip+'</span>':"")+'</div>'+
+        mbEnerjiRozet(x,mbIst)+
+        (function(){var bl=mbBolgeBul(x.oran);
+          return bl?'<div style="margin:4px 0 2px"><span style="font-size:10px;padding:2px 5px;'+
+            'border-radius:4px;background:rgba(124,77,255,.15);color:#b39dff;font-weight:700">'+
+            bl.ik+' '+E(bl.ad)+(x.oran!=null?' · '+Number(x.oran).toFixed(2):'')+'</span></div>':""})()+
+        (mbIst.pivot.acik?mbPivotRozet(x.kod,mbIst):"")+
+        serit+
         ((x.digerTfler&&x.digerTfler.length)?
           '<div style="margin:3px 0 2px"><span class="rozet" style="background:rgba(124,77,255,.22);color:#b39dff">'+
           'ayrıca '+x.digerTfler.map(function(t){return E(t)}).join(" · ")+'</span></div>':"")+
         '<div class="altbilgi" style="white-space:normal">'+
-        '<b style="color:'+mal.r+'">'+E(mal.t)+'</b> · <b style="color:'+ab.r+'">'+E(ab.t)+'</b>'+
+        '<b style="color:'+mal.r+'">MAL '+E(mal.t)+'</b> · <b style="color:'+ab.r+'">REJİM '+E(ab.t)+'</b>'+
         '</div></div>'+
         '<div class="sag"><div class="yuzde" style="color:'+kenar+';font-size:15px">'+E(String(x.fiyat))+'</div>'+
         '<div class="altbilgi">fiyat</div></div></div>';
     }).join("");
   });
-  /* ── 10) DURUM ── */
+  /* ── 10) 🔔 FİLTRE ALARMI (5 YUVA) ──
+     Sonuçların hemen altında: ekranda ne görüyorsan onu alarma bağlarsın. */
+  var alL=(mbAlarmD&&mbAlarmD.liste)||[];
+  var alYuva=(mbAlarmD&&mbAlarmD.yuva)||5;
+  h+='<div class="kutu" style="margin:14px 0 0;border-left:3px solid '+
+     (alL.length?"var(--yes)":"var(--ciz)")+'">'+
+     '<div style="font-weight:800;font-size:14px;margin-bottom:6px">🔔 Filtre alarmı '+
+     '<span style="opacity:.6;font-weight:600;font-size:12px">'+alL.length+' / '+alYuva+' yuva dolu</span></div>';
+  if(mbAlarmD===null){
+    h+='<div class="altbilgi" style="opacity:.6">alarm listesi alınıyor…</div>';
+  }else if(alL.length){
+    h+='<div class="altbilgi" style="margin-bottom:7px">'+
+       (mbAlarmD.seans?"🟢 Seans açık — listeye <b>yeni giren</b> hisseler bildiriliyor."
+                      :"🌙 Seans kapalı — bildirim seans açılınca sürer.")+'</div>';
+    alL.forEach(function(a,i){
+      h+='<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;'+
+         (i?'border-top:1px solid var(--ciz)':'')+'">'+
+         '<div style="flex:1;min-width:0">'+
+         '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+E(a.ozet)+'</div>'+
+         '<div class="altbilgi" style="opacity:.7">'+a.tfler.map(function(t){return E(t)}).join(" · ")+'</div>'+
+         '</div>'+
+         (D.yon?'<button class="sir" data-mbalsil="'+E(a.id)+'" '+
+           'style="padding:4px 9px;font-size:12px;flex:0 0 auto">🚫</button>':"")+
+         '</div>';
+    });
+  }else{
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal">Kurulu alarm yok. '+
+       'Yukarıdaki tikleri istediğin gibi ayarla, sonra bu filtreyi alarma ekle — '+
+       'seans içinde listeye <b>yeni giren</b> hisseler sana ve süper üyelere bildirim olarak gider. '+
+       'En fazla <b>'+alYuva+'</b> ayrı filtre aynı anda kurulu kalabilir.</div>';
+  }
+  if(D.yon){
+    h+='<div class="sirala" style="flex-wrap:wrap;margin-top:6px">'+
+       '<button class="dg" id="mbAlarmKur" style="width:auto;padding:8px 14px"'+
+       (alL.length>=alYuva?' disabled':'')+'>'+
+       (alL.length>=alYuva?"🔔 Yuvalar dolu":"🔔 Bu filtreyi alarma ekle ("+(alL.length+1)+". yuva)")+'</button>'+
+       (alL.length>1?'<button class="sir" id="mbAlarmHepsi">🚫 Hepsini kaldır</button>':"")+'</div>'+
+       '<div class="altbilgi" id="mbAlarmDurum" style="margin-top:6px"></div>';
+  }else{
+    h+='<div class="altbilgi" style="opacity:.6">Alarm filtresini yalnız yönetici kurar.</div>';
+  }
+  h+='</div>';
+  /* ── 11) DURUM ── */
   var eb=(v&&v.evrenBilgi)||{};
   h+='<div class="kutu" style="margin:12px 0 0;padding:9px 11px">'+
      '<div class="altbilgi" style="opacity:.8">'+(calisiyor?"🔄 Arka planda taranıyor":"⏸ Tarama durduruldu")+
@@ -4645,6 +6767,7 @@ function mbBagla(v,dilimler){
   var hp=el("mbTfHepsi");if(hp)hp.onclick=function(){tit();
     mbIst.tfler=(mbIst.tfler.length===dilimler.length)?[]:dilimler.map(function(t){return t.tf});
     mbUygula()};
+  T("[data-mbkapsam]",function(b){mbIst.kapsam=b.dataset.mbkapsam;mbUygula()});
   T("[data-mbmod]",function(b){
     var m=b.dataset.mbmod;mbIst[m].acik=!mbIst[m].acik;mbUygula()});
   T("[data-mbmalyon]",function(b){
@@ -4653,6 +6776,42 @@ function mbBagla(v,dilimler){
     mbUygula()});
   T("[data-mbtemiz]",function(){mbIst.mal.temiz=!mbIst.mal.temiz;mbUygula()});
   T("[data-mbkademe]",function(b){mbIst.dip.kademe=b.dataset.mbkademe;mbUygula()});
+  T("[data-mbez]",function(b){
+    var k=b.dataset.mbez;
+    mbIst.enerji[k]=!mbIst.enerji[k];mbUygula();
+  });
+  T("[data-mbezm]",function(){mbIst.enerji.mesafeAcik=!mbIst.enerji.mesafeAcik;mbUygula()});
+  T("[data-mbezy]",function(b){mbIst.enerji.mesafe=Number(b.dataset.mbezy);mbUygula()});
+  (function(){
+    var ez=el("mbEZSerbest");
+    if(ez)ez.onchange=function(){
+      var n=Number(ez.value);
+      if(isFinite(n)&&n>=0.1&&n<=30){mbIst.enerji.mesafe=n;mbUygula()}
+    };
+  })();
+  T("[data-mbbolge]",function(b){
+    var id=b.dataset.mbbolge,i=mbIst.bolge.secili.indexOf(id);
+    if(i>=0)mbIst.bolge.secili.splice(i,1);else mbIst.bolge.secili.push(id);
+    if(!mbIst.bolge.secili.length)mbIst.bolge.secili.push(id);   /* en az biri */
+    mbUygula()});
+  T("[data-mbpd]",function(b){
+    var d=b.dataset.mbpd,i=mbIst.pivot.dilimler.indexOf(d);
+    if(i>=0)mbIst.pivot.dilimler.splice(i,1);else mbIst.pivot.dilimler.push(d);
+    if(!mbIst.pivot.dilimler.length)mbIst.pivot.dilimler.push(d);   /* en az biri */
+    mbUygula()});
+  T("[data-mbpdurum]",function(b){
+    var d=b.dataset.mbpdurum;mbIst.pivot[d]=!mbIst.pivot[d];
+    if(!mbIst.pivot.kirdi&&!mbIst.pivot.yakin&&!mbIst.pivot.uzerinde)mbIst.pivot[d]=true;
+    mbUygula()});
+  T("[data-mbpy]",function(b){mbIst.pivot.yuzde=Number(b.dataset.mbpy);mbUygula()});
+  var pys=el("mbPYSerbest");
+  if(pys){var uyg=function(){
+    var n=Number(pys.value);
+    if(pys.value===""||!isFinite(n)||n<=0)return;
+    n=Math.max(0.1,Math.min(50,n));
+    if(mbIst.pivot.yuzde===n)return;
+    mbIst.pivot.yuzde=n;tit();mbUygula();
+  };pys.onkeydown=function(e2){if(e2.key==="Enter"){e2.preventDefault();uyg()}};pys.onblur=uyg}
   T("[data-mbabyon]",function(b){
     var y=b.dataset.mbabyon;mbIst.ab[y]=!mbIst.ab[y];
     if(!mbIst.ab.boga&&!mbIst.ab.ayi)mbIst.ab[y]=true;
@@ -4674,7 +6833,7 @@ function mbBagla(v,dilimler){
     inp.onkeydown=function(e2){if(e2.key==="Enter"){e2.preventDefault();uy()}};
     inp.onblur=uy;
   });
-  var yn=el("mbYenile");if(yn)yn.onclick=function(){tit();mbGetir()};
+  var tb=el("mbTaraBtn");if(tb)tb.onclick=function(){tit();mbTaraBaslat()};
   var dd=el("mbDur");if(dd)dd.onclick=function(){tit();dd.disabled=true;
     var o={};for(var k in mbIst)o[k]=mbIst[k];o.dur=(!v||v.calisiyor!==false)?1:0;
     post("/api/malboga",o).then(function(v2){mbD=v2;mbGoster(v2)}).catch(function(){dd.disabled=false})};
@@ -4682,6 +6841,36 @@ function mbBagla(v,dilimler){
     var o={};for(var k in mbIst)o[k]=mbIst[k];o.evrenYenile=1;
     post("/api/malboga",o).then(function(v2){mbD=v2;mbGoster(v2)})
       .catch(function(){ev.disabled=false;ev.textContent="🌍 Evreni yenile"})};
+  var ak=el("mbAlarmKur");
+  if(ak)ak.onclick=function(){tit();ak.disabled=true;ak.textContent="⏳ ekleniyor…";
+    var o={};for(var k in mbIst)o[k]=mbIst[k];o.alarmKur=1;
+    post("/api/malboga",o).then(function(r){
+      ak.disabled=false;
+      if(r&&r.ok){
+        mbAlarmD=r.alarm||mbAlarmD;
+        mbCizYenile();
+        var dv=el("mbAlarmDurum");
+        if(dv)dv.innerHTML='✅ Alarm eklendi. Şu anki <b>'+(r.tohum||0)+'</b> eşleşme '+
+          '"görülmüş" sayıldı; bundan sonra listeye <b>yeni girenler</b> bildirilecek.';
+      }else{
+        if(r&&r.alarm)mbAlarmD=r.alarm;
+        mbCizYenile();
+        var dv2=el("mbAlarmDurum");if(dv2)dv2.textContent="⚠️ "+((r&&r.hata)||"eklenemedi");
+      }
+    }).catch(function(){ak.disabled=false;
+      var dv3=el("mbAlarmDurum");if(dv3)dv3.textContent="⚠️ bağlantı hatası"});
+  };
+  T("[data-mbalsil]",function(b){
+    b.disabled=true;b.textContent="…";
+    post("/api/malboga",{alarmSil:1,alarmId:b.dataset.mbalsil}).then(function(r){
+      if(r&&r.alarm)mbAlarmD=r.alarm;mbCizYenile();
+    }).catch(function(){b.disabled=false;b.textContent="🚫"});
+  });
+  var ah=el("mbAlarmHepsi");
+  if(ah)ah.onclick=function(){tit();ah.disabled=true;
+    post("/api/malboga",{alarmSil:1,alarmId:true}).then(function(r){
+      mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};mbCizYenile();
+    }).catch(function(){ah.disabled=false})};
   var kb=el("mbKodBtn"),ki=el("mbKod");
   var bak=function(){var k=String((ki&&ki.value)||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
     if(k.length<3)return;tit();
@@ -4691,6 +6880,35 @@ function mbBagla(v,dilimler){
       .catch(function(){mbD=null;mbCiz()})};
   if(kb)kb.onclick=bak;
   if(ki)ki.onkeydown=function(e2){if(e2.key==="Enter")bak()};
+}
+/* ⏩ Havuzu elle doldurma döngüsü: her turda bir dilimi biraz ilerletir,
+   eksik dilim kalmayınca kendiliğinden durur ve listeyi tazeler. */
+/* İMLECİ İSTEMCİ TAŞIR. Sunucu her cevapta "şu dilimde şuraya kadar
+   geldim" der, biz onu bir sonraki istekte geri veririz. Böylece ilerleme
+   KV'nin gecikmesine takılmaz — bu, havuzun bir türlü dolmamasının sebebiydi. */
+var mbDolduruyor=false, mbDoldurSayac=0, mbDoldurDilim="", mbDoldurImlec=null;
+function mbDoldurTur(){
+  if(!mbDolduruyor||sekme!=="malboga")return;
+  var o={};for(var k in mbIst)o[k]=mbIst[k];
+  o.doldur=1;
+  if(mbDoldurDilim){o.imlecTf=mbDoldurDilim;o.imlecKod=mbDoldurImlec}
+  post("/api/malboga",o).then(function(r){
+    if(!mbDolduruyor)return;
+    mbDoldurSayac++;
+    var oncekiDilim=mbDoldurDilim;
+    mbDoldurDilim=(r&&r.dilim)||"";
+    /* dilim değiştiyse imleç sıfırdan başlar */
+    mbDoldurImlec=(mbDoldurDilim&&mbDoldurDilim===oncekiDilim)?(r&&r.imlecKod):0;
+    if(mbDoldurDilim!==oncekiDilim)mbDoldurImlec=(r&&r.imlecKod)||0;
+    if(r&&r.dilimler&&mbD)mbD.dilimler=r.dilimler;
+    if(!r||!r.dilim||r.eksik===0){        /* hepsi tamam */
+      mbDolduruyor=false;mbDoldurImlec=null;mbTazele();return;
+    }
+    if(mbD)mbGoster(mbD);
+    setTimeout(mbDoldurTur,1200);
+  }).catch(function(){
+    if(mbDolduruyor)setTimeout(mbDoldurTur,2500);
+  });
 }
 /* Tek hissenin bütün dilimleri — Pine'daki TF/DURUM/MAL panelinin aynısı. */
 function mbTekGoster(v){
@@ -4719,6 +6937,18 @@ function mbTekGoster(v){
       (x.doyum!=null?'<br>doyum <b>'+E(String(x.doyum))+'</b> · stop '+E(String(x.stop))+
         ' · 786 '+E(String(x.s786))+(x.s382!=null?' · 382 '+E(String(x.s382)):"")+
         (x.s236!=null?' · 236 '+E(String(x.s236)):""):"")+
+      /* ⚛ Enerji — TradingView’deki ⚛ sütununun aynısı; tek hisse ekranında
+         dilim dilim görünsün ki TV ile karşılaştırılabilsin. */
+      (function(){
+        var d=Number(x.ezAge)===0?"0B↑":Number(x.ezAge)===1?"1B↑":
+              Number(x.ezIns)>0.5?"İçinde":Number(x.ezAct)>0.5?"Zon":null;
+        if(!d)return "";
+        return '<br>⚛ <b>'+d+'</b>'+
+          (x.ezBot!=null?' · zon '+E(String(x.ezBot))+'–'+E(String(x.ezTop)):"")+
+          (x.ezMes!=null?' · üste %'+E(String(x.ezMes)):"")+
+          (x.ezEn!=null?' · güç %'+E(String(Math.round(x.ezEn))):"")+
+          (x.ezTp1!=null?' · GFH '+E(String(x.ezTp1)):"");
+      })()+
       '<br><span style="opacity:.6">'+x.bar+' bar · fiyat '+E(String(x.fiyat))+'</span></div></div>'+
       '<div class="sag"><div class="yuzde" style="color:'+kenar+';font-size:20px">'+(x.boga?"🐂":x.ayi?"🐻":"?")+'</div>'+
       '<div class="altbilgi">'+(x.durum===1?"topluyor":x.durum===-1?"dağıtıyor":"—")+'</div></div></div>';
@@ -4728,6 +6958,269 @@ function mbTekGoster(v){
   var y2=el("mbTekYenile");if(y2)y2.onclick=function(){tit();
     var k=t.kod;el("govde").innerHTML='<div class="yukleniyor">'+k+' yeniden ölçülüyor…</div>';
     post("/api/malboga",{kod:k}).then(function(v2){if(v2&&v2.ok&&v2.tek){mbTek=v2;mbTekGoster(v2)}})};
+}
+/* ================== 🟢 YEŞİL KAPANIŞ SEKMESİ (yalnız yönetici) ==========
+   Baştan sona uygulamanın içinde: başlat → ilerleme → rapor. Tarayıcıda
+   ayrı sayfa açılmaz. Tarama arka planda parça parça ilerler; sekmeden
+   çıkıp geri gelsen kaldığı yerden devam eder. */
+var ykD=null, ykSuruyor=false, ykAcik={};
+/* ── TARAMAYI UYGULAMA YÜRÜTÜR ──
+   Hisse listesi, sıra ve sayaçlar burada; sunucu yalnız ölçer. Böylece
+   KV gecikmesi ve isolate değişimi denklemden çıkar. */
+var ykKuyruk=null, ykIdx=0, ykSayac=null, ykTekler=null, ykKesim=0,
+    ykBaslangic=0, ykTeshis=null, ykHatali=[];
+function ykSayacKat(A,B){
+  if(!B)return A;
+  if(!A.taban)A.taban={};if(!A.komb)A.komb={};
+  var kat=function(h,k){
+    if(!k)return;
+    for(var b in k){var kay=k[b];if(!kay)continue;
+      if(!h[b])h[b]={n:0,gY:0,gT:0,kN:0,kY:0,kT:0};
+      ["n","gY","gT","kN","kY","kT"].forEach(function(al){h[b][al]+=Number(kay[al])||0});
+    }
+  };
+  kat(A.taban,B.taban);
+  for(var a in B.komb){if(!A.komb[a])A.komb[a]={};kat(A.komb[a],B.komb[a])}
+  return A;
+}
+function ykGozlem(){return (ykSayac&&ykSayac.taban&&ykSayac.taban[0]&&ykSayac.taban[0].n)||0}
+function ykDurumPaketi(){
+  var bitti=!!(ykKuyruk&&ykIdx>=ykKuyruk.length);
+  return{ok:true,yerel:true,tamam:ykKuyruk?Math.min(ykIdx,ykKuyruk.length):0,
+    toplam:ykKuyruk?ykKuyruk.length:0,tamamlandi:bitti,gozlem:ykGozlem(),
+    sure:ykBaslangic?Math.round((Date.now()-ykBaslangic)/1000):0,
+    teshis:ykTeshis,hatali:ykHatali.slice(0,40),bekle:true};
+}
+/* ── Rapor da uygulamada üretilir (sunucudaki ykOzetle ile aynı kurallar).
+   Sayaçları her turda sunucuya göndermek gereksiz yük olurdu. ── */
+var YK_LV_I=[-0.786,-0.618,-0.382,-0.236,0.0,0.236,0.382,0.5,0.618,0.786,1.0,1.272,1.618,2.618,3.618,4.236];
+var YK_AD_I=["D/D-786","D/D-618","D/D-382","D/D-236","DİKKAT AYI","D/D236","D/D382","Hazırlık",
+  "BOĞA","ZAYIF D/D","KARAR YERİ","KÜÇÜK DİRENÇ","DİRENÇ","GÜÇLÜ D/D","ÇOK GÜÇLÜ D/D","DOYUM"];
+var YK_BOLGE_I=["0.0 altı","dip bölgesi","karar/direnç","güçlü D/D üstü"];
+var YK_DILIM_I=["1SA","4SA","1G"];
+var YK_ASGARI_I=40, YK_KALDIRAC_I=0.5;
+function ykBantAdI(b){b=Number(b);
+  return b===0?"< "+YK_AD_I[0]:b===YK_LV_I.length?"> "+YK_AD_I[15]:YK_AD_I[b-1]+" → "+YK_AD_I[b]}
+function ykKombAd(id){
+  var p=String(id).split("|");
+  if(p[0]==="B")return p[1]+" · "+ykBantAdI(p[2]);
+  if(p[0]==="Z")return p[1]+" · "+YK_BOLGE_I[Number(p[2])];
+  if(p[0]==="P")return p[1]+" ["+YK_BOLGE_I[Number(p[2])]+"] + "+p[3]+" ["+YK_BOLGE_I[Number(p[4])]+"]";
+  if(p[0]==="U")return "1SA ["+YK_BOLGE_I[Number(p[1])]+"] + 4SA ["+YK_BOLGE_I[Number(p[2])]+"] + 1G ["+YK_BOLGE_I[Number(p[3])]+"]";
+  return id;
+}
+function ykOzetleYerel(S,alan){
+  if(!S||!S.taban)return null;
+  var oku=function(kutu,b){
+    var c=kutu&&kutu[b];
+    if(!c||typeof c!=="object")return null;
+    var n=alan==="g"?c.n:c.kN;
+    if(!n)return null;
+    return{n:n,yesil:100*(alan==="g"?c.gY:c.kY)/n,ort:(alan==="g"?c.gT:c.kT)/n};
+  };
+  var taban={};for(var b=0;b<=4;b++)taban[b]=oku(S.taban,b);
+  if(!taban[0])return null;
+  var satirlar=[],denenen=0;
+  for(var id in S.komb){
+    var kutu=S.komb[id];
+    var g=oku(kutu,0);if(!g||g.n<YK_ASGARI_I*2)continue;
+    var bl=[1,2,3,4].map(function(x){return oku(kutu,x)});
+    var eksik=false;
+    for(var i=0;i<4;i++)if(!bl[i]||bl[i].n<YK_ASGARI_I)eksik=true;
+    if(eksik)continue;
+    denenen++;
+    var k=bl.map(function(x,i2){return x.yesil-taban[i2+1].yesil});
+    var enAz=Math.min.apply(null,k);
+    satirlar.push({id:id,ad:ykKombAd(id),n:g.n,yesil:g.yesil,ort:g.ort,
+      kaldirac:g.yesil-taban[0].yesil,bolmeler:k,enAz:enAz,gecti:enAz>=YK_KALDIRAC_I});
+  }
+  satirlar.sort(function(a,b2){return b2.enAz-a.enAz});
+  var gecen=satirlar.filter(function(r){return r.gecti});
+  return{taban:{n:taban[0].n,yesil:taban[0].yesil,ort:taban[0].ort},
+    denenen:denenen,gecen:gecen.length,beklenenGurultu:Math.round(denenen*0.06),
+    gecenler:gecen.slice(0,25),
+    elenenler:satirlar.filter(function(r){return !r.gecti}).slice(0,10)};
+}
+/* ── Tarama döngüsü ── */
+function ykCiz(){
+  if(ykD){ykGoster(ykD);return}
+  ykD=ykDurumPaketi();
+  if(!ykKuyruk){ykD.yok=true}
+  ykGoster(ykD);
+}
+function ykBaslat(hizli){
+  el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
+  post("/api/malboga",{is:"evren"}).then(function(r){
+    if(!r||!r.ok||!r.kodlar||!r.kodlar.length){
+      el("govde").innerHTML='<div class="bos">Hisse listesi alınamadı.</div>';return}
+    ykKuyruk=hizli?r.kodlar.slice(0,40):r.kodlar.slice();
+    ykTekler=ykKuyruk.filter(function(_,i){return i%2===0});
+    ykIdx=0;ykSayac={taban:{},komb:{}};ykHatali=[];ykTeshis={veriYok:{},gozlemsiz:0,hata:0};
+    ykKesim=Math.floor(Date.now()/1000)-330*86400;
+    ykBaslangic=Date.now();ykSuruyor=true;
+    ykTur();
+  }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
+}
+function ykDur(){ykSuruyor=false;ykYenidenCiz()}
+function ykYenidenCiz(){
+  var v=ykDurumPaketi();
+  v.gun=ykOzetleYerel(ykSayac,"g");
+  v.kap=ykOzetleYerel(ykSayac,"k");
+  ykD=v;ykGoster(v);
+}
+function ykTur(){
+  if(!ykSuruyor||sekme!=="yesil"||!ykKuyruk)return;
+  if(ykIdx>=ykKuyruk.length){ykSuruyor=false;ykYenidenCiz();return}
+  var parca=ykKuyruk.slice(ykIdx,ykIdx+20);
+  post("/api/yesil",{is:"parti",kodlar:parca,tekler:ykTekler,zamanKesim:ykKesim})
+    .then(function(r){
+      if(!ykSuruyor)return;
+      if(r&&r.ok&&r.sayac)ykSayacKat(ykSayac,r.sayac);
+      if(r&&r.teshis){
+        for(var k in (r.teshis.veriYok||{}))ykTeshis.veriYok[k]=(ykTeshis.veriYok[k]||0)+r.teshis.veriYok[k];
+        ykTeshis.gozlemsiz+=r.teshis.gozlemsiz||0;ykTeshis.hata+=r.teshis.hata||0;
+      }
+      if(r&&r.hatali&&r.hatali.length)ykHatali=ykHatali.concat(r.hatali);
+      ykIdx+=parca.length;
+      ykYenidenCiz();
+      setTimeout(ykTur,60);
+    }).catch(function(){
+      if(!ykSuruyor)return;
+      ykTeshis.hata++;
+      if(ykTeshis.hata>30){ykSuruyor=false;ykYenidenCiz();return}
+      setTimeout(ykTur,1500);
+    });
+}
+/* Bir adım ilerlet, bitene kadar kendini çağırır. */
+/* Neden veri gelmedi — sessiz boş rapor yerine açık sebep. */
+function ykTeshisHTML(v){
+  var t=v&&v.teshis;if(!t)return"";
+  var p=[];
+  if(t.veriYok)for(var k in t.veriYok)if(t.veriYok[k])p.push(E(k)+" verisi gelmedi: <b>"+t.veriYok[k]+"</b> hisse");
+  if(t.gozlemsiz)p.push("hiç gün üretmeyen hisse: <b>"+t.gozlemsiz+"</b>");
+  if(t.hata)p.push("çekim hatası: <b>"+t.hata+"</b>");
+  if(!p.length)return"";
+  return '<div class="altbilgi" style="margin-top:8px;padding:7px 9px;background:rgba(248,81,73,.10);'+
+    'border-radius:8px;white-space:normal">📋 '+p.join(" · ")+'</div>';
+}
+function ykYuz(v,o){return v===null||v===undefined||!isFinite(v)?"—":(v>0?"+":"")+v.toFixed(o===undefined?1:o)}
+/* Bir kurulum satırı — dört bölme kutucuk olarak gösterilir. */
+function ykSatir(r,taban){
+  var kutu=(r.bolmeler||[]).map(function(v,i){
+    var ad=["eski dönem","yeni dönem","hisse A","hisse B"][i];
+    return '<span title="'+ad+'" style="display:inline-block;min-width:38px;text-align:center;'+
+      'background:'+(v>0?"rgba(63,185,80,.18)":"rgba(248,81,73,.18)")+';'+
+      'color:'+(v>0?"var(--yes)":"var(--kir)")+';border-radius:5px;padding:1px 4px;font-size:11px;font-weight:700">'+
+      ykYuz(v)+'</span>';
+  }).join(" ");
+  return '<div class="satir" style="border-left-color:'+(r.kaldirac>0?"var(--yes)":"var(--kir)")+';align-items:flex-start">'+
+    '<div class="sol"><div class="kod" style="font-size:13px;white-space:normal;line-height:1.35">'+E(r.ad)+'</div>'+
+    '<div class="altbilgi" style="margin-top:4px">'+r.n+' hisse-günü · yeşil <b>%'+r.yesil.toFixed(0)+'</b>'+
+    ' · ortalama <b>'+ykYuz(r.ort,2)+'%</b></div>'+
+    '<div style="margin-top:5px">'+kutu+'</div></div>'+
+    '<div class="sag"><div class="yuzde" style="color:'+(r.kaldirac>0?"var(--yes)":"var(--kir)")+';font-size:17px">'+
+    ykYuz(r.kaldirac)+'</div><div class="altbilgi">kaldıraç</div></div></div>';
+}
+function ykBolum(p,anahtar,baslik,aciklama){
+  if(!p)return '<div class="kutu"><h3>'+baslik+'</h3><div class="altbilgi">yeterli veri toplanmadı</div></div>';
+  var ac=ykAcik[anahtar];
+  var h='<div class="kutu" style="border-left:3px solid '+(p.gecen?"var(--yes)":"var(--ciz)")+'">'+
+    '<h3 style="margin:0 0 5px">'+baslik+'</h3>'+
+    '<div class="altbilgi" style="white-space:normal;margin-bottom:8px">'+aciklama+'</div>'+
+    '<div class="altbilgi" style="margin-bottom:8px">'+
+    '<b>TABAN: yeşil %'+p.taban.yesil.toFixed(1)+'</b> · ortalama '+ykYuz(p.taban.ort,3)+'% · '+
+    p.taban.n+' hisse-günü<br>'+
+    '<span style="opacity:.75">Yani hiçbir kural kullanmadan rastgele bir gün alsan sonuç bu. '+
+    'Aşağıdaki kurulumlar bunu ne kadar geçiyor, ona bak.</span></div>'+
+    '<div class="altbilgi" style="padding:7px 9px;background:'+(p.gecen?"rgba(63,185,80,.10)":"rgba(248,81,73,.10)")+';border-radius:8px">'+
+    '<b>'+p.denenen+' kurulum denendi · '+p.gecen+' tanesi dört sınavı da geçti</b><br>'+
+    '<span style="opacity:.8">Şans eseri geçmesi beklenen: yaklaşık '+p.beklenenGurultu+'. '+
+    (p.gecen>p.beklenenGurultu*1.5?"Bu sayının belirgin üstünde — gerçek bir sinyal var."
+      :"Bu sayıya yakın — bulunanlar büyük ölçüde şans olabilir.")+'</span></div>';
+  if(p.gecenler&&p.gecenler.length){
+    h+='<div class="altbilgi" style="margin:10px 0 4px;opacity:.8">SINAVI GEÇENLER (en iyi '+
+      Math.min(p.gecenler.length,25)+')</div>';
+    h+=p.gecenler.map(function(r){return ykSatir(r,p.taban)}).join("");
+  }else{
+    h+='<div class="bos" style="margin-top:10px">Dört sınavı da geçen kurulum yok.</div>';
+  }
+  h+='<button class="sir" data-ykac="'+anahtar+'" style="margin-top:10px">'+
+    (ac?"▲ elenenleri gizle":"▼ elenenleri de gör")+'</button>';
+  if(ac&&p.elenenler&&p.elenenler.length){
+    h+='<div class="altbilgi" style="margin:8px 0 4px;opacity:.7">ELENENLER — biri ya da birkaç sınavda düştüler</div>'+
+      p.elenenler.map(function(r){return ykSatir(r,p.taban)}).join("");
+  }
+  return h+'</div>';
+}
+function ykGoster(v){
+  var h='<div class="kutu" style="margin-top:0;border-left:3px solid var(--yes)">'+
+    '<h3 style="margin:0 0 6px">🟢 Yeşil Kapanış Araştırması</h3>'+
+    '<div class="altbilgi" style="white-space:normal;line-height:1.65">'+
+    'Şu soruyu araştırır: <b>hisse, fibo merdiveninin hangi basamağındayken ertesi günü yeşil kapatıyor?</b><br><br>'+
+    'Yüzlerce kurulum denenir. Ama çok deneyince rastgele veride bile parlak sonuçlar çıkar — '+
+    'o yüzden her kurulum <b>dört ayrı sınavdan</b> geçirilir:<br>'+
+    '• eski dönem · • yeni dönem · • hisselerin yarısı · • diğer yarısı<br>'+
+    'Dördünde birden tabanı geçemeyen kurulum şans sayılıp elenir.</div></div>';
+  var suruyor=v&&v.ok&&!v.yok&&!v.tamamlandi;
+  var bitti=v&&v.ok&&!v.yok&&v.tamamlandi;
+  /* ── durum / ilerleme ── */
+  if(suruyor){
+    var p=v.toplam?Math.min(100,Math.round(100*v.tamam/v.toplam)):0;
+    h+='<div class="kutu" style="margin:10px 0"><h3 style="margin:0 0 7px">⏳ Taranıyor…</h3>'+
+      '<div class="altbilgi">'+v.tamam+' / '+v.toplam+' hisse · '+(v.gozlem||0)+' hisse-günü toplandı · '+
+      (v.sure||0)+' sn</div>'+
+      '<div style="height:9px;background:var(--ciz);border-radius:5px;overflow:hidden;margin-top:8px">'+
+      '<div style="height:100%;width:'+p+'%;background:var(--yes);transition:width .3s"></div></div>'+
+      '<div class="altbilgi" style="margin-top:7px;opacity:.7">Sekmede kaldığın sürece ilerler. '+
+      'Çıkıp geri gelirsen kaldığı yerden devam eder. Sonuçlar aşağıda tarama sürerken de dolar.</div>'+
+      ykTeshisHTML(v)+
+      '<button class="sir" id="ykIptal" style="margin-top:9px">✕ Taramayı iptal et</button></div>';
+  }else{
+    h+='<div class="kutu" style="margin:10px 0"><h3 style="margin:0 0 7px">▶ Yeni tarama</h3>'+
+      (bitti?'<div class="altbilgi" style="margin-bottom:8px">Son tarama bitti: '+v.toplam+' hisse · '+
+        (v.gozlem||0)+' hisse-günü · '+(v.sure||0)+' sn.</div>':"")+
+      '<div class="altbilgi" style="margin-bottom:8px">Havuzun tamamı 2-3 dakika sürer ve en güvenilir '+
+      'sonucu verir. Hızlı deneme 40 hisseyle yaklaşık 20 saniyede biter ama örnek az olur.</div>'+
+      '<button class="dg" id="ykTam">🌍 Havuzun tamamını tara</button>'+
+      '<button class="sir" id="ykHizli" style="margin-top:8px">⚡ Hızlı deneme (40 hisse)</button>'+
+      '</div>';
+  }
+  /* ── sonuçlar ── (tarama sürerken de gösterilir) */
+  if(!suruyor&&!bitti){/* hiç iş yok — sonuç bölümü çizilmez */}
+  else if(v&&(v.gun||v.kap)){
+    h+=ykBolum(v.gun,"gun","📈 Gün içi — sabah al, akşam sat",
+      "Senin sorduğun ölçü bu: mumun yeşil kapanması. Sabah açılışta alıp akşam kapanışta satmak.");
+    h+=ykBolum(v.kap,"kap","🌙 Kapanıştan kapanışa — akşam al, ertesi akşam sat",
+      "Geceyi de elinde tutmak. İki bölümün TABAN satırlarını karşılaştır: aradaki fark, "+
+      "yükselişin gece mi gündüz mü olduğunu gösterir.");
+    h+='<div class="uyari" style="margin-top:12px"><b>Nasıl okunur?</b><br>'+
+      '<b>Kaldıraç</b> — kurulumun tabandan kaç puan iyi olduğu. Taban %45 ise %48 çıkan bir kurulumun kaldıracı +3  puandır.<br>'+
+      '<b>Dört küçük kutucuk</b> — sırasıyla eski dönem, yeni dönem, hisselerin bir yarısı, öbür yarısı. '+
+      'Dördü de yeşilse kurulum her koşulda tutmuş demektir. İçlerinden biri kırmızıysa güvenme.<br>'+
+      '<b>hisse-günü</b> — kaç örnek üzerinde ölçüldüğü. Sayı büyüdükçe sonuç güvenilir olur.<br><br>'+
+      '⚠️ Yüksek kaldıraçlı bir kurulum bile kesinlik değildir. %54 yeşil demek, her 100 işlemin '+
+      '46 tanesinin kırmızı kapanması demektir.</div>';
+    if(v.hatali&&v.hatali.length)
+      h+='<div class="altbilgi" style="margin-top:10px;opacity:.6">veri alınamayan: '+
+        v.hatali.map(function(k){return E(k)}).join(", ")+'</div>';
+  }else if(bitti){
+    /* Tarama bitti ama tek gözlem toplanamadı — sebebini söyle. */
+    h+='<div class="kutu" style="margin:10px 0;border-left:3px solid var(--kir)">'+
+      '<h3 style="margin:0 0 6px">⚠️ Hiç veri toplanamadı</h3>'+
+      '<div class="altbilgi" style="white-space:normal">Tarama bitti ama ölçülebilir tek bir '+
+      'hisse-günü çıkmadı. Bu neredeyse her zaman veri sağlayıcıdan kaynaklanır: '+
+      'çok sayıda hisse üst üste istenince Yahoo istekleri geri çevirmeye başlar.</div>'+
+      ykTeshisHTML(v)+
+      '<div class="altbilgi" style="margin-top:8px;white-space:normal">Ne yapmalı: birkaç dakika '+
+      'bekleyip <b>⚡ Hızlı deneme</b> ile tekrar dene. O çalışıyorsa sorun geçicidir, '+
+      'tam havuzu sonra tararsın.</div></div>';
+  }
+  el("govde").innerHTML=h;
+  var t=el("ykTam");if(t)t.onclick=function(){tit();ykBaslat(false)};
+  var z=el("ykHizli");if(z)z.onclick=function(){tit();ykBaslat(true)};
+  var ip=el("ykIptal");if(ip)ip.onclick=function(){tit();ykDur()};
+  [].forEach.call(document.querySelectorAll("[data-ykac]"),function(b){
+    b.onclick=function(){tit();var k=b.dataset.ykac;ykAcik[k]=!ykAcik[k];ykGoster(v)}});
 }
 /* ================== 🛡 SİSTEM SEKMESİ (yalnız yönetici) ==================
    Altı dayanıklılık maddesinin tamamı burada görünür:
@@ -4811,6 +7304,9 @@ function saglikGoster(v){
   h+=sagKart("bilgi","Yapılan tarama: <b>"+sy("absTarama")+"</b>",
       "Her tarama en fazla 16 hisseye bakar (Cloudflare istek başına 50 alt-istek sınırı) ve sonuç 30 dakika saklanır.");
   h+='<div class="altbilgi" style="margin:14px 0 6px;opacity:.75">🐂🐻 MAL + AYI/BOĞA</div>';
+  h+=sagKart("bilgi","Filtre alarmı gönderimi: <b>"+sy("mbAlarm")+"</b>",
+      "Kurulu tarama filtresine YENİ giren hisseler seans içinde bildirilir. "+
+      "Alıcılar: yönetici + süper üyeler (+ tanımlıysa alarm kanalı).");
   h+=sagKart("bilgi","İlerleyen dilim sayısı: <b>"+sy("mbTarama")+"</b>",
       "Yedi zaman dilimi sırayla taranır; bir dilimin havuzu bitince sıradakine geçilir. "+
       "Ölçümler dilim başına ayrı anahtarda birikir, 6 saat sonra bayatlayıp düşer.");
@@ -5153,6 +7649,8 @@ function panelCiz(){
     h+='<div class="kutu"><h3>🛠 Tam panel</h3>'+
       '<div class="bilgi">Üye tablosu, CSV dışa aktarma, davet ağacı ve ayarlar tarayıcıda.</div>'+
       '<button class="dg ik" id="pTam">🌐 Tam paneli aç</button></div>';
+    h+='<div class="kutu"><h3>🟢 Yeşil Kapanış</h3>'+
+      '<div class="bilgi">Hangi fibo basamağında ertesi gün yeşil kapanıyor — dört sınavlı araştırma. Uygulamanın içinde, 🟢 Yeşil Kapanış sekmesinde.</div></div>';
     el("govde").innerHTML=h;
     function id(x){return(el(x).value||"").replace(/\\D/g,"")}
     function calis(is,gov,kutu,btn){
@@ -5709,7 +8207,7 @@ if(z&&a)return j(a)+"\n\n"+AYNA(t,z);
 if(z)return AYNA(t,z);
 if(a)return "🔎 <b>"+t+"</b> için güncel durum\n\n"+j(a);
 return "🔎 <b>"+t+"</b>\n\nBu kod taramada bulunamadı. Yazımı kontrol et (örn. <code>THYAO</code>) ya da yeni tarama sonrası tekrar dene."}function PY(uname,userId,chatId){const link="https://t.me/"+uname+"?start=r"+userId,paylas="https://t.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(DAVET_METIN),menu=u(userId);menu.inline_keyboard=[[{text:"📤 Paylaş",url:paylas}]].concat(menu.inline_keyboard);return{chat_id:chatId,parse_mode:"HTML",disable_web_page_preview:!0,text:"📤 <b>Sistemi paylaş</b>\n\nAşağıdaki düğmeye dokun, Telegram'da kime göndereceğini seç. Davet bağlantın otomatik olarak gönderilir.",reply_markup:menu}}
-const Q={potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};const _ANA={async fetch(p,A,q){ORTAM=A;const $=new URL(p.url);if(n=$.origin,
+const Q={potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};const _ANA={async fetch(p,A,q){ORTAM=A;if(A&&A.ADMIN_IDS)try{EK_YON=new Set(String(A.ADMIN_IDS).split(",").map(x=>x.trim()).filter(Boolean))}catch(_){}const $=new URL(p.url);if(n=$.origin,
 i=A.PANEL_KEY||A.PUSH_KEY||t,"/surum"===$.pathname)return new Response("Fix Borsa Sinyal worker surum "+a,{headers:{"content-type":"text/plain; charset=utf-8","Access-Control-Allow-Origin":"*"}})
 ;if("/setup"===$.pathname){
 const e=(e,t)=>new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#0d1117;color:#e6edf3;font:15px/1.6 system-ui,sans-serif;padding:18px"><h2 style="margin:0 0 10px">'+e+"</h2>"+t+'<p style="margin-top:18px"><a href="/" style="color:#388bfd">← Durum sayfasına dön</a></p></body>',{
@@ -5767,13 +8265,146 @@ q.waitUntil(kilitli(A,"absDilim",50,()=>absDilimTara(A,[])).catch(()=>{})),
 /* 🐂🐻 MAL+AYI/BOĞA: her turda bir zaman diliminden bir dilim hisse
    ilerler; havuz bitince sıradaki zaman dilimine geçilir. Böylece yedi
    dilimin tamamı sırayla ve sürekli tazelenir. */
-q.waitUntil(kilitli(A,"mbDilim",50,()=>mbDilimTara(A)).catch(()=>{})),
+q.waitUntil(kilitli(A,"mbDilim",50,()=>mbAlarmOncelikliTara(A)).catch(()=>{})),
+/* 🔔 Kurulu tarama filtresi varsa listeye YENİ girenleri bildir.
+   mbDilimTara'dan sonra sıraya girer ki o turun taze ölçümünü görsün. */
+q.waitUntil(kilitli(A,"mbAlarm",50,()=>mbAlarmTara(A)).catch(()=>{})),
 q.waitUntil(kilitli(A,"portfoySnapshot",60,()=>portfoyGunlukSnapshotAl(A)).catch(()=>{})),
 saglikArtir("push")   /* sayaç bellekte artar, KV'ye en fazla 60 sn'de bir yazılır */
 /* Formasyon taramasini da tetikle — arka planda, yanit beklemeden. */
 ;const frmDurum=await formasyonTetikle(A).catch(()=>"hata")
 ;const n=t.kartlar?Object.keys(t.kartlar).filter(e=>"sira"!==e).map(e=>e+":"+(t.kartlar[e]||[]).length).join(" · "):""
-;return e({ok:!0,surum:a,depo:!!A.VERI,sayim:n,guncelleme:t.guncelleme,formasyon:frmDurum})}if($.pathname.startsWith("/panel")){
+;return e({ok:!0,surum:a,depo:!!A.VERI,sayim:n,guncelleme:t.guncelleme,formasyon:frmDurum})}if("/dipbacktest"===$.pathname){
+/* 🧪 Panelle AYNI kapı: PANEL_KEY (?key=) veya /panel'den alınan geçici
+   token (?t=) ile açılır. Başka kimse göremez. */
+const kk=await kapiKontrol(A,$,p,!0);
+if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
+const anahtar=$.searchParams.get("key")||$.searchParams.get("t")||"";
+const kodParam=($.searchParams.get("kod")||"").trim();
+const dilimParam=($.searchParams.get("tf")||"15DK,1SA,4SA,1G").trim();
+if($.searchParams.get("git")!=="1"){
+  const mevcutIs=await dbtIsOku(A);
+  return new Response(dbtFormHTML(anahtar,kodParam,dilimParam,mevcutIs),{headers:{"content-type":"text/html; charset=utf-8"}});
+}
+const seviyeler=$.searchParams.getAll("sv").filter(v=>DBT_SEVIYE.includes(v));
+const dilimler=dilimParam.split(",").map(s=>s.trim().toUpperCase()).filter(t=>MB_TF[mbTfNormal(t)]);
+const dilimlerSon=dilimler.length?dilimler:["15DK","1SA","4SA","1G"];
+if($.searchParams.get("evren")==="1"){
+  /* 🌍 TÜM HAVUZ: tek istekte sığmaz, KV'de kalıcı bir "iş" başlatıp
+     /dipbacktest/adim ile parça parça ilerletiyoruz. */
+  const evren=await mbEvren(A,[]);
+  const job={anahtar:anahtar,kuyruk:evren.slice(),toplam:evren.length,tamam:0,
+    dilimler:dilimlerSon,seviyeler:seviyeler.length?seviyeler:DBT_SEVIYE,
+    sonuclar:[],semboller:[],baslangic:Date.now(),guncelleme:Date.now(),tamamlandi:!1};
+  await dbtIsYaz(A,job);
+  return new Response(dbtIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+}
+let kodlar=kodParam?kodParam.split(/[,\s]+/).map(s=>s.toUpperCase().trim()).filter(Boolean):null;
+if(!kodlar||!kodlar.length){const evren=await mbEvren(A,[]);kodlar=evren.slice(0,25)}
+kodlar=kodlar.slice(0,40);
+const dbtT0=Date.now();
+const{sonuclar:dbtSonuclar,semboller:dbtSemboller}=await dbtKosu(kodlar,dilimlerSon,seviyeler.length?seviyeler:DBT_SEVIYE);
+const dbtOzet=dbtOzetle(dbtSonuclar);
+const dbtSure=((Date.now()-dbtT0)/1000).toFixed(1);
+return new Response(dbtRaporHTML({kodlar:kodlar,dilimler:dilimlerSon,
+  ozet:dbtOzet,semboller:dbtSemboller,sure:dbtSure,
+  toplamGiris:dbtSonuclar.length,anahtar:anahtar}),{headers:{"content-type":"text/html; charset=utf-8"}})}
+if("/dipbacktest/adim"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(JSON.stringify({ok:!1,mesaj:kk.mesaj||"yetkisiz"}),{status:kk.kod||401,headers:{"content-type":"application/json"}});
+  const job=await dbtIsOku(A);
+  if(!job)return new Response(JSON.stringify({ok:!1,mesaj:"aktif tarama yok"}),{headers:{"content-type":"application/json"}});
+  if(!job.tamamlandi&&job.kuyruk.length){
+    const grup=job.kuyruk.splice(0,DBT_ADIM_BOYUT);
+    const{sonuclar,semboller}=await dbtKosu(grup,job.dilimler,job.seviyeler);
+    /* Toplam sonuç listesi çok büyümesin diye 20.000 girişte kırpılır —
+       özet istatistikler etkilenmez, yalnız en eski girişler atılır. */
+    job.sonuclar=job.sonuclar.concat(sonuclar).slice(-20000);
+    job.semboller=job.semboller.concat(semboller);
+    job.tamam+=grup.length;
+    job.guncelleme=Date.now();
+    if(!job.kuyruk.length)job.tamamlandi=!0;
+    await dbtIsYaz(A,job);
+  }
+  return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:job.tamamlandi,toplamGiris:job.sonuclar.length}),{headers:{"content-type":"application/json"}})
+}
+if("/dipbacktest/rapor"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
+  const job=await dbtIsOku(A);
+  if(!job)return new Response("Aktif ya da tamamlanmış bir tam-havuz taraması yok. /dipbacktest adresinden 🌍 Tüm hisseler kutusunu işaretleyip başlat.",{headers:{"content-type":"text/plain; charset=utf-8"}});
+  const anahtar=$.searchParams.get("key")||$.searchParams.get("t")||job.anahtar||"";
+  if(!job.tamamlandi)
+    return new Response(dbtIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+  const ozet=dbtOzetle(job.sonuclar);
+  const sure=((job.guncelleme-job.baslangic)/1000).toFixed(1);
+  return new Response(dbtRaporHTML({kodlar:{length:job.toplam},dilimler:job.dilimler,
+    ozet:ozet,semboller:job.semboller,sure:sure,
+    toplamGiris:job.sonuclar.length,anahtar:anahtar}),{headers:{"content-type":"text/html; charset=utf-8"}})
+}
+if("/yesil"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
+  const anahtar=$.searchParams.get("key")||$.searchParams.get("t")||"";
+  const mevcut=await ykIsOku(A);
+  if($.searchParams.get("git")!=="1")
+    return new Response(ykFormHTML(anahtar,mevcut),{headers:{"content-type":"text/html; charset=utf-8"}});
+  let kodlar=String($.searchParams.get("kod")||"").toUpperCase().split(/[^A-Z0-9]+/).filter(x=>KOD_GECERLI.test(x));
+  if($.searchParams.get("evren")==="1"||!kodlar.length){
+    const ev=await mbEvren(A,[]);
+    kodlar=$.searchParams.get("evren")==="1"?ev.slice():ev.slice(0,40);
+  }
+  kodlar=[...new Set(kodlar)];
+  /* Zaman kesimi: en eski gözlem ile bugünün ortası. Veriyi görmeden
+     sabitlenir ki "en iyi bölme"yi seçme yanlılığı olmasın. */
+  const simdi=Math.floor(Date.now()/1000);
+  const job={anahtar:anahtar,kodlar:kodlar,kuyruk:kodlar.slice(),toplam:kodlar.length,tamam:0,
+    zamanKesim:simdi-330*86400,   /* ~11 ay önce: 1SA verisinin kapsadığı aralığın ortası */
+    sayac:ykSayacYeni(),semboller:[],baslangic:Date.now(),guncelleme:Date.now(),tamamlandi:!1};
+  await ykIsYaz(A,job);
+  return new Response(ykIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+}
+if("/yesil/adim"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(JSON.stringify({ok:!1}),{status:kk.kod||401,headers:{"content-type":"application/json"}});
+  const job=await ykIsOku(A);
+  if(!job)return new Response(JSON.stringify({ok:!1,mesaj:"aktif tarama yok"}),{headers:{"content-type":"application/json"}});
+  if(!job.tamamlandi&&job.kuyruk.length){
+    const grup=job.kuyruk.splice(0,YK_ADIM);
+    const tek=ykHisseTek(job.kodlar);
+    const{sayac,semboller}=await ykKosu(grup,job.zamanKesim,tek);
+    job.sayac=ykSayacBirlestir(job.sayac,sayac);
+    job.semboller=job.semboller.concat(semboller).slice(-600);
+    job.tamam+=grup.length;
+    job.guncelleme=Date.now();
+    if(!job.kuyruk.length)job.tamamlandi=!0;
+    await ykIsYaz(A,job);
+  }
+  /* Rapor PARÇALARDAN üretilir; bellekteki iş yalnız yedek olarak katılır.
+     Böylece bir adımın yazdığı hiçbir ölçüm kaybolmaz. */
+  const toplu=await ykParcalariTopla(A);
+  let raporSayac=toplu.sayac;
+  if(job.sayac){
+    const a=(raporSayac.taban&&raporSayac.taban[0]&&raporSayac.taban[0].n)||0;
+    const b=(job.sayac.taban&&job.sayac.taban[0]&&job.sayac.taban[0].n)||0;
+    if(b>a)raporSayac=job.sayac;            /* hangisi daha çoksa o */
+  }
+  const t=raporSayac&&raporSayac.taban&&raporSayac.taban[0];
+  return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,
+    tamamlandi:job.tamamlandi,gozlem:t?t.n:0}),{headers:{"content-type":"application/json"}});
+}
+if("/yesil/rapor"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
+  const job=await ykIsOku(A);
+  if(!job)return new Response("Aktif ya da tamamlanmış tarama yok. /yesil adresinden başlat.",{headers:{"content-type":"text/plain; charset=utf-8"}});
+  const anahtar=$.searchParams.get("key")||job.anahtar||"";
+  if(!job.tamamlandi)return new Response(ykIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+  return new Response(ykRaporHTML({sayac:job.sayac,semboller:job.semboller,toplam:job.toplam,
+    sure:((job.guncelleme-job.baslangic)/1000).toFixed(1),anahtar:anahtar}),
+    {headers:{"content-type":"text/html; charset=utf-8"}});
+}
+if($.pathname.startsWith("/panel")){
 /* 4️⃣ + 1️⃣ Panel kapısı: IP başına yanlış deneme sayacı + (tanımlıysa)
    Cloudflare yerel rate limit. Doğru anahtarla girişte hiçbir fark yok. */
 const kk=await kapiKontrol(A,$,p,!0);
@@ -6075,19 +8706,108 @@ if("/api/malboga"===$.pathname){
     if(!r)return JS({ok:!1,hata:"ölçüm alınamadı"});
     return JS({ok:!0,tek:r,sozluk:sozluk});
   }
+  /* 🔔 FİLTREYİ ALARMA GÖNDER / KALDIR — yalnız yönetici. */
+  if(gov&&gov.is==="alarmListe"){
+    return JS({ok:!0,alarm:await mbAlarmOzetListe(A)});
+  }
+  if(gov&&gov.alarmKur){
+    if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+    const kur=mbIstekNorm(gov);
+    if(!mbFiltreVarMi(kur))return JS({ok:!1,hata:"önce en az bir modül aç"},400);
+    if(!kur.tfler.length)return JS({ok:!1,hata:"önce zaman dilimi seç"},400);
+    const r=await mbAlarmYuvaYaz(A,kur,uid,gov.alarmId);
+    if(r.dolu)return JS({ok:!1,hata:"beş yuva da dolu — önce birini kaldır",
+      alarm:await mbAlarmOzetListe(A)},400);
+    const tohum=await mbAlarmTohumla(A,kur,r.yuva.id).catch(()=>0);
+    return JS({ok:!0,alarmKuruldu:!0,tohum:tohum,yuvaId:r.yuva.id,
+      alarm:await mbAlarmOzetListe(A)});
+  }
+  if(gov&&gov.alarmSil){
+    if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+    await mbAlarmYuvaSil(A,gov.alarmId===true?null:(gov.alarmId||null));
+    return JS({ok:!0,alarmSilindi:!0,alarm:await mbAlarmOzetListe(A)});
+  }
+  /* ⚡ DOĞRUDAN ÖLÇÜM — KV'YE HİÇ DOKUNMAZ
+     Üç tur boyunca KV üzerinden biriktirmeyi düzeltmeye çalıştık; her
+     seferinde başka bir yerden sızdı (gecikmeli okuma, isolate değişimi,
+     arka plan turunun çalışıp çalışmaması). Kökten çözüm: taramayı
+     uygulamanın kendisi yürütsün. Uygulama "şu dilimde şu hisseleri ölç"
+     der, sunucu ölçer ve HAM sonucu döner; biriktirme uygulamanın
+     belleğinde olur. Böylece KV, isolate ve cron denklemden tamamen çıkar
+     — havuzun tamamı her zaman taranabilir.
+     KV'deki birikim yalnız ALARM için kullanılmaya devam ediyor. */
+  if(gov&&gov.is==="evren"){
+    const ev=await tamEvren(A);
+    return JS({ok:!0,kodlar:ev.slice(),kaynak:ev.kaynak||"",sayi:ev.length});
+  }
+  if(gov&&gov.is==="olc"){
+    const tf=mbTfNormal(gov.tf);
+    const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[])
+      .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,MB_OLC_AZAMI);
+    const cikti={};
+    let onbellekten=0;
+    /* önce bellekte olanları topla — bunlar için ölçüm yapılmaz */
+    const kalan=[];
+    for(const kod of kodlar){
+      const c=mbOnbellekAl(kod,tf);
+      if(c){cikti[kod]=c;onbellekten++}else kalan.push(kod);
+    }
+    let sira=0;
+    const isci=async()=>{
+      while(sira<kalan.length){
+        const kod=kalan[sira++];
+        try{const r=await mbOlc(kod,tf,{});
+          if(r){delete r.tf;cikti[kod]=r;mbOnbellekKoy(kod,tf,r)}}catch(_){}
+      }
+    };
+    await Promise.all(Array.from({length:Math.min(MB_ES,kalan.length)},isci));
+    return JS({ok:!0,tf:tf,olcum:cikti,istenen:kodlar.length,onbellekten:onbellekten});
+  }
+  /* ⏩ ELLE DOLDUR — arka plan taraması havuzu saatler içinde doldurur;
+     kullanıcı beklemek istemezse bu uç seçili dilimleri hemen ilerletir.
+     Bir istekte tek dilim × sınırlı hisse: alt-istek bütçesi taşmasın. */
+  if(gov&&gov.doldur){
+    const d=mbIstekNorm(gov);
+    const evSayi=(await tamEvren(A)).length;
+    let ilerleyen=null;
+    for(const tf of d.tfler){
+      const b=await mbTfOku(A,tf,!0);            /* parçalar dahil */
+      if(Object.keys(b.sonuc||{}).length<evSayi){ilerleyen=tf;break}
+      await mbParcalariBirlestir(A,tf).catch(()=>{});  /* tamamsa kalıcılaştır */
+    }
+    /* İstemci aynı dilimde devam ediyorsa kendi imlecini gönderir. */
+    const dis=(gov.imlecTf&&gov.imlecTf===ilerleyen)?Number(gov.imlecKod):null;
+    let yeniImlec=0;
+    if(ilerleyen){
+      const b2=await mbDilimTara(A,ilerleyen,MB_DOLDUR_AZAMI,dis).catch(()=>null);
+      yeniImlec=(b2&&Number(b2.imlec))||0;
+    }
+    const durum=[];
+    for(const t of MB_TF_LISTE){
+      const b=d.tfler.indexOf(t)>=0?await mbTfOku(A,t,!0):await mbTfOku(A,t);
+      durum.push({tf:t,ad:MB_TF[t].ad,ik:MB_TF[t].ik,
+        olculen:Object.keys(b.sonuc||{}).length,evren:b.evren||evSayi,
+        yas:b.ts?Math.round((Date.now()-b.ts)/6e4):null});
+    }
+    const eksik=durum.filter(x=>d.tfler.indexOf(x.tf)>=0&&x.olculen<evSayi).length;
+    if(!eksik)for(const t of d.tfler)await mbParcalariBirlestir(A,t).catch(()=>{});
+    return JS({ok:!0,dolduruldu:!0,dilim:ilerleyen,imlecKod:yeniImlec,
+      dilimler:durum,evren:evSayi,eksik:eksik});
+  }
   /* ÜÇ MODÜL × SEÇİLİ ZAMAN DİLİMLERİ */
   const ist=mbIstekNorm(gov);
   const paket=await mbModulTara(A,ist).catch(()=>null);
   const dilimler=await mbDilimDurum(A).catch(()=>[]);
   let evrenBilgi={sayi:0,kaynak:"okunamadı",rapor:null};
   try{const ev=await tamEvren(A);evrenBilgi={sayi:ev.length,kaynak:ev.kaynak,rapor:YON?ev.rapor:null}}catch(_){}
+  const alarm=await mbAlarmOzetListe(A).catch(()=>null);
   if(!paket)return JS({ok:!0,sozluk:sozluk,dilimler:dilimler,evrenBilgi:evrenBilgi,
-    ist:ist,gruplar:[],ortak:[],calisiyor:!0});
+    ist:ist,gruplar:[],ortak:[],calisiyor:!0,alarm:alarm});
   const fav=await X(A,uid),pf=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf)]);
   for(const g of paket.gruplar)
     g.liste=g.liste.map(x=>Object.assign({takipte:izlenen.has(x.kod)},x));
   return JS({ok:!0,sozluk:sozluk,dilimler:dilimler,evrenBilgi:evrenBilgi,ist:ist,
-    gruplar:paket.gruplar,ortak:paket.ortak,calisiyor:paket.calisiyor});
+    gruplar:paket.gruplar,ortak:paket.ortak,calisiyor:paket.calisiyor,alarm:alarm});
 }
 /* 🌊 Absorpsiyon eşiklerini kaydet — SADECE yönetici. Kaydedince yeni
    önbellek anahtarına düştüğü için bir sonraki istekte anında yeni
@@ -6188,6 +8908,113 @@ return JS({ok:!0,guncelleme:T.guncelleme||null,toplam:liste.length,
  super:!!sup||!!YON,kilitSayi:(!sup&&!YON)?Math.min(KILIT,liste.length):0,
  sektorler:Object.keys(sekSay).sort().map(s2=>({ad:s2,n:sekSay[s2]})),
  liste:liste})}
+/* 🟢 YEŞİL KAPANIŞ ARAŞTIRMASI — artık tamamen uygulamanın içinden yönetilir.
+   Üç iş tek uçta: başlat · bir adım ilerlet · sonucu getir.
+   Tarayıcıda ayrı sayfa açmaya gerek yok. */
+/* 🟢 YEŞİL KAPANIŞ — sayaçlar PARÇALI yazılır.
+   Tek bir "iş" nesnesini oku-değiştir-yaz yapmak KV'nin gecikmesi yüzünden
+   veri kaybettiriyordu (tarama biterken ekrandaki her şeyin silinmesinin
+   sebebi buydu). Artık her adım KENDİ parçasına yazar (ykP:NO) — iki adım
+   asla aynı anahtara dokunmaz. Rapor bütün parçaları toplayarak üretilir. */
+async function ykParcaYaz(A,no,sayac){
+  if(!A||!A.VERI)return;
+  try{await A.VERI.put("ykP:"+no,JSON.stringify(sayac),{expirationTtl:172800})}catch(_){}
+}
+async function ykParcalariTopla(A){
+  const S=ykSayacYeni();let adet=0;
+  if(!A||!A.VERI)return{sayac:S,adet:0};
+  try{
+    const l=await A.VERI.list({prefix:"ykP:"});
+    for(const k of (l&&l.keys)||[]){
+      try{const h=await A.VERI.get(k.name);if(!h)continue;
+        ykSayacBirlestir(S,JSON.parse(h));adet++;
+      }catch(_){}
+    }
+  }catch(_){}
+  return{sayac:S,adet:adet};
+}
+async function ykParcalariSil(A){
+  if(!A||!A.VERI)return;
+  try{const l=await A.VERI.list({prefix:"ykP:"});
+    for(const k of (l&&l.keys)||[])await A.VERI.delete(k.name).catch(()=>{});
+  }catch(_){}
+}
+if("/api/yesil"===$.pathname){
+  if(!YON)return JS({ok:!1,hata:"Yetkin yok."},403);
+  const is=String(gov.is||"durum");
+  /* ⚡ DURUMSUZ ÖLÇÜM — sunucu hiçbir şey hatırlamaz.
+     Eskiden "başlat" KV'ye bir iş yazıyor, hemen ardından gelen "adım"
+     isteği başka bir isolate'e düşünce o işi bulamıyor ve "iş yok" diyordu;
+     ekran da başlangıç menüsüne geri dönüyordu. Artık hisse listesini ve
+     nerede kalındığını UYGULAMA tutuyor, sunucu yalnız verilen partiyi
+     ölçüp sayacı geri veriyor. */
+  if(is==="parti"){
+    const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[])
+      .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,YK_ADIM);
+    if(!kodlar.length)return JS({ok:!1,hata:"kod yok"});
+    const kesim=Number(gov.zamanKesim)||(Math.floor(Date.now()/1000)-330*86400);
+    const tekSet=new Set((Array.isArray(gov.tekler)?gov.tekler:[]));
+    const{sayac,semboller,teshis}=await ykKosu(kodlar,kesim,k=>tekSet.has(k));
+    return JS({ok:!0,sayac:sayac,teshis:teshis,
+      hatali:(semboller||[]).filter(x=>x.hata).map(x=>x.kod)});
+  }
+  if(is==="basla"){
+    let kodlar;
+    const ev=await mbEvren(A,[]);
+    if(gov.kodlar&&String(gov.kodlar).trim()){
+      kodlar=String(gov.kodlar).toUpperCase().split(/[^A-Z0-9]+/).filter(x=>KOD_GECERLI.test(x));
+    }else kodlar=ev.slice();
+    if(gov.hizli)kodlar=kodlar.slice(0,40);
+    kodlar=[...new Set(kodlar)];
+    if(!kodlar.length)return JS({ok:!1,hata:"taranacak hisse bulunamadı"});
+    const simdi=Math.floor(Date.now()/1000);
+    await ykParcalariSil(A);
+    await ykIsYaz(A,{anahtar:"",kodlar:kodlar,kuyruk:kodlar.slice(),toplam:kodlar.length,tamam:0,
+      zamanKesim:simdi-330*86400,sayac:ykSayacYeni(),semboller:[],
+      baslangic:Date.now(),guncelleme:Date.now(),tamamlandi:!1});
+    return JS({ok:!0,baslatildi:!0,toplam:kodlar.length});
+  }
+  if(is==="iptal"){ykIsSil();await ykParcalariSil(A);
+    try{await A.VERI.delete("ykIs")}catch(_){}return JS({ok:!0,iptal:!0})}
+  const job=await ykIsOku(A);
+  if(!job)return JS({ok:!0,yok:!0});
+  if(is==="adim"&&!job.tamamlandi&&job.kuyruk.length){
+    const grup=job.kuyruk.splice(0,YK_ADIM);
+    const parcaNo=Math.floor(job.tamam/YK_ADIM);
+    const{sayac,semboller,teshis}=await ykKosu(grup,job.zamanKesim,ykHisseTek(job.kodlar));
+    await ykParcaYaz(A,parcaNo,sayac);          /* kendi parçası — çakışma yok */
+    job.sayac=ykSayacBirlestir(job.sayac,sayac);
+    job.semboller=job.semboller.concat(semboller).slice(-600);
+    /* teşhisi biriktir — sonunda "neden boş" sorusunu cevaplayabilelim */
+    if(!job.teshis)job.teshis={veriYok:{},gozlemsiz:0,hata:0};
+    for(const k in teshis.veriYok)job.teshis.veriYok[k]=(job.teshis.veriYok[k]||0)+teshis.veriYok[k];
+    job.teshis.gozlemsiz+=teshis.gozlemsiz;job.teshis.hata+=teshis.hata;
+    job.tamam+=grup.length;job.guncelleme=Date.now();
+    if(!job.kuyruk.length)job.tamamlandi=!0;
+    await ykIsYaz(A,job);
+  }
+  const t=job.sayac&&job.sayac.taban&&job.sayac.taban[0];
+  const cvp={ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:!!job.tamamlandi,
+    gozlem:t?t.n:0,sure:Math.round((job.guncelleme-job.baslangic)/1000),
+    teshis:job.teshis||null};
+  /* Rapor HER adımda üretilir — kullanıcı sonucu beklemeden görsün, boş
+     kalıyorsa da hemen anlasın. Maliyeti yok: yalnız sayaçlar özetlenir. */
+  {
+    const paket=(alan)=>{
+      const o=ykOzetle(raporSayac,alan);
+      if(!o.taban)return null;
+      return{taban:{n:o.taban.n,yesil:o.taban.yesil,ort:o.taban.ort},
+        denenen:o.denenen,gecen:o.gecen,beklenenGurultu:Math.round(o.denenen*0.06),
+        gecenler:o.satirlar.filter(r=>r.gecti).slice(0,25).map(r=>({
+          ad:r.ad,tur:r.tur,n:r.n,yesil:r.yesil,ort:r.ort,kaldirac:r.kaldirac,bolmeler:r.bolmeler})),
+        elenenler:o.satirlar.filter(r=>!r.gecti).slice(0,10).map(r=>({
+          ad:r.ad,n:r.n,yesil:r.yesil,kaldirac:r.kaldirac,bolmeler:r.bolmeler}))};
+    };
+    cvp.gun=paket("g");cvp.kap=paket("k");
+    cvp.hatali=(job.semboller||[]).filter(s=>s.hata).map(s=>s.kod).slice(0,40);
+  }
+  return JS(cvp);
+}
 if("/api/tara"===$.pathname){
 if(!YON)return JS({ok:!1,mesaj:"Yetkin yok."},403);
 const s2=await taramaTetikle(A);
@@ -6291,7 +9118,7 @@ const kurulusGun=Math.max(1,Math.round((new Date(bg)-new Date(KURULUS))/864e5));
 const cikti=JS({ok:!0,donem:{h1:olc(7),a1:olc(30),a3:olc(90),y1:olc(365)},
 kurulus:{tarih:KURULUS,gun:kurulusGun,ist:olc(kurulusGun)},
 ayar:PA,elenenAykiri:elenenAykiri,elenenTaze:elenenTaze,yonetici:!!YON,
-guncelleme:G2.guncelleme||null});return cikti}
+guncelleme:G2.guncelleme||null,dipbacktestUrl:YON?(n+"/dipbacktest?key="+encodeURIComponent(i)):null});return cikti}
 /* ═══════════════════ 📊 BACKTEST — DÜRÜST ÖLÇÜM ═══════════════════
    İLK SÜRÜM ÜÇ AYRI YERDE YANLIŞTI, HEPSİ BURADA DÜZELTİLDİ:
 
@@ -6491,7 +9318,7 @@ return JS({ok:!0,uye:st.toplam||0,aktif24:Object.values(kl).filter(x=>x.son&&sim
 super:sup,engel:eng.length,depo:!!A.VERI,
 guncelleme:L2&&L2.guncelleme?new Date(L2.guncelleme).toLocaleString("tr-TR"):null,
 ozet:L2&&L2.kartlar?Object.keys(L2.kartlar).filter(x=>"sira"!==x).map(x=>({ad:x,n:L2.kartlar[x].length})):[],
-sonYayin:sy,panelUrl:r()})}
+sonYayin:sy,panelUrl:r(),dipbacktestUrl:n+"/dipbacktest?key="+encodeURIComponent(i)})}
 if("super"===is){
 const hid=ID(gov.id);if(!hid)return JS({ok:!0,mesaj:"⚠️ ID gir."});
 const ay=Math.max(1,Math.min(60,parseInt(gov.ay||"1",10)||1));
