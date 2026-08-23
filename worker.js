@@ -3930,6 +3930,42 @@ function E(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&l
 function N(v,b){return(v==null||isNaN(v))?"—":Number(v).toFixed(b==null?2:b)}
 function Y(v){if(v==null||isNaN(v))return"";return(v>=0?"+":"")+Number(v).toFixed(2)+"%"}
 function el(id){return document.getElementById(id)}
+/* 👣 Ayak izi: hangi sekmede ne kadar süre geçirildiğini ölçer, birikeni
+   periyodik olarak ve sekme değişince sunucuya gönderir. Sayfa tamamen
+   kapanırken sendBeacon kullanılır (fetch, unload sırasında güvenilir
+   tamamlanmayabiliyor). Kullanıcı deneyimini hiçbir şekilde etkilemez —
+   tüm istekler sessiz ve arka plandadır. */
+var izSekme=null, izBaslangic=0, izGirisGonderildi=!1;
+function izBirikenSn(){
+  if(!izSekme||!izBaslangic||document.hidden)return 0;
+  return Math.max(0,Math.round((Date.now()-izBaslangic)/1000));
+}
+function izGonder(sekmeAdi,sn,kapanisMi){
+  if(!sekmeAdi||!(sn>0))return;
+  var gov={sekme:sekmeAdi,sn:sn,initData:(TG&&TG.initData)||""};
+  if(kapanisMi&&navigator.sendBeacon){
+    try{navigator.sendBeacon("/api/iz",new Blob([JSON.stringify(gov)],{type:"application/json"}));return}catch(e){}
+  }
+  try{fetch("/api/iz",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(gov),keepalive:!0}).catch(function(){})}catch(e){}
+}
+function izSekmeDegisti(yeniSekme){
+  var sn=izBirikenSn();
+  if(sn>0&&izSekme)izGonder(izSekme,sn);
+  izSekme=yeniSekme;izBaslangic=Date.now();
+  if(!izGirisGonderildi){
+    izGirisGonderildi=!0;
+    try{fetch("/api/iz",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({giris:!0,initData:(TG&&TG.initData)||""}),keepalive:!0}).catch(function(){})}catch(e){}
+  }
+}
+try{
+  document.addEventListener("visibilitychange",function(){
+    if(document.hidden){var sn=izBirikenSn();if(sn>0&&izSekme)izGonder(izSekme,sn);izBaslangic=0}
+    else if(izSekme){izBaslangic=Date.now()}
+  });
+  window.addEventListener("pagehide",function(){var sn=izBirikenSn();if(sn>0&&izSekme)izGonder(izSekme,sn,!0)});
+  setInterval(function(){var sn=izBirikenSn();if(sn>=20&&izSekme){izGonder(izSekme,sn);izBaslangic=Date.now()}},2e4);
+}catch(e){}
 function post(yol,gov){
   gov=gov||{}; gov.initData=(TG&&TG.initData)||"";
   return fetch(yol,{method:"POST",headers:{"Content-Type":"application/json"},
@@ -3965,6 +4001,7 @@ function basla(){
     D=v;
     onizUygula();
     if(!D.onay)return onayCiz();
+    izSekmeDegisti(sekme);
     ciz();
   }).catch(function(){splashKapat();el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
   setTimeout(splashKapat,4000); /* güvenlik: yavaş bağlantıda sonsuza dek takılı kalmasın */
@@ -4017,7 +4054,7 @@ function sekCiz(){
   if(D.yon)s.push('<button class="sek'+(sekme==="sag"?" on":"")+'" data-r="nötr" data-s="sag">🛡 Sistem</button>');
   el("sekmeler").innerHTML=s.join("");
   [].forEach.call(el("sekmeler").children,function(b){
-    b.onclick=function(){tit();sekme=b.dataset.s;sira="kar";ciz();window.scrollTo(0,0)};
+    b.onclick=function(){tit();sekme=b.dataset.s;sira="kar";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
     b.oncontextmenu=function(e2){e2.preventDefault()};
   });
 }
@@ -4153,12 +4190,12 @@ function araBagla(){
   var yb=el("yardimBtn");
   if(yb&&!yb.dataset.bagli){
     yb.dataset.bagli="1";
-    yb.onclick=function(){tit();sekme="yardim";ciz();window.scrollTo(0,0)};
+    yb.onclick=function(){tit();sekme="yardim";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
   }
   var db=el("davetBtn");
   if(db&&!db.dataset.bagli){
     db.dataset.bagli="1";
-    db.onclick=function(){tit();sekme="davet";ciz();window.scrollTo(0,0)};
+    db.onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
   }
 }
 /* 🔄 ELLE TARAMA DÜĞMESİ — yalnız yönetici.
@@ -4243,7 +4280,7 @@ function hotCiz(){
         ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div>';
     kutu.innerHTML=h2;
     var hl=el("hotKilitLink");
-    if(hl)hl.onclick=function(){tit();sekme="davet";ciz();window.scrollTo(0,0)};
+    if(hl)hl.onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
     return;
   }
 
@@ -4346,7 +4383,7 @@ function satirBagla(){
       tit();
       /* Buğulu satır: kod detay ekranından okunabilirdi, o yüzden
          tıklama detaya değil davet ekranına gider. */
-      if(b.dataset.kilit){sekme="davet";ciz();window.scrollTo(0,0);return}
+      if(b.dataset.kilit){sekme="davet";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0);return}
       if(b.dataset.form)formasyonDetay(b.dataset.kod,b.dataset.l);
       else detay(b.dataset.kod,b.dataset.l);
     };
@@ -4427,7 +4464,7 @@ function adayCiz(){
       "tetik seviyesi ve kırarsa gideceği hedef.</p>"+
       "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
       '<button class="dg" id="davetGit">📤 Sistemi paylaş</button></div>';
-    el("davetGit").onclick=function(){tit();sekme="davet";ciz()};
+    el("davetGit").onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz()};
     return;
   }
   var alt=["adayOrta","adayOrtaVade","adayUzun","adayHafta"];
@@ -4463,7 +4500,7 @@ function kamaCiz(){
       '🎯 Formasyon henüz kırılmadan hazırlanmış hedefler — piyasa hareket etmeden sen pozisyon planlarsın</p>'+
       "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
       '<button class="dg" id="davetGit">📤 Sistemi paylaş, hemen aç</button></div>';
-    var dg0=el("davetGit");if(dg0)dg0.onclick=function(){tit();sekme="davet";ciz()};
+    var dg0=el("davetGit");if(dg0)dg0.onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz()};
     return;
   }
   if(kamaD){kamaGoster();return}
@@ -5013,7 +5050,7 @@ function temelBagla(){
     b.onclick=function(){
       tit();
       /* Kilitli satır kodu ele vermesin: davete gider. */
-      if(b.dataset.tkilit){sekme="davet";ciz();window.scrollTo(0,0);return}
+      if(b.dataset.tkilit){sekme="davet";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0);return}
       temelDetay(b.getAttribute("data-tkod"));
     };
   });
@@ -5187,7 +5224,7 @@ function alarmCiz(){
       "<p>Anlık uyarı, güçlü bir sinyale giren hisse oluştuğu an sana <b>özel mesaj</b> olarak gelir — listeyi açıp kontrol etmene gerek kalmaz.</p>"+
       "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
       '<button class="dg" id="davetGit">📤 Sistemi paylaş</button></div>';
-    el("davetGit").onclick=function(){tit();sekme="davet";ciz()};
+    el("davetGit").onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz()};
     return;
   }
   el("govde").innerHTML='<div class="kutu"><h3>🔔 Anlık Alarm</h3>'+
@@ -6135,7 +6172,7 @@ function mbCiz(){
       '🔎 Tek hisse sorgulama — herhangi bir kodu yazıp anında bu derinlikte bak</p>'+
       "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
       '<button class="dg" id="davetGit">📤 Sistemi paylaş, hemen aç</button></div>';
-    var dg=el("davetGit");if(dg)dg.onclick=function(){tit();sekme="davet";ciz()};
+    var dg=el("davetGit");if(dg)dg.onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz()};
     return;
   }
   if(mbTek){mbTekGoster(mbTek);return}
@@ -7954,6 +7991,50 @@ void 0!==e.potansiyel&&null!==e.potansiyel&&(a+=tuttu?"  ·  🏆 fiyat hedefin 
 e.sinyalZaman&&(a+="🕐 Sinyal zamanı: <b>"+e.sinyalZaman+"</b>\n"),a+="━━━━━━━━━━━━━━━━\n<i>⚠️ Yatırım tavsiyesi değildir.</i>",a}let H={},C=0;async function L(e){if(!e.VERI)return{toplam:0,basis:{},
 gun:{}};const t=await e.VERI.get("istatistik");return t?JSON.parse(t):{toplam:0,basis:{},gun:{}}}async function F(e){if(!e.VERI)return{};const t=await e.VERI.get("referanslar")
 ;return t?JSON.parse(t):{}}async function PK(e){if(!e.VERI)return{};const t=await e.VERI.get("paylasim");return t?JSON.parse(t):{}}async function PKArtir(e,t){if(!e.VERI)return;const a=await PK(e);a[t]=(a[t]||0)+1,await e.VERI.put("paylasim",JSON.stringify(a))}
+/* 👣 İZ (ayak izi): kullanıcı bazlı oturum süresi + sekme kullanım istatistiği.
+   Her kullanıcı kendi KV anahtarında tutulur (iz:{uid}) — farklı kullanıcılar
+   aynı anda yazınca tek bir anahtarda çakışma/limit sorunu yaşanmasın diye. */
+async function izOku(A,uid){if(!A.VERI)return null;const t=await A.VERI.get("iz:"+uid);return t?JSON.parse(t):null}
+async function izYaz(A,uid,sekme,sn){
+  if(!A.VERI||!uid)return;
+  const girisMi=sekme==="__giris__";
+  sn=Math.max(0,Math.min(300,Number(sn)||0)); /* tek bildirimde en fazla 5dk say — hatalı/art niyetli çok büyük değerleri engelle */
+  if(!girisMi&&sn<=0)return;
+  const mevcut=await izOku(A,uid)||{toplamSn:0,sekmeler:{},girisSayisi:0,ilkGiris:Date.now(),sonGiris:Date.now(),sonSekme:null,sonGorulme:Date.now()};
+  if(girisMi){
+    mevcut.girisSayisi=(mevcut.girisSayisi||0)+1;
+  }else{
+    const sk=String(sekme||"bilinmiyor").slice(0,30);
+    mevcut.toplamSn=(mevcut.toplamSn||0)+sn;
+    mevcut.sekmeler[sk]=(mevcut.sekmeler[sk]||0)+sn;
+    mevcut.sonSekme=sk;
+  }
+  mevcut.sonGiris=Date.now();mevcut.sonGorulme=Date.now();
+  await A.VERI.put("iz:"+uid,JSON.stringify(mevcut),{expirationTtl:60*60*24*400});
+}
+/* Panelde toplu göstermek için: en çok vakit geçiren kullanıcılar + sekme popülerliği.
+   Not: her çağrı KV'den kullanıcı sayısı kadar okuma yapar — bu yüzden /panel/iz
+   ayrı ve istek üzerine (panel sekmesi açıldığında) çağrılan bir uç, /panel/veri'nin
+   her açılışında otomatik tetiklenmiyor. */
+async function izListele(A,limit){
+  if(!A.VERI)return{kullanicilar:[],sekmeToplam:{}};
+  limit=limit||500;
+  let liste=[],cursor;
+  for(let i=0;i<20&&liste.length<limit;i++){
+    const s=await A.VERI.list({prefix:"iz:",limit:1000,cursor});
+    for(const k of s.keys){
+      const v=await A.VERI.get(k.name);
+      if(v)liste.push({id:k.name.slice(3),...JSON.parse(v)});
+      if(liste.length>=limit)break;
+    }
+    if(s.list_complete||!s.cursor)break;
+    cursor=s.cursor;
+  }
+  const sekmeToplam={};
+  for(const u of liste)for(const[sk,sn]of Object.entries(u.sekmeler||{}))sekmeToplam[sk]=(sekmeToplam[sk]||0)+sn;
+  liste.sort((a,b)=>(b.toplamSn||0)-(a.toplamSn||0));
+  return{kullanicilar:liste,sekmeToplam};
+}
 async function hmacSHA256(e,t){const a=await crypto.subtle.importKey("raw",e,{name:"HMAC",hash:"SHA-256"},!1,["sign"]);return new Uint8Array(await crypto.subtle.sign("HMAC",a,t))}function bytesToHex(e){let t="";for(const a of e)t+=a.toString(16).padStart(2,"0");return t}
 /* GÜVENLİK: /tg webhook'u kimden geldiğini doğrulamıyordu — Telegram dışından
    sahte bir update POST edilip from.id sahtelenerek yönetici komutları
@@ -7963,7 +8044,7 @@ async function hmacSHA256(e,t){const a=await crypto.subtle.importKey("raw",e,{na
    her /tg isteğinde Telegram'ın gönderdiği başlıkla karşılaştırıyoruz. */
 let WHS=null;async function whS(e){if(WHS)return WHS;if(!e.BOT_TOKEN)return null;const t=new TextEncoder(),a=await hmacSHA256(t.encode("fixborsa-tg-webhook"),t.encode(e.BOT_TOKEN));return WHS=bytesToHex(a).slice(0,32)}
 async function dogrulaInitData(e,t){const a=new URLSearchParams(e),n=a.get("hash");if(!n)return null;a.delete("hash");const i=[];for(const[e,t]of a.entries())i.push(e+"="+t);i.sort();const r=i.join("\n"),s=new TextEncoder(),l=await hmacSHA256(s.encode("WebAppData"),s.encode(t)),o=await hmacSHA256(l,s.encode(r));if(bytesToHex(o)!==n)return null;const c=a.get("user");if(!c)return null;try{const e=JSON.parse(c);return e&&e.id?String(e.id):null}catch(e){return null}}function W(){return(new Date).toISOString().slice(0,10)}let _={};async function Y(e){if(!e.VERI)return{};const t=await e.VERI.get("kullanim");return t?JSON.parse(t):{}}
-const J=["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"].join("")
+const J=["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"].join("")
 ;let G=null;async function X(e,t){if(!e.VERI)return[];const a=await e.VERI.get("fav:"+t);return a?JSON.parse(a):[]}
 /* PORTFÖY: fav (⭐ takip) listesinden bilerek AYRI bir KV anahtarı.
    fav yalnız "izle", portfoy ise "lot + maliyet" tutar — birini bozmadan
@@ -8610,7 +8691,16 @@ new Response(JSON.stringify({gonderilen:c,basarisiz:d,imlec:s,bitti:l}),{headers
 const e=await a(5e3),t=await Y(A),n=await F(A),py=await PK(A),i=new Set(await E(A,!0)),r=e=>e.map(e=>'"'+String(null==e?"":e).replace(/"/g,'""')+'"').join(",")
 ;let s=r(["id","ad","kullanici","katilim","davetci","davet_ettigi","paylas_tusu","sorgu","son_aktif","sinirsiz"])+"\n";for(const a of e){const e=t[String(a.id)]||{}
 ;s+=r([a.id,a.ad,a.kullanici,a.katilim,a.ref,n[String(a.id)]||0,py[String(a.id)]||0,e.toplam||0,e.son?new Date(1e3*e.son).toISOString():"",i.has(String(a.id))?"evet":""])+"\n"}return new Response("\ufeff"+s,{headers:{
-"content-type":"text/csv; charset=utf-8","content-disposition":'attachment; filename="fixborsa-uyeler.csv"'}})}if("/panel/veri"===$.pathname){
+"content-type":"text/csv; charset=utf-8","content-disposition":'attachment; filename="fixborsa-uyeler.csv"'}})}if("/panel/iz"===$.pathname){
+const lz=await a(2e3);
+const isim=e=>{const t=lz.find(t=>String(t.id)===String(e));return t&&(t.ad||(t.kullanici?"@"+t.kullanici:""))||("id:"+e)};
+const{kullanicilar:ham,sekmeToplam}=await izListele(A,500);
+const kullanicilar=ham.slice(0,200).map(u=>({id:u.id,ad:isim(u.id),toplamSn:u.toplamSn||0,girisSayisi:u.girisSayisi||0,
+  sonGorulme:u.sonGorulme||null,sonSekme:u.sonSekme||null,
+  sekmeler:Object.entries(u.sekmeler||{}).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([ad,sn])=>({ad,sn}))
+}));
+return new Response(JSON.stringify({kullanicilar,sekmeToplam,taranan:ham.length}),{headers:{"content-type":"application/json; charset=utf-8"}})}
+if("/panel/veri"===$.pathname){
 const e=await L(A),t=await F(A),n=await Y(A),i=await E(A,!0),r=await N(A,!0),s=await S(A,!0),py=await PK(A);let l=await a(1e3);const o=e=>{const t=l.find(t=>String(t.id)===String(e))
 ;return t&&(t.ad||(t.kullanici?"@"+t.kullanici:""))||""};for(const e of l){const t=n[String(e.id)]||{};e.sorgu=t.toplam||0,e.sonAktif=t.son||null,e.paylas=py[String(e.id)]||0}
 l.sort((e,t)=>(t.katilim||"").localeCompare(e.katilim||""));const c=Object.entries(t).map(([e,t])=>({id:e,n:t,ad:o(e),paylas:py[String(e)]||0})).sort((e,t)=>t.n-e.n).slice(0,50),d=Object.entries(n).map(([e,t])=>({id:e,
@@ -8667,6 +8757,14 @@ if(!d(uid)){
     return JS({ok:!1,hata:"çok hızlı — birkaç saniye bekle"},429);
 }
 const YON=d(uid),KOD=v=>String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10),ID=v=>String(v||"").replace(/\D/g,"");
+if("/api/iz"===$.pathname){
+/* 👣 İstemciden gelen ayak izi bildirimi: sekme değişiminde/otomatik aralıkla
+   biriken saniye, ya da oturum başlangıcı ("giris"). Sessizce kabul eder —
+   panel istatistiği için, kullanıcı deneyimini asla etkilememeli. */
+const sekme=String(gov.sekme||"").slice(0,30),sn=Number(gov.sn)||0,giris=!!gov.giris;
+if(giris)q.waitUntil(izYaz(A,uid,"__giris__",0).catch(()=>{}));
+if(sekme&&sn>0)q.waitUntil(izYaz(A,uid,sekme,sn).catch(()=>{}));
+return JS({ok:!0})}
 if("/api/veri"===$.pathname){
 const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid),portfoy=await XP(A,uid),portfoyGecmis=await XPG(A,uid),portfoyGunluk=await XPGUNLUK(A,uid);
 const un=BUN||await botAd(A).catch(()=>null)||"bot";
