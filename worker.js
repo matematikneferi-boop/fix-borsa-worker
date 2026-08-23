@@ -1463,6 +1463,34 @@ function ezEnerji(dur,rngH,atr){
   return Math.min(Math.max(comp+tsc+mat+tight,5),100);
 }
 function ezEvre(dur){return dur<10?"Forming":dur<25?"Growth":dur<50?"Mature":"Exhaustion"}
+/* _enz_gravity + _enz_touches + _enz_inst + _enz_direction + _enz_quality —
+   Pine'da hepsi tek bir "son bar" bloğunda çalışır, burada da öyle.
+   cBar: aktif zon için son bar, kırılmış zon için zonun bittiği bar. */
+function ezAgirOlc(m,avol,z,cBar){
+  const rngH=z.top-z.bottom,tol=rngH*0.1;
+  const lb=Math.min(cBar-z.startBar,500);
+  let sw=0,sv=0,tt=0,tb=0,ac=0,tv=0;
+  const av=avol[cBar];
+  for(let k=0;k<lb;k++){
+    const c=m[cBar-k];
+    const mp=(c.high+c.low+c.close)/3;
+    if(mp<=z.top&&mp>=z.bottom){sw+=mp*(c.hacim||0);sv+=(c.hacim||0)}
+    if(c.high>=z.top-tol&&c.high<=z.top+tol&&c.close<c.high-tol)tt++;
+    if(c.low>=z.bottom-tol&&c.low<=z.bottom+tol&&c.close>c.low+tol)tb++;
+    if(c.high<=z.top&&c.low>=z.bottom&&av!==null&&(c.hacim||0)>av*2){ac++;tv+=(c.hacim||0)}
+  }
+  z.gravityCenter=sv>0?sw/sv:(z.top+z.bottom)/2;
+  z.touchesTop=tt;z.touchesBottom=tb;
+  const ar=lb>0?ac/lb*100:0,vi=(av>0&&ac>0)?tv/(av*ac):0;
+  z.instFootprint=Math.min(ar*0.5+Math.min(vi*10,50),100);
+  const mid=(z.top+z.bottom)/2;
+  const gb=(z.gravityCenter-mid)/(rngH/2);
+  const tbv=(tt>0||tb>0)?(tb-tt)/Math.max(tt+tb,1):0;
+  const cb=gb*0.6+tbv*0.4;
+  z.direction=cb>0.1?"Bullish":cb<-0.1?"Bearish":"Neutral";
+  z.dirConfidence=Math.min(Math.abs(cb)*100+50,100);
+  z.breakoutQuality=ezKalite(z.energy,z.instFootprint,z.phase,z.dirConfidence);
+}
 function ezKalite(e,inst,ev,guv){
   const ps=ev==="Forming"?20:ev==="Growth"?50:ev==="Mature"?80:60;
   return Math.min((e||0)*0.3+(inst||0)*0.25+ps*0.25+(guv||0)*0.2,100);
@@ -1516,32 +1544,24 @@ function mbEnerjiMotor(m,minBars,atrMult){
         aktif.endBar=i;
         aktif.energy=ezEnerji(dur,rngH,a);
         aktif.phase=ezEvre(dur);
-        if(i===son){                       /* Pine: yalnız last_bar_index */
-          const lb=Math.min(i-aktif.startBar,500);
-          let sw=0,sv=0,tt=0,tb=0,ac=0,tv=0;
-          const av=avol[i];
-          for(let k=0;k<lb;k++){
-            const c=m[i-k];
-            const mp=(c.high+c.low+c.close)/3;
-            if(mp<=aktif.top&&mp>=aktif.bottom){sw+=mp*(c.hacim||0);sv+=(c.hacim||0)}
-            if(c.high>=aktif.top-tol&&c.high<=aktif.top+tol&&c.close<c.high-tol)tt++;
-            if(c.low>=aktif.bottom-tol&&c.low<=aktif.bottom+tol&&c.close>c.low+tol)tb++;
-            if(c.high<=aktif.top&&c.low>=aktif.bottom&&av!==null&&(c.hacim||0)>av*2){ac++;tv+=(c.hacim||0)}
-          }
-          aktif.gravityCenter=sv>0?sw/sv:(aktif.top+aktif.bottom)/2;
-          aktif.touchesTop=tt;aktif.touchesBottom=tb;
-          const ar=lb>0?ac/lb*100:0,vi=(av>0&&ac>0)?tv/(av*ac):0;
-          aktif.instFootprint=Math.min(ar*0.5+Math.min(vi*10,50),100);
-          const rng=aktif.top-aktif.bottom,mid=(aktif.top+aktif.bottom)/2;
-          const gb=(aktif.gravityCenter-mid)/(rng/2);
-          const tbv=(tt>0||tb>0)?(tb-tt)/Math.max(tt+tb,1):0;
-          const cb=gb*0.6+tbv*0.4;
-          aktif.direction=cb>0.1?"Bullish":cb<-0.1?"Bearish":"Neutral";
-          aktif.dirConfidence=Math.min(Math.abs(cb)*100+50,100);
-          aktif.breakoutQuality=ezKalite(aktif.energy,aktif.instFootprint,aktif.phase,aktif.dirConfidence);
-        }
+        if(i===son)ezAgirOlc(m,avol,aktif,i);   /* Pine: yalnız last_bar_index */
       }
     }
+  }
+  /* ⚠️ PINE'DAN AYRILAN TEK NOKTA — bilerek:
+     Pine ağır ölçüleri yalnız AKTİF zon için ve yalnız son barda yapar;
+     zon kırıldıysa güç/kalite/kurumsal iz alanları boş (na) kalır. Bu,
+     "0B kırdı VE kalitesi ≥60" gibi bir süzgeci imkânsız kılıyordu.
+     Kırılmış zon için aynı hesaplar zonun KENDİ ömrü üzerinden (startBar →
+     endBar) yapılır. Aktif zon yolu bir satır bile değişmedi, dolayısıyla
+     TradingView'in gösterdiği hiçbir sayı bundan etkilenmez; yalnız orada
+     boş kalan yere sayı gelir. */
+  if(aktif&&!aktif.isActive&&aktif.isBroken&&aktif.breakoutQuality===null&&
+     aktif.endBar>aktif.startBar){
+    if(aktif.energy===null)aktif.energy=ezEnerji(aktif.endBar-aktif.startBar,
+      aktif.top-aktif.bottom,atr[aktif.endBar]);
+    if(!aktif.phase)aktif.phase=ezEvre(aktif.endBar-aktif.startBar);
+    ezAgirOlc(m,avol,aktif,aktif.endBar);
   }
   return{aktif:aktif,zones:zones,atr:atr[son]};
 }
@@ -1550,14 +1570,20 @@ const EZ_Y2=v=>(v===null||v===undefined||!isFinite(v))?null:Math.round(v*100)/10
 const EZ_Y1=v=>(v===null||v===undefined||!isFinite(v))?null:Math.round(v*10)/10;
 function mbEnerjiTara(m){
   const bos={ezAct:0,ezIns:0,ezAge:9999,ezTop:null,ezBot:null,ezEn:null,ezBq:null,
-             ezDir:0,ezMes:null,ezTp1:null,ezEvre:""};
+             ezDir:0,ezMes:null,ezTp1:null,ezEvre:"",ezInst:null,ezUst:0};
   let r=null;
   try{r=mbEnerjiMotor(m,EZ_MINBARS,EZ_ATRMULT)}catch(_){return bos}
   if(!r||!r.aktif)return bos;
   const z=r.aktif,son=m.length-1,kap=m[son].close;
   const o={ezAct:0,ezIns:0,ezAge:9999,ezTop:EZ_Y2(z.top),ezBot:EZ_Y2(z.bottom),
            ezEn:EZ_Y1(z.energy),ezBq:EZ_Y1(z.breakoutQuality),
+           ezInst:EZ_Y1(z.instFootprint),
            ezDir:z.direction==="Bullish"?1:z.direction==="Bearish"?-1:0,
+           /* 🐞 MESAFENİN YÖNÜ — Pine _mes'i mutlak değer verdiği için
+              "üst çizgiyi %2,8 GEÇTİ" ile "üst çizgiye %2,8 KALDI" aynı
+              sayıya düşüyordu; ekranda ikisi de "kaldı" gibi okunuyordu.
+              Sayı Pine ile aynı kalır (süzgeç bozulmasın), yönü ezUst söyler. */
+           ezUst:(kap>z.top?1:0),
            ezMes:null,ezTp1:null,ezEvre:z.phase||""};
   if(z.isActive){o.ezAct=1;if(kap<=z.top&&kap>=z.bottom)o.ezIns=1}
   if(z.isBroken&&z.breakDir==="Bullish")o.ezAge=son-z.endBar;
@@ -1629,7 +1655,8 @@ function mbMotor(mumlar){
   const ez=mbEnerjiTara(m);
   return{bar:m.length,mt:mt,md:md,dip382:dip382,dip236:dip236,oran:oran,
     ezAct:ez.ezAct,ezIns:ez.ezIns,ezAge:ez.ezAge,ezTop:ez.ezTop,ezBot:ez.ezBot,
-    ezEn:ez.ezEn,ezBq:ez.ezBq,ezDir:ez.ezDir,ezMes:ez.ezMes,ezTp1:ez.ezTp1,ezEvre:ez.ezEvre,
+    ezEn:ez.ezEn,ezBq:ez.ezBq,ezInst:ez.ezInst,ezUst:ez.ezUst,
+    ezDir:ez.ezDir,ezMes:ez.ezMes,ezTp1:ez.ezTp1,ezEvre:ez.ezEvre,
     top:top_yas,dag:dag_yas,topHam:top_raw,dagHam:dag_raw,
     boga:boga,ayi:ayi,bogaGec:boga_gec,ayiGec:ayi_gec,
     rej:rej,rejYas:rej_yas,sonYas:son_yas,
