@@ -4005,7 +4005,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
-  s.push('<button class="sek'+(sekme==="malboga"?" on":"")+'" data-r="nötr" data-s="malboga">🐂 Mal+Ayı/Boğa</button>');
+  s.push('<button class="sek'+(sekme==="malboga"?" on":"")+'" data-r="nötr" data-s="malboga">🐂 Mal+Ayı/Boğa'+(D.super?"":" 🔒")+'</button>');
   if(D&&D.yon)s.push('<button class="sek'+(sekme==="yesil"?" on":"")+'" data-r="nötr" data-s="yesil">🟢 Yeşil Kapanış 🔐</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
@@ -5789,7 +5789,7 @@ function grafikCiz(kod,ad,deneme,yukseklik){
            kullanıcıyı yanıltma. */
         var renk2=d.yon==="al"?"#3fb950":(d.yon==="sat"?"#f85149":"#d29922");
         if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk2+';border-color:'+renk2+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+" · çizgi yok</span>";
-        if(yr)yr.innerHTML="";
+        if(yr)yr.innerHTML=desenYorumOzetHtml(d,sonFiyat,renk2);
       }else{if(rz)rz.innerHTML="";if(yr)yr.innerHTML=""}
       var kk=el("desenKumulatif");
       if(kk){
@@ -5824,9 +5824,25 @@ function grafikCiz(kod,ad,deneme,yukseklik){
                 (yzd2>=0?"+":"")+yzd2+'%</b> — net bir formasyon şekli oluşmadı, bu sadece genel yön.</div>';
             }
           }
+          /* Kutu tamamen boş kalmasın diye: elimizdeki mum verisinden
+             SMA20/EMA20 hesaplanır (uydurma değil, aynı mumlardan çıkan
+             standart bir gösterge). Yalnız fiyatın bu ortalamalara göre
+             nerede olduğu gösterilir; formasyon iddiasıyla karıştırılmasın
+             diye ayrı, açık etiketli bir kutuda durur. */
+          var gosterge="";
+          var kapanislar=veri.map(function(b){return b.close});
+          var sma20=smaSon(kapanislar,20), ema20=emaSon(kapanislar,20);
+          if(sma20!=null||ema20!=null){
+            gosterge='<div class="kutu" style="margin-top:8px;opacity:.85"><h3>📊 Göstergeler (SMA/EMA)</h3>'+
+              (sma20!=null?'<div class="yorumSat">SMA20 <b>'+N(sma20)+'</b>'+
+                (sonFiyat!=null?'  ·  fiyat <b class="'+(sonFiyat>=sma20?"ye":"kr")+'">'+(sonFiyat>=sma20?"üstünde":"altında")+'</b>':'')+'</div>':'')+
+              (ema20!=null?'<div class="yorumSat">EMA20 <b>'+N(ema20)+'</b>'+
+                (sonFiyat!=null?'  ·  fiyat <b class="'+(sonFiyat>=ema20?"ye":"kr")+'">'+(sonFiyat>=ema20?"üstünde":"altında")+'</b>':'')+'</div>':'')+
+              '<div class="altbilgi" style="opacity:.7;margin-top:4px">Bu bir formasyon değil, standart bir hareketli ortalama göstergesidir.</div></div>';
+          }
           kk.innerHTML='<div class="kutu" style="opacity:.85"><h3>🧮 Kümülatif hedef</h3>'+
             '<div class="btAc">Şu an hiçbir zaman diliminde aktif/net bir formasyon hedefi yok.</div>'+
-            trend+'</div>';
+            trend+'</div>'+gosterge;
         }
       }
       chart.timeScale().fitContent();
@@ -5847,6 +5863,36 @@ function grafikCiz(kod,ad,deneme,yukseklik){
    yorum kutusu. Üst/alt sınır her zaman görsel olarak ust/alt çizgisinin
    son noktası; onay/iptal ise yöne göre hangisinin tetik hangisinin geçersiz
    kılma seviyesi olduğunu belirler (yon="al" → onay üstte, iptal altta). */
+/* Çizgisiz (yalnız özet) formasyonlar için kısa yorum. desenYorumHtml
+   üst/alt çizgi olmadan hiçbir şey yazmıyordu — bu yüzden "formasyon var
+   ama açıklama boş" hissi oluyordu. Burada yalnız GERÇEKTEN elimizde olan
+   alanlar (yön, hedef, kalite) kullanılır; üst/alt/onay/iptal seviyesi
+   UYDURULMAZ, çünkü o veri bu dilimde yok. */
+function smaSon(kapanislar,n){
+  if(!kapanislar||kapanislar.length<n)return null;
+  var t=0;for(var i=kapanislar.length-n;i<kapanislar.length;i++)t+=kapanislar[i];
+  return t/n;
+}
+function emaSon(kapanislar,n){
+  if(!kapanislar||kapanislar.length<n)return null;
+  var k=2/(n+1),s=0;for(var i=0;i<n;i++)s+=kapanislar[i];
+  var e=s/n;
+  for(var i=n;i<kapanislar.length;i++)e=kapanislar[i]*k+e*(1-k);
+  return e;
+}
+function desenYorumOzetHtml(d,sonFiyat){
+  var h='<h3 style="margin-top:12px">🧭 Formasyon yorumu</h3>';
+  var yonMetin=d.yon==="al"?"⬆️ AL yönlü":(d.yon==="sat"?"⬇️ SAT yönlü":"yönü belirsiz");
+  h+='<div class="yorumSat">📐 Tip <b>'+E(d.tip||"—")+'</b>  ·  '+yonMetin+'</div>';
+  if(d.kalite)h+='<div class="yorumSat">⭐ Kalite <b>%'+d.kalite+'</b></div>';
+  if(typeof d.hedef==="number"){
+    var hedefYuzde=(sonFiyat>0)?(d.hedef-sonFiyat)/sonFiyat*100:null;
+    h+='<div class="yorumSat">🎯 Hedef <b>'+N(d.hedef)+'</b>'+
+      (hedefYuzde!=null?'  ·  '+(hedefYuzde>=0?"+":"")+hedefYuzde.toFixed(1)+'%':'')+'</div>';
+  }
+  h+='<p class="anlatim">Bu dilimde formasyon tespit edildi, ancak kırılım çizgilerinin tam geometrisi bu vadede henüz üretilmiyor — bu yüzden grafikte çizgi görünmüyor. Yön ve hedef yukarıdaki gibi; onay/iptal seviyeleri için üst kutudaki ana dilim (çizgili) sonucuna bakabilirsin.</p>';
+  return h;
+}
 function desenYorumHtml(d,sonFiyat,renk){
   var ustV=d.ust&&d.ust.length?d.ust[d.ust.length-1].value:null;
   var altV=d.alt&&d.alt.length?d.alt[d.alt.length-1].value:null;
@@ -6066,6 +6112,15 @@ var MB_BAR=[0,1,2,3,4];
 var MB_KADEME=[["dip","⬇️ Dip bölgesi"],["dip382","⬇️⬇️ Derin (382 altı)"],["dip236","⬇️⬇️⬇️ En dip (236 altı)"]];
 
 function mbCiz(){
+  if(!D.super){
+    el("govde").innerHTML='<div class="kilit"><div class="buyuk">🔒</div>'+
+      "<h2>Süper Üyelik gerekli</h2>"+
+      "<p>Mal toplama/dağıtım ve Ayı/Boğa rejim taraması Süper Üyelere özeldir.</p>"+
+      "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
+      '<button class="dg" id="davetGit">📤 Sistemi paylaş</button></div>';
+    var dg=el("davetGit");if(dg)dg.onclick=function(){tit();sekme="davet";ciz()};
+    return;
+  }
   if(mbTek){mbTekGoster(mbTek);return}
   /* Ölçümler uygulamanın belleğinde; hiç tarama yapılmadıysa boş paketle
      çizeriz ve kullanıcı "Taramayı başlat" der. */
@@ -6620,7 +6675,7 @@ function mbGoster(v,yerel){
   }
   h+='</div>';
   /* ── 3b) FİBO BÖLGESİ ── */
-  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("bolge","🪜","FİBO BÖLGESİ",mbIst.bolge.acik);
+  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("bolge","🪜","SEVİYE BÖLGESİ",mbIst.bolge.acik);
   if(mbIst.bolge.acik){
     h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
        'Fiyat merdivenin hangi ana bölgesinde? Sınırlar TradingView’deki çizgi adlarının aynısı.</div>'+
@@ -6731,7 +6786,7 @@ function mbGoster(v,yerel){
     (mbIst.bolge.acik?1:0)+(mbIst.pivot.acik?1:0)+(mbIst.enerji.acik?1:0);
   if(!acikSayi){
     h+='<div class="bos"><b>Hiç modül açık değil</b><br><br>'+
-       'Yukarıdaki altı modülden (📦 mal · ⬇️ dip · 🐂🐻 ayı/boğa · 🪜 fibo bölgesi · '+
+       'Yukarıdaki altı modülden (📦 mal · ⬇️ dip · 🐂🐻 ayı/boğa · 🪜 seviye bölgesi · '+
        '⚛ enerji · 📈 pivot) en az birinin sağındaki <b>○</b> tikine dokun.</div>';
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
