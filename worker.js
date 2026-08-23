@@ -5328,7 +5328,7 @@ function portfoyPerformansGrafikCiz(gunluk){
   try{
     var chart=LightweightCharts.createChart(kutu,{
       width:kutu.clientWidth||320, height:220,
-      layout:{background:{color:"transparent"},textColor:"#e6edf3"},
+      layout:{background:{color:"transparent"},textColor:"#e6edf3",attributionLogo:false},
       grid:{vertLines:{color:"#262d38"},horzLines:{color:"#262d38"}},
       timeScale:{timeVisible:false,secondsVisible:false},
       rightPriceScale:{borderVisible:false}
@@ -5746,7 +5746,7 @@ function grafikCiz(kod,ad,deneme,yukseklik){
       var saatlik=(tf==="1SA"||tf==="4SA");
       var chart=LightweightCharts.createChart(kutu,{
         width:kutu.clientWidth||320, height:yukseklik||220,
-        layout:{background:{color:"transparent"},textColor:"#e6edf3"},
+        layout:{background:{color:"transparent"},textColor:"#e6edf3",attributionLogo:false},
         grid:{vertLines:{color:"#262d38"},horzLines:{color:"#262d38"}},
         timeScale:{timeVisible:saatlik,secondsVisible:false},
         rightPriceScale:{borderVisible:false}
