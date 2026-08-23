@@ -368,6 +368,30 @@ function iptalSeviyesi(d){
   var son=hat[hat.length-1];
   return(son&&typeof son.value==="number")?son.value:null;
 }
+/* Formasyon hâlâ aktif mi? İki ayrı bitiş durumu var, ikisi de "artık
+   gösterilmesin" demek:
+   1) HEDEFE ULAŞILDI — kâr alındı, sinyal amacına erdi.
+   2) İPTAL SEVİYESİ KIRILDI — kurulum bozuldu, fiyat ters yöne gitti.
+   Örnek (gerçek bug): BLUME'de bearish "İkili Tepe" hedefi aşağı 34.30
+   idi; fiyat bunun yerine iptal seviyesi 38.72'yi yukarı kırıp 42.60'a
+   çıktı. Kurulum günler önce geçersiz olmuştu ama SADECE /api/kamalar
+   (liste ekranı) hedefTamam diye bakıyordu — iptal hiç kontrol
+   edilmiyordu, detay sayfası ve rozetler ise hiçbir kontrol yapmıyordu.
+   Bu fonksiyon üç yerde de (liste, rozet, detay) tek kaynaktan kullanılır. */
+function formasyonAktifMi(d,fiyat){
+  if(!d||fiyat==null)return true;
+  var hedef=(typeof d.hedef==="number")?d.hedef:null;
+  var iptal=iptalSeviyesi(d);
+  if(hedef!=null){
+    if(d.yon==="al"&&fiyat>=hedef)return false;
+    if(d.yon==="sat"&&fiyat<=hedef)return false;
+  }
+  if(iptal!=null){
+    if(d.yon==="al"&&fiyat<iptal)return false;
+    if(d.yon==="sat"&&fiyat>iptal)return false;
+  }
+  return true;
+}
 /* GÜVENLİK KEMERİ: formasyon.json'daki bazı kayıtlarda üst/alt sınır
    çizgileri ters etiketlenmiş geliyor (üst değeri alt değerinden küçük) —
    bu durumda onay/iptal/hedef yorumu da tersine dönüyor (ör. "iptal
@@ -382,6 +406,37 @@ function desenSinirDuzelt(d){
   var av=as&&typeof as.value==="number"?as.value:null;
   if(uv==null||av==null||uv>=av)return d;
   return Object.assign({},d,{ust:d.alt,alt:d.ust,ustUz:d.altUz,altUz:d.ustUz});
+}
+/* KÜMÜLATİF ÇOK-DİLİM HEDEFİ: bir hisse aranıp açıldığında TÜM zaman
+   dilimlerindeki (1SA/4SA/1G/1HAF/1AY) hâlâ AKTİF formasyonlar yöne göre
+   (al/sat) ikiye ayrılır, her yönün hedefleri KENDİ İÇİNDE ortalanır.
+   Yönler asla karıştırılıp tek bir sayıya indirilmez — biri "al" derken
+   diğeri "sat" diyorsa iki ayrı ortalama döner, çelişki gizlenmez. */
+function formasyonKumulatif(p){
+  if(!p||!Array.isArray(p.dilimler)||!p.dilimler.length)return null;
+  var fiyat=(typeof p.fiyat==="number")?p.fiyat:null;
+  var gruplar={al:[],sat:[]};
+  p.dilimler.forEach(function(d){
+    if(!d||(d.yon!=="al"&&d.yon!=="sat")||typeof d.hedef!=="number")return;
+    var dd=desenSinirDuzelt(d);
+    if(!formasyonAktifMi(dd,fiyat))return;
+    gruplar[d.yon].push(d);
+  });
+  function ozet(yon){
+    var liste=gruplar[yon];
+    if(!liste.length)return null;
+    var toplam=0;liste.forEach(function(d){toplam+=d.hedef});
+    var ort=toplam/liste.length;
+    return{
+      yon:yon,adet:liste.length,
+      dilimler:liste.map(function(d){return d.tf}),
+      ortalamaHedef:Math.round(ort*10000)/10000,
+      ortalamaYuzde:(fiyat!=null&&fiyat>0)?Math.round((ort-fiyat)/fiyat*100000)/1000:null
+    };
+  }
+  var al=ozet("al"),sat=ozet("sat");
+  if(!al&&!sat)return null;
+  return{al:al,sat:sat,fiyat:fiyat};
 }
 /* Fiyat, kırılım seviyesini yön yönünde geçmiş mi ("onay aldı") ? */
 function onayDurumu(yon,fiyat,kirilim){
@@ -442,14 +497,18 @@ async function formasyonBul(A,kod,tf){
   const j=await formasyonlariGetir(A);
   const p=j&&j.sonuc&&j.sonuc[kod];
   if(!p)return null;
+  const fiyat=(typeof p.fiyat==="number")?p.fiyat:null;
   tf=mumTfNormal(tf);
-  if(tf==="1G"&&p.gunluk)return desenSinirDuzelt(Object.assign({tf:"1G"},p.gunluk));
-  if(p.tf===tf&&p.ust&&p.alt)return desenSinirDuzelt({tf:tf,tip:p.tip,yon:p.yon,kalite:p.kalite,ust:p.ust,alt:p.alt,ustUz:p.ustUz,altUz:p.altUz,hedef:p.hedef,grup:p.grup});
-  if(Array.isArray(p.dilimler)){
-    const d=p.dilimler.find(x=>x&&x.tf===tf);
-    if(d)return desenSinirDuzelt(Object.assign({tf:tf,eksikCizgi:!0},d));
+  let d=null;
+  if(tf==="1G"&&p.gunluk)d=desenSinirDuzelt(Object.assign({tf:"1G"},p.gunluk));
+  else if(p.tf===tf&&p.ust&&p.alt)d=desenSinirDuzelt({tf:tf,tip:p.tip,yon:p.yon,kalite:p.kalite,ust:p.ust,alt:p.alt,ustUz:p.ustUz,altUz:p.altUz,hedef:p.hedef,grup:p.grup});
+  else if(Array.isArray(p.dilimler)){
+    const dd=p.dilimler.find(x=>x&&x.tf===tf);
+    if(dd)d=desenSinirDuzelt(Object.assign({tf:tf,eksikCizgi:!0},dd));
   }
-  return null;
+  if(!d)return null;
+  if(!formasyonAktifMi(d,fiyat))return null;
+  return d;
 }
 /* TEK TUŞ: "TARA VE BULUTA YÜKLE" /push'a ulaştığı anda GitHub'daki formasyon
    taramasını da başlatır. Böylece tarayıcıdan tek düğmeye basmak yetiyor.
@@ -5417,6 +5476,7 @@ function formasyonDetay(kod,ad){
   h+='<div class="kutu"><h3>📊 Grafik<span id="desenRozet"></span></h3>'+
      '<div id="mumKutu" class="mumKutu genis"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div>'+
      '<div id="desenYorum"></div></div>';
+  h+='<div id="desenKumulatif"></div>';
   h+='<button class="dg ik" id="fHisseDg">📈 Bu hissenin sinyal kartını gör</button>';
   h+='<button class="dg" id="fPaylasDg">📤 Paylaş</button>';
   h+='<div class="uyari">⚠️ Yatırım tavsiyesi değildir. Formasyon geçmişi gelecek performansı garanti etmez.</div>';
@@ -5557,6 +5617,7 @@ function detay(kod,ad){
          '<div class="bilgi">Bu hisse şu an hiçbir listede değil — aşağıda güncel iki yönlü durumu var.</div>';
     }
     h+='<div class="kutu"><h3>📊 Grafik<span id="desenRozet"></span></h3><div id="mumKutu" class="mumKutu"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div><div id="desenYorum"></div></div>';
+    h+='<div id="desenKumulatif"></div>';
     var G=(v&&v.gecmis)||[];
     var gG=G.filter(function(x){return !x.dolgu});
     if(gG.length){
@@ -5744,6 +5805,25 @@ function grafikCiz(kod,ad,deneme,yukseklik){
         if(rz)rz.innerHTML='<span class="rozet" style="margin-left:6px;color:'+renk2+';border-color:'+renk2+'">📐 '+d.tip+(d.kalite?" · %"+d.kalite:"")+" · çizgi yok</span>";
         if(yr)yr.innerHTML="";
       }else{if(rz)rz.innerHTML="";if(yr)yr.innerHTML=""}
+      var kk=el("desenKumulatif");
+      if(kk){
+        var ku=v&&v.kumulatif;
+        if(ku&&(ku.al||ku.sat)){
+          var satir=function(g){
+            if(!g)return"";
+            var rk=g.yon==="al"?"#3fb950":"#f85149";
+            var etiket=g.yon==="al"?"⬆️ AL yönlü":"⬇️ SAT yönlü";
+            var yzd=(g.ortalamaYuzde==null)?"":" ("+(g.ortalamaYuzde>0?"+":"")+g.ortalamaYuzde+"%)";
+            return '<div class="btGun"><div class="btUst">'+
+              '<b style="color:'+rk+'">'+etiket+'</b>'+
+              '<span class="btN">'+g.adet+' dilim: '+g.dilimler.join(", ")+'</span></div>'+
+              '<div class="btAlt">Ortalama hedef <b>'+g.ortalamaHedef+'</b>'+yzd+'</div></div>';
+          };
+          var uyari=(ku.al&&ku.sat)?'<div class="btAc" style="margin-top:7px;color:#d29922">⚠️ Dilimler çelişiyor — bazıları AL, bazıları SAT diyor. İki ortalama da ayrı ayrı gösteriliyor, birleştirilmedi.</div>':"";
+          kk.innerHTML='<div class="kutu"><h3>🧮 Kümülatif hedef (tüm dilimler)</h3>'+
+            satir(ku.al)+satir(ku.sat)+uyari+'</div>';
+        }else{kk.innerHTML=""}
+      }
       chart.timeScale().fitContent();
       var yenidenBoyutla=function(){try{chart.applyOptions({width:kutu.clientWidth||320})}catch(e){}};
       window.addEventListener("resize",yenidenBoyutla);
@@ -8561,7 +8641,9 @@ const ar=MUM_ARALIK[tf];
 const r=await yfMumlar(kod,ar.interval,ar.range).catch(e=>({veri:[],hatalar:["yfMumlar istisna: "+(e&&e.message||e)]}));
 const mumlar=r.veri||[];
 const desen=await formasyonBul(A,kod,tf);
-return JS({ok:!0,mumlar:mumlar,desen:desen,tf:tf,debug:r.hatalar||[]})}
+const fj=await formasyonlariGetir(A);
+const kumulatif=formasyonKumulatif(fj&&fj.sonuc&&fj.sonuc[kod]);
+return JS({ok:!0,mumlar:mumlar,desen:desen,tf:tf,kumulatif:kumulatif,debug:r.hatalar||[]})}
 /* FORMASYON ROZETİ + LİSTESİ — ikisi de tek kaynaktan, GitHub Actions'in
    yayinladigi formasyon.json'dan okunuyor. Yahoo istegi yok, hisse basina KV
    onbellegi yok, "en fazla 48 hisse" tavani yok. */
@@ -8569,7 +8651,7 @@ if("/api/formasyonlar"===$.pathname){
 const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[]).map(k=>KOD(k)).filter(Boolean))].slice(0,300);
 const j=await formasyonlariGetir(A);const sonuc={};
 if(j&&j.sonuc)for(const kod of kodlar){const p=j.sonuc[kod]
-;if(p&&p.tip)sonuc[kod]={tip:p.tip,yon:p.yon,kalite:p.kalite||0}}
+;if(p&&p.tip&&formasyonAktifMi(desenSinirDuzelt(p),(typeof p.fiyat==="number")?p.fiyat:null))sonuc[kod]={tip:p.tip,yon:p.yon,kalite:p.kalite||0}}
 return JS({ok:!0,sonuc:sonuc})}
 /* 📐 FORMASYON LİSTESİ — kök sebep düzeltmesi:
    Gönderdiğin formasyon.json örneğinde HER hissede fiyat zaten var
@@ -8597,10 +8679,9 @@ for(const kod of Object.keys(j.sonuc)){
   const kirilim=kirilimSeviyesi(d);
   const iptal=iptalSeviyesi(d);
   const onaylandi=onayDurumu(d.yon,fiyat,kirilim);
-  /* Hedefine ulaşmış formasyon artık aktif sayılmaz, listeden düşer. */
-  const hedefTamam=(hedef!=null&&fiyat!=null)?
-    (d.yon==="al"?fiyat>=hedef:(d.yon==="sat"?fiyat<=hedef:false)):false;
-  if(hedefTamam)continue;
+  /* Hedefine ulaşmış YA DA iptal seviyesi kırılmış formasyon artık aktif
+     sayılmaz, listeden düşer (bkz. formasyonAktifMi). */
+  if(!formasyonAktifMi(d,fiyat))continue;
   const digerDilimler=(Array.isArray(p.dilimler)?p.dilimler:[])
     .filter(x=>x&&x.tf&&x.tf!==p.tf).map(x=>x.tf);
   sonuc.push({
