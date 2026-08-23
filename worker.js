@@ -6079,7 +6079,7 @@ function mbEnerjiRozet(x,ist){
   if(!durum)return "";
   var rk=durum==="0B↑"?"#00e676":durum==="1B↑"?"#69f0ae":durum==="İçinde"?"#FFD700":"#FF9800";
   var par='<span style="color:'+rk+';font-weight:800">⚛ '+durum+'</span>';
-  if(x.ezMes!=null)par+=' · üst çizgiye %'+Number(x.ezMes).toFixed(1);
+  if(x.ezMes!=null)par+=' · üst çizgiyi %'+Number(x.ezMes).toFixed(1)+(x.ezUst?' GEÇTİ':' kaldı');
   if(x.ezEn!=null)par+=' · güç %'+Math.round(Number(x.ezEn));
   if(x.ezTp1!=null)par+=' · GFH '+Number(x.ezTp1).toFixed(2);
   return '<div style="font-size:10px;margin:3px 0 2px;opacity:.95">'+par+'</div>';
