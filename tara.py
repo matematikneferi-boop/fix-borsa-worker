@@ -391,10 +391,12 @@ def find_wedge(high, low, close, S):
                         tgt = uf(end) + maxh * 0.618 if falling else lf(end) - maxh * 0.618
                         best = _mk("Düşen Kama" if falling else "Yükselen Kama",
                                    "al" if falling else "sat", q,
-                                   [[u1[0], u1[1]], [end, uf(end)]],
-                                   [[l1[0], l1[1]], [end, lf(end)]],
+                                   [[u1[0], u1[1]], [u2[0], u2[1]]],
+                                   [[l1[0], l1[1]], [l2[0], l2[1]]],
                                    tgt, p1[0], end,
-                                   {"kirilim": round(float(uf(end) if falling else lf(end)), 4)})
+                                   {"kirilim": round(float(uf(end) if falling else lf(end)), 4),
+                                    "ustUz": [[u2[0], uf(u2[0])], [end, uf(end)]],
+                                    "altUz": [[l2[0], lf(l2[0])], [end, lf(end)]]})
                         best["_p4"] = p4[0]
     if best:
         best.pop("_p4", None)
