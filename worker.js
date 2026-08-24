@@ -6668,6 +6668,17 @@ function mbCiz(){
     return;
   }
   if(mbTek){mbTekGoster(mbTek);return}
+  /* 🔧 KRİTİK DÜZELTME: alarm kontrolü artık evren/tarama verisinin
+     yüklenmesini BEKLEMİYOR. Eskiden mbAlarmCek() yalnız aşağıdaki
+     "!mbEvrenKod" bloğunun ARKASINDA çağrılıyordu — evren ilk seferde
+     boşsa fonksiyon orada return ediyor ve alarm isteği o oturum
+     boyunca BİR DAHA HİÇ tetiklenmiyordu (istendi=false, mbAlarmD=null
+     sonsuza dek kalıyordu). Alarm, taramadan bağımsız bir veri olduğu
+     için artık sekmeye her girişte hemen, evrenin durumundan bağımsız
+     olarak tetikleniyor. */
+  mbAlarmCek();
+  mbTazelemeKur();
+  setTimeout(mbAlarmBekci,2500);
   /* Ölçümler uygulamanın belleğinde; hiç tarama yapılmadıysa boş paketle
      çizeriz ve kullanıcı "Taramayı başlat" der. */
   if(!mbEvrenKod){
@@ -6679,13 +6690,6 @@ function mbCiz(){
     return;
   }
   mbCizYenile();
-  mbAlarmCek();
-  mbTazelemeKur();
-  /* 🐇 HIZLI İLK KONTROL — eskiden yalnız 20 sn'de bir çalışan bekçiye
-     güveniliyordu, bu yüzden ilk açılışta alarm durumu 18-20 saniye
-     "yükleniyor…" gösterebiliyordu. Şimdi tab'a girildikten 2.5 sn sonra
-     bir kere ekstra kontrol yapılıyor — hâlâ boşsa hemen yeniden dener. */
-  setTimeout(mbAlarmBekci,2500);
   /* Sekmeye girildiğinde tarama KENDİLİĞİNDEN başlar — her seferinde
      düğmeye basmaya gerek yok. Ölçümler bellekte durduğu için ikinci
      girişte yeniden taramaz, yalnız eksik kalanları tamamlar. */
