@@ -6607,7 +6607,7 @@ function mbAlarmCek(zorla){
    açılırken istek başlamadan bir yerlerde takıldıysa) kilidi zorla açıp
    yeniden dener. Kullanıcı hiçbir şey yapmadan kendiliğinden düzelir. */
 function mbAlarmBekci(){
-  if(mbAlarmD===null&&mbAlarmIlkTs&&(Date.now()-mbAlarmIlkTs)>5000){
+  if(mbAlarmD===null&&mbAlarmIlkTs&&(Date.now()-mbAlarmIlkTs)>2000){
     mbAlarmIstendi=false;mbAlarmCek(true);
   }
 }
@@ -6681,6 +6681,11 @@ function mbCiz(){
   mbCizYenile();
   mbAlarmCek();
   mbTazelemeKur();
+  /* 🐇 HIZLI İLK KONTROL — eskiden yalnız 20 sn'de bir çalışan bekçiye
+     güveniliyordu, bu yüzden ilk açılışta alarm durumu 18-20 saniye
+     "yükleniyor…" gösterebiliyordu. Şimdi tab'a girildikten 2.5 sn sonra
+     bir kere ekstra kontrol yapılıyor — hâlâ boşsa hemen yeniden dener. */
+  setTimeout(mbAlarmBekci,2500);
   /* Sekmeye girildiğinde tarama KENDİLİĞİNDEN başlar — her seferinde
      düğmeye basmaya gerek yok. Ölçümler bellekte durduğu için ikinci
      girişte yeniden taramaz, yalnız eksik kalanları tamamlar. */
