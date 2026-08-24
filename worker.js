@@ -935,7 +935,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-24-e · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-08-24-g · 🔔 Filtre alarmı KÖKTEN DÜZELTİLDİ: artık her kullanıcının kendi 5 yuvası kendi ID'sine göre ayrı saklanıyor (eskiden tek global kayıttı, herkes paylaşıyordu) + kurma/kaldırma artık tüm süper üyelere açık (eskiden yalnız yöneticiydi) + bildirim doğrudan kuran kişiye gidiyor · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -3341,20 +3341,36 @@ async function mbDilimDurum(A){
       yeniden bildirilebilir.
    5) Yahoo'ya EK ÇAĞRI YAPMAZ — birikimdeki ölçümleri süzer. Ölçümleri
       tazeleyen zaten mbDilimTara'dır. */
-const MB_ALARM_ANAHTAR="mbAlarmFiltre";
-const MB_ALARM_GUN="mbAlarmGun";
+const MB_ALARM_ON="mbAlarmFiltre:";  /* + uid = o kullanıcının 5 yuvası */
+const MB_ALARM_GUN_ON="mbAlarmGun:"; /* + uid = o kullanıcının günlük hafızası */
 const MB_ALARM_AZAMI=12;            /* tek mesajda en fazla kaç hisse */
-const MB_ALARM_YUVA=5;              /* en fazla kaç ayrı filtre alarmı */
+const MB_ALARM_YUVA=5;              /* kullanıcı başına en fazla kaç ayrı filtre alarmı */
 const MB_BOLGE_AD={b1:"dikkat ayı→boğa",b2:"boğa→karar",b3:"karar→direnç",b4:"direnç→güçlü D/D"};
 
-/* ── BEŞ YUVA ──────────────────────────────────────────────────────────
-   Eskiden tek filtre vardı; yeni filtre kurmak eskisini siliyordu. Artık
-   en fazla MB_ALARM_YUVA (5) ayrı filtre aynı anda kurulu kalabilir ve her
-   biri BAĞIMSIZ çalışır: kendi "gördüklerim" hafızası, kendi bildirimi.
-   Eski tek-filtre kaydı okunurken kendiliğinden 1. yuvaya taşınır. */
-async function mbAlarmListeOku(A){
+/* ── KULLANICI BAŞINA BEŞ YUVA ────────────────────────────────────────
+   🐞 DÜZELTİLEN HATA: eskiden TÜM SİSTEM tek bir global KV anahtarına
+   (mbAlarmFiltre) yazıyordu — yani 5 yuva bir kullanıcıya değil, bütün
+   bota aitti ve yalnız yönetici kurabiliyordu. Bir kullanıcı "alarm
+   kurdum" sanırken aslında herkesin paylaştığı tek kaydı değiştiriyordu;
+   silinmiş gibi görünmesinin asıl sebebi buydu.
+   ARTIK: her kullanıcının kendi 5 yuvası kendi uid'ine göre KV'de ayrı
+   tutuluyor (mbAlarmFiltre:UID), kendi "gördüklerim" günlük hafızası ayrı
+   (mbAlarmGun:UID) ve bildirim doğrudan kendisine gidiyor. */
+async function mbAlarmListeOku(A,uid){
+  if(!uid)return[];
   let ham=null;
-  try{const h=A&&A.VERI&&await A.VERI.get(MB_ALARM_ANAHTAR);if(h)ham=JSON.parse(h)}catch(_){}
+  try{const h=A&&A.VERI&&await A.VERI.get(MB_ALARM_ON+uid);if(h)ham=JSON.parse(h)}catch(_){}
+  /* 🔁 TEK SEFERLİK GÖÇ: eski sürümde tek global anahtar (mbAlarmFiltre)
+     vardı ve yalnız yönetici kurabiliyordu. Yöneticinin kendi uid'inde
+     henüz kayıt yoksa eski global anahtara bakılır, bulunursa kendi
+     hesabına taşınır — kurduğu alarm kaybolmasın. */
+  if(!ham&&d(uid)){
+    try{const eski=A&&A.VERI&&await A.VERI.get("mbAlarmFiltre");
+      if(eski){const j=JSON.parse(eski);
+        if(j&&(Array.isArray(j.liste)||j.ist)){ham=j;
+          await A.VERI.put(MB_ALARM_ON+uid,eski).catch(()=>{});
+          await A.VERI.delete("mbAlarmFiltre").catch(()=>{});}}}catch(_){}
+  }
   if(!ham)return[];
   /* v1 (tek filtre) → v2 (liste) göçü */
   if(!Array.isArray(ham.liste)){
@@ -3363,44 +3379,63 @@ async function mbAlarmListeOku(A){
   }
   return ham.liste.filter(x=>x&&x.ist).slice(0,MB_ALARM_YUVA);
 }
-async function mbAlarmListeYaz(A,liste){
-  if(!A||!A.VERI)return[];
+async function mbAlarmListeYaz(A,uid,liste){
+  if(!A||!A.VERI||!uid)return[];
   const kirp=liste.slice(0,MB_ALARM_YUVA);
-  await A.VERI.put(MB_ALARM_ANAHTAR,JSON.stringify({v:2,liste:kirp})).catch(()=>{});
+  await A.VERI.put(MB_ALARM_ON+uid,JSON.stringify({v:2,liste:kirp})).catch(()=>{});
   return kirp;
 }
 /* Yeni yuva ekle ya da var olanı değiştir. Dönen: {liste,yuva} */
-async function mbAlarmYuvaYaz(A,ist,uid,id){
-  const liste=await mbAlarmListeOku(A);
+async function mbAlarmYuvaYaz(A,ist,uid,id,ad){
+  if(!uid)return{dolu:!0,liste:[]};
+  const liste=await mbAlarmListeOku(A,uid);
+  const yer0=liste.findIndex(x=>x.id===String(id||""));
+  const eskiAd=yer0>=0?(liste[yer0].ad||""):"";
+  const yeniAd=(ad!=null&&String(ad).trim())?String(ad).trim().slice(0,40):eskiAd;
   const kayit={id:String(id||("a"+Date.now().toString(36))),ist:ist,
-               ts:Date.now(),kuran:String(uid||"")};
+               ts:Date.now(),kuran:String(uid||""),ad:yeniAd};
   const yer=liste.findIndex(x=>x.id===kayit.id);
   if(yer>=0)liste[yer]=kayit;
   else{
     if(liste.length>=MB_ALARM_YUVA)return{dolu:!0,liste:liste};
     liste.push(kayit);
   }
-  return{liste:await mbAlarmListeYaz(A,liste),yuva:kayit};
+  return{liste:await mbAlarmListeYaz(A,uid,liste),yuva:kayit};
 }
-async function mbAlarmYuvaSil(A,id){
-  if(!A||!A.VERI)return[];
-  if(!id){                                  /* hepsi */
-    try{await A.VERI.delete(MB_ALARM_ANAHTAR);await A.VERI.delete(MB_ALARM_GUN)}catch(_){}
+async function mbAlarmYuvaSil(A,uid,id){
+  if(!A||!A.VERI||!uid)return[];
+  if(!id){                                  /* hepsi — yalnız kendi yuvaları */
+    try{await A.VERI.delete(MB_ALARM_ON+uid);await A.VERI.delete(MB_ALARM_GUN_ON+uid)}catch(_){}
     return[];
   }
-  const liste=(await mbAlarmListeOku(A)).filter(x=>x.id!==id);
-  return await mbAlarmListeYaz(A,liste);
+  const liste=(await mbAlarmListeOku(A,uid)).filter(x=>x.id!==id);
+  return await mbAlarmListeYaz(A,uid,liste);
 }
-/* Günlük "bildirdim" hafızası — anahtar: YUVA|KOD|DİLİM */
-async function mbAlarmGecmisi(A){
+/* Alarmı kurulu her kullanıcının uid listesi — arka plan taraması ve
+   öncelik hesaplama bunu kullanır. */
+async function mbAlarmKullanicilari(A){
+  if(!A||!A.VERI)return[];
+  const out=[];let cursor=void 0;
+  for(;;){
+    const liste=await A.VERI.list({prefix:MB_ALARM_ON,limit:1e3,cursor});
+    for(const k of liste.keys)out.push(k.name.slice(MB_ALARM_ON.length));
+    if(liste.list_complete||!liste.cursor)break;
+    cursor=liste.cursor;
+  }
+  return out;
+}
+/* Günlük "bildirdim" hafızası — kullanıcı başına. anahtar: YUVA|KOD|DİLİM */
+async function mbAlarmGecmisi(A,uid){
   const bugun=onayDonemi();
-  try{const h=await A.VERI.get(MB_ALARM_GUN);
+  if(!uid)return{gun:bugun,anahtarlar:[]};
+  try{const h=await A.VERI.get(MB_ALARM_GUN_ON+uid);
     if(h){const j=JSON.parse(h);if(j&&j.gun===bugun&&Array.isArray(j.anahtarlar))return j}}catch(_){}
   return{gun:bugun,anahtarlar:[]};
 }
-async function mbAlarmGecmisiYaz(A,g){
+async function mbAlarmGecmisiYaz(A,uid,g){
+  if(!uid)return;
   g.anahtarlar=g.anahtarlar.slice(-4000);
-  try{await A.VERI.put(MB_ALARM_GUN,JSON.stringify(g),{expirationTtl:172800})}catch(_){}
+  try{await A.VERI.put(MB_ALARM_GUN_ON+uid,JSON.stringify(g),{expirationTtl:172800})}catch(_){}
 }
 /* BIST seansı: hafta içi 09:30-18:10 (İstanbul). Yahoo barları da bu
    aralıkta değişiyor; dışında ölçüm sabit kaldığı için alarm da susar. */
@@ -3474,86 +3509,89 @@ async function mbAlarmEslesme(A,ist,yuvaId){
    🐞 Eskiden bütün hafızayı EZİYORDU — beşinci yuva kurulunca diğer dört
    yuvanın "gördüm" listesi siliniyor, hepsi baştan sel gibi bildiriyordu.
    Artık yalnız KENDİ yuvasının anahtarları eklenir. */
-async function mbAlarmTohumla(A,ist,yuvaId){
+async function mbAlarmTohumla(A,uid,ist,yuvaId){
   const e=await mbAlarmEslesme(A,ist,yuvaId);
-  const g=await mbAlarmGecmisi(A);
+  const g=await mbAlarmGecmisi(A,uid);
   const set=new Set(g.anahtarlar);
   for(const a of e.anahtarlar)set.add(a);
-  await mbAlarmGecmisiYaz(A,{gun:onayDonemi(),anahtarlar:[...set]});
+  await mbAlarmGecmisiYaz(A,uid,{gun:onayDonemi(),anahtarlar:[...set]});
   return e.anahtarlar.length;
 }
-/* Her /push turunda çalışır. Kurulu HER yuva için listeye yeni girenleri
-   bulur ve bildirir. Yuvalar birbirini etkilemez. */
+/* Her /push turunda çalışır. Alarmı kurulu HER KULLANICI için, o kullanıcının
+   kendi yuvalarına yeni girenleri bulur ve YALNIZ KENDİSİNE bildirir.
+   Kullanıcılar birbirini etkilemez — kendi hafızası, kendi mesajı. */
 async function mbAlarmTara(A){
   if(!A||!A.VERI||!A.BOT_TOKEN)return;
-  const yuvalar=await mbAlarmListeOku(A);
-  if(!yuvalar.length)return;                         /* filtre kurulmamış */
   if(!mbSeansIci())return;                           /* seans dışı */
-  const gecmis=await mbAlarmGecmisi(A);
-  const bilinen=new Set(gecmis.anahtarlar);
-  const parcalar=[];
-  let eklendi=0;
-  for(let yi=0;yi<yuvalar.length;yi++){
-    const yuva=yuvalar[yi];
-    const ist=mbIstekNorm(yuva.ist);
-    if(!mbFiltreVarMi(ist))continue;
-    const e=await mbAlarmEslesme(A,ist,yuva.id).catch(()=>null);
-    if(!e)continue;
-    const yeni=e.satirlar.filter((sx,i)=>!bilinen.has(e.anahtarlar[i]));
-    /* Hafızaya YENİLERİN HEPSİ yazılır (mesajda gösterilmeyenler dahil) —
-       yoksa tavanın altında kalanlar her turda tekrar "yeni" sayılırdı. */
-    for(let i=0;i<e.anahtarlar.length;i++)
-      if(!bilinen.has(e.anahtarlar[i])){bilinen.add(e.anahtarlar[i]);
-        gecmis.anahtarlar.push(e.anahtarlar[i]);eklendi++}
-    if(!yeni.length)continue;
-    /* En taze olay önce; mesaj kalabalık olmasın diye tavan var. */
-    yeni.sort((a,b)=>(a.taze-b.taze)||(a.kod<b.kod?-1:1));
-    const gosterilen=yeni.slice(0,MB_ALARM_AZAMI);
-    const grup={};
-    for(const sx of gosterilen){(grup[sx.tf]=grup[sx.tf]||[]).push(sx)}
-    let m="🔔 <b>ALARM "+(yi+1)+"/"+yuvalar.length+"</b>\n<i>"+mbFiltreOzet(ist)+"</i>\n";
-    for(const tf of ist.tfler){
-      const gg=grup[tf];if(!gg||!gg.length)continue;
-      m+="\n"+(MB_TF[tf]?MB_TF[tf].ik+" <b>"+MB_TF[tf].ad+"</b>":tf)+"\n";
-      for(const sx of gg){
-        const mal=sx.topHam<=sx.dagHam?("TOP "+(sx.topHam>999?"-":sx.topHam+"B")):("DAĞ "+(sx.dagHam>999?"-":sx.dagHam+"B"));
-        m+="• <b>"+sx.kod+"</b>  "+sx.fiyat+"  ·  "+mal+"  ·  "+
-          (sx.boga?"🐂":sx.ayi?"🐻":"?")+sx.rejYas+"B"+(sx.dip?"  ⬇️":"")+
-          (ist.enerji.acik&&sx.ezMes!==null&&sx.ezMes!==undefined?
-            "  ·  ⚛"+(sx.ezAge===0?"0B↑":sx.ezAge===1?"1B↑":"%"+sx.ezMes):"")+"\n";
-      }
-    }
-    while(m.slice(-1)==="\n")m=m.slice(0,-1);
-    if(yeni.length>gosterilen.length)
-      m+="\n<i>…ve "+(yeni.length-gosterilen.length)+" hisse daha.</i>";
-    parcalar.push(m);
-  }
-  if(eklendi)await mbAlarmGecmisiYaz(A,gecmis);
-  if(!parcalar.length)return;
-  const metin=parcalar.join("\n\n──────────\n\n")+"\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
-  /* 1) KANAL — tek istek, abone sayısından bağımsız */
+  const kullanicilar=await mbAlarmKullanicilari(A);
+  if(!kullanicilar.length)return;                     /* hiç kimse kurmamış */
   const kanal=String((A.ALARM_KANAL||"")).trim();
-  if(kanal)await b(A.BOT_TOKEN,"sendMessage",{chat_id:kanal,text:metin,
-    parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
-  /* 2) ÖZEL MESAJ — GEÇİCİ: kullanıcı isteğiyle şimdilik YALNIZ yöneticiye
-     gidiyor (süper üyelere gitmiyor). Genel "Anlık Alarm" (kısa trade
-     kırılımı) sistemi bundan etkilenmesin diye ayrı, kendi listesini
-     kullanıyor — alarmKullanicilari()'e dokunulmadı. */
-  const kullanicilar=[...new Set([...e,...(EK_YON?[...EK_YON]:[])])];
-  if(kullanicilar.length){
-    await alarmKuyrugaKoy(A,metin,kullanicilar);
-    await alarmKuyrukBosalt(A);
+  for(const uid of kullanicilar){
+    const yuvalar=await mbAlarmListeOku(A,uid).catch(()=>[]);
+    if(!yuvalar.length)continue;
+    const gecmis=await mbAlarmGecmisi(A,uid);
+    const bilinen=new Set(gecmis.anahtarlar);
+    const parcalar=[];
+    let eklendi=0;
+    for(let yi=0;yi<yuvalar.length;yi++){
+      const yuva=yuvalar[yi];
+      const ist=mbIstekNorm(yuva.ist);
+      if(!mbFiltreVarMi(ist))continue;
+      const e=await mbAlarmEslesme(A,ist,yuva.id).catch(()=>null);
+      if(!e)continue;
+      const yeni=e.satirlar.filter((sx,i)=>!bilinen.has(e.anahtarlar[i]));
+      /* Hafızaya YENİLERİN HEPSİ yazılır (mesajda gösterilmeyenler dahil) —
+         yoksa tavanın altında kalanlar her turda tekrar "yeni" sayılırdı. */
+      for(let i=0;i<e.anahtarlar.length;i++)
+        if(!bilinen.has(e.anahtarlar[i])){bilinen.add(e.anahtarlar[i]);
+          gecmis.anahtarlar.push(e.anahtarlar[i]);eklendi++}
+      if(!yeni.length)continue;
+      /* En taze olay önce; mesaj kalabalık olmasın diye tavan var. */
+      yeni.sort((a,b)=>(a.taze-b.taze)||(a.kod<b.kod?-1:1));
+      const gosterilen=yeni.slice(0,MB_ALARM_AZAMI);
+      const grup={};
+      for(const sx of gosterilen){(grup[sx.tf]=grup[sx.tf]||[]).push(sx)}
+      let m="🔔 <b>"+(yuva.ad?E2(yuva.ad):("ALARM "+(yi+1)+"/"+yuvalar.length))+"</b>\n<i>"+mbFiltreOzet(ist)+"</i>\n";
+      for(const tf of ist.tfler){
+        const gg=grup[tf];if(!gg||!gg.length)continue;
+        m+="\n"+(MB_TF[tf]?MB_TF[tf].ik+" <b>"+MB_TF[tf].ad+"</b>":tf)+"\n";
+        for(const sx of gg){
+          const mal=sx.topHam<=sx.dagHam?("TOP "+(sx.topHam>999?"-":sx.topHam+"B")):("DAĞ "+(sx.dagHam>999?"-":sx.dagHam+"B"));
+          m+="• <b>"+sx.kod+"</b>  "+sx.fiyat+"  ·  "+mal+"  ·  "+
+            (sx.boga?"🐂":sx.ayi?"🐻":"?")+sx.rejYas+"B"+(sx.dip?"  ⬇️":"")+
+            (ist.enerji.acik&&sx.ezMes!==null&&sx.ezMes!==undefined?
+              "  ·  ⚛"+(sx.ezAge===0?"0B↑":sx.ezAge===1?"1B↑":"%"+sx.ezMes):"")+"\n";
+        }
+      }
+      while(m.slice(-1)==="\n")m=m.slice(0,-1);
+      if(yeni.length>gosterilen.length)
+        m+="\n<i>…ve "+(yeni.length-gosterilen.length)+" hisse daha.</i>";
+      parcalar.push(m);
+    }
+    if(eklendi)await mbAlarmGecmisiYaz(A,uid,gecmis);
+    if(!parcalar.length)continue;
+    const metin=parcalar.join("\n\n──────────\n\n")+"\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";
+    /* Doğrudan bu kullanıcıya özel mesaj. */
+    await b(A.BOT_TOKEN,"sendMessage",{chat_id:uid,text:metin,
+      parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
+    /* Yöneticinin kendi filtreleri eskisi gibi kanala da düşsün istiyorsa
+       (ALARM_KANAL tanımlıysa) bu geriye dönük uyumluluk için korunuyor. */
+    if(kanal&&d(uid))await b(A.BOT_TOKEN,"sendMessage",{chat_id:kanal,text:metin,
+      parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
+    saglikArtir("mbAlarm");
   }
-  saglikArtir("mbAlarm");
 }
 /* Kurulu alarmların ihtiyaç duyduğu dilimlerden EN EKSİK olanı önce ilerlet.
    Alarm yoksa eski davranış (yedi dilim sırayla) aynen sürer. */
 async function mbAlarmOncelikliTara(A){
-  const yuvalar=await mbAlarmListeOku(A).catch(()=>[]);
-  if(!yuvalar.length)return mbDilimTara(A);
+  const kullanicilar=await mbAlarmKullanicilari(A).catch(()=>[]);
+  if(!kullanicilar.length)return mbDilimTara(A);
   const gerekli=[];
-  for(const y of yuvalar)for(const t of mbIstekNorm(y.ist).tfler)
-    if(gerekli.indexOf(t)<0)gerekli.push(t);
+  for(const uid of kullanicilar){
+    const yuvalar=await mbAlarmListeOku(A,uid).catch(()=>[]);
+    for(const y of yuvalar)for(const t of mbIstekNorm(y.ist).tfler)
+      if(gerekli.indexOf(t)<0)gerekli.push(t);
+  }
   if(!gerekli.length)return mbDilimTara(A);
   const evrenSayi=(await mbEvren(A)).length||1;
   let hedef=null,enAz=1e9;
@@ -3573,11 +3611,20 @@ function mbFiltreVarMi(ist){
            (ist.pivot&&ist.pivot.acik));
 }
 /* Alarm ekranı için özet — kaç yuva dolu, hangi filtreler kurulu. */
-async function mbAlarmOzetListe(A){
-  const yuvalar=await mbAlarmListeOku(A).catch(()=>[]);
+/* 🐞 DÜZELTİLEN HATA — "eklendi" yazıyor ama liste boş görünüyor.
+   Eskiden alarmKur/alarmSil sonrası buraya HER SEFERİNDE yeniden KV'den
+   okunuyordu. put() az önce yapılmış olsa da KV yaz-sonrası-oku garantisi
+   anlık değil; aynı istek içinde bile bazen eski/boş veri dönebiliyor —
+   ekranda "✅ eklendi" ile "0/5 dolu" birlikte görünüyordu. Artık BU
+   fonksiyon KV'ye gitmiyor, elde zaten olan (yazma sonrası bellekteki)
+   listeyi paketliyor. KV'den okuma yalnız ilk yüklemede (mbAlarmCek) olur. */
+function mbAlarmOzetPaketle(liste){
   return{yuva:MB_ALARM_YUVA,seans:mbSeansIci(),
-    liste:yuvalar.map(y=>{const i2=mbIstekNorm(y.ist);
-      return{id:y.id,ozet:mbFiltreOzet(i2),tfler:i2.tfler,ts:y.ts}})};
+    liste:(liste||[]).map(y=>{const i2=mbIstekNorm(y.ist);
+      return{id:y.id,ad:y.ad||"",ozet:mbFiltreOzet(i2),tfler:i2.tfler,ts:y.ts,ist:i2}})};
+}
+async function mbAlarmOzetListe(A,uid){
+  return mbAlarmOzetPaketle(await mbAlarmListeOku(A,uid).catch(()=>[]));
 }
 
 /* ---------- B) 🔐 İMZALI PANEL ANAHTARI ----------
@@ -6491,14 +6538,46 @@ function absGoster(v){
 var mbD=null, mbTek=null, mbBekle=false;
 /* Alarm listesi paketten AYRI gelir: tarama artık uygulamada yürüdüğü için
    sunucu paketi üretmiyor, alarm bilgisi de o pakette taşınamıyor. */
-var mbAlarmD=null, mbAlarmIstendi=false;
+var mbAlarmD=null, mbAlarmIstendi=false, mbAlarmDeneme=0;
+/* 🐞 "Alarm ekledim, çıkıp girince silinmiş gibi görünüyor" — sebep KV'nin
+   yaz-sonrası-oku gecikmesi: az önce eklenen alarm, uygulama yeniden
+   açıldığında sunucudan henüz gelmeyebilir. Çözüm: son bilinen listeyi
+   localStorage'a da yazıyoruz. Açılışta önce ONU gösteriyoruz (kayıp
+   görünmesin), sunucu cevabı gelince KARŞILAŞTIRIYORUZ: önbellekte olup
+   sunucuda eksik bir alarm varsa ve önbellek tazeyse (son 3 dk), bunu
+   gecikme sayıp sunucuyu değil önbelleği gösteriyoruz ve birkaç kez
+   daha deniyoruz — gerçekten silinmişse (başka yerden) birkaç deneme
+   sonunda zaten sunucu ile eşitleniyor. */
+function mbAlarmOnbellekOku(){
+  try{var h=localStorage.getItem("mbAlarmOnbellek");if(h)return JSON.parse(h)}catch(_){}
+  return null;
+}
+function mbAlarmOnbellekYaz(d){
+  try{localStorage.setItem("mbAlarmOnbellek",JSON.stringify({d:d,ts:Date.now()}))}catch(_){}
+}
 function mbAlarmCek(zorla){
   if(mbAlarmIstendi&&!zorla)return;
   mbAlarmIstendi=true;
+  if(!mbAlarmD){
+    var onbIlk=mbAlarmOnbellekOku();
+    if(onbIlk&&onbIlk.d)mbAlarmD=onbIlk.d;
+  }
   post("/api/malboga",{is:"alarmListe"}).then(function(r){
-    mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
+    var sunucu=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
+    var onb=mbAlarmOnbellekOku();
+    var eksik=onb&&onb.d&&onb.d.liste&&onb.d.liste.some(function(a){
+      return!(sunucu.liste||[]).some(function(b2){return b2.id===a.id})});
+    if(eksik&&onb.ts&&(Date.now()-onb.ts)<18e4&&mbAlarmDeneme<6){
+      mbAlarmDeneme++;
+      setTimeout(function(){mbAlarmIstendi=false;mbAlarmCek(true)},4000);
+      if(sekme==="malboga")mbCizYenile();
+      return;
+    }
+    mbAlarmDeneme=0;
+    mbAlarmD=sunucu;
+    mbAlarmOnbellekYaz(sunucu);
     if(sekme==="malboga")mbCizYenile();
-  }).catch(function(){mbAlarmD={yuva:5,seans:false,liste:[]}});
+  }).catch(function(){if(!mbAlarmD)mbAlarmD={yuva:5,seans:false,liste:[]}});
 }
 /* Açılış = TradingView varsayılanına yakın: günlükte son 5 barda mal toplanmış. */
 var mbIst={
@@ -7469,9 +7548,12 @@ function mbGoster(v,yerel){
     alL.forEach(function(a,i){
       h+='<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;'+
          (i?'border-top:1px solid var(--ciz)':'')+'">'+
-         '<div style="flex:1;min-width:0">'+
-         '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+E(a.ozet)+'</div>'+
+         '<div style="flex:1;min-width:0'+(D.yon?';cursor:pointer':'')+'"'+
+         (D.yon?' data-mbalyukle="'+i+'"':'')+'>'+
+         '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+(a.ad?E(a.ad):E(a.ozet))+'</div>'+
+         (a.ad?'<div class="altbilgi" style="opacity:.7">'+E(a.ozet)+'</div>':'')+
          '<div class="altbilgi" style="opacity:.7">'+a.tfler.map(function(t){return E(t)}).join(" · ")+'</div>'+
+         (D.yon?'<div class="altbilgi" style="opacity:.5">↩️ dokun — kriterleri yukarıya geri yükle</div>':'')+
          '</div>'+
          (D.yon?'<button class="sir" data-mbalsil="'+E(a.id)+'" '+
            'style="padding:4px 9px;font-size:12px;flex:0 0 auto">🚫</button>':"")+
@@ -7506,6 +7588,21 @@ function mbGoster(v,yerel){
      'seçtiğin dilimlerden bayat olan öncelikli tazelenir.</div></div>';
   el("govde").innerHTML=h;
   mbBagla(v,dilimler);
+}
+/* Kurulu bir alarmın kriterlerini yukarıdaki tik/kutulara geri yükler —
+   "ne ayarlamıştım" hatırlanabilsin diye. Modül-özel dilim override'ları
+   alarm kaydında tutulmuyor (yalnız genel dilim listesi), o yüzden her
+   modül "Genel"e döner; en azından koşulların kendisi birebir geri gelir. */
+function mbAlKriterYukle(ist){
+  if(!ist)return;
+  mbIst.kapsam=ist.kapsam==="herhangi"?"herhangi":"hepsi";
+  mbIst.tfler=(ist.tfler&&ist.tfler.length)?ist.tfler.slice():["1G"];
+  ["mal","dip","ab","enerji","bolge"].forEach(function(m){
+    if(!ist[m])return;
+    for(var k in ist[m])mbIst[m][k]=ist[m][k];
+    mbIst[m].tfler=null;
+  });
+  if(ist.pivot)for(var k2 in ist.pivot)mbIst.pivot[k2]=ist.pivot[k2];
 }
 /* Bütün tik/düğme olayları — tek yerde. */
 function mbBagla(v,dilimler){
@@ -7605,34 +7702,45 @@ function mbBagla(v,dilimler){
     post("/api/malboga",o).then(function(v2){mbD=v2;mbGoster(v2)})
       .catch(function(){ev.disabled=false;ev.textContent="🌍 Evreni yenile"})};
   var ak=el("mbAlarmKur");
-  if(ak)ak.onclick=function(){tit();ak.disabled=true;ak.textContent="⏳ ekleniyor…";
-    var o={};for(var k in mbIst)o[k]=mbIst[k];o.alarmKur=1;
+  if(ak)ak.onclick=function(){tit();
+    var isim=window.prompt("Bu alarma bir isim ver (istersen boş bırak):","");
+    if(isim===null)return;
+    ak.disabled=true;ak.textContent="⏳ ekleniyor…";
+    var o={};for(var k in mbIst)o[k]=mbIst[k];o.alarmKur=1;o.ad=isim;
     post("/api/malboga",o).then(function(r){
       ak.disabled=false;
       if(r&&r.ok){
         mbAlarmD=r.alarm||mbAlarmD;
+        mbAlarmOnbellekYaz(mbAlarmD);
         mbCizYenile();
         var dv=el("mbAlarmDurum");
         if(dv)dv.innerHTML='✅ Alarm eklendi. Şu anki <b>'+(r.tohum||0)+'</b> eşleşme '+
           '"görülmüş" sayıldı; bundan sonra listeye <b>yeni girenler</b> bildirilecek.';
       }else{
-        if(r&&r.alarm)mbAlarmD=r.alarm;
+        if(r&&r.alarm){mbAlarmD=r.alarm;mbAlarmOnbellekYaz(mbAlarmD)}
         mbCizYenile();
         var dv2=el("mbAlarmDurum");if(dv2)dv2.textContent="⚠️ "+((r&&r.hata)||"eklenemedi");
       }
     }).catch(function(){ak.disabled=false;
       var dv3=el("mbAlarmDurum");if(dv3)dv3.textContent="⚠️ bağlantı hatası"});
   };
+  T("[data-mbalyukle]",function(b){
+    var i=Number(b.dataset.mbalyukle),a=mbAlarmD&&mbAlarmD.liste&&mbAlarmD.liste[i];
+    if(!a||!a.ist)return;
+    mbAlKriterYukle(a.ist);mbUygula();
+    var dv=el("mbAlarmDurum");if(dv)dv.textContent="↩️ "+(i+1)+". alarmın kriterleri yukarı yüklendi.";
+  });
   T("[data-mbalsil]",function(b){
     b.disabled=true;b.textContent="…";
     post("/api/malboga",{alarmSil:1,alarmId:b.dataset.mbalsil}).then(function(r){
-      if(r&&r.alarm)mbAlarmD=r.alarm;mbCizYenile();
+      if(r&&r.alarm){mbAlarmD=r.alarm;mbAlarmOnbellekYaz(mbAlarmD)}mbCizYenile();
     }).catch(function(){b.disabled=false;b.textContent="🚫"});
   });
   var ah=el("mbAlarmHepsi");
   if(ah)ah.onclick=function(){tit();ah.disabled=true;
     post("/api/malboga",{alarmSil:1,alarmId:true}).then(function(r){
-      mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};mbCizYenile();
+      mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
+      mbAlarmOnbellekYaz(mbAlarmD);mbCizYenile();
     }).catch(function(){ah.disabled=false})};
   var kb=el("mbKodBtn"),ki=el("mbKod");
   var bak=function(){var k=String((ki&&ki.value)||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
@@ -9653,26 +9761,29 @@ if("/api/malboga"===$.pathname){
     if(!r)return JS({ok:!1,hata:"ölçüm alınamadı"});
     return JS({ok:!0,tek:r,sozluk:sozluk});
   }
-  /* 🔔 FİLTREYİ ALARMA GÖNDER / KALDIR — yalnız yönetici. */
+  /* 🔔 FİLTREYİ ALARMA GÖNDER / KALDIR — her SÜPER ÜYE kendi 5 yuvasını
+     kurar (eskiden yalnız yönetici kurabiliyordu ve tek bir global kayıt
+     herkes arasında paylaşılıyordu — "alarm siliniyor" şikayetinin asıl
+     sebebi buydu). Yönetici zaten suparUyeMi() içinde otomatik geçer. */
   if(gov&&gov.is==="alarmListe"){
-    return JS({ok:!0,alarm:await mbAlarmOzetListe(A)});
+    return JS({ok:!0,alarm:await mbAlarmOzetListe(A,uid)});
   }
   if(gov&&gov.alarmKur){
-    if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+    if(!await suparUyeMi(A,uid))return JS({ok:!1,hata:"yetkisiz — süper üyelik gerekli"},403);
     const kur=mbIstekNorm(gov);
     if(!mbFiltreVarMi(kur))return JS({ok:!1,hata:"önce en az bir modül aç"},400);
     if(!kur.tfler.length)return JS({ok:!1,hata:"önce zaman dilimi seç"},400);
-    const r=await mbAlarmYuvaYaz(A,kur,uid,gov.alarmId);
+    const r=await mbAlarmYuvaYaz(A,kur,uid,gov.alarmId,gov.ad);
     if(r.dolu)return JS({ok:!1,hata:"beş yuva da dolu — önce birini kaldır",
-      alarm:await mbAlarmOzetListe(A)},400);
-    const tohum=await mbAlarmTohumla(A,kur,r.yuva.id).catch(()=>0);
+      alarm:mbAlarmOzetPaketle(r.liste)},400);
+    const tohum=await mbAlarmTohumla(A,uid,kur,r.yuva.id).catch(()=>0);
     return JS({ok:!0,alarmKuruldu:!0,tohum:tohum,yuvaId:r.yuva.id,
-      alarm:await mbAlarmOzetListe(A)});
+      alarm:mbAlarmOzetPaketle(r.liste)});
   }
   if(gov&&gov.alarmSil){
-    if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
-    await mbAlarmYuvaSil(A,gov.alarmId===true?null:(gov.alarmId||null));
-    return JS({ok:!0,alarmSilindi:!0,alarm:await mbAlarmOzetListe(A)});
+    if(!await suparUyeMi(A,uid))return JS({ok:!1,hata:"yetkisiz — süper üyelik gerekli"},403);
+    const kalanListe=await mbAlarmYuvaSil(A,uid,gov.alarmId===true?null:(gov.alarmId||null));
+    return JS({ok:!0,alarmSilindi:!0,alarm:mbAlarmOzetPaketle(kalanListe)});
   }
   /* ⚡ DOĞRUDAN ÖLÇÜM — KV'YE HİÇ DOKUNMAZ
      Üç tur boyunca KV üzerinden biriktirmeyi düzeltmeye çalıştık; her
@@ -9747,7 +9858,7 @@ if("/api/malboga"===$.pathname){
   const dilimler=await mbDilimDurum(A).catch(()=>[]);
   let evrenBilgi={sayi:0,kaynak:"okunamadı",rapor:null};
   try{const ev=await tamEvren(A);evrenBilgi={sayi:ev.length,kaynak:ev.kaynak,rapor:YON?ev.rapor:null}}catch(_){}
-  const alarm=await mbAlarmOzetListe(A).catch(()=>null);
+  const alarm=await mbAlarmOzetListe(A,uid).catch(()=>null);
   if(!paket)return JS({ok:!0,sozluk:sozluk,dilimler:dilimler,evrenBilgi:evrenBilgi,
     ist:ist,gruplar:[],ortak:[],calisiyor:!0,alarm:alarm});
   const fav=await X(A,uid),pf=await XP(A,uid),izlenen=new Set([...fav,...Object.keys(pf)]);
