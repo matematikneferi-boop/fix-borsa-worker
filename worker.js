@@ -866,7 +866,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-24-b · 📐 Fibo Ölçüm İstasyonu: SEVİYE BÖLGESİ eşitlendi + Yahoo hız-sınırı toparlama (kademeli+yeniden dene)";
+const WORKER_SURUM="2026-08-24-c · 📐 Fibo Ölçüm İstasyonu: alt-istek sınırına karşı küçük parti (10) + gerçek hata teşhisi (🩺 Hatalar + ekranda örnek hata)";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2418,8 +2418,17 @@ function ykSayacBirlestir(A,B){
    Bu üçü Yahoo'ya giden anlık yükü düşürür, geçici engelleri toparlar. */
 const YK_ES=4;
 function ykBekle(ms){return new Promise(r=>setTimeout(r,ms))}
+/* 🩺 TEŞHİS EKİ: önceki iki düzeltme (kademeli başlangıç + tek seferlik
+   yeniden deneme) sorunu çözmedi — hâlâ "0 hisse-günü" ve üstelik daha HIZLI
+   bitiyor. Bu, ağır bir ipucu: gerçek hata muhtemelen Yahoo'nun ağır ağır
+   engellemesi değil, ANINDA patlayan bir şey (örn. Cloudflare'in "50 alt-
+   istek" sınırı ya da kod içinde başka bir istisna). Kör kör yama yapmak
+   yerine artık İLK hatayı olduğu gibi 🩺 Hatalar sekmesine (hataYaz) yazıyoruz
+   — bir sonraki denemede gerçek mesajı görüp KESİN teşhis koyabiliriz. Günde
+   1000 KV yazma sınırını zorlamamak için bu, tarama başına YALNIZ BİR KEZ olur. */
+let _ykIlkHataYazildi=!1;
 /* Bir grup hisseyi tarar, sayaç üretir. zamanKesim: bu damgadan öncesi "eski". */
-async function ykKosu(kodlar,zamanKesim,hisseTek){
+async function ykKosu(kodlar,zamanKesim,hisseTek,A){
   const S=ykSayacYeni();
   const semboller=[];
   /* TEŞHİS: gözlem 0 çıkarsa sebebini söyleyebilmek için hangi dilimde
@@ -2435,6 +2444,10 @@ async function ykKosu(kodlar,zamanKesim,hisseTek){
     const onb={};
     await Promise.all(ckListe.map(async x=>{
       const r=await yfMumlar(kod,x.interval,x.range);onb[x.ck]=(r&&r.veri)||[];
+      /* İlk gerçek Yahoo hata metnini (KV'ye yazmadan, bedava) sakla — ekranda
+         doğrudan görünsün, "çekim hatası" gibi anlamsız bir sayı değil. */
+      if(!teshis.ornekHata&&(!r||!r.veri||!r.veri.length)&&r&&r.hatalar&&r.hatalar.length)
+        teshis.ornekHata=kod+" ("+x.ck+"): "+r.hatalar[r.hatalar.length-1];
     }));
     return onb;
   };
@@ -2443,14 +2456,13 @@ async function ykKosu(kodlar,zamanKesim,hisseTek){
     while(sira<kodlar.length){
       const kod=kodlar[sira++];
       try{
-        let onb=await isciCek(kod);
-        /* hiç veri gelmedi mi? (muhtemelen geçici hız sınırı) → bir kez daha dene */
-        if(Object.keys(onb).every(k=>!onb[k].length)){
-          teshis.yenidenDenendi++;
-          await ykBekle(1500+Math.random()*1000);
-          onb=await isciCek(kod);
-          if(Object.keys(onb).some(k=>onb[k].length))teshis.yenidenKurtardi++;
-        }
+        const onb=await isciCek(kod);
+        /* NOT: burada eskiden "veri gelmezse bir daha dene" vardı — ama YK_ADIM
+           zaten küçültüldüğü (20→10) ve Cloudflare'in alt-istek sınırı asıl
+           şüpheli olduğu için KALDIRILDI: sınıra zaten yaklaşılmışken tekrar
+           denemek isteği ikiye katlayıp sınırı daha ÇABUK aşırıyor, işi
+           iyileştirmek yerine kötüleştiriyordu. query1→query2 yedeklemesi
+           (yfMumlar içinde) zaten tek katmanlı bir tekrar deneme sağlıyor. */
         const sr={};
         for(const t of YK_DILIM){
           const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
@@ -2506,7 +2518,11 @@ async function ykKosu(kodlar,zamanKesim,hisseTek){
         }
         if(!say)teshis.gozlemsiz++;
         semboller.push({kod:kod,gun:say});
-      }catch(e){teshis.hata++;semboller.push({kod:kod,hata:String((e&&e.message)||e)})}
+      }catch(e){
+        teshis.hata++;
+        semboller.push({kod:kod,hata:String((e&&e.message)||e)});
+        if(!_ykIlkHataYazildi&&A){_ykIlkHataYazildi=!0;hataYaz(A,"ykKosu:"+kod,e).catch(()=>{})}
+      }
     }
   };
   await Promise.all(Array.from({length:YK_ES},(_,i)=>isci(i)));
@@ -2554,7 +2570,15 @@ function ykOzetle(S,alan){
 /* Bir adımda kaç hisse. Her hisse 2 ayrı Yahoo çekimi yapıyor (60m ve 1d);
    yfMumlar gerekirse ikinci sunucuyu da deniyor. 8 hisse = en kötü 32
    alt-istek — Cloudflare'in ücretsiz plandaki 50 sınırının altında kalır. */
-const YK_ADIM=20;
+/* 20→10: Cloudflare Workers'ta bir istekte en fazla 50 (ücretsiz) ya da 1000
+   (ücretli) alt-istek hakkı var. 20 hisse × 2 benzersiz Yahoo isteği (60m+1d)
+   × olası query1→query2 yedeklemesi en kötü ihtimalle 80 alt-isteğe kadar
+   çıkabiliyordu — bu, ücretsiz planın 50 sınırını rahatça aşar ve o anda
+   Cloudflare kalan bütün fetch() çağrılarını ANINDA reddeder (network
+   gecikmesi beklemeden) — "hızlı ve toplu başarısızlık" örüntüsü tam
+   olarak gözlemlenen buydu. 10'a düşürmek en kötü durumda bile 40 alt-istekte
+   kalır, sınırın altında güvenli bir pay bırakır. */
+const YK_ADIM=10;
 /* 🐞 DÜZELTİLEN HATA — "tarama biterken ekrandaki her şey silindi"
    Cloudflare KV ANLIK TUTARLI DEĞİLDİR: yazdıktan hemen sonra okursan
    eski değeri alabilirsin. Tarama adımları 120 ms arayla oku-değiştir-yaz
@@ -7555,6 +7579,7 @@ function ykTur(){
         ykTeshis.gozlemsiz+=r.teshis.gozlemsiz||0;ykTeshis.hata+=r.teshis.hata||0;
         ykTeshis.yenidenDenendi=(ykTeshis.yenidenDenendi||0)+(r.teshis.yenidenDenendi||0);
         ykTeshis.yenidenKurtardi=(ykTeshis.yenidenKurtardi||0)+(r.teshis.yenidenKurtardi||0);
+        if(!ykTeshis.ornekHata&&r.teshis.ornekHata)ykTeshis.ornekHata=r.teshis.ornekHata;
       }
       if(r&&r.hatali&&r.hatali.length)ykHatali=ykHatali.concat(r.hatali);
       ykIdx+=parca.length;
@@ -7576,9 +7601,10 @@ function ykTeshisHTML(v){
   if(t.gozlemsiz)p.push("hiç gün üretmeyen hisse: <b>"+t.gozlemsiz+"</b>");
   if(t.hata)p.push("çekim hatası: <b>"+t.hata+"</b>");
   if(t.yenidenDenendi)p.push("yeniden denendi: <b>"+t.yenidenDenendi+"</b>"+(t.yenidenKurtardi?" (kurtarılan: <b>"+t.yenidenKurtardi+"</b>)":""));
-  if(!p.length)return"";
+  var oh=t.ornekHata?'<div style="margin-top:6px;opacity:.85">🔎 örnek hata: <code>'+E(String(t.ornekHata).slice(0,180))+'</code></div>':"";
+  if(!p.length&&!oh)return"";
   return '<div class="altbilgi" style="margin-top:8px;padding:7px 9px;background:rgba(248,81,73,.10);'+
-    'border-radius:8px;white-space:normal">📋 '+p.join(" · ")+'</div>';
+    'border-radius:8px;white-space:normal">📋 '+p.join(" · ")+oh+'</div>';
 }
 function ykYuz(v,o){return v===null||v===undefined||!isFinite(v)?"—":(v>0?"+":"")+v.toFixed(o===undefined?1:o)}
 /* Bir kurulum satırı — dört bölme kutucuk olarak gösterilir. */
@@ -8961,7 +8987,7 @@ if("/yesil/adim"===$.pathname){
   if(!job.tamamlandi&&job.kuyruk.length){
     const grup=job.kuyruk.splice(0,YK_ADIM);
     const tek=ykHisseTek(job.kodlar);
-    const{sayac,semboller}=await ykKosu(grup,job.zamanKesim,tek);
+    const{sayac,semboller}=await ykKosu(grup,job.zamanKesim,tek,A);
     job.sayac=ykSayacBirlestir(job.sayac,sayac);
     job.semboller=job.semboller.concat(semboller).slice(-600);
     job.tamam+=grup.length;
@@ -9581,7 +9607,7 @@ if("/api/yesil"===$.pathname){
     if(!kodlar.length)return JS({ok:!1,hata:"kod yok"});
     const kesim=Number(gov.zamanKesim)||(Math.floor(Date.now()/1000)-330*86400);
     const tekSet=new Set((Array.isArray(gov.tekler)?gov.tekler:[]));
-    const{sayac,semboller,teshis}=await ykKosu(kodlar,kesim,k=>tekSet.has(k));
+    const{sayac,semboller,teshis}=await ykKosu(kodlar,kesim,k=>tekSet.has(k),A);
     return JS({ok:!0,sayac:sayac,teshis:teshis,
       hatali:(semboller||[]).filter(x=>x.hata).map(x=>x.kod)});
   }
@@ -9608,7 +9634,7 @@ if("/api/yesil"===$.pathname){
   if(is==="adim"&&!job.tamamlandi&&job.kuyruk.length){
     const grup=job.kuyruk.splice(0,YK_ADIM);
     const parcaNo=Math.floor(job.tamam/YK_ADIM);
-    const{sayac,semboller,teshis}=await ykKosu(grup,job.zamanKesim,ykHisseTek(job.kodlar));
+    const{sayac,semboller,teshis}=await ykKosu(grup,job.zamanKesim,ykHisseTek(job.kodlar),A);
     await ykParcaYaz(A,parcaNo,sayac);          /* kendi parçası — çakışma yok */
     job.sayac=ykSayacBirlestir(job.sayac,sayac);
     job.semboller=job.semboller.concat(semboller).slice(-600);
@@ -9618,6 +9644,7 @@ if("/api/yesil"===$.pathname){
     job.teshis.gozlemsiz+=teshis.gozlemsiz;job.teshis.hata+=teshis.hata;
     job.teshis.yenidenDenendi=(job.teshis.yenidenDenendi||0)+(teshis.yenidenDenendi||0);
     job.teshis.yenidenKurtardi=(job.teshis.yenidenKurtardi||0)+(teshis.yenidenKurtardi||0);
+    if(!job.teshis.ornekHata&&teshis.ornekHata)job.teshis.ornekHata=teshis.ornekHata;
     job.tamam+=grup.length;job.guncelleme=Date.now();
     if(!job.kuyruk.length)job.tamamlandi=!0;
     await ykIsYaz(A,job);
