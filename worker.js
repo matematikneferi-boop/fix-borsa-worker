@@ -935,7 +935,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-24-h · 🔔 Filtre alarmı: arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu, sunucu izin verse de buton çıkmıyordu) + '0/5 dolu' ile 'yükleniyor' yazısı artık aynı anda gösterilmiyor (yanlış 'silindi' izlenimini önler) + KV gecikmesine karşı yeniden deneme süresi uzatıldı · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -6538,7 +6538,7 @@ function absGoster(v){
 var mbD=null, mbTek=null, mbBekle=false;
 /* Alarm listesi paketten AYRI gelir: tarama artık uygulamada yürüdüğü için
    sunucu paketi üretmiyor, alarm bilgisi de o pakette taşınamıyor. */
-var mbAlarmD=null, mbAlarmIstendi=false, mbAlarmDeneme=0;
+var mbAlarmD=null, mbAlarmIstendi=false, mbAlarmDeneme=0, mbAlarmIlkTs=0;
 /* 🐞 "Alarm ekledim, çıkıp girince silinmiş gibi görünüyor" — sebep KV'nin
    yaz-sonrası-oku gecikmesi: az önce eklenen alarm, uygulama yeniden
    açıldığında sunucudan henüz gelmeyebilir. Çözüm: son bilinen listeyi
@@ -6547,7 +6547,13 @@ var mbAlarmD=null, mbAlarmIstendi=false, mbAlarmDeneme=0;
    sunucuda eksik bir alarm varsa ve önbellek tazeyse (son 3 dk), bunu
    gecikme sayıp sunucuyu değil önbelleği gösteriyoruz ve birkaç kez
    daha deniyoruz — gerçekten silinmişse (başka yerden) birkaç deneme
-   sonunda zaten sunucu ile eşitleniyor. */
+   sonunda zaten sunucu ile eşitleniyor.
+   🐞 2. HATA (bulundu): istek gerçekten başarısız olursa (ağ kopması,
+   sunucudan geç/garip cevap) eski kod mbAlarmIstendi kilidini HİÇ
+   çözmüyordu VE ekranı yeniden çizmiyordu — sonuç: "alınıyor…" yazısı
+   ekranda SONSUZA dek asılı kalıyordu, bir daha da denenmiyordu. Şimdi:
+   8 sn'de zaman aşımı var, her durumda kilit çözülüyor, ekran her
+   durumda yeniden çiziliyor. */
 function mbAlarmOnbellekOku(){
   try{var h=localStorage.getItem("mbAlarmOnbellek");if(h)return JSON.parse(h)}catch(_){}
   return null;
@@ -6558,26 +6564,52 @@ function mbAlarmOnbellekYaz(d){
 function mbAlarmCek(zorla){
   if(mbAlarmIstendi&&!zorla)return;
   mbAlarmIstendi=true;
-  if(!mbAlarmD){
-    var onbIlk=mbAlarmOnbellekOku();
-    if(onbIlk&&onbIlk.d)mbAlarmD=onbIlk.d;
-  }
-  post("/api/malboga",{is:"alarmListe"}).then(function(r){
-    var sunucu=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
-    var onb=mbAlarmOnbellekOku();
-    var eksik=onb&&onb.d&&onb.d.liste&&onb.d.liste.some(function(a){
-      return!(sunucu.liste||[]).some(function(b2){return b2.id===a.id})});
-    if(eksik&&onb.ts&&(Date.now()-onb.ts)<18e4&&mbAlarmDeneme<15){
-      mbAlarmDeneme++;
-      setTimeout(function(){mbAlarmIstendi=false;mbAlarmCek(true)},4000);
-      if(sekme==="malboga")mbCizYenile();
-      return;
+  if(!mbAlarmIlkTs)mbAlarmIlkTs=Date.now();
+  try{
+    if(!mbAlarmD){
+      var onbIlk=mbAlarmOnbellekOku();
+      if(onbIlk&&onbIlk.d)mbAlarmD=onbIlk.d;
     }
-    mbAlarmDeneme=0;
-    mbAlarmD=sunucu;
-    mbAlarmOnbellekYaz(sunucu);
+    var zamanAsimi=new Promise(function(res){setTimeout(function(){res(null)},8000)});
+    Promise.race([post("/api/malboga",{is:"alarmListe"}),zamanAsimi]).then(function(r){
+      if(!r){                                 /* 8sn'de cevap gelmedi — vazgeç, tekrar denenebilsin */
+        mbAlarmIstendi=false;
+        if(!mbAlarmD)mbAlarmD={yuva:5,seans:false,liste:[]};
+        if(sekme==="malboga")mbCizYenile();
+        return;
+      }
+      var sunucu=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
+      var onb=mbAlarmOnbellekOku();
+      var eksik=onb&&onb.d&&onb.d.liste&&onb.d.liste.some(function(a){
+        return!(sunucu.liste||[]).some(function(b2){return b2.id===a.id})});
+      if(eksik&&onb.ts&&(Date.now()-onb.ts)<18e4&&mbAlarmDeneme<15){
+        mbAlarmDeneme++;
+        setTimeout(function(){mbAlarmIstendi=false;mbAlarmCek(true)},4000);
+        if(sekme==="malboga")mbCizYenile();
+        return;
+      }
+      mbAlarmDeneme=0;mbAlarmIstendi=false;
+      mbAlarmD=sunucu;
+      mbAlarmOnbellekYaz(sunucu);
+      if(sekme==="malboga")mbCizYenile();
+    }).catch(function(){
+      mbAlarmIstendi=false;
+      if(!mbAlarmD)mbAlarmD={yuva:5,seans:false,liste:[]};
+      if(sekme==="malboga")mbCizYenile();
+    });
+  }catch(_){
+    mbAlarmIstendi=false;
+    if(!mbAlarmD)mbAlarmD={yuva:5,seans:false,liste:[]};
     if(sekme==="malboga")mbCizYenile();
-  }).catch(function(){if(!mbAlarmD)mbAlarmD={yuva:5,seans:false,liste:[]}});
+  }
+}
+/* Bekçi: alarm ekranındayken 5 sn geçtiği hâlde hâlâ null ise (ör. sekme
+   açılırken istek başlamadan bir yerlerde takıldıysa) kilidi zorla açıp
+   yeniden dener. Kullanıcı hiçbir şey yapmadan kendiliğinden düzelir. */
+function mbAlarmBekci(){
+  if(mbAlarmD===null&&mbAlarmIlkTs&&(Date.now()-mbAlarmIlkTs)>5000){
+    mbAlarmIstendi=false;mbAlarmCek(true);
+  }
 }
 /* Açılış = TradingView varsayılanına yakın: günlükte son 5 barda mal toplanmış. */
 var mbIst={
@@ -6664,6 +6696,7 @@ function mbTazelemeKur(){
   if(mbZamanlayici)return;
   mbZamanlayici=setInterval(function(){
     if(sekme!=="malboga"){return}
+    mbAlarmBekci();
     if(mbTaraDurum&&mbTaraDurum.suruyor)return;
     var tfl=mbEfektifTfler();
     if(!tfl.length)return;
