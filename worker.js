@@ -10,17 +10,20 @@ function u(e){
    çalışmaya devam etsin diye silinmedi. */
 if(n)return{inline_keyboard:[[{text:"📱 UYGULAMAYI AÇ",web_app:{url:n+"/app"}}]]};
 const t=[];
-/* Dilim adlari KISA / ORTA / UZUN oldu; 1 HAFTA satirlari kaldirildi
-   (o dilim artik hic taranmiyor, liste hep bos geliyordu). */
+/* Dilim adlari KISA / ORTA / UZUN / HAFTA oldu. 1 HAFTA satirlari
+   2026-08-20'de kaldirilmisti cunku o dilim hic taranmiyordu; 2026-08-24'te
+   yumatu.html'deki ortak zaman dilimi motoru 1H'yi de cekmeye basladigi
+   icin liste artik doluyor, dugme geri eklendi. */
 t.push([{text:"🏅 Bu taramanın ilk 3'ü",callback_data:"ilk3"}],
 [{text:"📊 KISA · 1 saat",callback_data:"potansiyel"}],[{text:"🟨 KISA adayları (Süper Üyelik)",callback_data:"adayOrta"}],
 [{text:"📐 ORTA · 4 saat",callback_data:"fibo"}],[{text:"🟨 ORTA adayları (Süper Üyelik)",callback_data:"adayOrtaVade"}],
 [{text:"🗓 UZUN · 1 gün",callback_data:"uzunvade"}],[{text:"🟨 UZUN adayları (Süper Üyelik)",callback_data:"adayUzun"}],
+[{text:"📅 HAFTA · 1 hafta",callback_data:"haftalik"}],[{text:"🟨 HAFTA adayları (Süper Üyelik)",callback_data:"adayHafta"}],
 [{text:"⭐ Takip listem",callback_data:"fav"}],[{text:"👑 Anlık uyarı ayarları (Süper Üyelik)",callback_data:"alarm"}],[{text:"ℹ️ Sistem nedir? Nasıl kullanılır?",callback_data:"bilgi"}]);
 return d(e)&&(t.push([{text:"🔄 ŞİMDİ TARA VE YÜKLE 🔐",callback_data:"elletara"}]),
 t.push([{text:"📋 Ham sonuç metni 🔐",callback_data:"karne"}]),n&&t.push([{text:"🛠 Yönetici paneli 🔐",url:r()}])),t.push([BUN?{text:"📤 Sistemi paylaş",url:"https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+BUN+"?start=r"+e)+"&text="+encodeURIComponent(DAVET_METIN)}:{text:"📤 Sistemi paylaş",callback_data:"davet"}]),t.push([{
 text:"🔄 Yenile",callback_data:"menu"}]),{inline_keyboard:t}}
-const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>KISA</b> · 1 saat — hedefi en uzak olanlar\n📐 <b>ORTA</b> · 4 saat — bugün taze kıranlar\n🗓 <b>UZUN</b> · 1 gün — günlük pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n🏷️ <code>/surum</code> — yüklü sürümü ve son tarama saatini gösterir\n📃 <code>/sinyal</code> — güncel listeyi <b>mesaj olarak</b> gönderir\n⚡ <code>/canli</code> — sadece bar kapanmadan kırılanlar\n<i>Uygulama açılmıyorsa bu iki komut her zaman çalışır.</i>\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
+const f="👋 <b>Fix Borsa Sinyal</b>\n<i>BIST hisselerini gün boyu tarar, kırılım ve hedefleri gösterir.</i>\n\n🏅 <b>İlk 3</b> — bugün öne çıkan üç hisse\n📊 <b>KISA</b> · 1 saat — hedefi en uzak olanlar\n📐 <b>ORTA</b> · 4 saat — bugün taze kıranlar\n🗓 <b>UZUN</b> · 1 gün — günlük pivot kırılımları\n📅 <b>HAFTA</b> · 1 hafta — haftalık pivot kırılımları\n🪜 <b>Adaylar</b> 👑 — her tarama için henüz kırmadı ama hazır <i>(Süper Üyelik)</i>\n⭐ <b>Takip listem</b> — kendi hisselerin, anlık kâr/zarar\n👑 <b>Anlık uyarı</b> — güçlü bir sinyale giren hisse anında sana gelir <i>(Süper Üyelik)</i>\n\n🔎 <b>Hisse kodunu yaz</b> (örn. <code>THYAO</code>) — yukarı ve aşağı hedeflerini birlikte gönderirim.\n\n🏷️ <code>/surum</code> — yüklü sürümü ve son tarama saatini gösterir\n📃 <code>/sinyal</code> — güncel listeyi <b>mesaj olarak</b> gönderir\n⚡ <code>/canli</code> — sadece bar kapanmadan kırılanlar\n<i>Uygulama açılmıyorsa bu iki komut her zaman çalışır.</i>\n\n📤 <b>Süper Üyelik:</b> her 20 davette 1 ay açılır, davet ettikçe uzar.\n\n🤖 <i>Yapay zekâ tabanlı otomatik tarama · 120.657 bar</i>\n\n<i>⚠️ Yatırım tavsiyesi değildir. Bu sonuçlarla işlem yapmak tehlikelidir; anaparanı kaybedebilirsin.</i>"
 /* ══════════════════════════════════════════════════════════════════════════
    🛡 DAYANIKLILIK KATMANI (sürüm 11.6)
    Dört madde buraya toplandı. HİÇBİRİ mevcut davranışı değiştirmez:

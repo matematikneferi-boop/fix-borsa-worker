@@ -544,7 +544,7 @@ section{scroll-margin-top:8px}
        artık saf fibo, süzgeçsiz. fiboSkorMod JS'de kalıcı olarak "kapali"ya sabitlendi. -->
   <div style="text-align:center;margin:12px 0 4px">
     <button class="chip tgl on" id="fiboTaraBtn"
-      style="font-weight:800;font-size:17px;padding:14px 28px">📐 FİBO DİLİMLERİNİ TARA</button>
+      style="font-weight:800;font-size:17px;padding:14px 28px">🔄 VERİ ÇEK (TÜM DİLİMLER)</button>
   </div>
   <div id="fiboSonuc"></div>
 
@@ -6350,7 +6350,21 @@ function fiboOlc(){
    AG ISTEGI 4'ten 2'ye iner (5m ve 1wk serileri artik hic cekilmez).
    432 hisse: 1728 -> 864 istek. Onbellege bagli degil, YAPISAL kazanc.
    UYARI: Mini App'teki 15DK ve 1HAF/1AY sekmeleri bos kalir. */
-const FIBO_TF=["1SA","4SA","1G"];
+/* ================== 🔗 ORTAK ZAMAN DİLİMİ MOTORU ==================
+   ESKİDEN: yalnız 1SA·4SA·1G çekiliyordu. "haftalik" ve "adayHafta"
+   kartları bu yüzden HER ZAMAN boştu (bkz. tgKartlar içindeki HAFTA_TF
+   notu) — 1H hiç taranmıyordu. Ayrıca uygulamanın başka sekmelerinde
+   (sinyal/ahenk/kombo) kullanıcı 5DK veya 1AY gibi farklı bir dilim
+   seçtiğinde, o dilim burada hiç çekilmediği için oradan AYRI bir Yahoo
+   isteği daha atılıyordu — aynı hisse için gereksiz tekrar istek.
+   ARTIK: "🔄 Veri Çek" tek düğmesi TÜM dilimleri tek seferde, istenen
+   sırayla (aylık → haftalık → günlük → 4 saat → 1 saat → 15 dk → 5 dk)
+   çeker ve momCek() önbelleğine (sembol|aralik|menzil anahtarıyla) yazar.
+   Uygulamanın HİÇBİR yeri kendi özel isteğini atmaz; hepsi bu ortak
+   önbellekten okur — SIN_TF'deki "5 ağ isteğiyle 7 dilim" tasarımı
+   (5m→5DK/15DK, 1h→1SA/4SA, 1d/1wk/1mo doğrudan) sayesinde bu genişleme
+   yeni istek sayısını 2'den 5'e çıkarır, yine de hızlı kalır. */
+const FIBO_TF=["1A","1H","1G","4SA","1SA","15DK","5DK"];
 async function fiboTamTara(){
   const alan=$("fiboSonuc"); if(!alan) return;
   const btn=$("fiboTaraBtn");
@@ -6372,7 +6386,7 @@ async function fiboTamTara(){
     sinTfSecim=new Set(FIBO_TF);
     sinCanli=true;
     sinChipCiz();
-    alan.innerHTML='<p><span class="spin"></span> Fibo dilimleri taranıyor (1sa · 4sa · 1g)…</p>';
+    alan.innerHTML='<p><span class="spin"></span> Tüm dilimler taranıyor (1ay · 1hafta · 1g · 4sa · 1sa · 15dk · 5dk)…</p>';
     const sayac=setInterval(()=>{ if(btn) btn.textContent="⏳ "+(sinIlerleme||"taranıyor…"); },700);
     try{ await sinTara(); } finally{ clearInterval(sayac); }
     if(fiboDur){ alan.innerHTML='<p class="mom-durum">■ Durduruldu.</p>'; return; }
@@ -6382,7 +6396,7 @@ async function fiboTamTara(){
   }finally{
     /* tarayıcı sekmesinin kendi ayarı bozulmasın — kayıtlar zaten üretildi */
     sinCanli=eskiCanli; sinChipCiz();
-    if(btn){ btn.disabled=false; btn.textContent=btn.dataset.eski||"📐 FİBO DİLİMLERİNİ TARA"; }
+    if(btn){ btn.disabled=false; btn.textContent=btn.dataset.eski||"🔄 VERİ ÇEK (TÜM DİLİMLER)"; }
   }
 }
 
@@ -7480,7 +7494,7 @@ async function zincirCalistir(kaynak){
    SEKMEDE calisiyordu, sekme yenilenmedigi icin eski kod isbasindaydi.
    Artik her tarama sonunda surum ekrana yaziliyor: alttaki damga
    asagidakiyle ayni degilse calisan kod eskidir, sekmeyi kapatip ac. */
-const YAMA_SURUM="2026-08-20-e · düşenler defteri";
+const YAMA_SURUM="2026-08-24-a · ortak zaman dilimi motoru";
 const SUREKLI_BEKLE_MS=2000;
 /* SEANS PENCERESI — surekli mod yalnizca burada tarar.
    Disarida fiyat degismiyor; her 10 saniyede bir Yahoo'yu ve aynalari
@@ -7743,9 +7757,11 @@ function tgKartlar(){
   const TF_ETIKET={"1SA":"KISA","4SA":"ORTA","1G":"UZUN","1H":"1HAF","1A":"1AY"};
   const tfKisa=t=>TF_ETIKET[t]||(SIN_TF[t]?SIN_TF[t].kisa:t);
   paketSozluk=null;   /* her taramada sözlük yeniden kurulur */
-  /* haftalik: 1HAF zaten taranmiyor (FIBO_TF = 1SA/4SA/1G); liste hep bos
-     kaliyor ve arayuzde olu bir sekme olarak duruyordu. Anahtar korunuyor
-     ki eski istemciler kirilmasin, ama artik doldurulmuyor. */
+  /* haftalik: FIBO_TF artık 1H'yi de içeriyor (bkz. "ortak zaman dilimi
+     motoru"), bu yüzden bu liste ve adayHafta artık DOLUYOR. worker.js
+     tarafında Telegram menüsündeki "haftalik" düğmesi hâlâ kapalı —
+     açmak istenirse worker.js'teki u() fonksiyonuna eklenmesi yeterli,
+     buradaki veri zaten hazır. */
   const out={tavan:[],potansiyel:[],fibo:[],uzunvade:[],haftalik:[],
              adayKisa:[],adayOrta:[],adayOrtaVade:[],adayUzun:[],adayHafta:[]};
   /* ================== ⏱ YUMATU 1 — DÖRT TARAMA, TEK DİLİM ==================
@@ -13219,7 +13235,7 @@ function fiboHamCiz(){
     const a=$("fiboSonuc");
     if(a) a.innerHTML='<p class="mom-durum">Fiyat türü değişti — <b>'+
       (sinDuzeltilmis?"düzeltilmiş":"ham")+'</b>. Seviyelerin güncellenmesi için '+
-      '<b>📐 FİBO DİLİMLERİNİ TARA</b>ya bas.</p>';
+      '<b>🔄 VERİ ÇEK</b>e bas.</p>';
   };
   fiboHamCiz();
 }
