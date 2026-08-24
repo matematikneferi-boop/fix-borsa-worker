@@ -7203,8 +7203,13 @@ function mbGoster(v,yerel){
       E(t.ik+" "+t.ad)+(t.olculen?' <span style="opacity:.72;font-size:11px">'+t.olculen+'</span>':""),
       mbIst.tfler.indexOf(t.tf)>=0)});
   h+='</div>';
-  /* Birden çok dilim seçiliyken en kritik ayar: hepsinde mi, birinde mi? */
-  if(mbIst.tfler.length>1){
+  /* Birden çok dilim seçiliyken en kritik ayar: hepsinde mi, birinde mi?
+     (genelde >1 ya da bir modülün kendi seçiminde >1 varsa gösterilir,
+     çünkü bu ayar her iki durumda da o modülün kesişim/birleşim kuralını
+     belirler) */
+  var mbCoklu=mbIst.tfler.length>1||mbModTf(mbIst.mal).length>1||mbModTf(mbIst.dip).length>1||
+    mbModTf(mbIst.bolge).length>1||mbModTf(mbIst.enerji).length>1||mbModTf(mbIst.ab).length>1;
+  if(mbCoklu){
     h+='<div class="altbilgi" style="margin:10px 0 5px;opacity:.85">Seçili '+mbIst.tfler.length+' dilimde şart nasıl aransın?</div>'+
        '<div class="sirala" style="flex-wrap:wrap">'+
        mbCip('data-mbkapsam="hepsi"','✅ HEPSİNDE tutsun',mbIst.kapsam==="hepsi")+
@@ -7344,7 +7349,7 @@ function mbGoster(v,yerel){
       '<div style="height:100%;width:'+yuz+'%;background:var(--yes);transition:width .25s"></div></div>'+
       '<div class="altbilgi" style="margin-top:6px;opacity:.7">Sekmede kaldığın sürece sürer. '+
       'Sonuçlar aşağıda dolarken de süzülür.</div></div>';
-  }else if(ilr.olculen<ilr.gereken&&mbIst.tfler.length){
+  }else if(ilr.olculen<ilr.gereken&&mbEfektifTfler().length){
     h+='<div class="kutu" style="margin:8px 0"><div class="altbilgi">'+
       'Ölçülen: <b>'+ilr.olculen+'</b> / '+ilr.gereken+' — tarama birazdan tamamlanır.</div></div>';
   }else if(ilr.olculen&&mbSonTarama){
@@ -7368,8 +7373,8 @@ function mbGoster(v,yerel){
        '⚛ enerji · 📈 pivot) en az birinin sağındaki <b>○</b> tikine dokun.</div>';
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
-  if(!mbIst.tfler.length){
-    h+='<div class="bos"><b>Zaman dilimi seçilmedi</b><br><br>En üstten en az bir dilim seç.</div>';
+  if(!mbEfektifTfler().length){
+    h+='<div class="bos"><b>Zaman dilimi seçilmedi</b><br><br>En üstten en az bir dilim seç, ya da bir modülün kendi dilimini aç.</div>';
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
   /* ── 8) HEPSİNDE ÇIKANLAR ── */
