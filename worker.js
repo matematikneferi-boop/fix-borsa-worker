@@ -935,7 +935,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-24-e · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-08-24-f · 🔔 Filtre alarmı: isim/başlık verilebiliyor + uygulama kapanıp açılınca KV gecikmesiyle 'silinmiş' görünme sorunu önbellekle giderildi · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -3370,10 +3370,13 @@ async function mbAlarmListeYaz(A,liste){
   return kirp;
 }
 /* Yeni yuva ekle ya da var olanı değiştir. Dönen: {liste,yuva} */
-async function mbAlarmYuvaYaz(A,ist,uid,id){
+async function mbAlarmYuvaYaz(A,ist,uid,id,ad){
   const liste=await mbAlarmListeOku(A);
+  const yer0=liste.findIndex(x=>x.id===String(id||""));
+  const eskiAd=yer0>=0?(liste[yer0].ad||""):"";
+  const yeniAd=(ad!=null&&String(ad).trim())?String(ad).trim().slice(0,40):eskiAd;
   const kayit={id:String(id||("a"+Date.now().toString(36))),ist:ist,
-               ts:Date.now(),kuran:String(uid||"")};
+               ts:Date.now(),kuran:String(uid||""),ad:yeniAd};
   const yer=liste.findIndex(x=>x.id===kayit.id);
   if(yer>=0)liste[yer]=kayit;
   else{
@@ -3511,7 +3514,7 @@ async function mbAlarmTara(A){
     const gosterilen=yeni.slice(0,MB_ALARM_AZAMI);
     const grup={};
     for(const sx of gosterilen){(grup[sx.tf]=grup[sx.tf]||[]).push(sx)}
-    let m="🔔 <b>ALARM "+(yi+1)+"/"+yuvalar.length+"</b>\n<i>"+mbFiltreOzet(ist)+"</i>\n";
+    let m="🔔 <b>"+(yuva.ad?E2(yuva.ad):("ALARM "+(yi+1)+"/"+yuvalar.length))+"</b>\n<i>"+mbFiltreOzet(ist)+"</i>\n";
     for(const tf of ist.tfler){
       const gg=grup[tf];if(!gg||!gg.length)continue;
       m+="\n"+(MB_TF[tf]?MB_TF[tf].ik+" <b>"+MB_TF[tf].ad+"</b>":tf)+"\n";
@@ -3583,7 +3586,7 @@ function mbFiltreVarMi(ist){
 function mbAlarmOzetPaketle(liste){
   return{yuva:MB_ALARM_YUVA,seans:mbSeansIci(),
     liste:(liste||[]).map(y=>{const i2=mbIstekNorm(y.ist);
-      return{id:y.id,ozet:mbFiltreOzet(i2),tfler:i2.tfler,ts:y.ts,ist:i2}})};
+      return{id:y.id,ad:y.ad||"",ozet:mbFiltreOzet(i2),tfler:i2.tfler,ts:y.ts,ist:i2}})};
 }
 async function mbAlarmOzetListe(A){
   return mbAlarmOzetPaketle(await mbAlarmListeOku(A).catch(()=>[]));
@@ -6500,14 +6503,46 @@ function absGoster(v){
 var mbD=null, mbTek=null, mbBekle=false;
 /* Alarm listesi paketten AYRI gelir: tarama artık uygulamada yürüdüğü için
    sunucu paketi üretmiyor, alarm bilgisi de o pakette taşınamıyor. */
-var mbAlarmD=null, mbAlarmIstendi=false;
+var mbAlarmD=null, mbAlarmIstendi=false, mbAlarmDeneme=0;
+/* 🐞 "Alarm ekledim, çıkıp girince silinmiş gibi görünüyor" — sebep KV'nin
+   yaz-sonrası-oku gecikmesi: az önce eklenen alarm, uygulama yeniden
+   açıldığında sunucudan henüz gelmeyebilir. Çözüm: son bilinen listeyi
+   localStorage'a da yazıyoruz. Açılışta önce ONU gösteriyoruz (kayıp
+   görünmesin), sunucu cevabı gelince KARŞILAŞTIRIYORUZ: önbellekte olup
+   sunucuda eksik bir alarm varsa ve önbellek tazeyse (son 3 dk), bunu
+   gecikme sayıp sunucuyu değil önbelleği gösteriyoruz ve birkaç kez
+   daha deniyoruz — gerçekten silinmişse (başka yerden) birkaç deneme
+   sonunda zaten sunucu ile eşitleniyor. */
+function mbAlarmOnbellekOku(){
+  try{var h=localStorage.getItem("mbAlarmOnbellek");if(h)return JSON.parse(h)}catch(_){}
+  return null;
+}
+function mbAlarmOnbellekYaz(d){
+  try{localStorage.setItem("mbAlarmOnbellek",JSON.stringify({d:d,ts:Date.now()}))}catch(_){}
+}
 function mbAlarmCek(zorla){
   if(mbAlarmIstendi&&!zorla)return;
   mbAlarmIstendi=true;
+  if(!mbAlarmD){
+    var onbIlk=mbAlarmOnbellekOku();
+    if(onbIlk&&onbIlk.d)mbAlarmD=onbIlk.d;
+  }
   post("/api/malboga",{is:"alarmListe"}).then(function(r){
-    mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
+    var sunucu=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
+    var onb=mbAlarmOnbellekOku();
+    var eksik=onb&&onb.d&&onb.d.liste&&onb.d.liste.some(function(a){
+      return!(sunucu.liste||[]).some(function(b2){return b2.id===a.id})});
+    if(eksik&&onb.ts&&(Date.now()-onb.ts)<18e4&&mbAlarmDeneme<6){
+      mbAlarmDeneme++;
+      setTimeout(function(){mbAlarmIstendi=false;mbAlarmCek(true)},4000);
+      if(sekme==="malboga")mbCizYenile();
+      return;
+    }
+    mbAlarmDeneme=0;
+    mbAlarmD=sunucu;
+    mbAlarmOnbellekYaz(sunucu);
     if(sekme==="malboga")mbCizYenile();
-  }).catch(function(){mbAlarmD={yuva:5,seans:false,liste:[]}});
+  }).catch(function(){if(!mbAlarmD)mbAlarmD={yuva:5,seans:false,liste:[]}});
 }
 /* Açılış = TradingView varsayılanına yakın: günlükte son 5 barda mal toplanmış. */
 var mbIst={
@@ -7480,7 +7515,8 @@ function mbGoster(v,yerel){
          (i?'border-top:1px solid var(--ciz)':'')+'">'+
          '<div style="flex:1;min-width:0'+(D.yon?';cursor:pointer':'')+'"'+
          (D.yon?' data-mbalyukle="'+i+'"':'')+'>'+
-         '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+E(a.ozet)+'</div>'+
+         '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+(a.ad?E(a.ad):E(a.ozet))+'</div>'+
+         (a.ad?'<div class="altbilgi" style="opacity:.7">'+E(a.ozet)+'</div>':'')+
          '<div class="altbilgi" style="opacity:.7">'+a.tfler.map(function(t){return E(t)}).join(" · ")+'</div>'+
          (D.yon?'<div class="altbilgi" style="opacity:.5">↩️ dokun — kriterleri yukarıya geri yükle</div>':'')+
          '</div>'+
@@ -7631,18 +7667,22 @@ function mbBagla(v,dilimler){
     post("/api/malboga",o).then(function(v2){mbD=v2;mbGoster(v2)})
       .catch(function(){ev.disabled=false;ev.textContent="🌍 Evreni yenile"})};
   var ak=el("mbAlarmKur");
-  if(ak)ak.onclick=function(){tit();ak.disabled=true;ak.textContent="⏳ ekleniyor…";
-    var o={};for(var k in mbIst)o[k]=mbIst[k];o.alarmKur=1;
+  if(ak)ak.onclick=function(){tit();
+    var isim=window.prompt("Bu alarma bir isim ver (istersen boş bırak):","");
+    if(isim===null)return;
+    ak.disabled=true;ak.textContent="⏳ ekleniyor…";
+    var o={};for(var k in mbIst)o[k]=mbIst[k];o.alarmKur=1;o.ad=isim;
     post("/api/malboga",o).then(function(r){
       ak.disabled=false;
       if(r&&r.ok){
         mbAlarmD=r.alarm||mbAlarmD;
+        mbAlarmOnbellekYaz(mbAlarmD);
         mbCizYenile();
         var dv=el("mbAlarmDurum");
         if(dv)dv.innerHTML='✅ Alarm eklendi. Şu anki <b>'+(r.tohum||0)+'</b> eşleşme '+
           '"görülmüş" sayıldı; bundan sonra listeye <b>yeni girenler</b> bildirilecek.';
       }else{
-        if(r&&r.alarm)mbAlarmD=r.alarm;
+        if(r&&r.alarm){mbAlarmD=r.alarm;mbAlarmOnbellekYaz(mbAlarmD)}
         mbCizYenile();
         var dv2=el("mbAlarmDurum");if(dv2)dv2.textContent="⚠️ "+((r&&r.hata)||"eklenemedi");
       }
@@ -7658,13 +7698,14 @@ function mbBagla(v,dilimler){
   T("[data-mbalsil]",function(b){
     b.disabled=true;b.textContent="…";
     post("/api/malboga",{alarmSil:1,alarmId:b.dataset.mbalsil}).then(function(r){
-      if(r&&r.alarm)mbAlarmD=r.alarm;mbCizYenile();
+      if(r&&r.alarm){mbAlarmD=r.alarm;mbAlarmOnbellekYaz(mbAlarmD)}mbCizYenile();
     }).catch(function(){b.disabled=false;b.textContent="🚫"});
   });
   var ah=el("mbAlarmHepsi");
   if(ah)ah.onclick=function(){tit();ah.disabled=true;
     post("/api/malboga",{alarmSil:1,alarmId:true}).then(function(r){
-      mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};mbCizYenile();
+      mbAlarmD=(r&&r.alarm)||{yuva:5,seans:false,liste:[]};
+      mbAlarmOnbellekYaz(mbAlarmD);mbCizYenile();
     }).catch(function(){ah.disabled=false})};
   var kb=el("mbKodBtn"),ki=el("mbKod");
   var bak=function(){var k=String((ki&&ki.value)||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
@@ -9694,7 +9735,7 @@ if("/api/malboga"===$.pathname){
     const kur=mbIstekNorm(gov);
     if(!mbFiltreVarMi(kur))return JS({ok:!1,hata:"önce en az bir modül aç"},400);
     if(!kur.tfler.length)return JS({ok:!1,hata:"önce zaman dilimi seç"},400);
-    const r=await mbAlarmYuvaYaz(A,kur,uid,gov.alarmId);
+    const r=await mbAlarmYuvaYaz(A,kur,uid,gov.alarmId,gov.ad);
     if(r.dolu)return JS({ok:!1,hata:"beş yuva da dolu — önce birini kaldır",
       alarm:mbAlarmOzetPaketle(r.liste)},400);
     const tohum=await mbAlarmTohumla(A,kur,r.yuva.id).catch(()=>0);
