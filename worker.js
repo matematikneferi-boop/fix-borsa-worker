@@ -3573,20 +3573,11 @@ function mbFiltreVarMi(ist){
            (ist.pivot&&ist.pivot.acik));
 }
 /* Alarm ekranı için özet — kaç yuva dolu, hangi filtreler kurulu. */
-/* 🐞 DÜZELTİLEN HATA — "eklendi" yazıyor ama liste boş görünüyor.
-   Eskiden alarmKur/alarmSil sonrası buraya HER SEFERİNDE yeniden KV'den
-   okunuyordu. put() az önce yapılmış olsa da KV yaz-sonrası-oku garantisi
-   anlık değil; aynı istek içinde bile bazen eski/boş veri dönebiliyor —
-   ekranda "✅ eklendi" ile "0/5 dolu" birlikte görünüyordu. Artık BU
-   fonksiyon KV'ye gitmiyor, elde zaten olan (yazma sonrası bellekteki)
-   listeyi paketliyor. KV'den okuma yalnız ilk yüklemede (mbAlarmCek) olur. */
-function mbAlarmOzetPaketle(liste){
-  return{yuva:MB_ALARM_YUVA,seans:mbSeansIci(),
-    liste:(liste||[]).map(y=>{const i2=mbIstekNorm(y.ist);
-      return{id:y.id,ozet:mbFiltreOzet(i2),tfler:i2.tfler,ts:y.ts,ist:i2}})};
-}
 async function mbAlarmOzetListe(A){
-  return mbAlarmOzetPaketle(await mbAlarmListeOku(A).catch(()=>[]));
+  const yuvalar=await mbAlarmListeOku(A).catch(()=>[]);
+  return{yuva:MB_ALARM_YUVA,seans:mbSeansIci(),
+    liste:yuvalar.map(y=>{const i2=mbIstekNorm(y.ist);
+      return{id:y.id,ozet:mbFiltreOzet(i2),tfler:i2.tfler,ts:y.ts}})};
 }
 
 /* ---------- B) 🔐 İMZALI PANEL ANAHTARI ----------
@@ -7478,11 +7469,9 @@ function mbGoster(v,yerel){
     alL.forEach(function(a,i){
       h+='<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;'+
          (i?'border-top:1px solid var(--ciz)':'')+'">'+
-         '<div style="flex:1;min-width:0'+(D.yon?';cursor:pointer':'')+'"'+
-         (D.yon?' data-mbalyukle="'+i+'"':'')+'>'+
+         '<div style="flex:1;min-width:0">'+
          '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+E(a.ozet)+'</div>'+
          '<div class="altbilgi" style="opacity:.7">'+a.tfler.map(function(t){return E(t)}).join(" · ")+'</div>'+
-         (D.yon?'<div class="altbilgi" style="opacity:.5">↩️ dokun — kriterleri yukarıya geri yükle</div>':'')+
          '</div>'+
          (D.yon?'<button class="sir" data-mbalsil="'+E(a.id)+'" '+
            'style="padding:4px 9px;font-size:12px;flex:0 0 auto">🚫</button>':"")+
@@ -7517,21 +7506,6 @@ function mbGoster(v,yerel){
      'seçtiğin dilimlerden bayat olan öncelikli tazelenir.</div></div>';
   el("govde").innerHTML=h;
   mbBagla(v,dilimler);
-}
-/* Kurulu bir alarmın kriterlerini yukarıdaki tik/kutulara geri yükler —
-   "ne ayarlamıştım" hatırlanabilsin diye. Modül-özel dilim override'ları
-   alarm kaydında tutulmuyor (yalnız genel dilim listesi), o yüzden her
-   modül "Genel"e döner; en azından koşulların kendisi birebir geri gelir. */
-function mbAlKriterYukle(ist){
-  if(!ist)return;
-  mbIst.kapsam=ist.kapsam==="herhangi"?"herhangi":"hepsi";
-  mbIst.tfler=(ist.tfler&&ist.tfler.length)?ist.tfler.slice():["1G"];
-  ["mal","dip","ab","enerji","bolge"].forEach(function(m){
-    if(!ist[m])return;
-    for(var k in ist[m])mbIst[m][k]=ist[m][k];
-    mbIst[m].tfler=null;
-  });
-  if(ist.pivot)for(var k2 in ist.pivot)mbIst.pivot[k2]=ist.pivot[k2];
 }
 /* Bütün tik/düğme olayları — tek yerde. */
 function mbBagla(v,dilimler){
@@ -7649,12 +7623,6 @@ function mbBagla(v,dilimler){
     }).catch(function(){ak.disabled=false;
       var dv3=el("mbAlarmDurum");if(dv3)dv3.textContent="⚠️ bağlantı hatası"});
   };
-  T("[data-mbalyukle]",function(b){
-    var i=Number(b.dataset.mbalyukle),a=mbAlarmD&&mbAlarmD.liste&&mbAlarmD.liste[i];
-    if(!a||!a.ist)return;
-    mbAlKriterYukle(a.ist);mbUygula();
-    var dv=el("mbAlarmDurum");if(dv)dv.textContent="↩️ "+(i+1)+". alarmın kriterleri yukarı yüklendi.";
-  });
   T("[data-mbalsil]",function(b){
     b.disabled=true;b.textContent="…";
     post("/api/malboga",{alarmSil:1,alarmId:b.dataset.mbalsil}).then(function(r){
@@ -9696,15 +9664,15 @@ if("/api/malboga"===$.pathname){
     if(!kur.tfler.length)return JS({ok:!1,hata:"önce zaman dilimi seç"},400);
     const r=await mbAlarmYuvaYaz(A,kur,uid,gov.alarmId);
     if(r.dolu)return JS({ok:!1,hata:"beş yuva da dolu — önce birini kaldır",
-      alarm:mbAlarmOzetPaketle(r.liste)},400);
+      alarm:await mbAlarmOzetListe(A)},400);
     const tohum=await mbAlarmTohumla(A,kur,r.yuva.id).catch(()=>0);
     return JS({ok:!0,alarmKuruldu:!0,tohum:tohum,yuvaId:r.yuva.id,
-      alarm:mbAlarmOzetPaketle(r.liste)});
+      alarm:await mbAlarmOzetListe(A)});
   }
   if(gov&&gov.alarmSil){
     if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
-    const kalanListe=await mbAlarmYuvaSil(A,gov.alarmId===true?null:(gov.alarmId||null));
-    return JS({ok:!0,alarmSilindi:!0,alarm:mbAlarmOzetPaketle(kalanListe)});
+    await mbAlarmYuvaSil(A,gov.alarmId===true?null:(gov.alarmId||null));
+    return JS({ok:!0,alarmSilindi:!0,alarm:await mbAlarmOzetListe(A)});
   }
   /* ⚡ DOĞRUDAN ÖLÇÜM — KV'YE HİÇ DOKUNMAZ
      Üç tur boyunca KV üzerinden biriktirmeyi düzeltmeye çalıştık; her
