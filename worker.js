@@ -935,7 +935,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-24-g · 🔔 Filtre alarmı KÖKTEN DÜZELTİLDİ: artık her kullanıcının kendi 5 yuvası kendi ID'sine göre ayrı saklanıyor (eskiden tek global kayıttı, herkes paylaşıyordu) + kurma/kaldırma artık tüm süper üyelere açık (eskiden yalnız yöneticiydi) + bildirim doğrudan kuran kişiye gidiyor · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-08-24-h · 🔔 Filtre alarmı: arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu, sunucu izin verse de buton çıkmıyordu) + '0/5 dolu' ile 'yükleniyor' yazısı artık aynı anda gösterilmiyor (yanlış 'silindi' izlenimini önler) + KV gecikmesine karşı yeniden deneme süresi uzatıldı · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -6567,7 +6567,7 @@ function mbAlarmCek(zorla){
     var onb=mbAlarmOnbellekOku();
     var eksik=onb&&onb.d&&onb.d.liste&&onb.d.liste.some(function(a){
       return!(sunucu.liste||[]).some(function(b2){return b2.id===a.id})});
-    if(eksik&&onb.ts&&(Date.now()-onb.ts)<18e4&&mbAlarmDeneme<6){
+    if(eksik&&onb.ts&&(Date.now()-onb.ts)<18e4&&mbAlarmDeneme<15){
       mbAlarmDeneme++;
       setTimeout(function(){mbAlarmIstendi=false;mbAlarmCek(true)},4000);
       if(sekme==="malboga")mbCizYenile();
@@ -7538,9 +7538,10 @@ function mbGoster(v,yerel){
   h+='<div class="kutu" style="margin:14px 0 0;border-left:3px solid '+
      (alL.length?"var(--yes)":"var(--ciz)")+'">'+
      '<div style="font-weight:800;font-size:14px;margin-bottom:6px">🔔 Filtre alarmı '+
-     '<span style="opacity:.6;font-weight:600;font-size:12px">'+alL.length+' / '+alYuva+' yuva dolu</span></div>';
+     '<span style="opacity:.6;font-weight:600;font-size:12px">'+
+     (mbAlarmD===null?"yükleniyor…":alL.length+' / '+alYuva+' yuva dolu')+'</span></div>';
   if(mbAlarmD===null){
-    h+='<div class="altbilgi" style="opacity:.6">alarm listesi alınıyor…</div>';
+    h+='<div class="altbilgi" style="opacity:.6">alarm listesi alınıyor — sayı henüz kesinleşmedi…</div>';
   }else if(alL.length){
     h+='<div class="altbilgi" style="margin-bottom:7px">'+
        (mbAlarmD.seans?"🟢 Seans açık — listeye <b>yeni giren</b> hisseler bildiriliyor."
@@ -7548,24 +7549,24 @@ function mbGoster(v,yerel){
     alL.forEach(function(a,i){
       h+='<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;'+
          (i?'border-top:1px solid var(--ciz)':'')+'">'+
-         '<div style="flex:1;min-width:0'+(D.yon?';cursor:pointer':'')+'"'+
-         (D.yon?' data-mbalyukle="'+i+'"':'')+'>'+
+         '<div style="flex:1;min-width:0'+(D.super?';cursor:pointer':'')+'"'+
+         (D.super?' data-mbalyukle="'+i+'"':'')+'>'+
          '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+(a.ad?E(a.ad):E(a.ozet))+'</div>'+
          (a.ad?'<div class="altbilgi" style="opacity:.7">'+E(a.ozet)+'</div>':'')+
          '<div class="altbilgi" style="opacity:.7">'+a.tfler.map(function(t){return E(t)}).join(" · ")+'</div>'+
-         (D.yon?'<div class="altbilgi" style="opacity:.5">↩️ dokun — kriterleri yukarıya geri yükle</div>':'')+
+         (D.super?'<div class="altbilgi" style="opacity:.5">↩️ dokun — kriterleri yukarıya geri yükle</div>':'')+
          '</div>'+
-         (D.yon?'<button class="sir" data-mbalsil="'+E(a.id)+'" '+
+         (D.super?'<button class="sir" data-mbalsil="'+E(a.id)+'" '+
            'style="padding:4px 9px;font-size:12px;flex:0 0 auto">🚫</button>':"")+
          '</div>';
     });
   }else{
     h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal">Kurulu alarm yok. '+
        'Yukarıdaki tikleri istediğin gibi ayarla, sonra bu filtreyi alarma ekle — '+
-       'seans içinde listeye <b>yeni giren</b> hisseler sana ve süper üyelere bildirim olarak gider. '+
+       'seans içinde listeye <b>yeni giren</b> hisseler sana bildirim olarak gider. '+
        'En fazla <b>'+alYuva+'</b> ayrı filtre aynı anda kurulu kalabilir.</div>';
   }
-  if(D.yon){
+  if(D.super){
     h+='<div class="sirala" style="flex-wrap:wrap;margin-top:6px">'+
        '<button class="dg" id="mbAlarmKur" style="width:auto;padding:8px 14px"'+
        (alL.length>=alYuva?' disabled':'')+'>'+
@@ -7573,7 +7574,7 @@ function mbGoster(v,yerel){
        (alL.length>1?'<button class="sir" id="mbAlarmHepsi">🚫 Hepsini kaldır</button>':"")+'</div>'+
        '<div class="altbilgi" id="mbAlarmDurum" style="margin-top:6px"></div>';
   }else{
-    h+='<div class="altbilgi" style="opacity:.6">Alarm filtresini yalnız yönetici kurar.</div>';
+    h+='<div class="altbilgi" style="opacity:.6">Alarm filtresi süper üyelik gerektirir.</div>';
   }
   h+='</div>';
   /* ── 11) DURUM ── */
