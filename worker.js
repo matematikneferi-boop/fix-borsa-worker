@@ -6501,13 +6501,38 @@ function mbAlarmCek(zorla){
 var mbIst={
   kapsam:"hepsi",          /* hepsi = seçili dilimlerin HEPSİNDE tutsun */
   tfler:["1G"],
-  mal:{acik:true, top:true, dag:false, temiz:true, sinirsiz:false, n:5},
-  dip:{acik:false,kademe:"dip"},
+  /* tfler:null → modül GENEL dilim seçimini (yukarıdaki mbIst.tfler) kullanır.
+     tfler:[...] → modül KENDİ dilimini kullanır, genelden bağımsız çalışır.
+     Varsayılan hep null: kimse dokunmazsa sistem birebir eskisi gibi davranır. */
+  mal:{acik:true, top:true, dag:false, temiz:true, sinirsiz:false, n:5, tfler:null},
+  dip:{acik:false,kademe:"dip", tfler:null},
   pivot:{acik:false,dilimler:["KISA","ORTA","UZUN"],kirdi:true,yakin:false,uzerinde:false,yuzde:3},
-  bolge:{acik:false,secili:["b2"]},
-  enerji:{acik:false,olustu:true,icinde:true,b0:true,b1:false,mesafeAcik:true,mesafe:5},
-  ab :{acik:false,boga:true, ayi:false, sinirsiz:false, n:5}
+  bolge:{acik:false,secili:["b2"], tfler:null},
+  enerji:{acik:false,olustu:true,icinde:true,b0:true,b1:false,mesafeAcik:true,mesafe:5, tfler:null},
+  ab :{acik:false,boga:true, ayi:false, sinirsiz:false, n:5, tfler:null}
 };
+/* ═══ 🕒 MODÜL BAZLI ZAMAN DİLİMİ ═══════════════════════════════════════
+   Her modül (mal/dip/bölge/enerji/ayı-boğa) isterse kendi zaman dilimini
+   seçebilir; seçmezse (tfler null/boşsa) en üstteki GENEL dilim seçimini
+   kullanır. Pivot zaten kendi "dilimler" alanına sahip, buna dahil değil. */
+var MB_TF_SIRA=["5DK","15DK","1SA","4SA","1G","1HAF","1AY"];
+function mbModOzelMi(mod){return !!(mod&&Array.isArray(mod.tfler)&&mod.tfler.length)}
+function mbModTf(mod){return mbModOzelMi(mod)?mod.tfler:mbIst.tfler}
+function mbHerhangiOzelTf(){
+  return mbModOzelMi(mbIst.mal)||mbModOzelMi(mbIst.dip)||mbModOzelMi(mbIst.bolge)||
+         mbModOzelMi(mbIst.enerji)||mbModOzelMi(mbIst.ab);
+}
+/* Ölçüm/ilerleme/tazeleme fonksiyonlarının kullandığı GERÇEK dilim kümesi:
+   genel seçim ∪ her modülün kendi özel seçimi. Kimse özel seçim yapmazsa bu
+   küme mbIst.tfler ile birebir aynıdır (dizi referansı bile aynı kalır). */
+function mbEfektifTfler(){
+  if(!mbHerhangiOzelTf())return mbIst.tfler;
+  var out=mbIst.tfler.slice();
+  [mbIst.mal,mbIst.dip,mbIst.bolge,mbIst.enerji,mbIst.ab].forEach(function(mod){
+    mbModTf(mod).forEach(function(t){if(out.indexOf(t)<0)out.push(t)});
+  });
+  return MB_TF_SIRA.filter(function(t){return out.indexOf(t)>=0});
+}
 var MB_BAR=[0,1,2,3,4];
 var MB_KADEME=[["dip","⬇️ Dip bölgesi"],["dip382","⬇️⬇️ Derin (382 altı)"],["dip236","⬇️⬇️⬇️ En dip (236 altı)"]];
 
@@ -6558,10 +6583,11 @@ function mbTazelemeKur(){
   mbZamanlayici=setInterval(function(){
     if(sekme!=="malboga"){return}
     if(mbTaraDurum&&mbTaraDurum.suruyor)return;
-    if(!mbIst.tfler.length)return;
+    var tfl=mbEfektifTfler();
+    if(!tfl.length)return;
     var enHizli=1e9;
-    for(var i=0;i<mbIst.tfler.length;i++){
-      var sr=MB_TAZE_SURE[mbIst.tfler[i]]||9e5;
+    for(var i=0;i<tfl.length;i++){
+      var sr=MB_TAZE_SURE[tfl[i]]||9e5;
       if(sr<enHizli)enHizli=sr;
     }
     if(Date.now()-mbSonTarama<enHizli)return;
@@ -6573,7 +6599,7 @@ function mbOtomatikBaslat(){
   /* Tarama "sürüyor" görünüyorsa gerçekten sürüyor mu bak: sekme dışında
      durmuş olabilir. Nöbetçiyi kur ve döngüyü ittir. */
   if(mbTaraDurum&&mbTaraDurum.suruyor){mbNobetciKur();mbTaraTur();return}
-  if(!mbIst.tfler.length)return;
+  if(!mbEfektifTfler().length)return;
   var ilr=mbIlerleme();
   if(ilr.gereken&&ilr.olculen>=ilr.gereken)return;   /* zaten tamam */
   mbTaraBaslat();
@@ -6757,38 +6783,62 @@ function mbOlcumSay(tf){return mbOlcum[tf]?Object.keys(mbOlcum[tf]).length:0}
 function mbIlerleme(){
   var ger=0,var_=0;
   var n=mbEvrenKod?mbEvrenKod.length:0;
-  for(var i=0;i<mbIst.tfler.length;i++){ger+=n;var_+=mbOlcumSay(mbIst.tfler[i])}
+  var tfl=mbEfektifTfler();
+  for(var i=0;i<tfl.length;i++){ger+=n;var_+=mbOlcumSay(tfl[i])}
   return{gereken:ger,olculen:var_};
 }
 /* Sunucudaki mbModulGecti ile AYNI kurallar — tek kaynak olması için
    birebir aynı sırayla yazıldı. */
+/* Tek tek modül şartları — mbGectiMi'nin AYNI mantığı, dışarı alındı ki
+   özel-dilim yolunda (mbPaketUretOzel) her modül kendi ölçümüyle tek tek
+   çağrılabilsin. Davranış birebir korunuyor, yalnız yeniden düzenlendi. */
+function mbCondMal(x,ist){
+  var m=ist.mal;
+  if(!m||!m.acik)return true;
+  var N=m.sinirsiz?1e9:m.n, ok=false;
+  if(m.top)ok=ok||(m.temiz?(x.topHam<=N&&x.topHam<x.dagHam):x.topHam<=N);
+  if(m.dag)ok=ok||(x.dagHam<=N);
+  return ok;
+}
+function mbCondDip(x,ist){
+  var d=ist.dip;
+  if(!d||!d.acik)return true;
+  return !!x[d.kademe];
+}
+function mbCondBolge(x,ist){
+  var b=ist.bolge;
+  if(!b||!b.acik)return true;
+  var bl=mbBolgeBul(x.oran);
+  return !!(bl&&b.secili.indexOf(bl.id)>=0);
+}
+function mbCondAb(x,ist){
+  var a=ist.ab;
+  if(!a||!a.acik)return true;
+  var M=a.sinirsiz?1e9:a.n, ok=false;
+  if(a.boga)ok=ok||(!!x.boga&&x.rejYas<=M);
+  if(a.ayi) ok=ok||(!!x.ayi &&x.rejYas<=M);
+  return ok;
+}
 function mbGectiMi(x,ist,kod){
   if(!x)return false;
   if(ist.pivot&&ist.pivot.acik&&kod&&!mbPivotGecti(kod,ist))return false;
-  if(ist.mal.acik){
-    var N=ist.mal.sinirsiz?1e9:ist.mal.n, ok=false;
-    if(ist.mal.top)ok=ok||(ist.mal.temiz?(x.topHam<=N&&x.topHam<x.dagHam):x.topHam<=N);
-    if(ist.mal.dag)ok=ok||(x.dagHam<=N);
-    if(!ok)return false;
-  }
-  if(ist.dip.acik&&!x[ist.dip.kademe])return false;
-  if(ist.bolge&&ist.bolge.acik){
-    var bl=mbBolgeBul(x.oran);
-    if(!bl||ist.bolge.secili.indexOf(bl.id)<0)return false;
-  }
+  if(!mbCondMal(x,ist))return false;
+  if(!mbCondDip(x,ist))return false;
+  if(!mbCondBolge(x,ist))return false;
   if(!mbEnerjiGecti(x,ist))return false;
-  if(ist.ab.acik){
-    var M=ist.ab.sinirsiz?1e9:ist.ab.n, ok2=false;
-    if(ist.ab.boga)ok2=ok2||(!!x.boga&&x.rejYas<=M);
-    if(ist.ab.ayi) ok2=ok2||(!!x.ayi &&x.rejYas<=M);
-    if(!ok2)return false;
-  }
+  if(!mbCondAb(x,ist))return false;
   return true;
 }
 function mbTazelikSay(x){return Math.min(Number(x.topHam),Number(x.dagHam),Number(x.rejYas))}
 /* Bellekteki ölçümlerden ekranın beklediği paketi üretir — böylece çizim
    kodunun tamamı olduğu gibi kalır. */
 function mbPaketUret(){
+  /* Kimse hiçbir modülde özel dilim seçmediyse eskisi gibi (GENEL yol)
+     davran — sıfır risk. Bir modülde bile özel dilim seçilirse ÖZEL yola
+     geçilir. */
+  return mbHerhangiOzelTf()?mbPaketUretOzel():mbPaketUretGenel();
+}
+function mbPaketUretGenel(){
   var TFAD={"5DK":["5 dakika","⚡"],"15DK":["15 dakika","⏱"],"1SA":["1 saat","🕐"],
     "4SA":["4 saat","🕓"],"1G":["1 gün","🗓"],"1HAF":["1 hafta","📅"],"1AY":["1 ay","🗂"]};
   var SIRA=["5DK","15DK","1SA","4SA","1G","1HAF","1AY"];
@@ -6858,6 +6908,107 @@ function mbPaketUret(){
   });
   return v;
 }
+/* ═══ 🕒 ÖZEL DİLİM YOLU ═══════════════════════════════════════════════
+   En az bir modülde kendi dilimi seçildiyse buraya düşülür. Her aktif
+   modül KENDİ dilim listesinde (kapsam=hepsi→kesişim, herhangi→birleşim)
+   geçenleri bulur; modüller arası VE hâlâ geçerli — sadece artık her
+   modül kendi zaman dilimine bakıyor. Pivot zaten bağımsızdı, aynen
+   kullanılır. Paketin ŞEKLİ (alan adları) GENEL yolla birebir aynı
+   tutuldu ki ekran/kart çizim kodu hiç değişmesin. */
+function mbPaketUretOzel(){
+  var TFAD={"5DK":["5 dakika","⚡"],"15DK":["15 dakika","⏱"],"1SA":["1 saat","🕐"],
+    "4SA":["4 saat","🕓"],"1G":["1 gün","🗓"],"1HAF":["1 hafta","📅"],"1AY":["1 ay","🗂"]};
+  var SIRA=MB_TF_SIRA;
+  var evren=mbEvrenKod?mbEvrenKod.length:0;
+  var dilimler=SIRA.map(function(t){return{tf:t,ad:TFAD[t][0],ik:TFAD[t][1],
+    olculen:mbOlcumSay(t),evren:evren,yas:null}});
+  var sozluk={tfler:SIRA.map(function(t){return{tf:t,ad:TFAD[t][0],ik:TFAD[t][1]}})};
+  var v={ok:true,sozluk:sozluk,dilimler:dilimler,calisiyor:true,
+    evrenBilgi:{sayi:evren,kaynak:mbEvrenKaynak},ortak:[],gruplar:[]};
+
+  var MOD_LISTE=[
+    {k:"mal",   ist:mbIst.mal,   cond:mbCondMal},
+    {k:"dip",   ist:mbIst.dip,   cond:mbCondDip},
+    {k:"bolge", ist:mbIst.bolge, cond:mbCondBolge},
+    {k:"enerji",ist:mbIst.enerji,cond:mbEnerjiGecti},
+    {k:"ab",    ist:mbIst.ab,    cond:mbCondAb}
+  ];
+  var aktifler=MOD_LISTE.filter(function(m){return m.ist&&m.ist.acik});
+  var pivotAktif=!!(mbIst.pivot&&mbIst.pivot.acik);
+  if(!aktifler.length&&!pivotAktif)return v;
+
+  var tumTf=mbEfektifTfler();
+  var har={};
+  tumTf.forEach(function(t){har[t]=mbOlcum[t]||{}});
+
+  /* Her modül kendi dilim kümesinde geçenleri bulur */
+  var modGecen={};
+  aktifler.forEach(function(m){
+    var tfl=mbModTf(m.ist);
+    var birlesim=mbIst.kapsam!=="hepsi";     /* herhangi=birleşim, hepsi=kesişim */
+    var sonuc=null;
+    tfl.forEach(function(t){
+      var h=har[t]||{},s={};
+      for(var k in h)if(m.cond(h[k],mbIst))s[k]=true;
+      if(sonuc===null){sonuc={};for(var k1 in s)sonuc[k1]=true}
+      else if(birlesim){for(var k2 in s)sonuc[k2]=true}
+      else{var y={};for(var k3 in sonuc)if(s[k3])y[k3]=true;sonuc=y}
+    });
+    modGecen[m.k]=sonuc||{};
+  });
+
+  var pivotGecen=null;
+  if(pivotAktif){
+    pivotGecen={};
+    (mbEvrenKod||[]).forEach(function(kod){if(mbPivotGecti(kod,mbIst))pivotGecen[kod]=true});
+  }
+
+  /* Modüller arası VE (eskisiyle aynı kural — sadece artık her modül
+     kendi diliminde ölçülmüş oluyor) */
+  var ortakObj=null;
+  aktifler.forEach(function(m){
+    var s=modGecen[m.k];
+    if(ortakObj===null){ortakObj={};for(var k in s)ortakObj[k]=true}
+    else{var y={};for(var k2 in ortakObj)if(s[k2])y[k2]=true;ortakObj=y}
+  });
+  if(pivotAktif){
+    if(ortakObj===null){ortakObj={};for(var k3 in pivotGecen)ortakObj[k3]=true}
+    else{var y2={};for(var k4 in ortakObj)if(pivotGecen[k4])y2[k4]=true;ortakObj=y2}
+  }
+  var ortakListe=Object.keys(ortakObj||{}).sort();
+  v.ortak=ortakListe;
+
+  /* Satırda gösterilecek MAL/AB değerleri: kullanılan dilimlerin en
+     büyüğünden (TradingView karşılaştırması için — GENEL yoldaki
+     "enBuyuk" mantığının aynısı, artık birleşim kümesi üstünden). */
+  var enBuyuk=tumTf.length?tumTf[tumTf.length-1]:(mbIst.tfler[mbIst.tfler.length-1]||"1G");
+  var kaynak=har[enBuyuk]||{};
+  function serit(kod){
+    return tumTf.map(function(t){
+      var m=har[t][kod];
+      if(!m)return{tf:t,yok:true};
+      return{tf:t,boga:!!m.boga,ayi:!!m.ayi,rejYas:m.rejYas,topHam:m.topHam,
+        dagHam:m.dagHam,dip:!!m.dip,dip382:!!m.dip382,dip236:!!m.dip236,gecti:true};
+    });
+  }
+  var liste=ortakListe.map(function(k){
+    var o={kod:k},m=kaynak[k]||{};
+    for(var a in m)o[a]=m[a];
+    o.tfDurum=serit(k);o.digerTfler=[];return o;
+  }).sort(function(a,b){return (mbTazelikSay(a)-mbTazelikSay(b))||(a.kod<b.kod?-1:1)});
+
+  var olculen=tumTf.length?Math.min.apply(null,tumTf.map(function(t){return mbOlcumSay(t)})):0;
+  var aciklama=aktifler.map(function(m){return m.k+"("+mbModTf(m.ist).join("+")+")"}).join(", ")+
+    (pivotAktif?", pivot("+mbIst.pivot.dilimler.join("+")+")":"");
+  v.kapsam="hepsi";
+  v.kaynakTf=enBuyuk;
+  v.ozelDilim=true;      /* çizim tarafına "her modül kendi dilimini kullanıyor" bilgisini taşır */
+  v.gruplar=[{tf:"HEPSİ",ad:"Her modül kendi dilimi: "+aciklama+
+    " · satırdaki değerler "+enBuyuk+" diliminden",ik:"🎯",
+    olculen:olculen,evren:evren,kalan:Math.max(0,evren-olculen),yas:null,
+    cikan:liste.length,liste:liste.slice(0,150)}];
+  return v;
+}
 /* ── Tarama döngüsü ── */
 var MB_KANAL=3;              /* aynı anda yolda kaç istek */
 var MB_PARCA=16;             /* bir istekte kaç hisse (sunucu tavanı 16) */
@@ -6867,8 +7018,9 @@ var mbNobetci=null;
 
 function mbKuyrukKur(){
   var k=[];
-  for(var i=0;i<mbIst.tfler.length;i++){
-    var tf=mbIst.tfler[i];
+  var tfl=mbEfektifTfler();
+  for(var i=0;i<tfl.length;i++){
+    var tf=tfl[i];
     /* Zaten ölçülmüş hisseleri yeniden isteme — tazeleme mbOlcum'u boşaltır */
     var var_=mbOlcum[tf]||{};
     var eksik=[];
@@ -6883,7 +7035,7 @@ function mbKuyrukKur(){
 }
 function mbTaraBaslat(){
   if(mbTaraDurum&&mbTaraDurum.suruyor){mbTaraDurum.suruyor=false;mbNobetciKapat();mbCizYenile();return}
-  if(!mbIst.tfler.length){mbCizYenile();return}
+  if(!mbEfektifTfler().length){mbCizYenile();return}
   if(!mbEvrenKod){
     el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
     post("/api/malboga",{is:"evren"}).then(function(r){
@@ -6895,7 +7047,7 @@ function mbTaraBaslat(){
       el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
     return;
   }
-  mbTaraDurum={suruyor:true,tf:mbIst.tfler[0],baslangic:Date.now(),hata:0,
+  mbTaraDurum={suruyor:true,tf:mbEfektifTfler()[0],baslangic:Date.now(),hata:0,
                acik:0,onbellekten:0,kuyruk:mbKuyrukKur(),ucusta:[],sonHareket:Date.now()};
   mbNobetciKur();
   mbTaraTur();
@@ -7008,6 +7160,20 @@ function mbModulBas(id,ik,ad,acik){
     (acik?"background:var(--yes);color:#04140a;font-weight:800":"opacity:.6")+'">'+
     (acik?"✓":"○")+'</button></div>';
 }
+/* Modülün kendi zaman dilimi seçici şeridi — "Genel" ya da modüle özel
+   dilimler. Genel seçiliyken bu modül en üstteki 🕒 Zaman dilimleri
+   kutusunu kullanır; özel seçilirse kendi dilimiyle bağımsız çalışır. */
+function mbModulTfSatir(mod,dilimler){
+  var ozel=mbModOzelMi(mbIst[mod]);
+  var h='<div class="altbilgi" style="margin:8px 0 3px;opacity:.7">🕒 Bu modülün zaman dilimi</div>'+
+    '<div class="sirala" style="flex-wrap:wrap">'+
+    mbCip('data-mbmodtfg="'+mod+'"','🌐 Genel ('+E(mbIst.tfler.join(","))+')',!ozel);
+  dilimler.forEach(function(t){
+    h+=mbCip('data-mbmodtf="'+mod+':'+t.tf+'"',E(t.ik+" "+t.tf),
+      ozel&&mbIst[mod].tfler.indexOf(t.tf)>=0);
+  });
+  return h+'</div>';
+}
 /* 0B 1B 2B 3B 4B + elle kutu + sınırsız */
 function mbYasSatir(mod,st){
   var h='<div class="sirala" style="flex-wrap:wrap">';
@@ -7060,6 +7226,7 @@ function mbGoster(v,yerel){
        mbCip('data-mbtemiz="1"',"temiz",mbIst.mal.temiz)+'</div>';
     h+='<div class="altbilgi" style="margin:8px 0 5px;opacity:.7">en fazla kaç bar önce</div>';
     h+=mbYasSatir("mal",mbIst.mal);
+    h+=mbModulTfSatir("mal",dilimler);
   }
   h+='</div>';
   /* ── 3) DİP TARAMA ── */
@@ -7069,6 +7236,7 @@ function mbGoster(v,yerel){
     MB_KADEME.forEach(function(k){
       h+=mbCip('data-mbkademe="'+k[0]+'"',k[1],mbIst.dip.kademe===k[0])});
     h+='</div>';
+    h+=mbModulTfSatir("dip",dilimler);
   }
   h+='</div>';
   /* ── 4) AYI/BOĞA TARAMA ── */
@@ -7079,6 +7247,7 @@ function mbGoster(v,yerel){
        mbCip('data-mbabyon="ayi"',"🐻 Ayı",mbIst.ab.ayi)+'</div>';
     h+='<div class="altbilgi" style="margin:8px 0 5px;opacity:.7">bu rejime en fazla kaç bar önce geçilmiş</div>';
     h+=mbYasSatir("ab",mbIst.ab);
+    h+=mbModulTfSatir("ab",dilimler);
   }
   h+='</div>';
   /* ── 3b) FİBO BÖLGESİ ── */
@@ -7094,6 +7263,7 @@ function mbGoster(v,yerel){
          b.ik+' '+E(b.ad)+' <span style="opacity:.65;font-size:11px">('+b.alt+' – '+b.ust+')</span></button>';
     });
     h+='</div>';
+    h+=mbModulTfSatir("bolge",dilimler);
   }
   h+='</div>';
   /* ── 4c) ⚛ ENERJİ KIRILIMI ── */
@@ -7121,6 +7291,7 @@ function mbGoster(v,yerel){
     if(!(mbIst.enerji.olustu||mbIst.enerji.icinde||mbIst.enerji.b0||mbIst.enerji.b1))
       h+='<div class="altbilgi" style="margin-top:7px;color:var(--sar);white-space:normal">'+
          'Hiç durum seçili değil — yalnız mesafe şartı aranıyor (TradingView’de de böyle).</div>';
+    h+=mbModulTfSatir("enerji",dilimler);
   }
   h+='</div>';
   /* ── 4b) PİVOT KIRILIM ── */
@@ -7202,7 +7373,7 @@ function mbGoster(v,yerel){
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
   /* ── 8) HEPSİNDE ÇIKANLAR ── */
-  if(mbIst.kapsam!=="hepsi"&&mbIst.tfler.length>1&&ortak.length){
+  if(!mbHerhangiOzelTf()&&mbIst.kapsam!=="hepsi"&&mbIst.tfler.length>1&&ortak.length){
     h+='<div class="kutu" style="margin:10px 0;border-left:3px solid #ffea00">'+
        '<div style="font-weight:800;font-size:14px;margin-bottom:5px">⭐ Seçili '+
        mbIst.tfler.length+' dilimin HEPSİNDE çıkanlar ('+ortak.length+')</div>'+
@@ -7231,7 +7402,7 @@ function mbGoster(v,yerel){
          alttaki MAL/AB satırıyla aynı şeyi tekrar ediyordu ve "35 t3" gibi
          okunmaz görünüyordu. */
       var serit="";
-      if(x.tfDurum&&x.tfDurum.length>1&&mbIst.tfler.length>1){
+      if(x.tfDurum&&x.tfDurum.length>1){
         serit='<div style="display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 2px">'+
           x.tfDurum.map(function(d){
             if(d.yok)return '<span style="font-size:10px;padding:1px 4px;border-radius:4px;background:rgba(139,148,158,.18);color:#8b949e">'+E(d.tf)+' —</span>';
@@ -7340,6 +7511,18 @@ function mbBagla(v,dilimler){
     mbIst.tfler=(mbIst.tfler.length===dilimler.length)?[]:dilimler.map(function(t){return t.tf});
     mbUygula()};
   T("[data-mbkapsam]",function(b){mbIst.kapsam=b.dataset.mbkapsam;mbUygula()});
+  /* Modül "Genel" e dönsün — kendi özel dilimini bırakır */
+  T("[data-mbmodtfg]",function(b){
+    var m=b.dataset.mbmodtfg;mbIst[m].tfler=null;mbUygula()});
+  /* Modül kendi dilimini tikler/tik kaldırır — ilk tike basıldığında
+     özel moda geçer (boş diziyle başlar). */
+  T("[data-mbmodtf]",function(b){
+    var par=b.dataset.mbmodtf.split(":"),m=par[0],t=par[1];
+    if(!mbModOzelMi(mbIst[m]))mbIst[m].tfler=[];
+    var i=mbIst[m].tfler.indexOf(t);
+    if(i>=0)mbIst[m].tfler.splice(i,1);else mbIst[m].tfler.push(t);
+    if(!mbIst[m].tfler.length)mbIst[m].tfler=null;    /* boş kalırsa Genel'e dön */
+    mbUygula()});
   T("[data-mbmod]",function(b){
     var m=b.dataset.mbmod;mbIst[m].acik=!mbIst[m].acik;mbUygula()});
   T("[data-mbmalyon]",function(b){
