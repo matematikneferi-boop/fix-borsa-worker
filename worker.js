@@ -8,7 +8,7 @@ function u(e){
    artık uygulamanın içinde. Telegram menüsü tek düğmeye indirildi.
    Eski callback'ler yerinde duruyor — geçmiş mesajlardaki düğmeler
    çalışmaya devam etsin diye silinmedi. */
-if(n)return{inline_keyboard:[[{text:"📱 UYGULAMAYI AÇ",web_app:{url:n+"/app"}}]]};
+if(n)return{inline_keyboard:[[{text:"📱 UYGULAMAYI AÇ",web_app:{url:n+"/app?v="+Date.now()}}]]};
 const t=[];
 /* Dilim adlari KISA / ORTA / UZUN / HAFTA oldu. 1 HAFTA satirlari
    2026-08-20'de kaldirilmisti cunku o dilim hic taranmiyordu; 2026-08-24'te
@@ -8717,6 +8717,37 @@ function anaMenu(){
 var amb=el("anaMenuBtn");if(amb)amb.onclick=anaMenu;
 var bub=el("baslikYazi");if(bub)bub.onclick=bizeUlasin;
 basla();
+/* 🩺 GEÇİCİ TEŞHİS PANELİ — ekranın altında siyah kutu. Hata olursa
+   otomatik açılır; alarm sekmesindeyken 3 sn'de bir durumu yazar.
+   Sorun çözülünce bu IIFE bloğunu silebilirsin. */
+(function(){
+  var p=document.createElement('div');
+  p.id='dbgPanel';
+  p.style.cssText='position:fixed;bottom:0;left:0;right:0;max-height:38vh;overflow:auto;'+
+    'background:#000;color:#0f0;font:11px monospace;padding:6px;z-index:999999;'+
+    'white-space:pre-wrap;display:none';
+  document.body.appendChild(p);
+  var satirlar=[];
+  function log(s){
+    satirlar.push(new Date().toLocaleTimeString('tr-TR')+' '+s);
+    if(satirlar.length>40)satirlar.shift();
+    p.style.display='block';
+    p.textContent=satirlar.join('\\n');
+    p.scrollTop=p.scrollHeight;
+  }
+  window.onerror=function(msg,src,line,col){log('❌ JS HATASI: '+msg+'  (satır '+line+':'+col+')')};
+  window.addEventListener('unhandledrejection',function(e){
+    var r=e&&e.reason;
+    log('❌ PROMISE HATASI: '+(r&&r.message?r.message:String(r)));
+  });
+  setInterval(function(){
+    if(typeof sekme==='undefined'||sekme!=='malboga')return;
+    try{
+      log('sekme=malboga  mbAlarmD='+(typeof mbAlarmD==='undefined'?'? tanımsız':(mbAlarmD===null?'null (hâlâ geliyor)':'geldi ✅'))+
+        '  mbAlarmIstendi='+mbAlarmIstendi);
+    }catch(e){log('❌ panel kendi hatası: '+e.message)}
+  },3000);
+})();
 </script></body></html>
 `;
 const BILGI_METIN="ℹ️ <b>YUMATU 1 NEDİR?</b>\n\nBIST hisseleri için otomatik teknik tarama yapan bir <b>yapay zekâ</b> sistemidir. Sonuçlar <b>120.657 barlık</b> geçmiş veri üzerinde çalışan tarama motorundan çıkar. Gün içinde düzenli aralıklarla taranır, sonuçlar burada listelenir.\n\n<b>İçermez:</b> insan görüşü, şirket analizi, haber ya da bilanço değerlendirmesi. Yalnızca fiyat ve hacim matematiğidir.\n\n<b>3 liste — her biri YALNIZ kendi zaman diliminden:</b>\n📊 <b>1 SAAT</b> — yalnız 1 saatlik sinyaller\n📐 <b>4 SAAT</b> — yalnız 4 saatlik sinyaller\n🗓 <b>1 GÜN</b> — yalnız günlük sinyaller\n\nBir liste başka bir dilimin sinyalini <b>asla</b> göstermez; başlıkta yazan dilim ile kartın içindeki dilim her zaman aynıdır.\n\n🔎 <b>Hisse sorgulama</b>\nSohbete hisse kodunu yaz (örn. <code>THYAO</code>). O hissenin <b>iki yönünü birden</b> gönderirim: yukarı için direnç ve yükseliş hedefi, aşağı için destek ve düşüş hedefi. Hisse listelerde olmasa bile cevap alırsın.\n\n<b>Diğer düğmeler:</b>\n🏅 <b>İlk 3\'ü</b> — son taramanın en iyi 3 sonucu\n⭐ <b>Takip listem</b> — seçtiğin hisseleri anlık kâr/zararıyla takip et; eklemek/çıkarmak için hep aynı ⭐ düğmesine dokun\n🟨 <b>Adaylar</b> 👑 — her dilim için <i>henüz kırmadı ama makul mesafede.</i> Tetik seviyesini ve kırarsa gideceği hedefi gösterir; yani sinyal oluşmadan ÖNCE görürsün <b>(Süper Üyelik)</b>\n👑 <b>Anlık uyarı (Süper Üyelik)</b> — bir hisse güçlü bir sinyale girdiği an sana özel mesaj gelir\n\n<b>Süper Üyelikte neler açılıyor?</b>\n🟨 Aday listeleri (her dilim için)\n👑 Anlık uyarı mesajları\n⏳ Bekleme yok — listeler ve hisse sorguları anında\n\n<b>Süper Üyelik nasıl kazanılır?</b>\n📤 Sistemi paylaş düğmesiyle arkadaşlarını davet et. Davet sayacın hiç sıfırlanmaz, tüm zamanların toplamı olarak birikir. <b>Her 20 davette</b> süper üyeliğin <b>1 ay</b> açılır ya da (zaten süper üyeysen) mevcut süren üzerine <b>1 ay daha eklenir</b> — yani davet etmeye devam ettikçe süper üyeliğin otomatik uzar.\n\n<b>Neden bazen bekleme çıkıyor?</b>\nSistem çok sayıda kullanıcıya aynı anda hizmet verir; bu yüzden bazı işlemlerde kısa bir bekleme uygulanır. Bu, herkesin hizmeti düzgün alabilmesi içindir.\n\n<b>🔴 RİSK UYARISI</b>\n• Buradaki hiçbir çıktı <b>yatırım tavsiyesi değildir</b>.\n• Teknik tarama <b>geleceği bilmez</b>; hedefler tutmayabilir.\n• Geçmiş performans gelecek için <b>garanti vermez</b>.\n• Borsada <b>anaparanın tamamını kaybedebilirsin</b>.\n• Bu sonuçlara dayanarak işlem yapmak <b>tehlikelidir</b>. Sorumluluk tamamen sana aittir.\n\n<i>⚠️ Yatırım tavsiyesi değildir.</i>";function FAVKB(e){const t=[];for(let a=0;a<e.length;a+=2)t.push(e.slice(a,a+2).map(a=>({text:"❌ "+a,callback_data:"fav:"+a})));return t.push([{text:"◀️ Menü",callback_data:"menu"}]),{inline_keyboard:t}}
@@ -9246,7 +9277,7 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 ;const t=await b(A.BOT_TOKEN,"getMe",{})
 ;if(!t||!t.ok)return e("⚠️ Bot anahtarı geçersiz","<p>Telegram bu anahtarı tanımıyor"+(t&&t.error_code?" (hata "+t.error_code+")":"")+".</p><p>En sık sebep: değeri yapıştırırken başına/sonuna <b>tırnak</b> veya <b>boşluk</b> karışmış olması. Anahtar şuna benzer görünür: <code>1234567890:AAH...</code> — tırnak yok, boşluk yok.</p><p>BotFather'da <code>/mybots</code> → botun → <i>API Token</i> ile doğrulayıp Settings → Variables kısmına yeniden yapıştır ve <b>Deploy</b> et.</p>")
 ;const a=await b(A.BOT_TOKEN,"setWebhook",{url:`${$.origin}/tg`,allowed_updates:["message","callback_query"],secret_token:await whS(A)})
-;await b(A.BOT_TOKEN,"setChatMenuButton",{menu_button:{type:"web_app",text:"📱 Uygulamayı aç",web_app:{url:$.origin+"/app"}}}).catch(()=>{})
+;await b(A.BOT_TOKEN,"setChatMenuButton",{menu_button:{type:"web_app",text:"📱 Uygulamayı aç",web_app:{url:$.origin+"/app?v="+Date.now()}}}).catch(()=>{})
 ;return a&&a.ok?e("✅ Bağlantı kuruldu","<p>Bot: <b>@"+(t.result.username||"?")+"</b></p><p>Artık Telegram'da bota <b>/start</b> yazabilirsin.</p>"):e("⚠️ Bağlanamadı","<p>"+(a&&a.description||"bilinmeyen hata")+"</p>")
 }const ee={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, GET, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"86400"}
 ;if("OPTIONS"===p.method)return new Response(null,{status:204,headers:ee});if("/push"===$.pathname){const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({
@@ -9558,7 +9589,7 @@ q.waitUntil((async()=>{
      yazacağım" belli değildi (Telegram'dan doğrudan DM atmak sistemin
      dışına çıkıyordu). Artık mesajın altında "sistem üzerinden yanıtla"
      düğmesi var — uygulamayı doğrudan geri bildirim kutusuna açar. */
-  const dugme={inline_keyboard:[[{text:"📩 Sistem üzerinden yanıtla",web_app:{url:$.origin+"/app"}}]]};
+  const dugme={inline_keyboard:[[{text:"📩 Sistem üzerinden yanıtla",web_app:{url:$.origin+"/app?v="+Date.now()}}]]};
   for(const y of yoneticiListesi())await b(A.BOT_TOKEN,"sendMessage",{chat_id:y,text:bildirim,parse_mode:"HTML",reply_markup:dugme}).catch(()=>{});
 })());
 return JS({ok:!0})}
@@ -10515,7 +10546,7 @@ const e=await p.json().catch(()=>null);if(!e)return new Response("ok");await bot
    İstek arka planda gidiyor, yanıtı beklemiyoruz. */
 if(i&&t.chat&&t.chat.id)q.waitUntil(b(A.BOT_TOKEN,"setChatMenuButton",{
   chat_id:t.chat.id,
-  menu_button:{type:"web_app",text:"📱 Uygulamayı aç",web_app:{url:$.origin+"/app"}}
+  menu_button:{type:"web_app",text:"📱 Uygulamayı aç",web_app:{url:$.origin+"/app?v="+Date.now()}}
 }).catch(()=>{}));
 /* ================== 👑 YÖNETİCİ KOMUTLARI ==================
    Panele girmeden, sohbetten süper üyelik verme/alma:
