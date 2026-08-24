@@ -866,7 +866,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-23-j · ⚛ enerji kırılımı + 5 alarm yuvası + pivot/tarama onarımı";
+const WORKER_SURUM="2026-08-24-a · 📐 Fibo Aralığı Ölçüm İstasyonu: SEVİYE BÖLGESİ sınırları canlı taramayla birebir eşitlendi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2281,7 +2281,13 @@ function dbtRaporHTML(o){
 const YK_LV=[-0.786,-0.618,-0.382,-0.236,0.0,0.236,0.382,0.5,0.618,0.786,1.0,1.272,1.618,2.618,3.618,4.236];
 const YK_AD=["D/D-786","D/D-618","D/D-382","D/D-236","DİKKAT AYI","D/D236","D/D382","Hazırlık",
   "BOĞA","ZAYIF D/D","KARAR YERİ","KÜÇÜK DİRENÇ","DİRENÇ","GÜÇLÜ D/D","ÇOK GÜÇLÜ D/D","DOYUM"];
-const YK_BOLGE_AD=["0.0 altı","dip bölgesi","karar/direnç","güçlü D/D üstü"];
+/* 🪜 DÜZELTME (Ağustos 2026): bu dört ad/sınır artık MB_BOLGE (satır ~6457,
+   uygulamadaki "SEVİYE BÖLGESİ" taraması) ile BİREBİR aynı — 0-0.618 /
+   0.618-1 / 1-1.618 / 1.618-2.618. Eskiden burada ayrı (0/0.786/1.618)
+   sınırlar vardı; yani backtest'in ölçtüğü "bölge" ile ekranda gördüğün
+   SEVİYE BÖLGESİ FARKLI şeylerdi. Artık ykBolge() doğrudan mbBolgeBul()'u
+   çağırıyor — tek kaynak, iki yerde de aynı sonuç. */
+const YK_BOLGE_AD=["DİKKAT AYI → BOĞA","BOĞA → KARAR YERİ","KARAR YERİ → DİRENÇ","DİRENÇ → GÜÇLÜ D/D"];
 const YK_DILIM=["1SA","4SA","1G"];      /* 15DK/5DK: yalnız 60 gün veri, dışarıda */
 const YK_PENCERE=4000;                  /* backtest için geniş pencere (canlı tarama 700 kullanır) */
 const YK_ASGARI=40;                     /* bir bölmede en az kaç gözlem */
@@ -2289,7 +2295,11 @@ const YK_KALDIRAC=0.5;                  /* tabanı en az bu kadar geçmeli (yüz
 
 function ykBant(o){if(!isFinite(o))return null;for(let i=0;i<YK_LV.length;i++)if(o<YK_LV[i])return i;return YK_LV.length}
 function ykBantAd(b){return b===null?"?":b===0?"< "+YK_AD[0]:b===YK_LV.length?"> "+YK_AD[15]:YK_AD[b-1]+" → "+YK_AD[b]}
-function ykBolge(o){if(!isFinite(o))return null;return o<0?0:o<0.786?1:o<1.618?2:3}
+/* mbBolgeBul (satır ~6463) MB_BOLGE dizisinde arar ve dörtten birine denk
+   gelmezse (0.0 altı ya da 2.618 üstü) null döner — canlı taramanın
+   davranışıyla birebir. Burada da aynı kural: dışında kalan gözlem hiçbir
+   "Z|" kombinasyonuna girmez (aşağıda ykEslesenler bunu atlar). */
+function ykBolge(o){if(!isFinite(o))return null;const b=mbBolgeBul(o);return b?MB_BOLGE.indexOf(b):null}
 /* Her bar için merdivendeki konum (0.0 çizgisinden kaç birim yukarıda) */
 function ykOranSeri(m){
   const s=m.slice(-YK_PENCERE);
@@ -2321,10 +2331,16 @@ function ykKombinasyonlar(){
 /* Bir gözlemin hangi kombinasyonlara girdiği */
 function ykEslesenler(d){
   const out=[];
-  for(const t of YK_DILIM){out.push("B|"+t+"|"+d[t].bant);out.push("Z|"+t+"|"+d[t].bolge)}
-  for(let i=0;i<YK_DILIM.length;i++)for(let j=i+1;j<YK_DILIM.length;j++)
-    out.push("P|"+YK_DILIM[i]+"|"+d[YK_DILIM[i]].bolge+"|"+YK_DILIM[j]+"|"+d[YK_DILIM[j]].bolge);
-  out.push("U|"+d["1SA"].bolge+"|"+d["4SA"].bolge+"|"+d["1G"].bolge);
+  for(const t of YK_DILIM){
+    out.push("B|"+t+"|"+d[t].bant);
+    if(d[t].bolge!==null)out.push("Z|"+t+"|"+d[t].bolge);   /* dışında ise atla */
+  }
+  for(let i=0;i<YK_DILIM.length;i++)for(let j=i+1;j<YK_DILIM.length;j++){
+    const z1=d[YK_DILIM[i]].bolge,z2=d[YK_DILIM[j]].bolge;
+    if(z1!==null&&z2!==null)out.push("P|"+YK_DILIM[i]+"|"+z1+"|"+YK_DILIM[j]+"|"+z2);
+  }
+  const z1=d["1SA"].bolge,z2=d["4SA"].bolge,z3=d["1G"].bolge;
+  if(z1!==null&&z2!==null&&z3!==null)out.push("U|"+z1+"|"+z2+"|"+z3);
   return out;
 }
 /* Boş sayaç kabı. bolme: 0 genel · 1 zaman-eski · 2 zaman-yeni · 3 hisse-tek · 4 hisse-çift */
