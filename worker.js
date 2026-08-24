@@ -7544,7 +7544,7 @@ function ykIleri3HTML(i3){
   return '<div class="altbilgi" style="margin-top:5px;padding:6px 8px;background:rgba(88,166,255,.08);border-radius:7px">'+
     '📐 <b>3 bar sonrası</b> ('+i3.n3+' gözlem) — azami ortalama <b>'+ykYuz(i3.max3Ort,2)+'%</b> · '+
     'toplam getiri <b>'+ykYuz(i3.toplamGetiri3,1)+'%</b> (ort. '+ykYuz(i3.ortGetiri3,2)+'%)<br>'+
-    '🟢 3\'ü de yeşil: <b>%'+i3.yesil3Oran.toFixed(0)+'</b> · 🔴 3\'ü de kırmızı: <b>%'+i3.kirmizi3Oran.toFixed(0)+'</b><br>'+
+    '🟢 üçü de yeşil: <b>%'+i3.yesil3Oran.toFixed(0)+'</b> · 🔴 üçü de kırmızı: <b>%'+i3.kirmizi3Oran.toFixed(0)+'</b><br>'+
     '🎯 hedefe ulaşma: +1% → <b>%'+i3.hedef1.toFixed(0)+'</b> · +2% → <b>%'+i3.hedef2.toFixed(0)+'</b> · +3% → <b>%'+i3.hedef3.toFixed(0)+'</b></div>';
 }
 function ykSatir(r,taban){
@@ -7678,7 +7678,7 @@ function ykGoster(v){
       try{var ta=document.createElement("textarea");ta.value=metin;ta.style.position="fixed";ta.style.opacity="0";
         document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);
         d2.textContent="✅ kopyalandı"}
-      catch(e2){d2.innerHTML="⚠️ otomatik kopyalanamadı — metni elle seç:<br><textarea readonly style=\"width:100%;min-height:160px;margin-top:6px\">"+metin.replace(/</g,"&lt;")+"</textarea>"}
+      catch(e2){d2.innerHTML="⚠️ otomatik kopyalanamadı — metni elle seç:<br><textarea readonly style='width:100%;min-height:160px;margin-top:6px'>"+metin.replace(/</g,"&lt;")+"</textarea>"}
     }
   };
 }
@@ -7687,15 +7687,15 @@ function ykGoster(v){
    HTML/emoji süsü yok, yalnız sayılar ve etiketler — LLM'in ayrıştırması
    (parse) kolay olsun diye satır satır aynı düzende yazılır. */
 function ykMetinSatir(baslik,p){
-  if(!p||!p.taban)return baslik+": yeterli veri yok\n";
-  var out=baslik+"\n";
-  out+="taban: n="+p.taban.n+" yesil%="+p.taban.yesil.toFixed(1)+" ort_getiri%="+ykYuz(p.taban.ort,3)+"\n";
+  if(!p||!p.taban)return baslik+": yeterli veri yok\\n";
+  var out=baslik+"\\n";
+  out+="taban: n="+p.taban.n+" yesil%="+p.taban.yesil.toFixed(1)+" ort_getiri%="+ykYuz(p.taban.ort,3)+"\\n";
   if(p.taban.ileri3){var t3=p.taban.ileri3;
     out+="taban_3bar: n="+t3.n3+" azami_ort%="+ykYuz(t3.max3Ort,2)+" hep_yesil%="+t3.yesil3Oran.toFixed(1)+
       " hep_kirmizi%="+t3.kirmizi3Oran.toFixed(1)+" toplam_getiri%="+ykYuz(t3.toplamGetiri3,1)+
-      " ort_getiri%="+ykYuz(t3.ortGetiri3,2)+" hedef+1%="+t3.hedef1.toFixed(1)+" hedef+2%="+t3.hedef2.toFixed(1)+" hedef+3%="+t3.hedef3.toFixed(1)+"\n";
+      " ort_getiri%="+ykYuz(t3.ortGetiri3,2)+" hedef+1%="+t3.hedef1.toFixed(1)+" hedef+2%="+t3.hedef2.toFixed(1)+" hedef+3%="+t3.hedef3.toFixed(1)+"\\n";
   }
-  out+="denenen_kurulum="+p.denenen+" dort_sinavi_gecen="+p.gecen+" beklenen_gurultu="+p.beklenenGurultu+"\n";
+  out+="denenen_kurulum="+p.denenen+" dort_sinavi_gecen="+p.gecen+" beklenen_gurultu="+p.beklenenGurultu+"\\n";
   (p.gecenler||[]).forEach(function(r,i){
     out+=(i+1)+") "+r.ad+" | n="+r.n+" yesil%="+r.yesil.toFixed(1)+" kaldirac="+ykYuz(r.kaldirac)+
       " bolmeler=["+r.bolmeler.map(function(v){return ykYuz(v)}).join(",")+"]";
@@ -7704,16 +7704,16 @@ function ykMetinSatir(baslik,p){
         " hep_kirmizi%="+i3.kirmizi3Oran.toFixed(1)+" toplam_getiri%="+ykYuz(i3.toplamGetiri3,1)+
         " ort_getiri%="+ykYuz(i3.ortGetiri3,2)+" hedef+1/+2/+3%="+i3.hedef1.toFixed(0)+"/"+i3.hedef2.toFixed(0)+"/"+i3.hedef3.toFixed(0);
     }
-    out+="\n";
+    out+="\\n";
   });
   return out;
 }
 function ykMetinUret(v){
-  var out="FIBO ARALIĞI ÖLÇÜM İSTASYONU — SONUÇ\n";
-  out+="tarama: "+(v.toplam||0)+" hisse, "+(v.gozlem||0)+" hisse-günü, "+(v.sure||0)+" sn\n\n";
-  out+=ykMetinSatir("[GÜN İÇİ — açılış->kapanış]",v.gun)+"\n";
-  out+=ykMetinSatir("[KAPANIŞ->KAPANIŞ — geceyi de alır]",v.kap)+"\n";
-  out+="not: kaldirac = kurulumun taban yesil oranindan farki (puan). 3bar = sinyal barindan sonraki 3 bar.\n";
+  var out="FIBO ARALIĞI ÖLÇÜM İSTASYONU — SONUÇ\\n";
+  out+="tarama: "+(v.toplam||0)+" hisse, "+(v.gozlem||0)+" hisse-günü, "+(v.sure||0)+" sn\\n\\n";
+  out+=ykMetinSatir("[GÜN İÇİ — açılış->kapanış]",v.gun)+"\\n";
+  out+=ykMetinSatir("[KAPANIŞ->KAPANIŞ — geceyi de alır]",v.kap)+"\\n";
+  out+="not: kaldirac = kurulumun taban yesil oranindan farki (puan). 3bar = sinyal barindan sonraki 3 bar.\\n";
   return out;
 }
 /* ================== 🛡 SİSTEM SEKMESİ (yalnız yönetici) ==================
