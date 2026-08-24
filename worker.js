@@ -866,7 +866,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-24-a · 📐 Fibo Aralığı Ölçüm İstasyonu: SEVİYE BÖLGESİ sınırları canlı taramayla birebir eşitlendi";
+const WORKER_SURUM="2026-08-24-b · 📐 Fibo Ölçüm İstasyonu: SEVİYE BÖLGESİ eşitlendi + Yahoo hız-sınırı toparlama (kademeli+yeniden dene)";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2406,27 +2406,51 @@ function ykSayacBirlestir(A,B){
   for(const a in B.komb){if(!A.komb[a])A.komb[a]={};kat(A.komb[a],B.komb[a])}
   return A;
 }
+/* 🐞 DÜZELTME (Ağustos 2026) — "434 hisse, 0 hisse-günü, 318 çekim hatası":
+   DBT_ES(10) eşzamanlı hisse × 2 farklı Yahoo isteği = her anda ~20 istek
+   birden gidiyordu. Yahoo bu kadar yoğun ardışık isteği kısa sürede
+   engellemeye/geciktirmeye başlıyor (Cloudflare Workers'ın paylaşımlı IP
+   havuzundan geldiği için özellikle savunmasız). Çözüm üç parçalı:
+     1) Bu tarama için DBT_ES yerine daha düşük özel bir eşzamanlılık (YK_ES).
+     2) Her "işçi" aynı anda değil, hafif kademeli (stagger) başlar.
+     3) Bir hisse için HİÇ veri gelmezse (iki dilim de boş) — genelde geçici
+        engel demektir — kısa bir bekleme sonrası TEK SEFER yeniden denenir.
+   Bu üçü Yahoo'ya giden anlık yükü düşürür, geçici engelleri toparlar. */
+const YK_ES=4;
+function ykBekle(ms){return new Promise(r=>setTimeout(r,ms))}
 /* Bir grup hisseyi tarar, sayaç üretir. zamanKesim: bu damgadan öncesi "eski". */
 async function ykKosu(kodlar,zamanKesim,hisseTek){
   const S=ykSayacYeni();
   const semboller=[];
   /* TEŞHİS: gözlem 0 çıkarsa sebebini söyleyebilmek için hangi dilimde
      veri gelmediğini sayıyoruz. Sessiz boş rapor en kötü hatadır. */
-  const teshis={veriYok:{},gozlemsiz:0,hata:0};
+  const teshis={veriYok:{},gozlemsiz:0,hata:0,yenidenDenendi:0,yenidenKurtardi:0};
   let sira=0;
-  const isci=async()=>{
+  const isciCek=async(kod)=>{
+    const ckListe=[],gor={};
+    for(const t of YK_DILIM){
+      const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
+      if(!gor[ck]){gor[ck]=!0;ckListe.push({ck:ck,interval:tf.interval,range:tf.range})}
+    }
+    const onb={};
+    await Promise.all(ckListe.map(async x=>{
+      const r=await yfMumlar(kod,x.interval,x.range);onb[x.ck]=(r&&r.veri)||[];
+    }));
+    return onb;
+  };
+  const isci=async(isciNo)=>{
+    await ykBekle(isciNo*180);          /* kademeli başlangıç — tek anda patlama olmasın */
     while(sira<kodlar.length){
       const kod=kodlar[sira++];
       try{
-        const ckListe=[],gor={};
-        for(const t of YK_DILIM){
-          const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
-          if(!gor[ck]){gor[ck]=!0;ckListe.push({ck:ck,interval:tf.interval,range:tf.range})}
+        let onb=await isciCek(kod);
+        /* hiç veri gelmedi mi? (muhtemelen geçici hız sınırı) → bir kez daha dene */
+        if(Object.keys(onb).every(k=>!onb[k].length)){
+          teshis.yenidenDenendi++;
+          await ykBekle(1500+Math.random()*1000);
+          onb=await isciCek(kod);
+          if(Object.keys(onb).some(k=>onb[k].length))teshis.yenidenKurtardi++;
         }
-        const onb={};
-        await Promise.all(ckListe.map(async x=>{
-          const r=await yfMumlar(kod,x.interval,x.range);onb[x.ck]=(r&&r.veri)||[];
-        }));
         const sr={};
         for(const t of YK_DILIM){
           const tf=MB_TF[mbTfNormal(t)],ck=tf.interval+"|"+tf.range;
@@ -2485,7 +2509,7 @@ async function ykKosu(kodlar,zamanKesim,hisseTek){
       }catch(e){teshis.hata++;semboller.push({kod:kod,hata:String((e&&e.message)||e)})}
     }
   };
-  await Promise.all(Array.from({length:DBT_ES},isci));
+  await Promise.all(Array.from({length:YK_ES},(_,i)=>isci(i)));
   return{sayac:S,semboller:semboller,teshis:teshis};
 }
 /* Sayaçlardan rapor. alan: "g" gün içi · "k" kapanış→kapanış */
@@ -7529,6 +7553,8 @@ function ykTur(){
       if(r&&r.teshis){
         for(var k in (r.teshis.veriYok||{}))ykTeshis.veriYok[k]=(ykTeshis.veriYok[k]||0)+r.teshis.veriYok[k];
         ykTeshis.gozlemsiz+=r.teshis.gozlemsiz||0;ykTeshis.hata+=r.teshis.hata||0;
+        ykTeshis.yenidenDenendi=(ykTeshis.yenidenDenendi||0)+(r.teshis.yenidenDenendi||0);
+        ykTeshis.yenidenKurtardi=(ykTeshis.yenidenKurtardi||0)+(r.teshis.yenidenKurtardi||0);
       }
       if(r&&r.hatali&&r.hatali.length)ykHatali=ykHatali.concat(r.hatali);
       ykIdx+=parca.length;
@@ -7549,6 +7575,7 @@ function ykTeshisHTML(v){
   if(t.veriYok)for(var k in t.veriYok)if(t.veriYok[k])p.push(E(k)+" verisi gelmedi: <b>"+t.veriYok[k]+"</b> hisse");
   if(t.gozlemsiz)p.push("hiç gün üretmeyen hisse: <b>"+t.gozlemsiz+"</b>");
   if(t.hata)p.push("çekim hatası: <b>"+t.hata+"</b>");
+  if(t.yenidenDenendi)p.push("yeniden denendi: <b>"+t.yenidenDenendi+"</b>"+(t.yenidenKurtardi?" (kurtarılan: <b>"+t.yenidenKurtardi+"</b>)":""));
   if(!p.length)return"";
   return '<div class="altbilgi" style="margin-top:8px;padding:7px 9px;background:rgba(248,81,73,.10);'+
     'border-radius:8px;white-space:normal">📋 '+p.join(" · ")+'</div>';
@@ -9586,9 +9613,11 @@ if("/api/yesil"===$.pathname){
     job.sayac=ykSayacBirlestir(job.sayac,sayac);
     job.semboller=job.semboller.concat(semboller).slice(-600);
     /* teşhisi biriktir — sonunda "neden boş" sorusunu cevaplayabilelim */
-    if(!job.teshis)job.teshis={veriYok:{},gozlemsiz:0,hata:0};
+    if(!job.teshis)job.teshis={veriYok:{},gozlemsiz:0,hata:0,yenidenDenendi:0,yenidenKurtardi:0};
     for(const k in teshis.veriYok)job.teshis.veriYok[k]=(job.teshis.veriYok[k]||0)+teshis.veriYok[k];
     job.teshis.gozlemsiz+=teshis.gozlemsiz;job.teshis.hata+=teshis.hata;
+    job.teshis.yenidenDenendi=(job.teshis.yenidenDenendi||0)+(teshis.yenidenDenendi||0);
+    job.teshis.yenidenKurtardi=(job.teshis.yenidenKurtardi||0)+(teshis.yenidenKurtardi||0);
     job.tamam+=grup.length;job.guncelleme=Date.now();
     if(!job.kuyruk.length)job.tamamlandi=!0;
     await ykIsYaz(A,job);
