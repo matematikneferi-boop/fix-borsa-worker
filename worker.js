@@ -829,6 +829,72 @@ async function alarmKuyrukBosalt(e){
   if(!kuyruk.isler.length)await e.VERI.delete("alarmKuyruk").catch(()=>{});
   else await e.VERI.put("alarmKuyruk",JSON.stringify(kuyruk),{expirationTtl:ALARM_KUYRUK_TTL});
 }
+
+/* ---------- 📢 YAYIN (toplu duyuru) TEKRAR-DENEME KUYRUĞU ----------
+   🐞 DÜZELTİLEN HATA: bir yayın turu bitince "başarısız" sayılan alıcılar
+   sonsuza dek kayboluyordu — 403 (bot engellenmiş) veya 400 (geçersiz
+   sohbet) gibi KALICI hatalar dışında (ör. 429 tükendi, 5xx, ağ hatası)
+   bunlar aslında tekrar denenince gidebilirdi. Artık kalıcı olmayan
+   başarısızlar bu kuyruğa düşüyor ve alarmKuyruk ile AYNI ritimde
+   (her /push turunda bir parça) arka planda tek tuşa gerek kalmadan
+   tekrar tekrar denenıyor. */
+const YAYIN_KUYRUK_TTL=21600;        /* 6 saat — makul bir süre sonra vazgeçilir */
+const YAYIN_KUYRUK_PARCA=15;         /* her /push turunda tekrar denenecek alıcı sayısı */
+const YAYIN_KUYRUK_AZAMI_DENEME=6;   /* aynı alıcıya en fazla bu kadar tur tekrar denenir */
+
+async function yayinKuyrugaKoy(e,is){
+  if(!e.VERI||!Array.isArray(is.alicilar)||!is.alicilar.length)return;
+  let kuyruk={isler:[]};
+  try{const h=await e.VERI.get("yayinKuyruk");if(h)kuyruk=JSON.parse(h)||{isler:[]}}catch(_){}
+  if(!Array.isArray(kuyruk.isler))kuyruk.isler=[];
+  kuyruk.isler.push({metin:is.metin||"",fileId:is.fileId||"",tur:is.tur||"",
+    alicilar:is.alicilar,ix:0,deneme:0,ts:Date.now()});
+  /* Kuyrukta çok iş birikmesin — eski duyurular zaten bayatlamıştır. */
+  if(kuyruk.isler.length>3)kuyruk.isler=kuyruk.isler.slice(-3);
+  await e.VERI.put("yayinKuyruk",JSON.stringify(kuyruk),{expirationTtl:YAYIN_KUYRUK_TTL});
+}
+
+async function yayinKuyrukBosalt(e){
+  if(!e.VERI||!e.BOT_TOKEN)return;
+  let kuyruk=null;
+  try{const h=await e.VERI.get("yayinKuyruk");if(!h)return;kuyruk=JSON.parse(h)}catch(_){return}
+  if(!kuyruk||!Array.isArray(kuyruk.isler)||!kuyruk.isler.length)return;
+  const is=kuyruk.isler[0];
+  if(!is||!Array.isArray(is.alicilar)||!is.alicilar.length){
+    kuyruk.isler.shift();
+    if(!kuyruk.isler.length)await e.VERI.delete("yayinKuyruk").catch(()=>{});
+    else await e.VERI.put("yayinKuyruk",JSON.stringify(kuyruk),{expirationTtl:YAYIN_KUYRUK_TTL});
+    return;
+  }
+  const bas=Number(is.ix)||0,son=Math.min(is.alicilar.length,bas+YAYIN_KUYRUK_PARCA);
+  const yeniTekrar=[],yeniBotEngelli=[];
+  let i=bas;
+  for(;i<son;i++){
+    const hid=is.alicilar[i];
+    let rr;
+    try{
+      if(is.fileId&&"video"===is.tur)rr=await b(e.BOT_TOKEN,"sendVideo",{chat_id:hid,video:is.fileId,caption:String(is.metin||"").slice(0,1024),parse_mode:"HTML"});
+      else if(is.fileId)rr=await b(e.BOT_TOKEN,"sendPhoto",{chat_id:hid,photo:is.fileId,caption:String(is.metin||"").slice(0,1024),parse_mode:"HTML"});
+      else rr=await b(e.BOT_TOKEN,"sendMessage",{chat_id:hid,text:is.metin,parse_mode:"HTML",disable_web_page_preview:!0});
+    }catch(_){rr=null}
+    if(!rr||!rr.ok){
+      const kod=(rr&&rr.error_code)||0;
+      if(403===kod)yeniBotEngelli.push(hid);
+      else if(400!==kod)yeniTekrar.push(hid);   /* kalıcı hatalar bir daha denenmez */
+    }
+  }
+  if(yeniBotEngelli.length)await botEngelliEkle(e,yeniBotEngelli).catch(()=>{});
+  is.ix=i;
+  is.deneme=(Number(is.deneme)||0)+1;
+  if(is.ix>=is.alicilar.length){
+    /* Bu partinin bir turu bitti — hâlâ başarısız olan var ve deneme hakkı
+       kaldıysa, onları başa alıp bir tur daha dene; yoksa işi bırak. */
+    if(yeniTekrar.length&&is.deneme<YAYIN_KUYRUK_AZAMI_DENEME){is.alicilar=yeniTekrar;is.ix=0}
+    else kuyruk.isler.shift();
+  }
+  if(!kuyruk.isler.length)await e.VERI.delete("yayinKuyruk").catch(()=>{});
+  else await e.VERI.put("yayinKuyruk",JSON.stringify(kuyruk),{expirationTtl:YAYIN_KUYRUK_TTL});
+}
 /* ================== 🚨 ALARM — GÜNLÜK HAFIZA ==================
    ESKİ MANTIK YALNIZCA BİR ÖNCEKİ TARAMAYA BAKIYORDU. Aralık 5 dakikayken
    iş görüyordu; SÜREKLİ MODDA (10 sn) iki tarama arasında liste neredeyse
@@ -866,7 +932,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-24-c · 📐 Fibo Ölçüm İstasyonu: alt-istek sınırına karşı küçük parti (10) + gerçek hata teşhisi (🩺 Hatalar + ekranda örnek hata)";
+const WORKER_SURUM="2026-08-24-e · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -3571,7 +3637,22 @@ if(y){o=y,oTS=Date.now()}
 return o}const h={kisitMin:7,
 kisitMax:18};let w=null,O=0;async function S(e,t){if(!t&&w&&Date.now()-O<6e4)return w;let a={...h};if(e.VERI){const t=await e.VERI.get("ayar");t&&(a={...a,...JSON.parse(t)})}return w=a,O=Date.now(),a}
 let T=null,x=0;async function E(e,t){if(!t&&T&&Date.now()-x<6e4)return T;if(!e.VERI)return T=[],x=Date.now(),T;const a=await e.VERI.get("vip");return T=a?JSON.parse(a):[],x=Date.now(),T}let v=null,R=0
-;async function N(e,t){if(!t&&v&&Date.now()-R<6e4)return v;if(!e.VERI)return v=[],R=Date.now(),v;const a=await e.VERI.get("engel");return v=a?JSON.parse(a):[],R=Date.now(),v}async function B(e,t){
+;async function N(e,t){if(!t&&v&&Date.now()-R<6e4)return v;if(!e.VERI)return v=[],R=Date.now(),v;const a=await e.VERI.get("engel");return v=a?JSON.parse(a):[],R=Date.now(),v}
+/* 🚫 BOTU ENGELLEYENLER — panelden elle "engel"lenenlerden FARKLI: bunlar
+   kullanıcının kendisinin Telegram'da botu engellemesi/hesabını silmesi
+   (403 Forbidden) sonucu otomatik tespit edilir. Toplu mesaj sırasında
+   403 alınan her ID buraya işlenir, böylece panelde "botu engellemiş /
+   ulaşılamayan" diye ayrı bir segment olarak görülüp gerçek net üye
+   sayısı hesaplanabilir. */
+let _beBellek=null,_beTS=0;
+async function botEngelliOku(e,zorla){if(!zorla&&_beBellek&&Date.now()-_beTS<6e4)return _beBellek;if(!e.VERI)return _beBellek=[],_beTS=Date.now(),_beBellek;let l=[];try{const h=await e.VERI.get("botEngelli");if(h)l=JSON.parse(h)||[]}catch(_){}return _beBellek=l,_beTS=Date.now(),_beBellek}
+async function botEngelliEkle(e,yeniListe){
+  if(!e.VERI||!Array.isArray(yeniListe)||!yeniListe.length)return;
+  const liste=await botEngelliOku(e,!0);const set=new Set(liste.map(String));let degisti=!1;
+  for(const id of yeniListe){const s=String(id);if(!set.has(s)){set.add(s);degisti=!0}}
+  if(degisti){const y=[...set];await e.VERI.put("botEngelli",JSON.stringify(y)).catch(()=>{});_beBellek=y;_beTS=Date.now()}
+}
+async function B(e,t){
 return!d(t)&&(await N(e)).includes(String(t))}function M(e){return new Request("https://kisit.local/u/"+e)}function M60(e){return new Request("https://kisit60.local/u/"+e)}async function D(e){try{return await caches.default.delete(M(e)),!0}catch(e){return!1}}
 /* TR gününe göre "bugün mü" — bot mesajlarındaki 🆕 işareti için. */
 const BUGUN_MU=e=>{if(!e||!e.sinyalTs)return!1;const g=v=>Math.floor((Number(v)+10800)/86400);return g(e.sinyalTs)===g(Date.now()/1e3)};
@@ -8250,7 +8331,8 @@ function panelCiz(){
     };
     el("pyTest").onclick=function(){tit();calis("yayin",{metin:el("pyMetin").value,hedef:"test",
       fileId:medya&&medya.fileId,tur:medya&&medya.tur},"pyDurum","pyTest")};
-    function yayinTur(imlec,toplam){
+    function yayinTur(imlec,toplam,toplamKuyruk){
+      toplamKuyruk=toplamKuyruk||0;
       post("/api/yon",{is:"yayin",metin:el("pyMetin").value,hedef:"hepsi",imlec:imlec,
         fileId:medya&&medya.fileId,tur:medya&&medya.tur}).then(function(r){
         /* 🐞 DÜZELTİLEN HATA: hata anında sunucu {hata,sebep} döndürüyor ama
@@ -8258,9 +8340,9 @@ function panelCiz(){
            salt "hata" yazılıyor — asıl sebep (ör. KV limiti, engelli liste
            okunamadı) hiç görünmüyordu. Artık gerçek sebep gösteriliyor. */
         if(!r||!r.ok){el("pyDurum").textContent=(r&&(r.mesaj||r.hata))?("⚠️ "+(r.mesaj||r.hata)+(r&&r.sebep?" — "+r.sebep:"")):"⚠️ hata — sunucudan yanıt alınamadı";el("pyHepsi").disabled=false;return}
-        toplam+=r.gonderilen||0;
-        el("pyDurum").textContent=(r.bitti?"✅ bitti · ":"gönderiliyor… ")+toplam+" kişiye gitti"+(r.basarisiz?" · başarısız: "+r.basarisiz:"");
-        if(!r.bitti&&r.imlec)setTimeout(function(){yayinTur(r.imlec,toplam)},350);
+        toplam+=r.gonderilen||0;toplamKuyruk+=r.kuyruklandi||0;
+        el("pyDurum").textContent=(r.bitti?"✅ bitti · ":"gönderiliyor… ")+toplam+" kişiye gitti"+(r.basarisiz?" · başarısız: "+r.basarisiz:"")+(toplamKuyruk?" · "+toplamKuyruk+" kişiye arka planda tekrar denenecek":"");
+        if(!r.bitti&&r.imlec)setTimeout(function(){yayinTur(r.imlec,toplam,toplamKuyruk)},350);
         else el("pyHepsi").disabled=false;
       }).catch(function(e){el("pyDurum").textContent="⚠️ bağlantı hatası"+(e&&e.message?" — "+e.message:"");el("pyHepsi").disabled=false});
     }
@@ -8269,7 +8351,7 @@ function panelCiz(){
       var g=function(){
         if(medya&&el("pyMetin").value.length>1024){el("pyDurum").textContent=
           "⚠️ medya varken yazı en fazla 1024 karakter olabilir";return}
-        el("pyHepsi").disabled=true;el("pyDurum").textContent="başlıyor…";yayinTur("",0)};
+        el("pyHepsi").disabled=true;el("pyDurum").textContent="başlıyor…";yayinTur("",0,0)};
       try{TG.showConfirm("Duyuru TÜM üyelere gönderilsin mi?",function(o){if(o)g()})}
       catch(e){if(confirm("Tüm üyelere gönderilsin mi?"))g()}
     };
@@ -8396,7 +8478,7 @@ async function hmacSHA256(e,t){const a=await crypto.subtle.importKey("raw",e,{na
    her /tg isteğinde Telegram'ın gönderdiği başlıkla karşılaştırıyoruz. */
 let WHS=null;async function whS(e){if(WHS)return WHS;if(!e.BOT_TOKEN)return null;const t=new TextEncoder(),a=await hmacSHA256(t.encode("fixborsa-tg-webhook"),t.encode(e.BOT_TOKEN));return WHS=bytesToHex(a).slice(0,32)}
 async function dogrulaInitData(e,t){const a=new URLSearchParams(e),n=a.get("hash");if(!n)return null;a.delete("hash");const i=[];for(const[e,t]of a.entries())i.push(e+"="+t);i.sort();const r=i.join("\n"),s=new TextEncoder(),l=await hmacSHA256(s.encode("WebAppData"),s.encode(t)),o=await hmacSHA256(l,s.encode(r));if(bytesToHex(o)!==n)return null;const c=a.get("user");if(!c)return null;try{const e=JSON.parse(c);return e&&e.id?String(e.id):null}catch(e){return null}}function W(){return(new Date).toISOString().slice(0,10)}let _={};async function Y(e){if(!e.VERI)return{};const t=await e.VERI.get("kullanim");return t?JSON.parse(t):{}}
-const J=["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"].join("")
+const J=["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"].join("")
 ;let G=null;async function X(e,t){if(!e.VERI)return[];const a=await e.VERI.get("fav:"+t);return a?JSON.parse(a):[]}
 /* PORTFÖY: fav (⭐ takip) listesinden bilerek AYRI bir KV anahtarı.
    fav yalnız "izle", portfoy ise "lot + maliyet" tutar — birini bozmadan
@@ -8874,6 +8956,10 @@ q.waitUntil(kilitli(A,"alarm",60,()=>alarmGonder(A,eskiListe,t)).catch(()=>{})),
 /* Yeni alarm olmasa bile bekleyen kuyruk her turda bir parca ilerler:
    yarim kalmis bir dagitim bir sonraki taramada tamamlanir. */
 q.waitUntil(kilitli(A,"alarmKuyruk",50,()=>alarmKuyrukBosalt(A)).catch(()=>{})),
+/* 📢 Toplu duyuru tekrar-deneme kuyruğu: her turda bir parça ilerler,
+   yarım kalan/kalıcı olmayan başarısız gönderimler tek tuşa gerek
+   kalmadan arka planda tekrar denenir. */
+q.waitUntil(kilitli(A,"yayinKuyruk",50,()=>yayinKuyrukBosalt(A)).catch(()=>{})),
 /* Absorpsiyon havuzu her turda bir dilim ilerler; birkac dakikada
    tum evren taranmis ve surekli tazelenir olur. */
 q.waitUntil(kilitli(A,"absDilim",50,()=>absDilimTara(A,[])).catch(()=>{})),
@@ -9030,19 +9116,30 @@ let e=[...await E(A,!0)];if(t.ekle){const a=String(t.ekle).replace(/\D/g,"");a&&
 return e.VERI&&await e.VERI.put("vip",JSON.stringify(t)),T=t,x=Date.now(),t}(A,e),t.ekle&&q.waitUntil(D(String(t.ekle).replace(/\D/g,""))),new Response(JSON.stringify({vip:e}),{headers:{
 "content-type":"application/json; charset=utf-8"}})}if("/panel/engel"===$.pathname){let e=[...await N(A,!0)];if(t.ekle){const a=String(t.ekle).replace(/\D/g,"");a&&!e.includes(a)&&e.push(a)}
 return t.sil&&(e=e.filter(e=>e!==String(t.sil))),await async function(e,t){return e.VERI&&await e.VERI.put("engel",JSON.stringify(t)),v=t,R=Date.now(),t}(A,e),new Response(JSON.stringify({engel:e}),{
-headers:{"content-type":"application/json; charset=utf-8"}})}if("/panel/ayar"===$.pathname){const e="POST"===p.method?await async function(e,t){const a={...h,...await S(e,!0),...t}
+headers:{"content-type":"application/json; charset=utf-8"}})}if("/panel/botengel"===$.pathname){
+/* Otomatik tespit edilen "botu engellemiş" listesi — elle EKLENMEZ, sadece
+   yanlış tespit varsa ya da kullanıcı botu tekrar açtıysa listeden
+   çıkarılabilir (böylece bir sonraki yayında tekrar denenir). */
+let e=await botEngelliOku(A,!0);if(t.sil){const a=String(t.sil);e=e.filter(e=>String(e)!==a);await A.VERI.put("botEngelli",JSON.stringify(e)).catch(()=>{});_beBellek=e;_beTS=Date.now()}
+return new Response(JSON.stringify({botEngelli:e}),{headers:{"content-type":"application/json; charset=utf-8"}})}if("/panel/ayar"===$.pathname){const e="POST"===p.method?await async function(e,t){const a={...h,...await S(e,!0),...t}
 ;return a.kisitMin=Math.max(0,Math.min(600,Number(a.kisitMin)||0)),a.kisitMax=Math.max(a.kisitMin,Math.min(600,Number(a.kisitMax)||0)),e.VERI&&await e.VERI.put("ayar",JSON.stringify(a)),w=a,
 O=Date.now(),a}(A,t):await S(A,!0);return new Response(JSON.stringify({ayar:e}),{headers:{"content-type":"application/json; charset=utf-8"}})}if("/panel/kota"===$.pathname){
 const e=await D(String(t.id||"").replace(/\D/g,""));return new Response(JSON.stringify({ok:e}),{headers:{"content-type":"application/json; charset=utf-8"}})}if("/panel/yayin"===$.pathname){
 const a=String(t.metin||"").trim();if(!a)return new Response(JSON.stringify({hata:"mesaj boş"}),{status:400,headers:{"content-type":"application/json"}});const n=t.hedef||"hepsi",i=60
 ;let r=[],s=null,l=!0;if("test"===n)r=[...e];else if("tek"===n)r=[String(t.id||"").replace(/\D/g,"")].filter(Boolean);else if("vip"===n){const e=await E(A,!0),a=Number(t.imlec||0);r=e.slice(a,a+i),
 l=a+i>=e.length,s=l?null:String(a+i)}else if(A.VERI){const e=await A.VERI.list({prefix:"u:",limit:i,cursor:t.imlec||void 0});r=e.keys.map(e=>e.name.slice(2)),l=!!e.list_complete||!e.cursor,
-s=l?null:e.cursor}const o=new Set(await N(A,!0));let c=0,d=0;for(const e of r){if(o.has(String(e)))continue;const t=await b(A.BOT_TOKEN,"sendMessage",{chat_id:e,text:a,parse_mode:"HTML",
-disable_web_page_preview:!0});t&&t.ok?c++:d++}return A.VERI&&l&&q.waitUntil(A.VERI.put("sonYayin",JSON.stringify({tarih:(new Date).toISOString(),metin:a.slice(0,300),hedef:n}))),
-new Response(JSON.stringify({gonderilen:c,basarisiz:d,imlec:s,bitti:l}),{headers:{"content-type":"application/json; charset=utf-8"}})}if("/panel/csv"===$.pathname){
-const e=await a(5e3),t=await Y(A),n=await F(A),py=await PK(A),i=new Set(await E(A,!0)),r=e=>e.map(e=>'"'+String(null==e?"":e).replace(/"/g,'""')+'"').join(",")
-;let s=r(["id","ad","kullanici","katilim","davetci","davet_ettigi","paylas_tusu","sorgu","son_aktif","sinirsiz"])+"\n";for(const a of e){const e=t[String(a.id)]||{}
-;s+=r([a.id,a.ad,a.kullanici,a.katilim,a.ref,n[String(a.id)]||0,py[String(a.id)]||0,e.toplam||0,e.son?new Date(1e3*e.son).toISOString():"",i.has(String(a.id))?"evet":""])+"\n"}return new Response("\ufeff"+s,{headers:{
+s=l?null:e.cursor}const o=new Set(await N(A,!0));let c=0,d=0;const pyTekrar=[],pyBotEngelli=[];
+for(const e2 of r){if(o.has(String(e2)))continue;
+  let rr;try{rr=await b(A.BOT_TOKEN,"sendMessage",{chat_id:e2,text:a,parse_mode:"HTML",disable_web_page_preview:!0})}catch(_){rr=null}
+  if(rr&&rr.ok)c++;else{d++;const kod=(rr&&rr.error_code)||0;if(403===kod)pyBotEngelli.push(e2);else if(400!==kod)pyTekrar.push(e2)}
+}
+if(A.VERI&&pyTekrar.length&&"hepsi"===n)q.waitUntil(yayinKuyrugaKoy(A,{metin:a,fileId:"",tur:"",alicilar:pyTekrar}).catch(()=>{}));
+if(A.VERI&&pyBotEngelli.length)q.waitUntil(botEngelliEkle(A,pyBotEngelli).catch(()=>{}));
+return A.VERI&&l&&q.waitUntil(A.VERI.put("sonYayin",JSON.stringify({tarih:(new Date).toISOString(),metin:a.slice(0,300),hedef:n}))),
+new Response(JSON.stringify({gonderilen:c,basarisiz:d,kuyruklandi:pyTekrar.length,imlec:s,bitti:l}),{headers:{"content-type":"application/json; charset=utf-8"}})}if("/panel/csv"===$.pathname){
+const e=await a(5e3),t=await Y(A),n=await F(A),py=await PK(A),i=new Set(await E(A,!0)),eng2=new Set(await N(A,!0)),be2=new Set(await botEngelliOku(A)),r=e=>e.map(e=>'"'+String(null==e?"":e).replace(/"/g,'""')+'"').join(",")
+;let s=r(["id","ad","kullanici","katilim","davetci","davet_ettigi","paylas_tusu","sorgu","son_aktif","sinirsiz","panelden_engelli","botu_engellemis"])+"\n";for(const a of e){const e=t[String(a.id)]||{}
+;s+=r([a.id,a.ad,a.kullanici,a.katilim,a.ref,n[String(a.id)]||0,py[String(a.id)]||0,e.toplam||0,e.son?new Date(1e3*e.son).toISOString():"",i.has(String(a.id))?"evet":"",eng2.has(String(a.id))?"evet":"",be2.has(String(a.id))?"evet":""])+"\n"}return new Response("\ufeff"+s,{headers:{
 "content-type":"text/csv; charset=utf-8","content-disposition":'attachment; filename="fixborsa-uyeler.csv"'}})}if("/panel/iz"===$.pathname){
 const lz=await a(2e3);
 const isim=e=>{const t=lz.find(t=>String(t.id)===String(e));return t&&(t.ad||(t.kullanici?"@"+t.kullanici:""))||("id:"+e)};
@@ -9053,13 +9150,19 @@ const kullanicilar=ham.slice(0,200).map(u=>({id:u.id,ad:isim(u.id),toplamSn:u.to
 }));
 return new Response(JSON.stringify({kullanicilar,sekmeToplam,taranan:ham.length}),{headers:{"content-type":"application/json; charset=utf-8"}})}
 if("/panel/veri"===$.pathname){
-const e=await L(A),t=await F(A),n=await Y(A),i=await E(A,!0),r=await N(A,!0),s=await S(A,!0),py=await PK(A),gb=await gbOku(A);let l=await a(1e3);const o=e=>{const t=l.find(t=>String(t.id)===String(e))
+const e=await L(A),t=await F(A),n=await Y(A),i=await E(A,!0),r=await N(A,!0),s=await S(A,!0),py=await PK(A),gb=await gbOku(A),be=await botEngelliOku(A);let l=await a(1e3);const o=e=>{const t=l.find(t=>String(t.id)===String(e))
 ;return t&&(t.ad||(t.kullanici?"@"+t.kullanici:""))||""};for(const e of l){const t=n[String(e.id)]||{};e.sorgu=t.toplam||0,e.sonAktif=t.son||null,e.paylas=py[String(e.id)]||0}
 l.sort((e,t)=>(t.katilim||"").localeCompare(e.katilim||""));const c=Object.entries(t).map(([e,t])=>({id:e,n:t,ad:o(e),paylas:py[String(e)]||0})).sort((e,t)=>t.n-e.n).slice(0,50),d=Object.entries(n).map(([e,t])=>({id:e,
 ad:o(e),toplam:t.toplam||0,potansiyel:t.potansiyel||0,fibo:t.fibo||0,detay:t.detay||0,son:t.son||null
 })).sort((e,t)=>t.toplam-e.toplam).slice(0,50),u=Math.floor(Date.now()/1e3),f=Object.values(n).filter(e=>e.son&&u-e.son<86400).length,b=Object.values(n).filter(e=>e.son&&u-e.son<604800).length,p=await g(A)
+/* 📊 SEGMENTASYON — "kayıtlı" ile "gerçekte ulaşılabilir/aktif" farklı
+   şeyler: engel (admin kapatmış) ve botEngelli (kullanıcı botu engellemiş/
+   silinmiş hesap) çıkarılınca gerçek net alıcı kitlesi ortaya çıkar; sorgu
+   sayısı 0 olanlar da kayıtlı ama hiç kullanmamış demektir. l en fazla
+   1000 kayıt üzerinden taranır (taraliUye alanına bakılabilir). */
+;const hk=l.filter(e=>!e.sorgu).length,net=(e.toplam||0)-r.length-be.length
 ;let y=null;if(A.VERI){const e=await A.VERI.get("sonYayin");e&&(y=JSON.parse(e))}return new Response(JSON.stringify({toplam:e.toplam||0,gun:e.gun||{},basis:e.basis||{},kullanicilar:l.slice(0,400),
-referans:c,sorguLider:d,vip:i,engel:r,ayar:s,aktif24:f,aktif7g:b,sonYayin:y,listeGuncelleme:p?p.guncelleme:null,listeOzet:p&&p.kartlar?Object.keys(p.kartlar).filter(e=>"sira"!==e).map(e=>({ad:e,
+referans:c,sorguLider:d,vip:i,engel:r,botEngelli:be,hicKullanmayan:hk,netUlasilabilir:net,taraliUye:l.length,ayar:s,aktif24:f,aktif7g:b,sonYayin:y,listeGuncelleme:p?p.guncelleme:null,listeOzet:p&&p.kartlar?Object.keys(p.kartlar).filter(e=>"sira"!==e).map(e=>({ad:e,
 n:p.kartlar[e].length})):[],depo:!!A.VERI,agac:l.map(e=>({id:e.id,ad:e.ad,kullanici:e.kullanici,ref:e.ref,paylas:e.paylas})),paylasToplam:Object.values(py).reduce((a,b)=>a+(Number(b)||0),0),geribildirim:gb.slice(0,100)}),{headers:{"content-type":"application/json; charset=utf-8"}})}return new Response(await async function(){if(G)return G
 ;const e=Uint8Array.from(atob(J),e=>e.charCodeAt(0)),t=new Blob([e]).stream().pipeThrough(new DecompressionStream("gzip"));return G=await new Response(t).text(),G}(),{headers:{
 "content-type":"text/html; charset=utf-8"}})};if("/paylas"===$.pathname){const ref=($.searchParams.get("r")||"").replace(/\D/g,""),uname=await botAd(A).catch(()=>null)||"bot",link="https://t.me/share/url?url="+encodeURIComponent("https://t.me/"+uname+"?start=r"+ref)+"&text="+encodeURIComponent(DAVET_METIN);return new Response('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://telegram.org/js/telegram-web-app.js" async></script></head><body style="margin:0;background:#0d1117;color:#e6edf3;font:15px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div>Yönlendiriliyor…</div><script>(function(){var link='+JSON.stringify(link)+';var done=false;function git(){if(done)return;done=true;var tg=window.Telegram&&window.Telegram.WebApp;try{if(tg&&tg.initData){try{fetch("/paylas/log",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({initData:tg.initData})}).catch(function(){})}catch(e){}}if(tg&&tg.openTelegramLink){try{tg.ready&&tg.ready()}catch(e){}tg.openTelegramLink(link);try{tg.close()}catch(e){}}else{location.href=link}}catch(e){location.href=link}}setTimeout(git,1200);var iv=setInterval(function(){if(window.Telegram&&window.Telegram.WebApp){clearInterval(iv);git()}},50)})()</script></body></html>',{headers:{"content-type":"text/html; charset=utf-8"}})}
@@ -10028,6 +10131,10 @@ try{
 }
 const eng=new Set(await N(A,!0).catch(()=>[]));let gonderilen=0,basarisiz=0;
 const fid=String(gov.fileId||""),tur=String(gov.tur||"");
+/* 📢 kalıcı olmayan başarısızlar (429 tükendi / 5xx / ağ hatası) burada
+   biriktirilip turun sonunda yayinKuyruk'a atılır — bkz. aşağıdaki not.
+   403 (bot engellenmiş) alanlar ise ayrıca botEngelli listesine işlenir. */
+const tekrarListesi=[],yeniBotEngelli=[];
 for(const hid of liste){
   if(eng.has(String(hid)))continue;
   /* 🐞 DÜZELTİLEN HATA: tek bir alıcıda çıkan beklenmeyen bir hata (ör. ağ
@@ -10040,12 +10147,23 @@ for(const hid of liste){
     if(fid&&"video"===tur)rr=await b(A.BOT_TOKEN,"sendVideo",{chat_id:hid,video:fid,caption:metin.slice(0,1024),parse_mode:"HTML"});
     else if(fid)rr=await b(A.BOT_TOKEN,"sendPhoto",{chat_id:hid,photo:fid,caption:metin.slice(0,1024),parse_mode:"HTML"});
     else rr=await b(A.BOT_TOKEN,"sendMessage",{chat_id:hid,text:metin,parse_mode:"HTML",disable_web_page_preview:!0});
-    rr&&rr.ok?gonderilen++:basarisiz++;
-  }catch(err){basarisiz++}
+    if(rr&&rr.ok)gonderilen++;
+    else{
+      basarisiz++;
+      /* 403 = kullanıcı botu engellemiş, 400 = geçersiz sohbet vb. — bunlar
+         KALICI, tekrar denemek anlamsız. Geri kalan her şey (429 tükendi,
+         5xx, rr=null → ağ hatası) tekrar denenebilir, kuyruğa aday. */
+      const kod=(rr&&rr.error_code)||0;
+      if(403===kod)yeniBotEngelli.push(hid);
+      else if(400!==kod)tekrarListesi.push(hid);
+    }
+  }catch(err){basarisiz++;tekrarListesi.push(hid)}
 }
+if(A.VERI&&tekrarListesi.length&&"hepsi"===hedef)q.waitUntil(yayinKuyrugaKoy(A,{metin:metin,fileId:fid,tur:tur,alicilar:tekrarListesi}).catch(()=>{}));
+if(A.VERI&&yeniBotEngelli.length)q.waitUntil(botEngelliEkle(A,yeniBotEngelli).catch(()=>{}));
 if(A.VERI&&bitti&&"test"!==hedef&&"tek"!==hedef)q.waitUntil(A.VERI.put("sonYayin",JSON.stringify({tarih:(new Date).toISOString(),metin:metin.slice(0,300),hedef:hedef})).catch(()=>{}));
-return JS({ok:!0,gonderilen:gonderilen,basarisiz:basarisiz,imlec:imlec,bitti:bitti,
-mesaj:"test"===hedef?"🧪 Test gönderildi ("+gonderilen+")":"tek"===hedef?"✅ gönderildi":"gönderildi: "+gonderilen+(basarisiz?" · başarısız: "+basarisiz:"")})}
+return JS({ok:!0,gonderilen:gonderilen,basarisiz:basarisiz,kuyruklandi:tekrarListesi.length,botuEngelledi:yeniBotEngelli.length,imlec:imlec,bitti:bitti,
+mesaj:"test"===hedef?"🧪 Test gönderildi ("+gonderilen+")":"tek"===hedef?"✅ gönderildi":"gönderildi: "+gonderilen+(basarisiz?" · başarısız: "+basarisiz:"")+(tekrarListesi.length?" (arka planda tekrar denenecek: "+tekrarListesi.length+")":"")})}
 return JS({ok:!1,hata:"bilinmeyen is"},400)}
 return JS({ok:!1,hata:"bilinmeyen yol"},404)}
 if("/durum"===$.pathname){const e=(A.VERI?"DEPO BAĞLI ✅":"DEPO YOK ⚠️ (kullanıcılar liste göremeyebilir)")+"\nformasyon tetikleyici: "+(A.GH_TOKEN?"HAZIR ✅":"GH_TOKEN TANIMLI DEĞİL ⚠️"),t=await g(A)
