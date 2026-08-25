@@ -11666,8 +11666,24 @@ function fiboHedefler(r,derinlik,sapmaYuzde,devKat){
       return {oran:o,v:v,yuzde:(v/fiyat-1)*100};}):[];
   /* kırılım seviyeleri: yukarısı çıkış bacağının tepesi, aşağısı iniş bacağının dibi */
   const ustSeviye=cTepe?cTepe.v:null, altSeviye=iDip?iDip.v:null;
-  const yon=(ustSeviye!==null&&fiyat>ustSeviye)?"boga":
-            ((altSeviye!==null&&fiyat<altSeviye)?"ayi":"notr");
+  /* ---------- KIRILIM HAFIZASI (DÜZELTİLDİ) ----------
+     ESKİ HATA: yon sadece SON kapanışla ustSeviye/altSeviye karşılaştırılarak
+     buluyordu. Fiyat bir kez seviyeyi kırıp sonra geri o seviyenin altına
+     düşerse (ör. LXGYO: 11.03'ü kırdı, sonra 10.96'ya geri çekildi), pivot
+     henüz yenilenmediği için "yon" tekrar notr'a dönüyor ve yakinAdayTara()
+     zaten bir kez kırılmış seviyeyi tertemiz "yeni aday" gibi tekrar
+     listeye koyuyordu. DÜZELTME: son kapanışa değil, o pivot oluştuktan
+     sonraki TÜM bar kapanışlarına bakılıyor — seviye BİR KEZ kırıldıysa
+     (herhangi bir bar kapanışı geçtiyse) bir daha "notr" sayılmıyor;
+     yeni bir pivot oluşana kadar bu hafıza kalıcı. */
+  let bogaKirildi=false, ayiKirildi=false;
+  if(ustSeviye!==null&&cTepe){
+    for(let k=cTepe.ix+1;k<r.n;k++){ if(r.kap[k]>ustSeviye){ bogaKirildi=true; break; } }
+  }
+  if(altSeviye!==null&&iDip){
+    for(let k=iDip.ix+1;k<r.n;k++){ if(r.kap[k]<altSeviye){ ayiKirildi=true; break; } }
+  }
+  const yon=bogaKirildi?"boga":(ayiKirildi?"ayi":"notr");
   return {tepe:ustSeviye, dip:altSeviye,
           cikBacak:cikBacak, inBacak:inBacak,
           cikDip:cDip?cDip.v:null, inTepe:iTepe?iTepe.v:null,
