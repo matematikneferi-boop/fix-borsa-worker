@@ -34,6 +34,10 @@ function trSaat() {
                   String(d.getUTCMinutes()).padStart(2, "0") };
 }
 function seansAcikMi() {
+  /* Elle "Run workflow" ile tetiklenince seans kısıtı uygulanmaz — kod
+     değişikliğini seans dışında (ör. akşam) test edebilmek için. Cron'dan
+     gelen otomatik taramalar hâlâ sadece seans içinde çalışır. */
+  if (process.env.GITHUB_EVENT_NAME === "workflow_dispatch") return true;
   const { gun, dk } = trSaat();
   if (gun === 0 || gun === 6) return false;               /* Pazar / Cumartesi */
   return dk >= SEANS_BAS_DK && dk <= SEANS_BITIS_DK;
