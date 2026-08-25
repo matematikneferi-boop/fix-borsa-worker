@@ -3480,7 +3480,32 @@ function mbFiltreOzet(ist){
 async function mbAlarmEslesme(A,ist,yuvaId){
   const anahtarlar=[],satirlar=[];
   const on=yuvaId?(yuvaId+"|"):"";
-  const har=(ist.pivot&&ist.pivot.acik)?await mbPivotHaritasiS(A).catch(()=>({})):null;
+  const pivotAktif=!!(ist.pivot&&ist.pivot.acik);
+  const har=pivotAktif?await mbPivotHaritasiS(A).catch(()=>({})):null;
+  /* 🐞 DÜZELTİLEN HATA — SAF PİVOT FİLTRESİ MALBOĞA MOTORUNA REHİN KALIYORDU.
+     Eskiden buradaki tek aday kaynağı mbTfOku(tf).sonuc'tu — yani MAL/AYI-
+     BOĞA motorunun o zaman dilimini taramış olması ŞARTTI. Kullanıcının
+     filtresi yalnız 📈 pivot kırılımı istiyorsa (mal/dip/ab/bölge/enerji
+     hiçbiri açık değilse) bu motorla hiçbir ilgisi yok; pivot verisi zaten
+     ayrı bir haritadan (mbPivotHaritasiS → ana liste g(A).kartlar) geliyor.
+     Sonuç: hisse pivotu kırmış olsa bile malboğa o hisseyi/tf'i henüz
+     taramadıysa alarm HİÇ tetiklenmiyordu — bazen saatlerce. Artık saf
+     pivot filtresi doğrudan pivot haritasından okunur, malboğa turunu
+     beklemez. */
+  const digerAktif=ist.mal.acik||ist.dip.acik||ist.ab.acik||
+    (ist.bolge&&ist.bolge.acik)||(ist.enerji&&ist.enerji.acik);
+  if(pivotAktif&&!digerAktif){
+    let K={};
+    try{const v=await g(A);K=(v&&v.kartlar)||{}}catch(_){K={}}
+    for(const kod of Object.keys(har||{})){
+      if(!mbPivotGectiS(kod,ist,har))continue;
+      const kart=Z({kartlar:K},kod);
+      anahtarlar.push(on+kod+"|piv");
+      satirlar.push({kod:kod,tf:"piv",fiyat:kart?kart.fiyat:null,
+        giris:kart?kart.giris:null,hedef:kart?kart.hedef:null,taze:0,piv:!0});
+    }
+    return{anahtarlar:anahtarlar,satirlar:satirlar};
+  }
   /* "hepsi" kapsamı: hisse seçili dilimlerin HEPSİNDE tutmalı. Uygulamadaki
      kesişim kuralının aynısı — alarm ekranda görünenden farklı davranmasın. */
   const sayac={};
@@ -3552,6 +3577,18 @@ async function mbAlarmTara(A){
       const grup={};
       for(const sx of gosterilen){(grup[sx.tf]=grup[sx.tf]||[]).push(sx)}
       let m="🔔 <b>"+(yuva.ad?E2(yuva.ad):("ALARM "+(yi+1)+"/"+yuvalar.length))+"</b>\n<i>"+mbFiltreOzet(ist)+"</i>\n";
+      /* Saf pivot satırları (tf:"piv") malboğa alanı taşımaz — kendi biçimiyle
+         yazılır, tf grupları arasında değil, en üstte. */
+      const gpiv=grup.piv;
+      if(gpiv&&gpiv.length){
+        m+="\n📈 <b>Pivot kırılımı</b>\n";
+        for(const sx of gpiv){
+          const f=v=>v===null||v===undefined?"?":Number(v).toFixed(2);
+          m+="• <b>"+sx.kod+"</b>  "+f(sx.fiyat)+
+            (sx.giris!==null&&sx.giris!==undefined?"  ·  giriş "+f(sx.giris):"")+
+            (sx.hedef!==null&&sx.hedef!==undefined?"  ·  hedef "+f(sx.hedef):"")+"\n";
+        }
+      }
       for(const tf of ist.tfler){
         const gg=grup[tf];if(!gg||!gg.length)continue;
         m+="\n"+(MB_TF[tf]?MB_TF[tf].ik+" <b>"+MB_TF[tf].ad+"</b>":tf)+"\n";
@@ -3589,8 +3626,16 @@ async function mbAlarmOncelikliTara(A){
   const gerekli=[];
   for(const uid of kullanicilar){
     const yuvalar=await mbAlarmListeOku(A,uid).catch(()=>[]);
-    for(const y of yuvalar)for(const t of mbIstekNorm(y.ist).tfler)
-      if(gerekli.indexOf(t)<0)gerekli.push(t);
+    for(const y of yuvalar){
+      const ynorm=mbIstekNorm(y.ist);
+      /* Saf pivot filtresi (mal/dip/ab/bölge/enerji hiçbiri açık değil)
+         malboğa dilimine ihtiyaç duymuyor artık — öncelik listesine
+         boşuna dilim eklenip tarama kaynağı çarçur edilmesin. */
+      const digerAktif=ynorm.mal.acik||ynorm.dip.acik||ynorm.ab.acik||
+        (ynorm.bolge&&ynorm.bolge.acik)||(ynorm.enerji&&ynorm.enerji.acik);
+      if(ynorm.pivot&&ynorm.pivot.acik&&!digerAktif)continue;
+      for(const t of ynorm.tfler)if(gerekli.indexOf(t)<0)gerekli.push(t);
+    }
   }
   if(!gerekli.length)return mbDilimTara(A);
   const evrenSayi=(await mbEvren(A)).length||1;
