@@ -10865,7 +10865,57 @@ const l=A.PUSH_KEY||t,o=a&&a.kartlar?Object.keys(a.kartlar).filter(e=>"sira"!==e
 /* Tüm istekler bu kapıdan geçer: beklenmeyen bir hata çıkarsa artık sessizce
    kaybolmuyor, 🩺 Hatalar sekmesine düşüyor. Davranış değişmiyor — hata
    yoksa hiçbir ek iş yapılmıyor. */
-export default{async fetch(p,A,q){
+export default{
+/* ⏰ GERÇEK CRON — ROOT-CAUSE ÇÖZÜM (2026-08-26)
+   19 aydır çözülemeyen sorunun kökü: bu worker'da native bir zamanlayıcı
+   HİÇ yoktu (bkz. yukarıdaki eski not: "Bu worker'da native bir cron yok").
+   Hisse Taraması (malboğa: mal/dip/bölge/enerji/ab modülleri + bu
+   modüllere kurulan kişisel filtre alarmları) o havuzu YALNIZ İKİ yoldan
+   dolduruyordu:
+     1) Mini App açıkken tarayıcıdaki mbTazelemeKur() döngüsü (sekmeye
+        girince başlar, sekmeden çıkınca / uygulama kapanınca JS durur,
+        döngü de durur — Telegram kapatılınca bu yol tamamen ölür).
+     2) tara.py'nin her 8 dakikada bir vurduğu /push isteği içindeki
+        mbAlarmOncelikliTara() — ama bu, HER 8 DAKİKADA BİR yalnız TEK bir
+        zaman diliminden küçük bir parti (8-60 hisse) ilerletiyor. Evren
+        400+ hisseyse bir dilimin baştan sona tazelenmesi saatler
+        sürebiliyor; kullanıcı uygulamayı kapattığı an alarm pratikte
+        durma noktasına geliyordu. Bu davranış "arada bir tazeleniyor"
+        gibi görünüp aslında neredeyse hiç ilerlemediği için hata
+        19 ay boyunca "bulunamadı" — aslında hep oradaydı, sadece kanıtı
+        (Cloudflare Cron Trigger paneli) hiç açılmamıştı.
+   ÇÖZÜM: Cloudflare Workers'ın kendi native "Cron Trigger" özelliği
+   kullanılıyor. Bu, tara.py'den, Telegram'dan, mini app'ten TAMAMEN
+   BAĞIMSIZ çalışır — Cloudflare'in kendi sunucuları saati geldiğinde
+   worker'ı tetikler, sen telefonu kapatsan da, tara.py dursa da çalışır.
+   KURULUM (bir kez, ~30 saniye):
+     Cloudflare panelinde bu worker'ı aç → Settings → Triggers →
+     Cron Triggers → Add Cron Trigger → şu ifadeyi yaz: * * * * *
+     (Cloudflare'in izin verdiği en sık aralık budur: HER DAKİKA.)
+     Kaydet — kod tarafında başka hiçbir şey yapmana gerek yok, aşağıdaki
+     scheduled() bunu otomatik yakalayacak.
+   Bu değişiklik mevcut hiçbir davranışı bozmaz: fetch() ve /push akışı
+   birebir aynı kalıyor, yalnız YENİ bir giriş noktası (scheduled)
+   ekleniyor. */
+async scheduled(ev,A,ctx){
+  ORTAM=A;
+  if(A&&A.ADMIN_IDS)try{EK_YON=new Set(String(A.ADMIN_IDS).split(",").map(x=>x.trim()).filter(Boolean))}catch(_){}
+  ctx.waitUntil((async()=>{
+    try{
+      /* Aynı dakikada dilimi iki kez ilerlet: 8 dakikada 1 parti yerine
+         dakikada 2 parti — havuzun tamamı artık dakikalar içinde,
+         saatler değil, tazelenir. Kilit mekanizması /push ile çakışmayı
+         zaten engelliyor (bellekKilitAl aynı isim üzerinden). */
+      await kilitli(A,"mbDilim",50,()=>mbAlarmOncelikliTara(A)).catch(()=>{});
+      await kilitli(A,"mbDilim",50,()=>mbAlarmOncelikliTara(A)).catch(()=>{});
+      /* Taze ölçümü hemen süz ve kurulu her alarma yeni girenleri gönder. */
+      await kilitli(A,"mbAlarm",50,()=>mbAlarmTara(A)).catch(()=>{});
+    }catch(err){
+      try{await hataYaz(A,"scheduled",err,null)}catch(e){}
+    }
+  })());
+},
+async fetch(p,A,q){
 try{return await _ANA.fetch(p,A,q)}
 catch(err){
 try{q.waitUntil(hataYaz(A,"fetch",err,p))}catch(e){await hataYaz(A,"fetch",err,p).catch(()=>{})}
