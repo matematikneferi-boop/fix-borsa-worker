@@ -7118,20 +7118,32 @@ function mbPaketUretOzel(){
   var har={};
   tumTf.forEach(function(t){har[t]=mbOlcum[t]||{}});
 
-  /* Her modül kendi dilim kümesinde geçenleri bulur */
-  var modGecen={};
+  /* Her modül kendi dilim kümesinde geçenleri bulur.
+     🔒 KİLİT FİX (Ağustos 2026) — "boğa filtresine ayı sızması":
+     Eskiden yalnızca kod bazında geçti/geçmedi (true/false) tutuluyordu;
+     HANGİ dilimde geçtiği unutuluyordu. Aşağıdaki satırlarda ise kartta
+     gösterilen boğa/ayı/oran değerleri HER ZAMAN "en büyük seçili dilim"den
+     (enBuyuk) okunuyordu — modülün asıl geçtiği dilimden değil. Sonuç:
+     bir hisse örn. 1SA'da boğa+bölge şartını gerçekten sağlayıp listeye
+     girebiliyordu, ama kartta 1G ya da 1HAF gibi daha büyük bir dilimin
+     (o an AYI olan) verisi basılıyordu — filtre doğruydu, gösterim
+     yanlış hisseyi/dilimi gösteriyordu. Artık her modül, kodun HANGİ
+     dilim(ler)de geçtiğini de (modGecenTf) ayrıca kaydediyor; gösterim
+     bu bilgiden kurulur (aşağıda). */
+  var modGecen={}, modGecenTf={};
   aktifler.forEach(function(m){
     var tfl=mbModTf(m.ist);
     var birlesim=mbIst.kapsam!=="hepsi";     /* herhangi=birleşim, hepsi=kesişim */
-    var sonuc=null;
+    var sonuc=null, gecTf={};
     tfl.forEach(function(t){
       var h=har[t]||{},s={};
-      for(var k in h)if(m.cond(h[k],mbIst))s[k]=true;
+      for(var k in h)if(m.cond(h[k],mbIst)){s[k]=true;(gecTf[k]=gecTf[k]||[]).push(t)}
       if(sonuc===null){sonuc={};for(var k1 in s)sonuc[k1]=true}
       else if(birlesim){for(var k2 in s)sonuc[k2]=true}
       else{var y={};for(var k3 in sonuc)if(s[k3])y[k3]=true;sonuc=y}
     });
     modGecen[m.k]=sonuc||{};
+    modGecenTf[m.k]=gecTf;
   });
 
   var pivotGecen=null;
@@ -7155,11 +7167,31 @@ function mbPaketUretOzel(){
   var ortakListe=Object.keys(ortakObj||{}).sort();
   v.ortak=ortakListe;
 
-  /* Satırda gösterilecek MAL/AB değerleri: kullanılan dilimlerin en
-     büyüğünden (TradingView karşılaştırması için — GENEL yoldaki
-     "enBuyuk" mantığının aynısı, artık birleşim kümesi üstünden). */
+  /* Satırda gösterilecek MAL/AB değerleri: eskiden KOŞULSUZ en büyük seçili
+     dilimden okunuyordu (aşağıdaki enBuyuk hâlâ SON ÇARE / geriye dönük
+     uyumluluk içindir). 🔒 KİLİT FİX: "bölge" ya da "ab" modülü aktifse —
+     yani ekranda boğa/ayı/oran gibi 571-rejim alanları GÖSTERİLECEKSE —
+     her kod için o modülün GERÇEKTEN geçtiği dilim kullanılır. Böylece
+     kartta yazan boğa/ayı değeri, o hisseyi listeye sokan koşulla HER
+     ZAMAN birebir aynı dilime ait olur; başka bir dilimin (çelişen)
+     rejimi asla karta sızamaz. */
   var enBuyuk=tumTf.length?tumTf[tumTf.length-1]:(mbIst.tfler[mbIst.tfler.length-1]||"1G");
-  var kaynak=har[enBuyuk]||{};
+  var oncelikliMod=aktifler.some(function(m){return m.k==="bolge"})?"bolge":
+                    (aktifler.some(function(m){return m.k==="ab"})?"ab":null);
+  function enBuyukTf(liste){
+    if(!liste||!liste.length)return null;
+    for(var i=tumTf.length-1;i>=0;i--)if(liste.indexOf(tumTf[i])>=0)return tumTf[i];
+    return liste[liste.length-1];
+  }
+  function gosterimTf(kod){
+    if(oncelikliMod){
+      var g=(modGecenTf[oncelikliMod]||{})[kod];
+      var t=enBuyukTf(g);
+      if(t)return t;
+    }
+    return enBuyuk;   /* geriye dönük son çare — hiçbir modül geçiş dilimi bulamadıysa */
+  }
+  var kaynakGenel=har[enBuyuk]||{};
   function serit(kod){
     return tumTf.map(function(t){
       var m=har[t][kod];
@@ -7169,7 +7201,9 @@ function mbPaketUretOzel(){
     });
   }
   var liste=ortakListe.map(function(k){
-    var o={kod:k},m=kaynak[k]||{};
+    var gtf=gosterimTf(k);
+    var kaynak=(gtf&&har[gtf])||kaynakGenel;
+    var o={kod:k,gosterimTf:gtf||enBuyuk},m=kaynak[k]||kaynakGenel[k]||{};
     for(var a in m)o[a]=m[a];
     o.tfDurum=serit(k);o.digerTfler=[];return o;
   }).sort(function(a,b){return (mbTazelikSay(a)-mbTazelikSay(b))||(a.kod<b.kod?-1:1)});
@@ -7181,7 +7215,8 @@ function mbPaketUretOzel(){
   v.kaynakTf=enBuyuk;
   v.ozelDilim=true;      /* çizim tarafına "her modül kendi dilimini kullanıyor" bilgisini taşır */
   v.gruplar=[{tf:"HEPSİ",ad:"Her modül kendi dilimi: "+aciklama+
-    " · satırdaki değerler "+enBuyuk+" diliminden",ik:"🎯",
+    (oncelikliMod?" · satırdaki boğa/ayı/oran değerleri her hissenin KENDİ geçtiği "+oncelikliMod+" dilimden (kilitli)":
+    " · satırdaki değerler "+enBuyuk+" diliminden"),ik:"🎯",
     olculen:olculen,evren:evren,kalan:Math.max(0,evren-olculen),yas:null,
     cikan:liste.length,liste:liste.slice(0,150)}];
   return v;
