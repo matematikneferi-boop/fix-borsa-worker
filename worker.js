@@ -6977,6 +6977,14 @@ function mbCondDip(x,ist){
 function mbCondBolge(x,ist){
   var b=ist.bolge;
   if(!b||!b.acik)return true;
+  /* YENİ (Ağustos 2026): Fibo bölge/aralık taraması artık AYRICA rejimin
+     BOĞA olmasını şart koşuyor. Bölge (oran) tek başına 571'in doyum>close
+     rejim şartından BAĞIMSIZ bir ölçüdür (yalnız fiyatın fibo merdiveninde
+     hangi basamakta olduğunu söyler) — bu yüzden "aralıkta ama aslında
+     ayı rejiminde" hisseler de listeye giriyordu. Artık AYI/BOĞA modülü
+     (ist.ab) ayrıca açılmasa bile, bölge taraması kendi içinde x.boga
+     şartını dayatıyor: "hisse boğa iken o aralıkta olanlar" tanımı budur. */
+  if(!x.boga)return false;
   var bl=mbBolgeBul(x.oran);
   return !!(bl&&b.secili.indexOf(bl.id)>=0);
 }
