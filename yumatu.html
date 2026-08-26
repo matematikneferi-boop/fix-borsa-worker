@@ -5969,6 +5969,116 @@ function fiboSuzgecBagla(){
     };
   });
 }
+/* ================== 571 (DOYUM) SİSTEMİ — TV'deki BOĞA/AYI'nın BİREBİR JS PORTU ==================
+   Kaynak: fix_borsa_kütüphane.txt → pl.levels_571 / pivots_571 (Pine v6)
+           fix_borsa_6_2.txt → status_func_571(): doyum > kapanış ⇒ "BOĞA", değilse "AYI"
+   Sabitler TV'deki varsayılanlarla BİREBİR AYNI: depth=10, lowerThreshold=1.0,
+   upperThreshold=0.236, reverse=false. TV bunu request.security(..., calc_bars_count=700)
+   ile çağırıyor — biz de son 700 barla sınırlıyoruz (D571_PENCERE).
+   NOT: bu, aşağıdaki fiboKirilimTara'nın kullandığı "ZigZag pivot kırılımı" ile
+   TAMAMEN AYRI bir motor — 571 bir zigzag bacağı bulup (fib eşik testiyle "geçerli"
+   bacağı seçiyor) o bacağın 4,236 katı UZANTISINI ("doyum" — tükeniş seviyesi)
+   hesaplıyor; doyum fiyatın üstündeyse hâlâ "gidecek yer var" (BOĞA) demek.
+   PINE'IN KENDİ TUHAFLIĞI BİLE BİREBİR KORUNDU: aşağıdaki "bacak arama" döngüsünde
+   315. satırdaki (kütüphanede) "p.time < lastL.time" kontrolü HER İKİ yönde de
+   (isHighLast true/false fark etmeksizin) hep lastL'nin zamanıyla kıyaslıyor —
+   bu, kaynak Pine kodunda da öyle yazılmış; TV ile birebir eşleşmek için
+   "düzeltilmeden" aynen taşındı. Aynı şekilde startPrice/endPrice/offset/diff
+   Pine'daki "var" (bar'lar arası kalıcı) değişkenler gibi davranıyor — bir barda
+   geçerli bacak bulunamazsa bir önceki barın değerleri korunuyor. */
+const D571_DEPTH=10, D571_LOW=1.0, D571_UP=0.236, D571_REV=false, D571_PENCERE=700;
+/* pivots_571(src, uzunluk, buyukMu): Pine'daki manuel pivot testi — bar j için,
+   j-uzunluk'taki değerin, [j-2*uzunluk, j] penceresinde en büyük/en küçük olup
+   olmadığına bakar (sol=sağ=uzunluk teyitli standart pivot, depth/2=5). */
+function d571PivotBul(dizi,uzunluk,buyukMu,j){
+  if(j<uzunluk*2) return null;
+  const pIx=j-uzunluk, deger=dizi[pIx];
+  for(let k=0;k<=uzunluk*2;k++){
+    const v=dizi[j-k];
+    if(buyukMu ? v>deger : v<deger) return null;
+  }
+  return {t:pIx, v:deger};
+}
+/* d571Hesapla(r, n): r.yuk/r.dus/r.kap dizileriyle, son görünür bar (n-1) için
+   {doyum, seviye236, seviye382, seviye786, stopSeviyesi, kapanis, boga} döndürür.
+   Henüz geçerli bir bacak bulunamadıysa null döner (Pine'daki [na,na,...] karşılığı). */
+function d571Hesapla(r,n){
+  const bas=Math.max(0,n-D571_PENCERE), uzunluk=D571_DEPTH/2;
+  let pivotsH=[], pivotsL=[];
+  let isHighLast=false, startPrice=null, endPrice=null, offset=null;
+  for(let j=bas;j<n;j++){
+    let H=d571PivotBul(r.yuk,uzunluk,true,j);
+    let L=d571PivotBul(r.dus,uzunluk,false,j);
+    const cH=pivotsH.length, cL=pivotsL.length;
+    if(cH>0&&cL>0){
+      const lastH=pivotsH[cH-1], lastL=pivotsL[cL-1];
+      isHighLast=lastH.t>lastL.t;
+      if(isHighLast){ if(H){ if(H.v>lastH.v) pivotsH[cH-1]=H; H=null; } }
+      else{ if(L){ if(L.v<lastL.v) pivotsL[cL-1]=L; L=null; } }
+    }
+    if(H) pivotsH.push(H);
+    if(L) pivotsL.push(L);
+    if(pivotsH.length>200) pivotsH.shift();
+    if(pivotsL.length>200) pivotsL.shift();
+
+    if(pivotsH.length>0&&pivotsL.length>0){
+      let pH=pivotsH.slice(), pL=pivotsL.slice();
+      let lastH=null, lastL=null;
+      while(pH.length>0&&pL.length>0){
+        lastH=pH.pop(); lastL=pL.pop();
+        isHighLast=lastH.t>lastL.t;
+        let pivots=isHighLast?pH:pL;
+        /* Pine'daki for-i döngüsü: dizi hep TEPEDEN küçülüyor (pop veya son
+           elemanı silme), bu yüzden "her zaman son eleman" mantığıyla
+           sadeleştirildi — davranış birebir aynı (bkz. yorum yukarıda). */
+        while(pivots.length>0){
+          const p=pivots[pivots.length-1];
+          if(p.t<lastL.t) break;                        /* Pine'da da hep lastL.time */
+          const dahaIyi=isHighLast?(p.v>lastH.v):(p.v<lastL.v);
+          if(dahaIyi){ if(isHighLast) lastH=pivots.pop(); else lastL=pivots.pop(); }
+          else pivots.pop();
+        }
+        if(pH.length===0||pL.length===0) break;
+        isHighLast=lastH.t>lastL.t;
+        pivots=isHighLast?pH:pL;
+        const prevPivot=pivots[pivots.length-1];
+        startPrice=prevPivot.v;
+        let devamEt=false;
+        if(isHighLast){
+          endPrice=lastL.v;
+          const diffTemp=Math.abs(startPrice-endPrice);
+          if(lastH.v>endPrice+diffTemp*D571_LOW||lastH.v<endPrice+diffTemp*D571_UP){
+            pL.push(lastL); devamEt=true;
+          } else offset=lastL.v-lastH.v;
+        } else {
+          endPrice=lastH.v;
+          const diffTemp=Math.abs(startPrice-endPrice);
+          if(lastL.v<endPrice-diffTemp*D571_LOW||lastL.v>endPrice-diffTemp*D571_UP){
+            pH.push(lastH); devamEt=true;
+          } else offset=lastH.v-lastL.v;
+        }
+        if(devamEt) continue;
+        offset=(isHighLast?-1:1)*Math.abs(offset);
+        break;
+      }
+    }
+  }
+  if(startPrice===null||endPrice===null||offset===null) return null;
+  const diff=(isHighLast?-1:1)*Math.abs(startPrice-endPrice);
+  const adjustedEnd=endPrice-offset;
+  const kapanis=r.kap[n-1];
+  if(kapanis==null||!(kapanis>0)) return null;
+  const doyum=adjustedEnd+((D571_REV?-1:1)*diff*4.236);
+  return {
+    doyum:doyum,
+    seviye236:adjustedEnd+((D571_REV?-1:1)*diff*0.236),
+    seviye382:adjustedEnd+((D571_REV?-1:1)*diff*0.382),
+    seviye786:adjustedEnd+((D571_REV?-1:1)*diff*0.786),
+    stopSeviyesi:adjustedEnd,
+    kapanis:kapanis,
+    boga: doyum>kapanis
+  };
+}
 /* ================== FİBO KIRILIM TARAMASI ==================
    Ahenk/lokomotiften BAĞIMSIZ, tamamen fiyat yapısına bakan ayrı bir tarama.
    Her zaman dilimi için ayrı ayrı sorar:
@@ -6017,6 +6127,19 @@ function fiboKirilimTara(temiz,tfListe){
       let anlik=false;
       if(f.yon==="notr"&&f.tepe!==null&&r.acikBar&&r.yuk&&r.yuk[r.n-1]>f.tepe){
         f.yon="boga"; anlik=true;
+      }
+      /* BOĞA ŞARTI (2026-08-26): salt fibo pivotunu kırmak TV'deki "BOĞA" ile
+         AYNI ŞEY DEĞİL. TV'de gördüğün boğa/ayı etiketi pl.levels_571 / 
+         status_func_571'den geliyor (doyum > kapanış ⇒ BOĞA) — d571Hesapla()
+         bu motorun birebir JS taşımasıdır (bkz. fonksiyon tanımı). Artık fibo
+         kırılımı geçerli sayılması için AYRICA aynı dilimin son barında 571
+         durumu da BOĞA olmalı; değilse kırılım notr'a düşer, 🐂 listesine
+         girmez. Ayı tarafı bilinçli olarak dokunulmadı — istenen yalnızca
+         boğa şartıydı. MALİYET: d571Hesapla tüm bar geçmişini (≤700 bar)
+         yeniden oynatır — TV ile birebir eşleşmesi için kabul edilen bedel. */
+      if(f.yon==="boga"){
+        const d571=d571Hesapla(r,r.n);
+        if(!d571||!d571.boga) f.yon="notr";
       }
       /* kırılımın tazeliği: kaç bar önce seviye ilk kez aşıldı */
       /* TAZELİK: kırılımın kaç bar önce olduğu.
@@ -7494,7 +7617,7 @@ async function zincirCalistir(kaynak){
    SEKMEDE calisiyordu, sekme yenilenmedigi icin eski kod isbasindaydi.
    Artik her tarama sonunda surum ekrana yaziliyor: alttaki damga
    asagidakiyle ayni degilse calisan kod eskidir, sekmeyi kapatip ac. */
-const YAMA_SURUM="2026-08-25-a · kırılım hafızası düzeltmesi";
+const YAMA_SURUM="2026-08-26-b · fibo kırılımına GERÇEK 571 boğa şartı (Pine birebir port)";
 const SUREKLI_BEKLE_MS=2000;
 /* SEANS PENCERESI — surekli mod yalnizca burada tarar.
    Disarida fiyat degismiyor; her 10 saniyede bir Yahoo'yu ve aynalari
