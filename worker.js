@@ -1576,37 +1576,6 @@ function mbDurum571Seri(m){
   return mb571Seri(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)
     .map(x=>(x&&isFinite(x.doyum)&&isFinite(x.close))?(x.doyum>x.close?"BOĞA":"AYI"):null);
 }
-
-/* ═══ 571 KİLİT KATMANI — mb571SeriKilitli / mbDurum571SeriKilitli ═══
-   Pine tarafındaki levels_571_locked() (fix borsa kütüphane, satır ~1147)
-   ile BİREBİR AYNI SEBEP: m dizisinin SON elemanı — borsa açıkken — HENÜZ
-   KAPANMAMIŞ, sürekli güncellenen bir bar (yfMumCek'teki "CANLI SON BAR"
-   yaması + Yahoo'nun intraday'de zaten canlı döndürdüğü oluşmakta olan
-   mum). mb571Seri'nin durumlu pivot motoru (pivotsH/pivotsL) bu canlı barı
-   da işleme aldığı için, "son pivot H mi L mi" kararı — dolayısıyla
-   BOĞA/AYI etiketi — İKİ ART ARDA TARAMA arasında (fiyat oynadıkça)
-   TİTREŞEBİLİYOR: bir çekimde BOĞA görünen hisse, birkaç dakika sonraki
-   çekimde AYI'ya dönüp taramaya "sızabiliyor" — ekranda hâlâ doğru fibo
-   aralığı gösterilirken bile.
-   ÇÖZÜM: seviye YAPISINI (doyum/236/382/786/stop) SON bar hariç, en son
-   KAPANMIŞ bardaki durumla dondur; sadece FİYAT (close) canlı kalsın.
-   Böylece "fiyat kilitli seviyeyi geçti mi" karşılaştırması hâlâ gerçek
-   zamanlı çalışır, ama BOĞA/AYI'yı belirleyen pivot yapısı artık canlı
-   barın titreşiminden etkilenmez. */
-function mb571SeriKilitli(m,depth,lowTh,upTh,rev){
-  const tam=mb571Seri(m,depth,lowTh,upTh,rev);
-  const n=tam.length,out=new Array(n);
-  for(let i=0;i<n;i++){
-    const yapi=i>0?tam[i-1]:tam[i];   /* ilk barda geri dönecek kapanmış bar yok */
-    out[i]=yapi?{doyum:yapi.doyum,s236:yapi.s236,s382:yapi.s382,s786:yapi.s786,
-                 stop:yapi.stop,close:m[i].close}:null;   /* fiyat CANLI kalır */
-  }
-  return out;
-}
-function mbDurum571SeriKilitli(m){
-  return mb571SeriKilitli(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)
-    .map(x=>(x&&isFinite(x.doyum)&&isFinite(x.close))?(x.doyum>x.close?"BOĞA":"AYI"):null);
-}
 /* ── kütüphane:3200  ⚛ LATENT ENERGY REACTOR (enz_run + enz_scan) ──────
    Pine'daki sıkışma-zonu motorunun birebir çevirisi. Fiyat dar bir bantta
    sıkışırken "gizli enerji" birikir; bant kırılınca hareket başlar.
@@ -1786,10 +1755,8 @@ function mbMotor(mumlar){
   if(m.length<25)return null;
   const son=m.length-1;
   const[mtS,mdS]=mbMalTopDagit(m);
-  /* KİLİT: BOĞA/AYI kararı ve seviyeler artık canlı (henüz kapanmamış) son
-     bardan değil, en son KAPANMIŞ bardan okunur — bkz. mb571SeriKilitli. */
-  const st=mbDurum571SeriKilitli(m);
-  const lv=mb571SeriKilitli(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)[son];
+  const st=mbDurum571Seri(m);
+  const lv=mb571Seri(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)[son];
 
   /* f_mal_scan_motor: yaş 5 barı geçtiyse 9999 sayılır (tarama penceresi) */
   const topHam=mbBarsSince(mtS,son),dagHam=mbBarsSince(mdS,son);
@@ -1920,41 +1887,6 @@ function mbGrupla(mumlar,saat){
   }
   return out;
 }
-/* 60 DAKİKALIK "GÜDÜK" SON BAR — BIST seansı 09:30-18:00 (8.5 saat); 60
-   dakikalık ızgara bu yüzden HER GÜN 9 bar üretiyor: 09:30..16:30 tam
-   saatlik (8 bar) + 17:30-18:00 yalnız 30 dakikalık bir "güdük" 9. bar
-   (kapanış müzayedesi). Ekran görüntülerindeki 1sa tutarsızlığının kaynağı
-   burası: Pine tarafı TradingView'in KENDİ "1 saat" grafiğini kullanıyor,
-   TradingView ise BIST'te bu son 30 dakikayı ayrı bir mum GÖSTERMİYOR —
-   kapanış müzayedesi bir önceki (16:30-17:30) muma dahil oluyor, yani
-   TradingView'in günlük bar sayısı 8. Yahoo'dan çektiğimiz veri ise 9 —
-   HER GÜN fazladan bir bar. pivots_571'in onay penceresi depth/2=5 bar
-   geriye bakıyor; 700 barlık pencerede biriken bu fazladan barlar
-   TradingView'den FARKLI bir pivot/BOĞA-AYI kararına yol açıyor — özellikle
-   1SA'da (ve ondan türeyen 4SA'da) gözlemlenen "Pine boğa diyor, worker ayı
-   diyor" tutarsızlığının kök sebebi bu bar-sayısı kaymasıdır.
-   DÜZELTME: her günün varsa fazladan (güdük, <55 dk) son barını bir önceki
-   tam saatlik bara BİRLEŞTİR — TradingView'in gördüğü bar sayısına geri
-   dön. Yalnızca 1SA/4SA'nın paylaştığı 60m ham veride uygulanır. */
-function mb60GudukBirlestir(mumlar){
-  if(!mumlar||mumlar.length<2)return mumlar;
-  const out=[];
-  for(const b of mumlar){
-    const onceki=out[out.length-1];
-    if(onceki){
-      const ayniGun=Math.floor((onceki.time+10800)/86400)===Math.floor((b.time+10800)/86400);
-      const fark=b.time-onceki.time;
-      if(ayniGun&&fark>0&&fark<3300){        /* < 55 dk → tam saatlik değil, güdük bar */
-        onceki.high=Math.max(onceki.high,b.high);
-        onceki.low=Math.min(onceki.low,b.low);
-        onceki.close=b.close;onceki.hacim+=b.hacim;
-        continue;
-      }
-    }
-    out.push({time:b.time,open:b.open,high:b.high,low:b.low,close:b.close,hacim:b.hacim});
-  }
-  return out;
-}
 /* Tek hisse + tek dilim ölçümü. onbellek: aynı turda 1SA ve 4SA tek
    saatlik çekimi paylaşsın diye (alt-istek bütçesi yarıya iner). */
 async function mbOlc(kod,tfKod,onbellek){
@@ -1964,7 +1896,6 @@ async function mbOlc(kod,tfKod,onbellek){
   if(!ham){
     const r=await yfMumlar(kod,tf.interval,tf.range);
     ham=(r&&r.veri)||[];
-    if(tf.interval==="60m")ham=mb60GudukBirlestir(ham);
     if(onbellek)onbellek[ck]=ham;
   }
   if(!ham.length)return null;
@@ -2129,9 +2060,7 @@ async function dbtKosu(kodlar,dilimler,seviyeler){
         const onbellek={};
         await Promise.all(ckListe.map(async x=>{
           const r=await yfMumlar(kod,x.interval,x.range);
-          let veri=(r&&r.veri)||[];
-          if(x.interval==="60m")veri=mb60GudukBirlestir(veri);
-          onbellek[x.ck]=veri;
+          onbellek[x.ck]=(r&&r.veri)||[];
         }));
         const serilerTf={};
         for(const t of dilimler){
@@ -2583,9 +2512,7 @@ async function ykKosu(kodlar,zamanKesim,hisseTek,A){
     }
     const onb={};
     await Promise.all(ckListe.map(async x=>{
-      const r=await yfMumlar(kod,x.interval,x.range);let veri=(r&&r.veri)||[];
-      if(x.interval==="60m")veri=mb60GudukBirlestir(veri);
-      onb[x.ck]=veri;
+      const r=await yfMumlar(kod,x.interval,x.range);onb[x.ck]=(r&&r.veri)||[];
       /* İlk gerçek Yahoo hata metnini (KV'ye yazmadan, bedava) sakla — ekranda
          doğrudan görünsün, "çekim hatası" gibi anlamsız bir sayı değil. */
       if(!teshis.ornekHata&&(!r||!r.veri||!r.veri.length)&&r&&r.hatalar&&r.hatalar.length)
