@@ -4416,6 +4416,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
+  s.push('<button class="sek'+(sekme==="ortaklik"?" on":"")+'" data-r="nötr" data-s="ortaklik">🔗 Ortaklık Haritası</button>');
   if(D&&D.yon)s.push('<button class="sek'+(sekme==="yesil"?" on":"")+'" data-r="nötr" data-s="yesil">📐 Fibo Aralığı Ölçüm İstasyonu 🔐</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
@@ -4462,6 +4463,7 @@ function ciz(){
   if(sekme==="hata")return hataCiz();
   if(sekme==="sag")return saglikCiz();
   if(sekme==="abs")return absCiz();
+  if(sekme==="ortaklik")return ortaklikCiz();
   if(sekme==="malboga")return mbCiz();
   if(sekme==="yesil")return ykCiz();
   if(sekme==="rot")return rotCiz();
@@ -6585,6 +6587,97 @@ function absGoster(v){
     }).catch(function(){k.disabled=false;k.textContent="💾 Kaydet ve yeniden tara";
       el("absAyarDurum").textContent="⚠️ bağlantı hatası"});
   };
+}
+/* ================== 🔗 ORTAKLIK HARİTASI SEKMESİ ==================
+   Şirket kartındaki her ortak/yönetici tıklanabilir: o isme basınca
+   borsadaki TÜM şirketlerdeki ortaklık/yönetim kurulu/üst yönetim
+   kayıtları listelenir. Ayrıca 4 modüllük tarama: tek ortak kontrolü,
+   %50+ hakim ortak, düşük halka açıklık, birden fazla şirkette görünen
+   isimler. Veri KV'de "ortaklikHaritasi" anahtarında; kap_ortaklik_scraper.py
+   tarafından periyodik üretilip yazılıyor (canlı hesaplama DEĞİL). */
+var ortD=null, ortAktifModul="tekOrtakKontrolu", ortSeciliKisi=null;
+function ortaklikCiz(){
+  if(ortD){ortaklikGoster(ortD);return}
+  el("govde").innerHTML='<div class="yukleniyor">ortaklık haritası okunuyor…</div>';
+  post("/api/ortaklik",{}).then(function(v){ortD=v;ortaklikGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Okunamadı. Birazdan tekrar dene.</div>'});
+}
+var ORT_MODUL_AD={
+  tekOrtakKontrolu:"👤 Tek ortağın kontrol ettiği şirketler",
+  hakimOrtak50:"🏛 %50+ hakim ortaklı tahtalar",
+  dusukHalkaAciklik:"🔒 Düşük halka açıklık",
+  cokluSirketIsimler:"🔁 Birden fazla şirkette görünen isimler"
+};
+function ortaklikGoster(v){
+  if(!v||!v.ok){
+    el("govde").innerHTML='<div class="bos">Ortaklık haritası henüz hazır değil.<br>'+
+      'Veri kaynağı (KAP taraması) ilk çalıştırmasını bekliyor olabilir.</div>';
+    return;
+  }
+  if(ortSeciliKisi){ortaklikKisiGoster(ortSeciliKisi);return}
+  var h='<div class="uyari" style="margin-top:0"><b>🔗 Ortaklık Haritası</b><br>'+
+    'Bir isme dokun, borsadaki tüm şirketlerini gör. Aşağıdaki 4 modül, '+
+    'bilinen ortaklık/yönetim verisi üzerinden otomatik süzülür.<br>'+
+    '<span style="opacity:.7">Kaynak: KAP genel kurul/faaliyet raporu dokümanları · '+
+    'güncelleme: '+E(v.guncelleme||"—")+' · '+(v.sirketSayisi||0)+' şirket tarandı</span></div>';
+  h+='<div class="sirala" style="flex-wrap:wrap">'+Object.keys(ORT_MODUL_AD).map(function(k){
+    return '<button class="sir'+(ortAktifModul===k?" on":"")+'" data-om="'+k+'">'+ORT_MODUL_AD[k]+'</button>';
+  }).join("")+'</div>';
+
+  var liste=(v.modul&&v.modul[ortAktifModul])||[];
+  if(!liste.length){
+    h+='<div class="bos">Bu filtreye uyan şirket/kişi bulunamadı.</div>';
+  }else if(ortAktifModul==="cokluSirketIsimler"){
+    h+=liste.map(function(x){
+      return '<div class="satir" data-isim="'+E(x.isim)+'" style="cursor:pointer">'+
+        '<div class="sol"><div class="kod">'+E(x.isim)+'</div>'+
+        '<div class="altbilgi">'+x.sirketSayisi+' şirkette görünüyor · '+
+        x.sirketler.slice(0,4).map(function(s2){return E(s2.ticker)}).join(", ")+
+        (x.sirketler.length>4?" +"+(x.sirketler.length-4):"")+'</div></div>'+
+        '<div class="sag">👉</div></div>';
+    }).join("");
+  }else if(ortAktifModul==="dusukHalkaAciklik"){
+    h+=liste.map(function(x){
+      return '<div class="satir"><div class="sol"><div class="kod">'+E(x.ticker)+' — '+E(x.unvan)+'</div></div>'+
+        '<div class="sag"><div class="yuzde">%'+x.halkaAciklikTahmini+'</div>'+
+        '<div class="altbilgi">tahmini halka açıklık</div></div></div>';
+    }).join("");
+  }else{
+    h+=liste.map(function(x){
+      return '<div class="satir"><div class="sol">'+
+        '<div class="kod">'+E(x.ticker)+' — '+E(x.unvan)+'</div>'+
+        '<div class="altbilgi"><span data-isim="'+E(x.ortak)+'" style="text-decoration:underline;cursor:pointer">'+
+        E(x.ortak)+'</span> · %'+E(String(x.payYuzde))+'</div></div></div>';
+    }).join("");
+  }
+  el("govde").innerHTML=h;
+  [].forEach.call(document.querySelectorAll("[data-om]"),function(b){
+    b.onclick=function(){tit();ortAktifModul=b.dataset.om;ortaklikGoster(v)};
+  });
+  [].forEach.call(document.querySelectorAll("[data-isim]"),function(b){
+    b.onclick=function(){tit();ortSeciliKisi=b.dataset.isim;ortaklikKisiAc(ortSeciliKisi)};
+  });
+}
+function ortaklikKisiAc(isim){
+  el("govde").innerHTML='<div class="yukleniyor">'+E(isim)+' için borsa haritası çıkarılıyor…</div>';
+  post("/api/ortaklikKisi",{isim:isim}).then(ortaklikKisiGoster)
+    .catch(function(){el("govde").innerHTML='<div class="bos">Bulunamadı.</div>'});
+}
+function ortaklikKisiGoster(v){
+  var h='<button class="sir" id="ortGeri">◀ Haritaya dön</button>';
+  if(!v||!v.ok||!v.kayitlar||!v.kayitlar.length){
+    h+='<div class="bos">'+E(v&&v.isim||"")+' için kayıt bulunamadı.</div>';
+  }else{
+    h+='<div class="kutu"><h3>👤 '+E(v.goruntuIsim||v.isim)+'</h3>'+
+      '<div class="altbilgi">'+v.kayitlar.length+' şirkette kayıt bulundu — '+
+      'aynı görünen farklı kişiler otomatik ayrıştırılmadı, isim tam eşleşmesi kullanıldı.</div></div>';
+    h+=v.kayitlar.map(function(k){
+      return '<div class="satir"><div class="sol"><div class="kod">'+E(k.ticker)+' — '+E(k.unvan)+'</div>'+
+        '<div class="altbilgi">'+E(k.rol)+(k.payYuzde!=null?' · %'+E(String(k.payYuzde)):"")+'</div></div></div>';
+    }).join("");
+  }
+  el("govde").innerHTML=h;
+  var g=el("ortGeri");if(g)g.onclick=function(){tit();ortSeciliKisi=null;ortaklikGoster(ortD)};
 }
 /* ================== 🐂🐻 TARAMA SEKMESİ (MAL · DİP · AYI/BOĞA) ==========
    Üç bağımsız tarama modülü tek ekranda. Her modülün kendi aç/kapa tiki
@@ -9893,6 +9986,42 @@ calisiyor:paket.calisiyor!==!1,
 yas:Math.round((Date.now()-(paket.ts||0))/6e4),
 liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenen.has(x.kod)},x)),
 ayar:YON?(paket.ayar||await absAyarAl(A)):null})}
+/* 🔗 ORTAKLIK HARİTASI — KV'de önceden hesaplanmış veriyi servis eder.
+   Canlı hesaplama YAPMAZ (KAP taraması dakikalar sürer); kap_ortaklik_scraper.py
+   periyodik çalışıp KV'yi güncelliyor. Veri yoksa dürüstçe ok:false döner. */
+if("/api/ortaklik"===$.pathname){
+  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
+  const ham=await A.VERI.get("ortaklikHaritasi");
+  if(!ham)return JS({ok:!1});
+  let v;try{v=JSON.parse(ham)}catch(e){return JS({ok:!1,hata:"veri bozuk"})}
+  return JS({ok:!0,guncelleme:v.guncelleme,sirketSayisi:v.sirketSayisi,modul:v.modul})
+}
+/* 🔎 Tek kişinin borsadaki tüm haritası. İsim eşleştirme normalize edilmiş
+   anahtar üzerinden TAM eşleşme — benzer/kısmi isimler asla birleştirilmez. */
+if("/api/ortaklikKisi"===$.pathname){
+  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
+  const isim=String((gov&&gov.isim)||"").trim();
+  if(!isim)return JS({ok:!1,hata:"isim gerekli"});
+  const ham=await A.VERI.get("ortaklikHaritasi");
+  if(!ham)return JS({ok:!1});
+  let v;try{v=JSON.parse(ham)}catch(e){return JS({ok:!1,hata:"veri bozuk"})}
+  const anahtar=isim.trim().replace(/i/g,"İ").replace(/ı/g,"I").replace(/ğ/g,"Ğ")
+    .replace(/ü/g,"Ü").replace(/ş/g,"Ş").replace(/ö/g,"Ö").replace(/ç/g,"Ç")
+    .toUpperCase().replace(/\s+/g," ").trim();
+  const kayit=(v.kisiIndeksi||{})[anahtar];
+  if(!kayit)return JS({ok:!0,isim:isim,kayitlar:[]});
+  return JS({ok:!0,isim:isim,goruntuIsim:kayit.goruntu_isim,
+    kayitlar:(kayit.kayitlar||[]).map(k=>({ticker:k.ticker,unvan:k.unvan,rol:k.rol,payYuzde:k.pay_yuzde}))})
+}
+/* 📥 Toplu yükleme ucu — kap_ortaklik_scraper.py'nin push_to_worker()
+   fonksiyonu buraya POST atar. PANEL_KEY ile korunuyor. */
+if("/api/ortaklikYukle"===$.pathname){
+  const anahtar=A.PANEL_KEY||t;
+  if(!gov||gov.key!==anahtar)return JS({ok:!1,hata:"yetkisiz"},403);
+  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
+  await A.VERI.put("ortaklikHaritasi",JSON.stringify(gov.veri||{}));
+  return JS({ok:!0})
+}
 /* ═══ 🐂🐻 MAL TOPLAMA/DAĞITIM + AYI/BOĞA — TÜM ZAMAN DİLİMLERİ ═══
    Üç iş tek uçta:
      gov.kod  → tek hissenin BÜTÜN dilimleri (Pine'daki TF panelinin aynısı)
