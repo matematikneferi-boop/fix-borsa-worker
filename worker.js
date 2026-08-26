@@ -3126,8 +3126,14 @@ function mbIstekNorm(gov){
   return ist;
 }
 const MB_DIP_KADEME={dip:1,dip382:1,dip236:1};
-/* 🪜 Dört ana fibo bölgesi — istemcideki MB_BOLGE ile birebir aynı sınırlar */
-const MB_BOLGE_S={b1:[0.0,0.618],b2:[0.618,1.0],b3:[1.0,1.618],b4:[1.618,2.618]};
+/* 🪜 Altı fibo bölgesi — server MB_BOLGE ile birebir aynı sınırlar (id:[alt,ust]).
+   🔒 Ağustos 2026: b5/b6 eklendi (2.618–4.236) — bkz. MB_BOLGE üstündeki not.
+   Bu tablo server MB_BOLGE'nin elle senkronize tutulan bir aynasıdır; ikisi
+   ayrı diziler olduğu için biri güncellenip öbürü unutulursa iki tarama
+   yolu (canlı ekran / KV-arka plan) yeniden birbirinden sapar — bölge
+   sınırı değiştirilecekse İKİSİ DE değiştirilmeli. */
+const MB_BOLGE_S={b1:[0.0,0.618],b2:[0.618,1.0],b3:[1.0,1.618],b4:[1.618,2.618],
+                  b5:[2.618,3.618],b6:[3.618,4.236]};
 const MB_PIVOT_S={KISA:"potansiyel",ORTA:"fibo",UZUN:"uzunvade"};
 const MB_PIVOT_ADAY={KISA:"adayOrta",ORTA:"adayOrtaVade",UZUN:"adayUzun"};
 function mbSayiNorm(v,vars,alt,ust){
@@ -3135,8 +3141,16 @@ function mbSayiNorm(v,vars,alt,ust){
   if(!isFinite(n))return vars;
   return Math.min(ust,Math.max(alt,n));
 }
-function mbBolgeGectiS(oran,ist){
+/* 🔒 KİLİT FİX (Ağustos 2026) — "boğa filtresine ayı sızması" burada da vardı:
+   Bu fonksiyon yalnız "oran" (fiyatın merdivendeki konumu) alıyordu, rejimin
+   (571 boğa/ayı) kendisine hiç bakmıyordu — canlı ekrandaki mbCondBolge'de
+   düzeltilen sızıntının BİREBİR AYNISI, bu ayrı (KV arka plan) tarama
+   yolunda hâlâ açıktı. Artık x'in tamamı alınıyor ve boğa şartı burada da
+   dayatılıyor — "hisse boğa iken o aralıkta olanlar" iki yolda da geçerli. */
+function mbBolgeGectiS(x,ist){
   if(!ist.bolge||!ist.bolge.acik)return!0;
+  if(!x||!x.boga)return!1;
+  const oran=x.oran;
   if(oran===null||oran===undefined||!isFinite(oran))return!1;
   for(const id of ist.bolge.secili){
     const b=MB_BOLGE_S[id];
@@ -3214,7 +3228,7 @@ function mbModulGecti(x,ist){
     if(!ok)return!1;
   }
   if(ist.dip.acik&&!x[ist.dip.kademe])return!1;
-  if(!mbBolgeGectiS(x.oran,ist))return!1;
+  if(!mbBolgeGectiS(x,ist))return!1;
   if(!mbEnerjiGectiS(x,ist))return!1;
   if(ist.ab.acik){
     const N=ist.ab.sinirsiz?1e9:ist.ab.n;
@@ -3345,7 +3359,8 @@ const MB_ALARM_ON="mbAlarmFiltre:";  /* + uid = o kullanıcının 5 yuvası */
 const MB_ALARM_GUN_ON="mbAlarmGun:"; /* + uid = o kullanıcının günlük hafızası */
 const MB_ALARM_AZAMI=12;            /* tek mesajda en fazla kaç hisse */
 const MB_ALARM_YUVA=5;              /* kullanıcı başına en fazla kaç ayrı filtre alarmı */
-const MB_BOLGE_AD={b1:"dikkat ayı→boğa",b2:"boğa→karar",b3:"karar→direnç",b4:"direnç→güçlü D/D"};
+const MB_BOLGE_AD={b1:"dikkat ayı→boğa",b2:"boğa→karar",b3:"karar→direnç",b4:"direnç→güçlü D/D",
+                   b5:"güçlü D/D→çok güçlü D/D",b6:"çok güçlü D/D→doyum"};
 
 /* ── KULLANICI BAŞINA BEŞ YUVA ────────────────────────────────────────
    🐞 DÜZELTİLEN HATA: eskiden TÜM SİSTEM tek bir global KV anahtarına
@@ -6787,18 +6802,27 @@ function mbGetir(){ mbCizYenile(); }
      ⚡ son barda kırdı      — kırılım en son barda oldu
      🎯 kırılıma %X kaldı    — henüz kırmadı ama yakın (aday listesi)
      ✅ kırılımın üzerinde   — kırmış ve fiyat hâlâ seviyenin üstünde */
-/* ═══ 🪜 FİBO BÖLGELERİ ═══════════════════════════════════════════════
-   Merdivenin dört ana bölgesi — sınırlar TradingView'deki çizgi adlarının
-   birebir karşılığı:
+/* 🪜 Altı fibo bölgesi — sınırlar TradingView çizgi adlarının birebir karşılığı:
      🟠 DİKKAT AYI → BOĞA      0.0   – 0.618   dip bölgesi, toparlanma
      🟢 BOĞA → KARAR YERİ      0.618 – 1.0     boğaya geçmiş, karara yürüyor
      🔵 KARAR YERİ → DİRENÇ    1.0   – 1.618   kararı geçmiş, dirence yürüyor
-     🟣 DİRENÇ → GÜÇLÜ D/D     1.618 – 2.618   direnci geçmiş, güçlü bölge */
+     🟣 DİRENÇ → GÜÇLÜ D/D     1.618 – 2.618   direnci geçmiş, güçlü bölge
+     🔴 GÜÇLÜ D/D → ÇOK GÜÇLÜ D/D  2.618 – 3.618   çok güçlü trend bölgesi
+     ⚫ ÇOK GÜÇLÜ D/D → DOYUM      3.618 – 4.236   doyuma yaklaşan aşırı uzama
+   🔒 KİLİT FİX (Ağustos 2026) — "DOHOL her dilimde boğa ama listede yok":
+   Merdiven aslında 4.236'daki (doyum) noktasına kadar sürüyor ama bu dizi
+   eskiden 2.618'de (GÜÇLÜ D/D) kesiliyordu. Sonuç: çok güçlü, sürdürülebilir
+   bir boğa trendinde olup fiyatı 2.618'i geçmiş HER hisse — ki "her zaman
+   diliminde boğa" tarif tam da böyle bir hisseyi anlatıyor — dört bölgenin
+   HİÇBİRİNE denk gelmiyor, bölge taraması onu hiç göremiyordu. b5/b6 bu
+   boşluğu kapatıyor; artık merdivenin tamamı (doyuma kadar) taranabiliyor. */
 var MB_BOLGE=[
   {id:"b1",ik:"🟠",ad:"DİKKAT AYI → BOĞA",alt:0.0,ust:0.618},
   {id:"b2",ik:"🟢",ad:"BOĞA → KARAR YERİ",alt:0.618,ust:1.0},
   {id:"b3",ik:"🔵",ad:"KARAR YERİ → DİRENÇ",alt:1.0,ust:1.618},
-  {id:"b4",ik:"🟣",ad:"DİRENÇ → GÜÇLÜ D/D",alt:1.618,ust:2.618}
+  {id:"b4",ik:"🟣",ad:"DİRENÇ → GÜÇLÜ D/D",alt:1.618,ust:2.618},
+  {id:"b5",ik:"🔴",ad:"GÜÇLÜ D/D → ÇOK GÜÇLÜ D/D",alt:2.618,ust:3.618},
+  {id:"b6",ik:"⚫",ad:"ÇOK GÜÇLÜ D/D → DOYUM",alt:3.618,ust:4.236}
 ];
 function mbBolgeBul(oran){
   if(oran===null||oran===undefined||!isFinite(oran))return null;
