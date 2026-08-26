@@ -164,7 +164,13 @@ class KapIstemci:
         return r.json()
 
     def member_filter(self, ticker: str) -> Optional[dict]:
-        """ticker -> {companyCode, mkkMemberOid, title, permaLink}"""
+        """ticker -> {companyCode, mkkMemberOid, title, permaLink}
+
+        NOT: KAP bu uç için tek bir obje DEĞİL, bir LİSTE döndürüyor
+        (ticker'la eşleşen/başlayan tüm şirketler). Eskiden kod bunun
+        her zaman tek obje olduğunu varsayıyordu ve listeye .get()
+        çağırınca 'list' object has no attribute 'get' hatası veriyordu.
+        Şimdi listeden companyCode'u tam eşleşen kaydı seçiyoruz."""
         self._bekle()
         r = self.c.get(f"/tr/api/member/filter/{ticker}", headers={
             "Referer": f"{BASE}/tr/bist-sirketler"
@@ -172,9 +178,18 @@ class KapIstemci:
         if r.status_code != 200:
             return None
         try:
-            return r.json()
+            veri = r.json()
         except Exception:
             return None
+        if isinstance(veri, list):
+            for kayit in veri:
+                if isinstance(kayit, dict) and str(kayit.get("companyCode", "")).upper() == ticker.upper():
+                    return kayit
+            # tam eşleşme yoksa ilk kaydı dene (yine de dict olduğundan emin ol)
+            return veri[0] if veri and isinstance(veri[0], dict) else None
+        if isinstance(veri, dict):
+            return veri
+        return None
 
     def genel_sayfa_html(self, perma_link: str) -> Optional[str]:
         self._bekle()

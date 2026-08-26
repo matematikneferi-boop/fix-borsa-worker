@@ -9738,6 +9738,20 @@ const res=rr.result;
 const fid=video?(res.video&&res.video.file_id):(res.photo&&res.photo.length?res.photo[res.photo.length-1].file_id:null);
 if(!fid)return JS2({ok:!1,hata:"file_id alinamadi"},400);
 return JS2({ok:!0,tur:video?"video":"foto",fileId:fid})}
+/* 📥 Toplu yükleme ucu — kap_ortaklik_scraper.py'nin push_to_worker()
+   fonksiyonu buraya POST atar. Telegram initData GÖNDEREMEZ (bu bir
+   GitHub Actions script'i, Telegram oturumu yok) — bu yüzden bu route
+   genel /api/ initData kapısından ÖNCE, kendi PANEL_KEY korumasıyla
+   ayrı tutuluyor (bkz. /api/medyayukle ile aynı desen). */
+if("/api/ortaklikYukle"===$.pathname&&"POST"===p.method){
+  const JS2=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
+  const gov2=await p.json().catch(()=>null);
+  const anahtar=A.PANEL_KEY||t;
+  if(!gov2||gov2.key!==anahtar)return JS2({ok:!1,hata:"yetkisiz"},403);
+  if(!A.VERI)return JS2({ok:!1,hata:"KV bağlı değil"});
+  await A.VERI.put("ortaklikHaritasi",JSON.stringify(gov2.veri||{}));
+  return JS2({ok:!0})
+}
 if($.pathname.startsWith("/api/")){
 const JS=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
 if("POST"!==p.method)return JS({ok:!1,hata:"POST bekleniyor"},405);
@@ -10012,15 +10026,6 @@ if("/api/ortaklikKisi"===$.pathname){
   if(!kayit)return JS({ok:!0,isim:isim,kayitlar:[]});
   return JS({ok:!0,isim:isim,goruntuIsim:kayit.goruntu_isim,
     kayitlar:(kayit.kayitlar||[]).map(k=>({ticker:k.ticker,unvan:k.unvan,rol:k.rol,payYuzde:k.pay_yuzde}))})
-}
-/* 📥 Toplu yükleme ucu — kap_ortaklik_scraper.py'nin push_to_worker()
-   fonksiyonu buraya POST atar. PANEL_KEY ile korunuyor. */
-if("/api/ortaklikYukle"===$.pathname){
-  const anahtar=A.PANEL_KEY||t;
-  if(!gov||gov.key!==anahtar)return JS({ok:!1,hata:"yetkisiz"},403);
-  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
-  await A.VERI.put("ortaklikHaritasi",JSON.stringify(gov.veri||{}));
-  return JS({ok:!0})
 }
 /* ═══ 🐂🐻 MAL TOPLAMA/DAĞITIM + AYI/BOĞA — TÜM ZAMAN DİLİMLERİ ═══
    Üç iş tek uçta:
