@@ -1920,6 +1920,41 @@ function mbGrupla(mumlar,saat){
   }
   return out;
 }
+/* 60 DAKİKALIK "GÜDÜK" SON BAR — BIST seansı 09:30-18:00 (8.5 saat); 60
+   dakikalık ızgara bu yüzden HER GÜN 9 bar üretiyor: 09:30..16:30 tam
+   saatlik (8 bar) + 17:30-18:00 yalnız 30 dakikalık bir "güdük" 9. bar
+   (kapanış müzayedesi). Ekran görüntülerindeki 1sa tutarsızlığının kaynağı
+   burası: Pine tarafı TradingView'in KENDİ "1 saat" grafiğini kullanıyor,
+   TradingView ise BIST'te bu son 30 dakikayı ayrı bir mum GÖSTERMİYOR —
+   kapanış müzayedesi bir önceki (16:30-17:30) muma dahil oluyor, yani
+   TradingView'in günlük bar sayısı 8. Yahoo'dan çektiğimiz veri ise 9 —
+   HER GÜN fazladan bir bar. pivots_571'in onay penceresi depth/2=5 bar
+   geriye bakıyor; 700 barlık pencerede biriken bu fazladan barlar
+   TradingView'den FARKLI bir pivot/BOĞA-AYI kararına yol açıyor — özellikle
+   1SA'da (ve ondan türeyen 4SA'da) gözlemlenen "Pine boğa diyor, worker ayı
+   diyor" tutarsızlığının kök sebebi bu bar-sayısı kaymasıdır.
+   DÜZELTME: her günün varsa fazladan (güdük, <55 dk) son barını bir önceki
+   tam saatlik bara BİRLEŞTİR — TradingView'in gördüğü bar sayısına geri
+   dön. Yalnızca 1SA/4SA'nın paylaştığı 60m ham veride uygulanır. */
+function mb60GudukBirlestir(mumlar){
+  if(!mumlar||mumlar.length<2)return mumlar;
+  const out=[];
+  for(const b of mumlar){
+    const onceki=out[out.length-1];
+    if(onceki){
+      const ayniGun=Math.floor((onceki.time+10800)/86400)===Math.floor((b.time+10800)/86400);
+      const fark=b.time-onceki.time;
+      if(ayniGun&&fark>0&&fark<3300){        /* < 55 dk → tam saatlik değil, güdük bar */
+        onceki.high=Math.max(onceki.high,b.high);
+        onceki.low=Math.min(onceki.low,b.low);
+        onceki.close=b.close;onceki.hacim+=b.hacim;
+        continue;
+      }
+    }
+    out.push({time:b.time,open:b.open,high:b.high,low:b.low,close:b.close,hacim:b.hacim});
+  }
+  return out;
+}
 /* Tek hisse + tek dilim ölçümü. onbellek: aynı turda 1SA ve 4SA tek
    saatlik çekimi paylaşsın diye (alt-istek bütçesi yarıya iner). */
 async function mbOlc(kod,tfKod,onbellek){
@@ -1929,6 +1964,7 @@ async function mbOlc(kod,tfKod,onbellek){
   if(!ham){
     const r=await yfMumlar(kod,tf.interval,tf.range);
     ham=(r&&r.veri)||[];
+    if(tf.interval==="60m")ham=mb60GudukBirlestir(ham);
     if(onbellek)onbellek[ck]=ham;
   }
   if(!ham.length)return null;
@@ -2093,7 +2129,9 @@ async function dbtKosu(kodlar,dilimler,seviyeler){
         const onbellek={};
         await Promise.all(ckListe.map(async x=>{
           const r=await yfMumlar(kod,x.interval,x.range);
-          onbellek[x.ck]=(r&&r.veri)||[];
+          let veri=(r&&r.veri)||[];
+          if(x.interval==="60m")veri=mb60GudukBirlestir(veri);
+          onbellek[x.ck]=veri;
         }));
         const serilerTf={};
         for(const t of dilimler){
@@ -2545,7 +2583,9 @@ async function ykKosu(kodlar,zamanKesim,hisseTek,A){
     }
     const onb={};
     await Promise.all(ckListe.map(async x=>{
-      const r=await yfMumlar(kod,x.interval,x.range);onb[x.ck]=(r&&r.veri)||[];
+      const r=await yfMumlar(kod,x.interval,x.range);let veri=(r&&r.veri)||[];
+      if(x.interval==="60m")veri=mb60GudukBirlestir(veri);
+      onb[x.ck]=veri;
       /* İlk gerçek Yahoo hata metnini (KV'ye yazmadan, bedava) sakla — ekranda
          doğrudan görünsün, "çekim hatası" gibi anlamsız bir sayı değil. */
       if(!teshis.ornekHata&&(!r||!r.veri||!r.veri.length)&&r&&r.hatalar&&r.hatalar.length)
