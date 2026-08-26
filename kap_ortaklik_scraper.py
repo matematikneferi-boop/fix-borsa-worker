@@ -524,7 +524,22 @@ def push_to_worker(cikti_yolu: str, worker_url: str, panel_key: str):
     with open(cikti_yolu, encoding="utf-8") as f:
         veri = json.load(f)
     r = httpx.post(f"{worker_url}/api/ortaklikYukle", json={"key": panel_key, "veri": veri}, timeout=30)
-    print(r.status_code, r.text[:200])
+    print(r.status_code, r.text[:300])
+    # ÖNEMLİ: durum kodunu kontrol et. Eskiden burada sadece print yapılıp
+    # geçiliyordu — worker 403 "yetkisiz" dönse bile script bunu fark etmiyor,
+    # Action yeşil bitiyor ve sen verinin gittiğini sanıyordun.
+    if r.status_code != 200:
+        raise RuntimeError(f"Worker push başarısız: HTTP {r.status_code} — {r.text[:300]}")
+    try:
+        cevap = r.json()
+    except Exception:
+        raise RuntimeError(f"Worker'dan geçersiz yanıt: {r.text[:300]}")
+    if not cevap.get("ok"):
+        raise RuntimeError(
+            f"Worker push reddetti: {cevap.get('hata', 'bilinmeyen hata')} — "
+            "PANEL_KEY, GitHub secret'ı ile Cloudflare Worker'daki değerle "
+            "birebir aynı mı kontrol et."
+        )
 
 
 if __name__ == "__main__":
