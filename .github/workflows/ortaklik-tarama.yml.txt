@@ -1,0 +1,44 @@
+name: Ortaklık Haritası Taraması
+
+# Ne zaman çalışır:
+#  1) Her gün TR saatiyle 06:00'da otomatik (UTC 03:00)
+#  2) İstediğin an Actions sekmesinden "Run workflow" ile elle
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      sirket_sayisi:
+        description: "Kaç şirket taransın? Test için '10' yaz, tam borsa için 'tumu' yaz."
+        required: false
+        default: "tumu"
+
+jobs:
+  tara:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Depoyu indir
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Paketleri kur
+        run: pip install -r requirements.txt
+
+      - name: Taramayı çalıştır ve worker'a gönder
+        env:
+          SIRKET_SAYISI: ${{ github.event.inputs.sirket_sayisi || 'tumu' }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          PANEL_KEY: ${{ secrets.PANEL_KEY }}
+        run: python kap_ortaklik_scraper.py
+
+      - name: Üretilen dosyayı sakla (indirmek istersen)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ortaklik-haritasi-sonucu
+          path: ortaklik_haritasi.json
+          if-no-files-found: ignore
