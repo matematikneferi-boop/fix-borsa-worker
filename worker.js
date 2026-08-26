@@ -1576,6 +1576,37 @@ function mbDurum571Seri(m){
   return mb571Seri(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)
     .map(x=>(x&&isFinite(x.doyum)&&isFinite(x.close))?(x.doyum>x.close?"BOĞA":"AYI"):null);
 }
+
+/* ═══ 571 KİLİT KATMANI — mb571SeriKilitli / mbDurum571SeriKilitli ═══
+   Pine tarafındaki levels_571_locked() (fix borsa kütüphane, satır ~1147)
+   ile BİREBİR AYNI SEBEP: m dizisinin SON elemanı — borsa açıkken — HENÜZ
+   KAPANMAMIŞ, sürekli güncellenen bir bar (yfMumCek'teki "CANLI SON BAR"
+   yaması + Yahoo'nun intraday'de zaten canlı döndürdüğü oluşmakta olan
+   mum). mb571Seri'nin durumlu pivot motoru (pivotsH/pivotsL) bu canlı barı
+   da işleme aldığı için, "son pivot H mi L mi" kararı — dolayısıyla
+   BOĞA/AYI etiketi — İKİ ART ARDA TARAMA arasında (fiyat oynadıkça)
+   TİTREŞEBİLİYOR: bir çekimde BOĞA görünen hisse, birkaç dakika sonraki
+   çekimde AYI'ya dönüp taramaya "sızabiliyor" — ekranda hâlâ doğru fibo
+   aralığı gösterilirken bile.
+   ÇÖZÜM: seviye YAPISINI (doyum/236/382/786/stop) SON bar hariç, en son
+   KAPANMIŞ bardaki durumla dondur; sadece FİYAT (close) canlı kalsın.
+   Böylece "fiyat kilitli seviyeyi geçti mi" karşılaştırması hâlâ gerçek
+   zamanlı çalışır, ama BOĞA/AYI'yı belirleyen pivot yapısı artık canlı
+   barın titreşiminden etkilenmez. */
+function mb571SeriKilitli(m,depth,lowTh,upTh,rev){
+  const tam=mb571Seri(m,depth,lowTh,upTh,rev);
+  const n=tam.length,out=new Array(n);
+  for(let i=0;i<n;i++){
+    const yapi=i>0?tam[i-1]:tam[i];   /* ilk barda geri dönecek kapanmış bar yok */
+    out[i]=yapi?{doyum:yapi.doyum,s236:yapi.s236,s382:yapi.s382,s786:yapi.s786,
+                 stop:yapi.stop,close:m[i].close}:null;   /* fiyat CANLI kalır */
+  }
+  return out;
+}
+function mbDurum571SeriKilitli(m){
+  return mb571SeriKilitli(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)
+    .map(x=>(x&&isFinite(x.doyum)&&isFinite(x.close))?(x.doyum>x.close?"BOĞA":"AYI"):null);
+}
 /* ── kütüphane:3200  ⚛ LATENT ENERGY REACTOR (enz_run + enz_scan) ──────
    Pine'daki sıkışma-zonu motorunun birebir çevirisi. Fiyat dar bir bantta
    sıkışırken "gizli enerji" birikir; bant kırılınca hareket başlar.
@@ -1755,8 +1786,10 @@ function mbMotor(mumlar){
   if(m.length<25)return null;
   const son=m.length-1;
   const[mtS,mdS]=mbMalTopDagit(m);
-  const st=mbDurum571Seri(m);
-  const lv=mb571Seri(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)[son];
+  /* KİLİT: BOĞA/AYI kararı ve seviyeler artık canlı (henüz kapanmamış) son
+     bardan değil, en son KAPANMIŞ bardan okunur — bkz. mb571SeriKilitli. */
+  const st=mbDurum571SeriKilitli(m);
+  const lv=mb571SeriKilitli(m,MB_DEPTH,MB_LOW_TH,MB_UP_TH,MB_REV)[son];
 
   /* f_mal_scan_motor: yaş 5 barı geçtiyse 9999 sayılır (tarama penceresi) */
   const topHam=mbBarsSince(mtS,son),dagHam=mbBarsSince(mdS,son);
