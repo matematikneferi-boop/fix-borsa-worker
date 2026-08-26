@@ -1835,7 +1835,7 @@ const MB_TF={
   "1SA" :{ad:"1 saat",   ik:"🕐", interval:"60m", range:"2y"},
   "4SA" :{ad:"4 saat",   ik:"🕓", interval:"60m", range:"2y", grupSaat:4},
   "1G"  :{ad:"1 gün",    ik:"🗓",  interval:"1d",  range:"5y",  hayaletAt:!0},
-  "1HAF":{ad:"1 hafta",  ik:"📅", interval:"1wk", range:"10y", hayaletAt:!0},
+  "1HAF":{ad:"1 hafta",  ik:"📅", interval:"1wk", range:"max", hayaletAt:!0},
   "1AY" :{ad:"1 ay",     ik:"🗂",  interval:"1mo", range:"max", hayaletAt:!0}
 };
 const MB_TF_LISTE=["5DK","15DK","1SA","4SA","1G","1HAF","1AY"];
