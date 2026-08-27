@@ -53,7 +53,8 @@ from bs4 import BeautifulSoup
 
 BASE = "https://www.kap.org.tr"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
-RATE_LIMIT_SEC = 0.5  # 2 istek/sn
+RATE_LIMIT_SEC = 1.2  # ~0.8 istek/sn — 0.5sn (2/sn) gerçek çalıştırmada WAF'ı tetikleyip
+                       # "Server disconnected" hatasına yol açtığı görüldü, yavaşlatıldı
 
 
 # ───────────────────────── yardımcılar ─────────────────────────
@@ -143,6 +144,7 @@ class KapIstemci:
             follow_redirects=True,
         )
         self._son_istek = 0.0
+        self._ardarda_hata = 0
         # Oturum ısıtma — WAF'ın timeout ile bağlantı kesmesini azalttığı
         # gözlemlendi (bkz. recon notları).
         try:
@@ -155,6 +157,38 @@ class KapIstemci:
         if gecen < RATE_LIMIT_SEC:
             time.sleep(RATE_LIMIT_SEC - gecen)
         self._son_istek = time.time()
+
+    def _istek(self, method: str, yol: str, **kwargs):
+        """TÜM HTTP isteklerinin geçtiği tek nokta. GERÇEK ÇALIŞTIRMADA GÖRÜLEN
+        SORUN: KAP'ın WAF'ı art arda istekleri belirli bir noktadan sonra
+        'Server disconnected without sending a response' ile kesiyor —
+        eskiden bu hata tek şirketi tamamen iptal ediyordu (784 şirketin
+        neredeyse tamamı boş dönüyordu). Şimdi:
+          1) Bağlantı hatalarında (disconnect/timeout/reset) artan bekleme
+             süreleriyle (2sn, 5sn, 12sn) 3 kez tekrar deniyor.
+          2) Art arda çok sayıda istek başarısız olursa (WAF geçici blok
+             koymuş olabilir) çok daha uzun bir soğuma (60sn) uygulayıp
+             devam ediyor — taramayı komple bırakmak yerine yavaşlayarak
+             tamamlamayı deniyor."""
+        gecikmeler = [2, 5, 12]
+        for deneme, gecikme in enumerate([0] + gecikmeler):
+            if gecikme:
+                time.sleep(gecikme)
+            self._bekle()
+            try:
+                r = self.c.request(method, yol, **kwargs)
+                self._ardarda_hata = 0
+                return r
+            except (httpx.RemoteProtocolError, httpx.ConnectError, httpx.ConnectTimeout,
+                    httpx.ReadTimeout, httpx.ReadError, httpx.PoolTimeout) as e:
+                if deneme == len(gecikmeler):
+                    self._ardarda_hata += 1
+                    if self._ardarda_hata >= 5:
+                        print(f"  ⏳ {self._ardarda_hata} istek üst üste koptu — WAF geçici blok koymuş olabilir, 60sn soğuyoruz…")
+                        time.sleep(60)
+                        self._ardarda_hata = 0
+                    raise
+                continue
 
     def sirket_listesi(self) -> list:
         """Tüm BIST-kotalı şirketler.
@@ -172,7 +206,7 @@ class KapIstemci:
         de olsa veri dönsün), ama bu durum konsola açıkça yazılıyor."""
         self._bekle()
         try:
-            r = self.c.get("/tr/api/company/generic/excel/IGS/A")
+            r = self._istek("GET", "/tr/api/company/generic/excel/IGS/A")
             r.raise_for_status()
             import pandas as pd
             import io
@@ -194,8 +228,7 @@ class KapIstemci:
             return sonuc
         except Exception as e:
             print(f"⚠️ Excel tam liste alınamadı ({e}), yedek (sınırlı) JSON listeye düşülüyor…")
-            self._bekle()
-            r = self.c.get("/tr/api/company/items/IGS/A")
+            r = self._istek("GET", "/tr/api/company/items/IGS/A")
             r.raise_for_status()
             return r.json()
 
@@ -207,10 +240,12 @@ class KapIstemci:
         her zaman tek obje olduğunu varsayıyordu ve listeye .get()
         çağırınca 'list' object has no attribute 'get' hatası veriyordu.
         Şimdi listeden companyCode'u tam eşleşen kaydı seçiyoruz."""
-        self._bekle()
-        r = self.c.get(f"/tr/api/member/filter/{ticker}", headers={
-            "Referer": f"{BASE}/tr/bist-sirketler"
-        })
+        try:
+            r = self._istek("GET", f"/tr/api/member/filter/{ticker}", headers={
+                "Referer": f"{BASE}/tr/bist-sirketler"
+            })
+        except Exception:
+            return None
         if r.status_code != 200:
             return None
         try:
@@ -228,8 +263,10 @@ class KapIstemci:
         return None
 
     def genel_sayfa_html(self, perma_link: str) -> Optional[str]:
-        self._bekle()
-        r = self.c.get(f"/tr/sirket-bilgileri/genel/{perma_link}")
+        try:
+            r = self._istek("GET", f"/tr/sirket-bilgileri/genel/{perma_link}")
+        except Exception:
+            return None
         if r.status_code != 200:
             return None
         return r.text
@@ -246,32 +283,36 @@ class KapIstemci:
         toplam_gun = 0
         while toplam_gun < gun_geriye:
             baslangic = bitis - pencere
-            self._bekle()
-            r = self.c.post(
-                "/tr/api/disclosure/members/byCriteria",
-                json={
-                    "fromDate": baslangic.isoformat(),
-                    "toDate": bitis.isoformat(),
-                    "mkkMemberOidList": [mkk_member_oid],
-                    "subjectList": [],
-                },
-                headers={"Referer": f"{BASE}/tr/bildirim-sorgu"},
-            )
-            if r.status_code == 200:
-                try:
-                    sonuclar.extend(r.json())
-                except Exception:
-                    pass
+            try:
+                r = self._istek(
+                    "POST", "/tr/api/disclosure/members/byCriteria",
+                    json={
+                        "fromDate": baslangic.isoformat(),
+                        "toDate": bitis.isoformat(),
+                        "mkkMemberOidList": [mkk_member_oid],
+                        "subjectList": [],
+                    },
+                    headers={"Referer": f"{BASE}/tr/bildirim-sorgu"},
+                )
+                if r.status_code == 200:
+                    try:
+                        sonuclar.extend(r.json())
+                    except Exception:
+                        pass
+            except Exception:
+                pass  # bu pencere kayboldu, diğer pencerelerle devam
             bitis = baslangic - timedelta(days=1)
             toplam_gun += pencere.days
         return sonuclar
 
     def disclosure_detay(self, disclosure_index: int) -> Optional[dict]:
-        self._bekle()
-        r = self.c.get(
-            f"/tr/api/notification/attachment-detail/{disclosure_index}",
-            headers={"Referer": f"{BASE}/tr/Bildirim/{disclosure_index}"},
-        )
+        try:
+            r = self._istek(
+                "GET", f"/tr/api/notification/attachment-detail/{disclosure_index}",
+                headers={"Referer": f"{BASE}/tr/Bildirim/{disclosure_index}"},
+            )
+        except Exception:
+            return None
         if r.status_code != 200:
             return None
         try:
@@ -281,8 +322,10 @@ class KapIstemci:
             return None
 
     def pdf_indir(self, obj_id: str) -> Optional[bytes]:
-        self._bekle()
-        r = self.c.get(f"/tr/api/file/download/{obj_id}")
+        try:
+            r = self._istek("GET", f"/tr/api/file/download/{obj_id}")
+        except Exception:
+            return None
         if r.status_code != 200:
             return None
         return extract_pdf_from_java_bytes(r.content)
