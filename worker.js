@@ -10008,7 +10008,19 @@ if("/api/ortaklik"===$.pathname){
   const ham=await A.VERI.get("ortaklikHaritasi");
   if(!ham)return JS({ok:!1});
   let v;try{v=JSON.parse(ham)}catch(e){return JS({ok:!1,hata:"veri bozuk"})}
-  return JS({ok:!0,guncelleme:v.guncelleme,sirketSayisi:v.sirketSayisi,modul:v.modul})
+  /* kap_ortaklik_scraper.py çıktısı snake_case (pay_yuzde, sirket_sayisi, ...)
+     üretiyor, arayüz (ortaklikGoster) camelCase okuyor — /api/ortaklikKisi
+     bu dönüşümü zaten yapıyordu, burada eksikti. "undefined şirkette
+     görünüyor" hatasının kaynağı buydu. */
+  const m=v.modul||{};
+  const modul={
+    tekOrtakKontrolu:(m.tekOrtakKontrolu||[]).map(x=>({ticker:x.ticker,unvan:x.unvan,ortak:x.ortak,payYuzde:x.pay_yuzde})),
+    hakimOrtak50:(m.hakimOrtak50||[]).map(x=>({ticker:x.ticker,unvan:x.unvan,ortak:x.ortak,payYuzde:x.pay_yuzde,tuzelMi:x.tuzel_mi})),
+    dusukHalkaAciklik:(m.dusukHalkaAciklik||[]).map(x=>({ticker:x.ticker,unvan:x.unvan,halkaAciklikTahmini:x.halka_aciklik_tahmini})),
+    cokluSirketIsimler:(m.cokluSirketIsimler||[]).map(x=>({isim:x.isim,sirketSayisi:x.sirket_sayisi,
+      sirketler:(x.sirketler||[]).map(s=>({ticker:s.ticker,rol:s.rol,payYuzde:s.pay_yuzde}))}))
+  };
+  return JS({ok:!0,guncelleme:v.guncelleme,sirketSayisi:v.sirketSayisi,modul:modul})
 }
 /* 🔎 Tek kişinin borsadaki tüm haritası. İsim eşleştirme normalize edilmiş
    anahtar üzerinden TAM eşleşme — benzer/kısmi isimler asla birleştirilmez. */
