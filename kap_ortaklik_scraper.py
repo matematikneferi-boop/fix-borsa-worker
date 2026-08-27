@@ -55,6 +55,14 @@ BASE = "https://www.kap.org.tr"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
 RATE_LIMIT_SEC = 1.2  # ~0.8 istek/sn — 0.5sn (2/sn) gerçek çalıştırmada WAF'ı tetikleyip
                        # "Server disconnected" hatasına yol açtığı görüldü, yavaşlatıldı
+PDF_MAX_SAYFA = 40     # Bir PDF'te bu sayfadan sonrası taranmaz — ortaklık yapısı
+                       # tablosu neredeyse hep dokümanın başında olur; 300 sayfalık
+                       # faaliyet raporlarında saatlerce takılmayı önler
+PDF_MAX_SANIYE = 25    # Bir PDF'in işlenmesine tanınan üst süre (sn)
+MAX_TOPLAM_SANIYE = 5 * 3600  # Toplam tarama bütçesi (5 saat) — GH Actions'ın
+                               # 6 saatlik iş sınırına çarpıp HİÇBİR ŞEY
+                               # kaydedilmemesindense, süre dolunca kalan
+                               # şirketler atlanıp o ana kadarki veri yazılır
 
 
 # ───────────────────────── yardımcılar ─────────────────────────
@@ -418,9 +426,21 @@ def extract_ortaklik_from_pdf_tables(pdf) -> list:
     üzerinde regex tahmini yapan extract_ortaklik_from_pdf_text'ten çok daha
     güvenilir: karışık büyük/küçük harfli fon isimlerini, sayı/parantez
     içeren unvanları da doğru yakalar. Önce bu denenir, bulamazsa metin
-    regex'ine düşülür (bkz. sirket_isle)."""
+    regex'ine düşülür (bkz. sirket_isle).
+
+    GÜVENLİK SINIRI (kritik): Gerçek çalıştırmada script bir 'Faaliyet
+    Raporu'nda (200-300 sayfa olabiliyor) SAATLERCE takılı kaldı — her
+    sayfada extract_tables() çağırmak büyük PDF'lerde çok yavaş. Ortaklık
+    yapısı tablosu KAP dokümanlarında hemen hemen HER ZAMAN ilk birkaç
+    sayfada olduğundan, ilk PDF_MAX_SAYFA sayfadan sonrası taranmıyor;
+    ayrıca PDF_MAX_SANIYE'yi aşarsa (yavaş/karmaşık sayfalar) erken çıkılıyor."""
     kalemler = []
-    for sayfa in pdf.pages:
+    baslangic_t = time.monotonic()
+    for i, sayfa in enumerate(pdf.pages):
+        if i >= PDF_MAX_SAYFA:
+            break
+        if time.monotonic() - baslangic_t > PDF_MAX_SANIYE:
+            break
         try:
             tablolar = sayfa.extract_tables()
         except Exception:
@@ -519,14 +539,29 @@ def sirket_isle(kap: KapIstemci, ticker: str, unvan: str) -> SirketKarti:
         # her bildirim türü aday sayılıyor — fonlar ve kurumsal ortaklar
         # genelde bu geniş listedeki dokümanlarda geçiyor (tek başlığa
         # güvenmek çoğu şirketi 'bulunamadı'ya düşürüyordu).
-        aday = [b for b in bildirimler if any(
-            k in (b.get("subject") or "") for k in
-            ["Genel Kurul", "Ortaklık Yapısı", "Payların Oranı", "Sermaye Yapısı",
-             "Pay Sahipliği", "İzahname", "Halka Arz", "Faaliyet Raporu",
-             "Sermaye Artırımı", "Kurumsal Yönetim"]
-        )]
-        # en yeniden en eskiye, ilk BAŞARILI parse'ı kabul et
+        # ÖNCELİK SIRASI ÖNEMLİ: 'Faaliyet Raporu' 200-300 sayfa olabilen en
+        # yavaş/riskli doküman türü — gerçek çalıştırmada bunda saatlerce
+        # takılı kalındı. Küçük/hedefli belgeler önce denenir, faaliyet
+        # raporuna sadece hiçbiri işe yaramazsa başvurulur.
+        ONCELIK_SIRASI = [
+            "Ortaklık Yapısı", "Payların Oranı", "Sermaye Yapısı", "Pay Sahipliği",
+            "Genel Kurul", "Kurumsal Yönetim", "Sermaye Artırımı", "İzahname",
+            "Halka Arz", "Faaliyet Raporu",
+        ]
+
+        def _oncelik(b):
+            konu = b.get("subject") or ""
+            for i, k in enumerate(ONCELIK_SIRASI):
+                if k in konu:
+                    return i
+            return len(ONCELIK_SIRASI)
+
+        aday = [b for b in bildirimler if any(k in (b.get("subject") or "") for k in ONCELIK_SIRASI)]
+        # önce en yeniden en eskiye, sonra (kararlı sort sayesinde) belge türü
+        # önceliğine göre grupla — böylece her öncelik grubu içinde en yeni
+        # belge önce denenir, ama tüm gruplar arasında öncelik sırası korunur
         aday.sort(key=lambda b: b.get("publishDate", ""), reverse=True)
+        aday.sort(key=_oncelik)
         bulundu = False
         for b in aday[:10]:  # gereksiz PDF indirmeyi sınırla ama eskiden 5'ti — çok az deniyordu
             detay = kap.disclosure_detay(b["disclosureIndex"])
@@ -545,9 +580,13 @@ def sirket_isle(kap: KapIstemci, ticker: str, unvan: str) -> SirketKarti:
                     #    fon/kurum isimlerini karışık harfle de yakalar)
                     kalemler = extract_ortaklik_from_pdf_tables(pdf)
                     # 2) Tablo bulunamadıysa düz metin regex'ine düş
+                    #    (aynı sayfa/süre sınırı burada da uygulanıyor)
                     if not kalemler:
                         metin = ""
-                        for sayfa in pdf.pages:
+                        t0 = time.monotonic()
+                        for i, sayfa in enumerate(pdf.pages):
+                            if i >= PDF_MAX_SAYFA or time.monotonic() - t0 > PDF_MAX_SANIYE:
+                                break
                             metin += (sayfa.extract_text() or "") + "\n"
                         kalemler = extract_ortaklik_from_pdf_text(metin)
             except Exception:
@@ -665,7 +704,12 @@ def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "ortaklik_haritas
         ham_liste = ham_liste[:sinirli_sayi]
 
     sirketler = []
+    baslangic_t = time.monotonic()
     for i, s in enumerate(ham_liste):
+        if time.monotonic() - baslangic_t > MAX_TOPLAM_SANIYE:
+            print(f"\n⏹️ Zaman bütçesi doldu ({MAX_TOPLAM_SANIYE/3600:.1f} saat) — "
+                  f"kalan {len(ham_liste)-i} şirket atlanıp o ana kadar toplanan veri kaydediliyor.")
+            break
         ticker = s.get("stockCode")
         unvan = s.get("kapMemberTitle", "")
         if not ticker:
