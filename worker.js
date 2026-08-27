@@ -6596,6 +6596,11 @@ function absGoster(v){
    isimler. Veri KV'de "ortaklikHaritasi" anahtarında; kap_ortaklik_scraper.py
    tarafından periyodik üretilip yazılıyor (canlı hesaplama DEĞİL). */
 var ortD=null, ortAktifModul="tekOrtakKontrolu", ortSeciliKisi=null;
+var ortSeciliSirket=null;    // ticker seçiliyse şirket kartı gösterilir
+var ortAramaTip="isim";      // "isim" (kişi/fon) veya "sirket"
+var ortAramaMetin="";        // aramanın kendisi (kutuda yazan)
+var ortAramaSonuc=null;      // son arama sonucu {tip,sonuclar}
+var ortAramaZamanlayici=null;
 function ortaklikCiz(){
   if(ortD){ortaklikGoster(ortD);return}
   el("govde").innerHTML='<div class="yukleniyor">ortaklık haritası okunuyor…</div>';
@@ -6615,11 +6620,30 @@ function ortaklikGoster(v){
     return;
   }
   if(ortSeciliKisi){ortaklikKisiGoster(ortSeciliKisi);return}
+  if(ortSeciliSirket){ortaklikSirketGoster(ortSirketD);return}
   var h='<div class="uyari" style="margin-top:0"><b>🔗 Ortaklık Haritası</b><br>'+
     'Bir isme dokun, borsadaki tüm şirketlerini gör. Aşağıdaki 4 modül, '+
     'bilinen ortaklık/yönetim verisi üzerinden otomatik süzülür.<br>'+
     '<span style="opacity:.7">Kaynak: KAP genel kurul/faaliyet raporu dokümanları · '+
     'güncelleme: '+E(v.guncelleme||"—")+' · '+(v.sirketSayisi||0)+' şirket tarandı</span></div>';
+
+  // ── ARAMA KUTUSU ─────────────────────────────────────────────
+  h+='<div class="sirala" style="flex-wrap:wrap">'+
+    '<button class="sir'+(ortAramaTip==="isim"?" on":"")+'" id="ortAramaTipIsim">👤🏦 İsim/Fon Ara</button>'+
+    '<button class="sir'+(ortAramaTip==="sirket"?" on":"")+'" id="ortAramaTipSirket">🏢 Şirket Ara</button>'+
+    '</div>';
+  h+='<input id="ortAramaKutu" type="text" placeholder="'+
+    (ortAramaTip==="sirket"?"Ticker veya şirket adı yaz…":"İsim veya fon adı yaz…")+
+    '" value="'+E(ortAramaMetin)+'" style="width:100%;box-sizing:border-box;padding:10px;'+
+    'margin:6px 0;border-radius:8px;border:1px solid #444;background:#111;color:#eee;font-size:15px">';
+
+  if(ortAramaMetin.trim().length>=2){
+    h+='<div id="ortAramaSonuclar">'+ortaklikAramaSonucHtml()+'</div>';
+    el("govde").innerHTML=h;
+    ortaklikAramaOlaylariBagla();
+    return;
+  }
+
   h+='<div class="sirala" style="flex-wrap:wrap">'+Object.keys(ORT_MODUL_AD).map(function(k){
     return '<button class="sir'+(ortAktifModul===k?" on":"")+'" data-om="'+k+'">'+ORT_MODUL_AD[k]+'</button>';
   }).join("")+'</div>';
@@ -6658,6 +6682,101 @@ function ortaklikGoster(v){
   [].forEach.call(document.querySelectorAll("[data-isim]"),function(b){
     b.onclick=function(){tit();ortSeciliKisi=b.dataset.isim;ortaklikKisiAc(ortSeciliKisi)};
   });
+  ortaklikAramaOlaylariBagla();
+}
+function ortaklikAramaOlaylariBagla(){
+  var ti=el("ortAramaTipIsim"), ts=el("ortAramaTipSirket"), kutu=el("ortAramaKutu");
+  if(ti)ti.onclick=function(){ortAramaTip="isim";ortAramaSonuc=null;ortaklikGoster(ortD)};
+  if(ts)ts.onclick=function(){ortAramaTip="sirket";ortAramaSonuc=null;ortaklikGoster(ortD)};
+  if(kutu){
+    kutu.focus();
+    kutu.selectionStart=kutu.selectionEnd=kutu.value.length;
+    kutu.oninput=function(){
+      ortAramaMetin=kutu.value;
+      clearTimeout(ortAramaZamanlayici);
+      ortAramaZamanlayici=setTimeout(function(){
+        if(ortAramaMetin.trim().length<2){ortAramaSonuc=null;ortaklikGoster(ortD);return}
+        post("/api/ortaklikAra",{q:ortAramaMetin.trim(),tip:ortAramaTip}).then(function(r){
+          ortAramaSonuc=r;
+          var kap=el("ortAramaSonuclar");
+          if(kap){kap.innerHTML=ortaklikAramaSonucHtml();ortaklikAramaSonucOlaylariBagla()}
+        });
+      },350);
+    };
+  }
+  ortaklikAramaSonucOlaylariBagla();
+}
+function ortaklikAramaSonucHtml(){
+  if(!ortAramaSonuc)return '<div class="yukleniyor">aranıyor…</div>';
+  var liste=ortAramaSonuc.sonuclar||[];
+  if(!liste.length)return '<div class="bos">Eşleşme bulunamadı.</div>';
+  if(ortAramaSonuc.tip==="sirket"){
+    return liste.map(function(x){
+      return '<div class="satir" data-ticker="'+E(x.ticker)+'" style="cursor:pointer">'+
+        '<div class="sol"><div class="kod">'+E(x.ticker)+' — '+E(x.unvan)+'</div></div>'+
+        '<div class="sag">👉</div></div>';
+    }).join("");
+  }
+  return liste.map(function(x){
+    var etiket=x.tuzelMi?"🏦 ":"👤 ";
+    return '<div class="satir" data-isim="'+E(x.isim)+'" style="cursor:pointer">'+
+      '<div class="sol"><div class="kod">'+etiket+E(x.isim)+'</div>'+
+      '<div class="altbilgi">'+x.sirketSayisi+' şirkette görünüyor'+
+      (x.sirketler&&x.sirketler.length?' · '+x.sirketler.map(function(t){return E(t)}).join(", "):"")+
+      '</div></div><div class="sag">👉</div></div>';
+  }).join("");
+}
+function ortaklikAramaSonucOlaylariBagla(){
+  [].forEach.call(document.querySelectorAll("#ortAramaSonuclar [data-isim]"),function(b){
+    b.onclick=function(){tit();ortSeciliKisi=b.dataset.isim;ortaklikKisiAc(ortSeciliKisi)};
+  });
+  [].forEach.call(document.querySelectorAll("#ortAramaSonuclar [data-ticker]"),function(b){
+    b.onclick=function(){tit();ortSeciliSirket=b.dataset.ticker;ortaklikSirketAc(ortSeciliSirket)};
+  });
+}
+var ortSirketD=null;
+function ortaklikSirketAc(ticker){
+  el("govde").innerHTML='<div class="yukleniyor">'+E(ticker)+' için kart çıkarılıyor…</div>';
+  post("/api/ortaklikSirket",{ticker:ticker}).then(function(v){ortSirketD=v;ortaklikSirketGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Bulunamadı.</div>'});
+}
+function ortaklikSirketGoster(v){
+  var h='<button class="sir" id="ortGeri">◀ Haritaya dön</button>';
+  if(!v||!v.ok||v.bulunamadi){
+    h+='<div class="bos">'+E(v&&v.ticker||"")+' için kayıt bulunamadı.</div>';
+  }else{
+    h+='<div class="kutu"><h3>🏢 '+E(v.ticker)+' — '+E(v.unvan)+'</h3>'+
+      (v.halkaAciklikTahmini!=null?'<div class="altbilgi">Tahmini halka açıklık: %'+E(String(v.halkaAciklikTahmini))+'</div>':"")+
+      '</div>';
+    if(v.ortaklikYapisi&&v.ortaklikYapisi.length){
+      h+='<div class="uyari"><b>Ortaklık yapısı</b></div>';
+      h+=v.ortaklikYapisi.map(function(o){
+        var etiket=o.tuzelMi?"🏦 ":"👤 ";
+        return '<div class="satir"><div class="sol">'+
+          '<div class="kod"><span data-isim="'+E(o.isim)+'" style="text-decoration:underline;cursor:pointer">'+
+          etiket+E(o.isim)+'</span></div></div>'+
+          '<div class="sag"><div class="yuzde">%'+E(String(o.payYuzde))+'</div></div></div>';
+      }).join("");
+    }
+    if(v.yonetimKurulu&&v.yonetimKurulu.length){
+      h+='<div class="uyari"><b>Yönetim kurulu</b></div>';
+      h+=v.yonetimKurulu.map(function(y){
+        return '<div class="satir"><div class="sol">'+
+          '<div class="kod"><span data-isim="'+E(y.isim)+'" style="text-decoration:underline;cursor:pointer">'+
+          E(y.isim)+'</span></div><div class="altbilgi">'+E(y.gorev)+'</div></div></div>';
+      }).join("");
+    }
+    if(!(v.ortaklikYapisi&&v.ortaklikYapisi.length)&&!(v.yonetimKurulu&&v.yonetimKurulu.length)){
+      h+='<div class="bos">Bu şirket için ortaklık/yönetim verisi bulunamadı'+
+        (v.veriEksik&&v.veriEksik.length?' ('+v.veriEksik.map(function(e){return E(e)}).join(", ")+')':"")+
+        '.</div>';
+    }
+  }
+  el("govde").innerHTML=h;
+  var g=el("ortGeri");if(g)g.onclick=function(){tit();ortSeciliSirket=null;ortaklikGoster(ortD)};
+  [].forEach.call(document.querySelectorAll("[data-isim]"),function(b){
+    b.onclick=function(){tit();ortSeciliSirket=null;ortSeciliKisi=b.dataset.isim;ortaklikKisiAc(ortSeciliKisi)};
+  });
 }
 function ortaklikKisiAc(isim){
   el("govde").innerHTML='<div class="yukleniyor">'+E(isim)+' için borsa haritası çıkarılıyor…</div>';
@@ -6678,7 +6797,7 @@ function ortaklikKisiGoster(v){
     }).join("");
   }
   el("govde").innerHTML=h;
-  var g=el("ortGeri");if(g)g.onclick=function(){tit();ortSeciliKisi=null;ortaklikGoster(ortD)};
+  var g=el("ortGeri");if(g)g.onclick=function(){tit();ortSeciliKisi=null;ortSeciliSirket=null;ortaklikGoster(ortD)};
 }
 /* ================== 🐂🐻 TARAMA SEKMESİ (MAL · DİP · AYI/BOĞA) ==========
    Üç bağımsız tarama modülü tek ekranda. Her modülün kendi aç/kapa tiki
@@ -10022,6 +10141,73 @@ if("/api/ortaklik"===$.pathname){
       sirketler:(x.sirketler||[]).map(s=>({ticker:s.ticker,rol:s.rol,payYuzde:s.pay_yuzde}))}))
   };
   return JS({ok:!0,guncelleme:v.guncelleme,sirketSayisi:v.sirketSayisi,modul:modul})
+}
+/* 🔎 SERBEST ARAMA — isim/fon (kisiIndeksi) veya şirket (ticker/unvan) için.
+   gov.tip: "isim" (varsayılan) veya "sirket". gov.q: en az 2 karakter.
+   Sadece ≥2 şirkette görünenler değil, TEK şirkette geçen isim/fon da
+   eşleşir — "birden fazla şirkette görünen" modülünden farklı olarak
+   burada amaç belirli bir ismi/şirketi DOĞRUDAN bulmak. */
+if("/api/ortaklikAra"===$.pathname){
+  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
+  const q=String((gov&&gov.q)||"").trim();
+  if(q.length<2)return JS({ok:!0,sonuclar:[]});
+  const tip=String((gov&&gov.tip)||"isim");
+  const ham=await A.VERI.get("ortaklikHaritasi");
+  if(!ham)return JS({ok:!1});
+  let v;try{v=JSON.parse(ham)}catch(e){return JS({ok:!1,hata:"veri bozuk"})}
+  const normTR=s=>String(s||"").replace(/i/g,"İ").replace(/ı/g,"I").replace(/ğ/g,"Ğ")
+    .replace(/ü/g,"Ü").replace(/ş/g,"Ş").replace(/ö/g,"Ö").replace(/ç/g,"Ç")
+    .toUpperCase().replace(/\s+/g," ").trim();
+  const qN=normTR(q);
+  if(tip==="sirket"){
+    const sirketler=v.sirketler||{};
+    const sonuclar=[];
+    for(const ticker in sirketler){
+      const kart=sirketler[ticker]||{};
+      const unvan=kart.unvan||"";
+      if(normTR(ticker).includes(qN)||normTR(unvan).includes(qN)){
+        sonuclar.push({ticker:ticker,unvan:unvan});
+        if(sonuclar.length>=30)break;
+      }
+    }
+    return JS({ok:!0,tip:"sirket",sonuclar:sonuclar})
+  }
+  // tip==="isim" (kişi/fon)
+  const indeks=v.kisiIndeksi||{};
+  const sonuclar=[];
+  for(const anahtar in indeks){
+    if(anahtar.includes(qN)){
+      const kayit=indeks[anahtar]||{};
+      const tickerlar=[...new Set((kayit.kayitlar||[]).map(k=>k.ticker))];
+      sonuclar.push({
+        isim:kayit.goruntu_isim||anahtar,
+        tuzelMi:kayit.tuzel_mi,
+        sirketSayisi:tickerlar.length,
+        sirketler:tickerlar.slice(0,4),
+      });
+      if(sonuclar.length>=30)break;
+    }
+  }
+  sonuclar.sort((a,b)=>b.sirketSayisi-a.sirketSayisi);
+  return JS({ok:!0,tip:"isim",sonuclar:sonuclar})
+}
+/* 🏢 Tek bir şirketin tam kartı (yönetim kurulu + ortaklık yapısı) —
+   "Şirket Ara" sonucuna dokununca açılır. */
+if("/api/ortaklikSirket"===$.pathname){
+  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
+  const ticker=String((gov&&gov.ticker)||"").trim().toUpperCase();
+  if(!ticker)return JS({ok:!1,hata:"ticker gerekli"});
+  const ham=await A.VERI.get("ortaklikHaritasi");
+  if(!ham)return JS({ok:!1});
+  let v;try{v=JSON.parse(ham)}catch(e){return JS({ok:!1,hata:"veri bozuk"})}
+  const kart=(v.sirketler||{})[ticker];
+  if(!kart)return JS({ok:!0,bulunamadi:!0,ticker:ticker});
+  return JS({ok:!0,ticker:ticker,unvan:kart.unvan,
+    yonetimKurulu:(kart.yonetim_kurulu||[]).map(y=>({isim:y.isim,gorev:y.gorev})),
+    ustYonetim:(kart.ust_yonetim||[]).map(u=>({isim:u.isim,gorev:u.gorev})),
+    ortaklikYapisi:(kart.ortaklik_yapisi||[]).map(o=>({isim:o.isim,payYuzde:o.pay_yuzde,tuzelMi:o.tuzel_mi})),
+    halkaAciklikTahmini:kart.halka_aciklik_tahmini,
+    veriEksik:kart.veri_eksik||[]})
 }
 /* 🔎 Tek kişinin borsadaki tüm haritası. İsim eşleştirme normalize edilmiş
    anahtar üzerinden TAM eşleşme — benzer/kısmi isimler asla birleştirilmez. */
