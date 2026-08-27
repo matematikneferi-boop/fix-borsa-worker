@@ -6606,7 +6606,7 @@ var ORT_MODUL_AD={
   tekOrtakKontrolu:"👤 Tek ortağın kontrol ettiği şirketler",
   hakimOrtak50:"🏛 %50+ hakim ortaklı tahtalar",
   dusukHalkaAciklik:"🔒 Düşük halka açıklık",
-  cokluSirketIsimler:"🔁 Birden fazla şirkette görünen isimler"
+  cokluSirketIsimler:"🔁 Birden fazla şirkette görünen isim/fon"
 };
 function ortaklikGoster(v){
   if(!v||!v.ok){
@@ -6629,8 +6629,9 @@ function ortaklikGoster(v){
     h+='<div class="bos">Bu filtreye uyan şirket/kişi bulunamadı.</div>';
   }else if(ortAktifModul==="cokluSirketIsimler"){
     h+=liste.map(function(x){
+      var etiket=x.tuzelMi?"🏦 ":"👤 ";
       return '<div class="satir" data-isim="'+E(x.isim)+'" style="cursor:pointer">'+
-        '<div class="sol"><div class="kod">'+E(x.isim)+'</div>'+
+        '<div class="sol"><div class="kod">'+etiket+E(x.isim)+'</div>'+
         '<div class="altbilgi">'+x.sirketSayisi+' şirkette görünüyor · '+
         x.sirketler.slice(0,4).map(function(s2){return E(s2.ticker)}).join(", ")+
         (x.sirketler.length>4?" +"+(x.sirketler.length-4):"")+'</div></div>'+
@@ -6668,7 +6669,7 @@ function ortaklikKisiGoster(v){
   if(!v||!v.ok||!v.kayitlar||!v.kayitlar.length){
     h+='<div class="bos">'+E(v&&v.isim||"")+' için kayıt bulunamadı.</div>';
   }else{
-    h+='<div class="kutu"><h3>👤 '+E(v.goruntuIsim||v.isim)+'</h3>'+
+    h+='<div class="kutu"><h3>'+(v.tuzelMi?"🏦 ":"👤 ")+E(v.goruntuIsim||v.isim)+'</h3>'+
       '<div class="altbilgi">'+v.kayitlar.length+' şirkette kayıt bulundu — '+
       'aynı görünen farklı kişiler otomatik ayrıştırılmadı, isim tam eşleşmesi kullanıldı.</div></div>';
     h+=v.kayitlar.map(function(k){
@@ -10017,7 +10018,7 @@ if("/api/ortaklik"===$.pathname){
     tekOrtakKontrolu:(m.tekOrtakKontrolu||[]).map(x=>({ticker:x.ticker,unvan:x.unvan,ortak:x.ortak,payYuzde:x.pay_yuzde})),
     hakimOrtak50:(m.hakimOrtak50||[]).map(x=>({ticker:x.ticker,unvan:x.unvan,ortak:x.ortak,payYuzde:x.pay_yuzde,tuzelMi:x.tuzel_mi})),
     dusukHalkaAciklik:(m.dusukHalkaAciklik||[]).map(x=>({ticker:x.ticker,unvan:x.unvan,halkaAciklikTahmini:x.halka_aciklik_tahmini})),
-    cokluSirketIsimler:(m.cokluSirketIsimler||[]).map(x=>({isim:x.isim,sirketSayisi:x.sirket_sayisi,
+    cokluSirketIsimler:(m.cokluSirketIsimler||[]).map(x=>({isim:x.isim,tuzelMi:x.tuzel_mi,sirketSayisi:x.sirket_sayisi,
       sirketler:(x.sirketler||[]).map(s=>({ticker:s.ticker,rol:s.rol,payYuzde:s.pay_yuzde}))}))
   };
   return JS({ok:!0,guncelleme:v.guncelleme,sirketSayisi:v.sirketSayisi,modul:modul})
@@ -10036,8 +10037,8 @@ if("/api/ortaklikKisi"===$.pathname){
     .toUpperCase().replace(/\s+/g," ").trim();
   const kayit=(v.kisiIndeksi||{})[anahtar];
   if(!kayit)return JS({ok:!0,isim:isim,kayitlar:[]});
-  return JS({ok:!0,isim:isim,goruntuIsim:kayit.goruntu_isim,
-    kayitlar:(kayit.kayitlar||[]).map(k=>({ticker:k.ticker,unvan:k.unvan,rol:k.rol,payYuzde:k.pay_yuzde}))})
+  return JS({ok:!0,isim:isim,goruntuIsim:kayit.goruntu_isim,tuzelMi:kayit.tuzel_mi,
+    kayitlar:(kayit.kayitlar||[]).map(k=>({ticker:k.ticker,unvan:k.unvan,rol:k.rol,payYuzde:k.pay_yuzde,tuzelMi:k.tuzel_mi}))})
 }
 /* ═══ 🐂🐻 MAL TOPLAMA/DAĞITIM + AYI/BOĞA — TÜM ZAMAN DİLİMLERİ ═══
    Üç iş tek uçta:

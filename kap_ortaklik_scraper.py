@@ -300,23 +300,99 @@ def parse_yonetim_ve_ust_yonetim(html: str) -> tuple:
 
 ORTAKLIK_BASLIK_ANAHTARLARI = [
     "Ortağın Ticaret Unvanı", "Ortağın Adı Soyadı", "Ortak Adı",
-    "Pay Sahibinin Ünvanı/Adı Soyadı", "Pay Sahibi",
+    "Pay Sahibinin Ünvanı/Adı Soyadı", "Pay Sahibi", "Ortağın Unvanı",
+    "Ortak", "Hissedar", "Adı Soyadı/Ticaret Unvanı", "Pay Sahibinin Adı",
 ]
 PAY_BASLIK_ANAHTARLARI = [
     "Sermayedeki Payı", "Sermaye Payı", "Pay Oranı (%)", "Oy Hakkı Oranı",
+    "Sermaye Payı (%)", "Pay Oranı", "Payı (%)", "%",
 ]
+
+# Tüzel kişi / fon / kurum tespiti — hem PDF metninden hem tablodan gelen
+# isimlerde ortak kullanılır. Sadece A.Ş./LTD değil, portföy yönetimi
+# fonları, emeklilik/sigorta şirketleri, vakıflar, bankalar da tüzel kişi
+# sayılır — 'bütün fonların çıkması' talebi için genişletildi.
+ISTISNA_DESENI = re.compile(
+    r"^(TOPLAM|GENEL TOPLAM|DİĞER|HALKA AÇIK|HALKA AÇIK KISIM|HALKA AÇIK OLAN|SERMAYE|TAHSISLI)\b",
+    re.IGNORECASE,
+)
+TUZEL_DESENI = re.compile(
+    r"A\.?Ş\.?|A\.?O\.?|LTD|LİMİTED|HOLDİNG|SANAYİ|TİCARET|\bFON\b|FONU\b|"
+    r"PORTFÖY|PORTFOY|EMEKLİLİK|SİGORTA|VARLIK KİRALAMA|GİRİŞİM SERMAYESİ|"
+    r"YATIRIM ORTAKLIĞI|YATIRIM FONU|VAKF?I|VAKIF|BANKASI|KOOPERATİF",
+    re.IGNORECASE,
+)
+
+
+def _hucre_temizle(x) -> str:
+    if x is None:
+        return ""
+    return re.sub(r"\s+", " ", str(x).replace("\n", " ")).strip()
+
+
+def extract_ortaklik_from_pdf_tables(pdf) -> list:
+    """pdfplumber'ın extract_tables() ile PDF içindeki GERÇEK tablo yapısını
+    okur (satır/sütun korunur). Yönetim kurulu tablosu için kullanılan
+    'sabit pozisyona değil BAŞLIK METNİNE göre eşleş' stratejisinin aynısı
+    burada da uygulanıyor: ORTAKLIK_BASLIK_ANAHTARLARI / PAY_BASLIK_ANAHTARLARI
+    ile başlık hücrelerini eşleştirip o sütunlardan okuyor. Bu, düz metin
+    üzerinde regex tahmini yapan extract_ortaklik_from_pdf_text'ten çok daha
+    güvenilir: karışık büyük/küçük harfli fon isimlerini, sayı/parantez
+    içeren unvanları da doğru yakalar. Önce bu denenir, bulamazsa metin
+    regex'ine düşülür (bkz. sirket_isle)."""
+    kalemler = []
+    for sayfa in pdf.pages:
+        try:
+            tablolar = sayfa.extract_tables()
+        except Exception:
+            continue
+        for tablo in (tablolar or []):
+            if not tablo or len(tablo) < 2:
+                continue
+            baslik = [_hucre_temizle(h) for h in tablo[0]]
+            isim_col = pay_col = None
+            for i, h in enumerate(baslik):
+                hl = h.lower()
+                if isim_col is None and any(k.lower() in hl for k in ORTAKLIK_BASLIK_ANAHTARLARI):
+                    isim_col = i
+                if pay_col is None and any(k.lower() in hl for k in PAY_BASLIK_ANAHTARLARI):
+                    pay_col = i
+            if isim_col is None or pay_col is None:
+                continue
+            for satir in tablo[1:]:
+                if not satir or len(satir) <= max(isim_col, pay_col):
+                    continue
+                isim = _hucre_temizle(satir[isim_col])
+                yuzde = parse_tr_yuzde(_hucre_temizle(satir[pay_col]))
+                if not isim or yuzde is None or not (0 < yuzde <= 100):
+                    continue
+                # başlık satırı tekrar tabloya karışmışsa (bazı PDF'lerde olur) atla
+                if isim.lower() in [k.lower() for k in ORTAKLIK_BASLIK_ANAHTARLARI]:
+                    continue
+                # 'Diğer', 'Halka Açık', 'Toplam' gibi özet satırları isim sayma
+                if ISTISNA_DESENI.match(isim):
+                    continue
+                tuzel = bool(TUZEL_DESENI.search(isim))
+                kalemler.append(OrtaklikKalemi(isim=isim, pay_yuzde=yuzde, tuzel_mi=tuzel, kaynak="pdf-tablo"))
+    return kalemler
 
 
 def extract_ortaklik_from_pdf_text(metin: str) -> list:
-    """PDF'ten çıkarılan düz metinden ortaklık yapısı satırlarını yakalamaya
-    çalışır. KAP genel kurul bilgilendirme dokümanlarında tipik satır:
+    """Tablo yapısı pdfplumber tarafından çıkarılamadığında (bazı PDF'ler
+    tabloyu değil serbest metni andırır) düz metinden ortaklık yapısı
+    satırlarını yakalamaya çalışır. KAP genel kurul bilgilendirme
+    dokümanlarında tipik satır:
       'AHMET YILMAZ                    120.000.000        24,00'
-    yani: İSİM (büyük harf ağırlıklı) ... TUTAR ... YÜZDE
+    veya fon/kurum örneği:
+      'ABC Portföy Yönetimi A.Ş. Değişken Fon    45.000.000    9,00'
+    yani: İSİM (büyük/karışık harf) ... TUTAR ... YÜZDE. Artık sadece
+    tamamen büyük harfli isimlerle sınırlı değil — karışık harf, rakam,
+    parantez içeren fon/kurum unvanlarını da kabul ediyor.
     Bu bir best-effort regex'tir; şirket/dönem bazında format farklılaşabilir.
     Eşleşmeyen şirketler 'veri_eksik' listesine düşer, UYDURULMAZ."""
     kalemler = []
     satir_deseni = re.compile(
-        r"^([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜ\.\s&/]{4,60}?)\s{2,}[\d.,]+\s+(?:TL\s+)?%?\s*([\d]{1,3}[.,]\d{1,2})\s*$",
+        r"^([A-Za-zÇĞİÖŞÜçğıöşü0-9][A-Za-zÇĞİÖŞÜçğıöşü0-9\.\s&/,()\-]{4,80}?)\s{2,}[\d.,]+\s+(?:TL\s+)?%?\s*([\d]{1,3}[.,]\d{1,2})\s*$",
         re.MULTILINE,
     )
     for satir in metin.splitlines():
@@ -325,9 +401,9 @@ def extract_ortaklik_from_pdf_text(metin: str) -> list:
         if m:
             isim = m.group(1).strip(" .")
             yuzde = parse_tr_yuzde(m.group(2))
-            if isim and yuzde is not None and 0 < yuzde <= 100:
-                tuzel = bool(re.search(r"A\.?Ş\.?|LTD|LİMİTED|HOLDİNG|SANAYİ|TİCARET", isim))
-                kalemler.append(OrtaklikKalemi(isim=isim, pay_yuzde=yuzde, tuzel_mi=tuzel, kaynak="pdf"))
+            if isim and yuzde is not None and 0 < yuzde <= 100 and not ISTISNA_DESENI.match(isim):
+                tuzel = bool(TUZEL_DESENI.search(isim))
+                kalemler.append(OrtaklikKalemi(isim=isim, pay_yuzde=yuzde, tuzel_mi=tuzel, kaynak="pdf-metin"))
     return kalemler
 
 
@@ -360,14 +436,20 @@ def sirket_isle(kap: KapIstemci, ticker: str, unvan: str) -> SirketKarti:
             bildirimler = kap.disclosure_ara(kart.mkk_member_oid, gun_geriye=730)
         except Exception:
             bildirimler = []
+        # Sadece "Genel Kurul" değil, ortaklık/sermaye yapısını içerebilecek
+        # her bildirim türü aday sayılıyor — fonlar ve kurumsal ortaklar
+        # genelde bu geniş listedeki dokümanlarda geçiyor (tek başlığa
+        # güvenmek çoğu şirketi 'bulunamadı'ya düşürüyordu).
         aday = [b for b in bildirimler if any(
             k in (b.get("subject") or "") for k in
-            ["Genel Kurul", "Ortaklık Yapısı", "Payların Oranı"]
+            ["Genel Kurul", "Ortaklık Yapısı", "Payların Oranı", "Sermaye Yapısı",
+             "Pay Sahipliği", "İzahname", "Halka Arz", "Faaliyet Raporu",
+             "Sermaye Artırımı", "Kurumsal Yönetim"]
         )]
         # en yeniden en eskiye, ilk BAŞARILI parse'ı kabul et
         aday.sort(key=lambda b: b.get("publishDate", ""), reverse=True)
         bulundu = False
-        for b in aday[:5]:  # gereksiz PDF indirmeyi sınırla
+        for b in aday[:10]:  # gereksiz PDF indirmeyi sınırla ama eskiden 5'ti — çok az deniyordu
             detay = kap.disclosure_detay(b["disclosureIndex"])
             if not detay or not detay.get("attachments"):
                 continue
@@ -375,19 +457,25 @@ def sirket_isle(kap: KapIstemci, ticker: str, unvan: str) -> SirketKarti:
             pdf_bytes = kap.pdf_indir(obj_id)
             if not pdf_bytes:
                 continue
+            kalemler = []
             try:
                 import pdfplumber
                 import io
-                metin = ""
                 with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-                    for sayfa in pdf.pages:
-                        metin += (sayfa.extract_text() or "") + "\n"
+                    # 1) Önce gerçek tablo yapısını dene (en güvenilir —
+                    #    fon/kurum isimlerini karışık harfle de yakalar)
+                    kalemler = extract_ortaklik_from_pdf_tables(pdf)
+                    # 2) Tablo bulunamadıysa düz metin regex'ine düş
+                    if not kalemler:
+                        metin = ""
+                        for sayfa in pdf.pages:
+                            metin += (sayfa.extract_text() or "") + "\n"
+                        kalemler = extract_ortaklik_from_pdf_text(metin)
             except Exception:
-                metin = ""
-            kalemler = extract_ortaklik_from_pdf_text(metin)
+                kalemler = []
             if kalemler:
                 for k in kalemler:
-                    k.kaynak = f"pdf:{b['disclosureIndex']}"
+                    k.kaynak = f"{k.kaynak}:{b['disclosureIndex']}"
                 kart.ortaklik_yapisi = kalemler
                 bulundu = True
                 break
@@ -406,27 +494,32 @@ def sirket_isle(kap: KapIstemci, ticker: str, unvan: str) -> SirketKarti:
 # ───────────────────────── indeks + 4 modül filtre ─────────────────────────
 
 def kisi_indeksi_kur(sirketler: list) -> dict:
-    """isim(normalize) -> {goruntu_isim, kayitlar:[{ticker, unvan, rol, pay_yuzde}]}"""
+    """isim(normalize) -> {goruntu_isim, tuzel_mi, kayitlar:[{ticker, unvan, rol, pay_yuzde, tuzel_mi}]}
+
+    ARTIK sadece gerçek kişi ortaklar değil, TÜZEL ortaklar da (fon, holding,
+    portföy yönetim şirketi, sigorta/emeklilik şirketi vb.) bu indekse giriyor
+    — önceden 'if not o.tuzel_mi' filtresiyle tüm fonlar haritadan siliniyordu,
+    'birden fazla şirkette görünen fonlar/kurumlar' hiç çıkmıyordu."""
     indeks = {}
 
-    def ekle(isim, ticker, unvan, rol, pay=None):
+    def ekle(isim, ticker, unvan, rol, pay=None, tuzel=False):
         anahtar = normalize_isim(isim)
         if not anahtar:
             return
         if anahtar not in indeks:
-            indeks[anahtar] = {"goruntu_isim": isim.strip(), "kayitlar": []}
+            indeks[anahtar] = {"goruntu_isim": isim.strip(), "tuzel_mi": tuzel, "kayitlar": []}
         indeks[anahtar]["kayitlar"].append({
-            "ticker": ticker, "unvan": unvan, "rol": rol, "pay_yuzde": pay,
+            "ticker": ticker, "unvan": unvan, "rol": rol, "pay_yuzde": pay, "tuzel_mi": tuzel,
         })
 
     for s in sirketler:
         for y in s.yonetim_kurulu:
-            ekle(y.isim, s.ticker, s.unvan, y.gorev)
+            ekle(y.isim, s.ticker, s.unvan, y.gorev, tuzel=False)
         for u in s.ust_yonetim:
-            ekle(u.isim, s.ticker, s.unvan, u.gorev)
+            ekle(u.isim, s.ticker, s.unvan, u.gorev, tuzel=False)
         for o in s.ortaklik_yapisi:
-            if not o.tuzel_mi:  # sadece gerçek kişi ortaklar isim haritasına girer
-                ekle(o.isim, s.ticker, s.unvan, "Ortak", o.pay_yuzde)
+            rol = "Ortak (Fon/Kurum)" if o.tuzel_mi else "Ortak"
+            ekle(o.isim, s.ticker, s.unvan, rol, o.pay_yuzde, tuzel=o.tuzel_mi)
 
     return indeks
 
@@ -475,6 +568,7 @@ def modul_coklu_sirket_isimler(indeks: dict, min_sirket=2) -> list:
         if len(tickerlar) >= min_sirket:
             sonuc.append({
                 "isim": kayit["goruntu_isim"],
+                "tuzel_mi": kayit.get("tuzel_mi", False),
                 "sirket_sayisi": len(tickerlar),
                 "sirketler": [{"ticker": k["ticker"], "rol": k["rol"], "pay_yuzde": k["pay_yuzde"]}
                               for k in kayit["kayitlar"]],
