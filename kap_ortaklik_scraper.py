@@ -41,6 +41,7 @@ DÜRÜST NOTLAR (gerçek kısıtlar, gizlenmedi)
 
 import json
 import re
+import signal
 import struct
 import time
 import unicodedata
@@ -50,6 +51,37 @@ from typing import Optional
 
 import httpx
 from bs4 import BeautifulSoup
+import contextlib
+
+
+class ZamanAsimi(Exception):
+    """zaman_siniri() bloğu süresini aşınca fırlatılır."""
+    pass
+
+
+def _alarm_isleyici(signum, frame):
+    raise ZamanAsimi()
+
+
+@contextlib.contextmanager
+def zaman_siniri(saniye: int):
+    """GERÇEK zorlayıcı üst süre — sinyal tabanlı (SIGALRM), sadece
+    Unix'te çalışır (GitHub Actions Linux runner'ları için yeterli).
+
+    NEDEN GEREKLİ: httpx'in timeout=20.0 ayarı sadece AĞ seviyesinde işliyor.
+    Gerçek çalıştırmada script >1 saat hiçbir ilerleme kaydetmeden takılı
+    kaldı — muhtemelen KAP'ın döndürdüğü Excel dosyasını openpyxl'in
+    ayrıştırması (CPU-bound, ağ değil) beklenenden çok yavaş/patolojik bir
+    durumda kaldı. httpx timeout'u bunu YAKALAYAMAZ çünkü ağ isteği çoktan
+    bitmiş, sorun yerel işlemde. SIGALRM ise ne olursa olsun (ağ, CPU-bound
+    parse, sonsuz döngü) süre dolunca ZamanAsimi fırlatarak bloğu keser."""
+    eski = signal.signal(signal.SIGALRM, _alarm_isleyici)
+    signal.alarm(saniye)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, eski)
 
 BASE = "https://www.kap.org.tr"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
@@ -214,20 +246,21 @@ class KapIstemci:
         de olsa veri dönsün), ama bu durum konsola açıkça yazılıyor."""
         self._bekle()
         try:
-            r = self._istek("GET", "/tr/api/company/generic/excel/IGS/A")
-            r.raise_for_status()
-            import pandas as pd
-            import io
-            df = pd.read_excel(io.BytesIO(r.content))
-            sonuc = []
-            for _, row in df.iterrows():
-                if len(row) < 2:
-                    continue
-                ticker = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
-                unvan = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""
-                if not ticker or ticker.lower() == "nan":
-                    continue
-                sonuc.append({"stockCode": ticker, "kapMemberTitle": unvan})
+            with zaman_siniri(90):  # ağ + pandas/openpyxl ayrıştırma dahil TÜM adım
+                r = self._istek("GET", "/tr/api/company/generic/excel/IGS/A")
+                r.raise_for_status()
+                import pandas as pd
+                import io
+                df = pd.read_excel(io.BytesIO(r.content))
+                sonuc = []
+                for _, row in df.iterrows():
+                    if len(row) < 2:
+                        continue
+                    ticker = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
+                    unvan = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""
+                    if not ticker or ticker.lower() == "nan":
+                        continue
+                    sonuc.append({"stockCode": ticker, "kapMemberTitle": unvan})
             if len(sonuc) < 200:
                 # Beklenenden çok azsa (Excel formatı değişmiş olabilir) bunu
                 # sessizce kabul etme — açıkça uyar ve eski uca düş.
@@ -697,6 +730,50 @@ def modul_coklu_sirket_isimler(indeks: dict, min_sirket=2) -> list:
 
 # ───────────────────────── ana akış ─────────────────────────
 
+def _cikti_olustur(sirketler: list) -> dict:
+    indeks = kisi_indeksi_kur(sirketler)
+    return {
+        "guncelleme": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "sirketSayisi": len(sirketler),
+        "sirketler": {s.ticker: asdict(s) for s in sirketler},
+        "kisiIndeksi": {k: v for k, v in indeks.items()},
+        "modul": {
+            "tekOrtakKontrolu": modul_tek_ortak_kontrolu(sirketler),
+            "hakimOrtak50": modul_hakim_ortak_50(sirketler),
+            "dusukHalkaAciklik": modul_dusuk_halka_aciklik(sirketler),
+            "cokluSirketIsimler": modul_coklu_sirket_isimler(indeks),
+        },
+    }
+
+
+def _ara_kayit_yaz(sirketler: list, cikti_yolu: str):
+    """Tarama bitmeden ARA KAYIT — iş iptal edilirse/kesilirse elde ne
+    varsa diskte kalsın diye. Ana dosyanın üzerine yazar (aynı yol),
+    böylece iş normal bitince zaten TAM veriyle üzerine yazılmış olur.
+    Ayrıca WORKER_URL/PANEL_KEY tanımlıysa canlı worker'a da gönderilir —
+    eskiden bu sadece tarama TAMAMEN bitince oluyordu; iş yarıda kesilirse
+    Telegram botunda hiçbir güncelleme görünmüyordu."""
+    try:
+        gecici = _cikti_olustur(sirketler)
+        gecici["tamamlandi"] = False  # ara kayıt olduğunu belirt
+        with open(cikti_yolu, "w", encoding="utf-8") as f:
+            json.dump(gecici, f, ensure_ascii=False, indent=2)
+        print(f"  💾 Ara kayıt yazıldı ({len(sirketler)} şirket, {cikti_yolu})")
+    except Exception as e:
+        print(f"  ⚠️ Ara kayıt yazılamadı: {e}")
+        return
+
+    import os
+    worker_url = os.environ.get("WORKER_URL", "").strip().rstrip("/")
+    panel_key = os.environ.get("PANEL_KEY", "").strip()
+    if worker_url and panel_key:
+        try:
+            push_to_worker(cikti_yolu, worker_url, panel_key)
+            print(f"  📡 Ara kayıt worker'a da gönderildi ({len(sirketler)} şirket)")
+        except Exception as e:
+            print(f"  ⚠️ Ara kayıt worker'a gönderilemedi: {e}")
+
+
 def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "ortaklik_haritasi.json"):
     kap = KapIstemci()
     ham_liste = kap.sirket_listesi()
@@ -716,26 +793,28 @@ def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "ortaklik_haritas
             continue
         print(f"[{i+1}/{len(ham_liste)}] {ticker} işleniyor…")
         try:
-            kart = sirket_isle(kap, ticker, unvan)
+            with zaman_siniri(180):  # bir şirket en fazla 3 dakika işlenir, ne olursa olsun
+                kart = sirket_isle(kap, ticker, unvan)
+        except ZamanAsimi:
+            print(f"  ⏱️ {ticker} 3 dakikada bitmedi, atlanıyor")
+            continue
         except Exception as e:
             print(f"  ⚠️ {ticker} hata: {e}")
             continue
         sirketler.append(kart)
 
-    indeks = kisi_indeksi_kur(sirketler)
+        # ARA KAYIT (kritik): İş İPTAL EDİLİRSE / GitHub'ın 6 saatlik sınırına
+        # ÇARPARSA / elektrik giderse — daha önce JSON sadece döngü TAMAMEN
+        # bitince yazılıyordu, yani saatlerce sürüp yarıda kesilen bir koşuda
+        # HİÇBİR ŞEY kaydedilmiyordu (gerçekte yaşandı: 8+ saatlik ilerleme
+        # riske girdi). Artık her 25 şirkette bir o ana kadarki veri diske
+        # yazılıyor — en kötü ihtimalle 25 şirketlik ilerleme kaybedilir,
+        # tüm koşu değil.
+        if len(sirketler) % 25 == 0:
+            _ara_kayit_yaz(sirketler, cikti_yolu)
 
-    cikti = {
-        "guncelleme": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "sirketSayisi": len(sirketler),
-        "sirketler": {s.ticker: asdict(s) for s in sirketler},
-        "kisiIndeksi": {k: v for k, v in indeks.items()},
-        "modul": {
-            "tekOrtakKontrolu": modul_tek_ortak_kontrolu(sirketler),
-            "hakimOrtak50": modul_hakim_ortak_50(sirketler),
-            "dusukHalkaAciklik": modul_dusuk_halka_aciklik(sirketler),
-            "cokluSirketIsimler": modul_coklu_sirket_isimler(indeks),
-        },
-    }
+    cikti = _cikti_olustur(sirketler)
+    cikti["tamamlandi"] = True
 
     with open(cikti_yolu, "w", encoding="utf-8") as f:
         json.dump(cikti, f, ensure_ascii=False, indent=2)
