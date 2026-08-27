@@ -157,11 +157,47 @@ class KapIstemci:
         self._son_istek = time.time()
 
     def sirket_listesi(self) -> list:
-        """Tüm BIST-kotalı şirketler. memberType=IGS."""
+        """Tüm BIST-kotalı şirketler.
+
+        DÜZELTME (kritik): Eskiden '/tr/api/company/items/IGS/A' kullanılıyordu.
+        Bu uç KAP'ın arama kutusu (autocomplete) için var — TÜM şirketleri değil,
+        SINIRLI/kısmi bir sonuç kümesi döndürüyor. Gerçek taramada 700+ olması
+        gereken BIST evreni bu yüzden 137'ye düşüyordu; PDF/fon iyileştirmeleri
+        bir işe yaramıyordu çünkü daha ilk adımda şirketlerin çoğu listeye hiç
+        girmiyordu.
+        KAP'ın kendi 'BIST Şirketleri' sayfasının (kap.org.tr/tr/bist-sirketler)
+        kullandığı GERÇEK tam liste kaynağı bir Excel dışa aktarma uç noktası —
+        onu kullanıyoruz. JSON uç noktası ağ hatası/format değişikliği gibi bir
+        sebeple çalışmazsa eski uca düşülüyor (hiç veri dönmemesindense eksik
+        de olsa veri dönsün), ama bu durum konsola açıkça yazılıyor."""
         self._bekle()
-        r = self.c.get("/tr/api/company/items/IGS/A")
-        r.raise_for_status()
-        return r.json()
+        try:
+            r = self.c.get("/tr/api/company/generic/excel/IGS/A")
+            r.raise_for_status()
+            import pandas as pd
+            import io
+            df = pd.read_excel(io.BytesIO(r.content))
+            sonuc = []
+            for _, row in df.iterrows():
+                if len(row) < 2:
+                    continue
+                ticker = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
+                unvan = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""
+                if not ticker or ticker.lower() == "nan":
+                    continue
+                sonuc.append({"stockCode": ticker, "kapMemberTitle": unvan})
+            if len(sonuc) < 200:
+                # Beklenenden çok azsa (Excel formatı değişmiş olabilir) bunu
+                # sessizce kabul etme — açıkça uyar ve eski uca düş.
+                print(f"⚠️ Excel'den sadece {len(sonuc)} şirket geldi (beklenen 500+), eski JSON uca düşülüyor…")
+                raise RuntimeError("excel_beklenenden_az")
+            return sonuc
+        except Exception as e:
+            print(f"⚠️ Excel tam liste alınamadı ({e}), yedek (sınırlı) JSON listeye düşülüyor…")
+            self._bekle()
+            r = self.c.get("/tr/api/company/items/IGS/A")
+            r.raise_for_status()
+            return r.json()
 
     def member_filter(self, ticker: str) -> Optional[dict]:
         """ticker -> {companyCode, mkkMemberOid, title, permaLink}
