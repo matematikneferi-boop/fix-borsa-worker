@@ -36,17 +36,20 @@ DÜRÜST NOTLAR (gerçek kısıtlar, gizlenmedi)
   bir temel: var olduğunu bilmediğim bir alana güvenmek yerine.
 - TEFAS, bir fonun VARLIK SINIFI dağılımını (örn. "%62 Hisse Senedi, %20
   Tahvil...") herkese açık API'sinden net veriyor. AMA "hangi hisse, ne kadar"
-  bilgisi TEFAS'ta YOK. Bu bilgi sadece SPK mevzuatı gereği fonların her ayın
-  ilk haftasında KAP'a yüklediği "Aylık Portföy Dağılım Raporu" ekinde var.
-  Kaynak zorunlu olarak KAP — TEFAS sadece fon listesi/isim/büyüklük için
-  kullanılıyor.
-- KAP tarafı, kap_ortaklik_scraper.py'daki AYNI KapIstemci makinesini
-  (member/filter, disclosure/byCriteria, attachment-detail, file/download)
-  kullanıyor. Fonların da (BIO, TTE, KPH, TGE gibi) şirket ticker'ları gibi
-  3 harfli KAP kodları olduğu ve aynı uçlarla sorgulanabildiği, KAP'ın halka
-  açık bildirim sayfalarında GÖZLEMLENDİ (bkz. isportfoy.com.tr / ekofin.net
-  KAP duyuru linkleri) — ama bu varsayım BU SANDBOX'TA CANLI TEST EDİLEMEDİ
-  (internet kapalı, kap.org.tr'ye bu ortamdan erişim yok).
+  bilgisi TEFAS'ta YOK. Bu bilgi KAP'a fonların her ay yüklediği "I-FONU
+  TANITICI BİLGİLER" bildiriminin "III-FON PORTFÖY DEĞERİ TABLOSU" bölümünde
+  var — GERÇEK bir belge (DOH, Ekim-2025) canlı çekilip tam içeriğiyle
+  incelenerek satır yapısı doğrulandı (bkz. extract_hisseler_from_pdf başı).
+  İlk sürümde "Portföy Dağılım Raporu" aranıyordu, bu YANLIŞ çıktı; doğru
+  bildirim türü budur. Kaynak zorunlu olarak KAP — TEFAS sadece fon
+  listesi/isim/büyüklük için kullanılıyor.
+- KAP'ta fonların KENDİ ayrı kaydı var (kap.org.tr/tr/fon-bilgileri/...,
+  şirketlerin kap.org.tr/tr/sirket-bilgileri/...'sinden AYRI bir alan) ve
+  bildirim başlıkları fon koduyla başlıyor (ör. "DOH-Tera Portföy..."), bu
+  CANLI doğrulandı. Ama TEFAS'ın 3 harfli fon kodu çoğu fonda KAP'ın kendi
+  companyCode alanıyla BİREBİR AYNI DEĞİL (tara #3 sonucu: 610 fondan
+  ~%85'i 'kap_uye_bulunamadi' verdi) — bu yüzden kap.fon_uyesi_bul() önce
+  kodla, bulamazsa fon ADIYLA arayıp KELİME ÖRTÜŞMESİYLE doğruluyor.
 - PDF içindeki hisse tablosunun sütun/başlık yapısı fondan fona, dönemden
   döneme değişebiliyor (ortaklık yapısı PDF'lerinde görülen sorunun aynısı).
   extract_hisseler_from_pdf() esnek başlık eşleştirmesi kullanıyor ve
@@ -67,6 +70,7 @@ import signal
 import struct
 import time
 import unicodedata
+import urllib.parse
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
@@ -119,6 +123,27 @@ def _tr_upper(s: str) -> str:
 
 HISSE_YOGUN_DESENI = re.compile(r"HİSSE SENEDİ YOĞUN FON")
 DEGISKEN_DESENI = re.compile(r"DEĞİŞKEN FON")
+
+# fon_uyesi_bul()'da isim eşleştirmesinde ELENEN, ayırt edici olmayan
+# kelimeler — bunlar hemen her fon adında geçtiği için örtüşme sayılmaz.
+_ANLAMSIZ_KELIME = {
+    "FON", "FONU", "FONUN", "PORTFÖY", "PORTFOY", "PY", "YÖNETİMİ", "YONETIMI",
+    "A.Ş.", "AŞ", "A.S.", "VE", "İLE", "ILE", "ÖZEL", "OZEL", "DEĞİŞKEN",
+    "DEGISKEN", "HİSSE", "HISSE", "SENEDİ", "SENEDI", "YOĞUN", "YOGUN", "TL",
+    "BİR", "BIR",
+}
+
+
+def _anlamli_kelimeler(isim: str) -> set:
+    """Fon adından, eşleştirmede işe yarayacak (kurucu adı, ayırt edici
+    kelime gibi) parçaları çıkarır — 'FON', 'PORTFÖY' gibi her fonda geçen
+    kelimeleri saymaz, yoksa hemen her fon 'eşleşmiş' görünür. Min uzunluk
+    2 (1 değil) — 'İŞ' (İş Portföy'ün kısaltması) gibi kısa ama ayırt edici
+    kurucu adlarını elememek için; TEK harfli parçalar (noktalama artığı)
+    hâlâ elenir."""
+    n = _tr_upper(isim)
+    n = re.sub(r"[().,]", " ", n)
+    return {k for k in n.split() if len(k) >= 2 and k not in _ANLAMSIZ_KELIME}
 
 
 # ───────────────────────── yardımcılar ─────────────────────────
@@ -317,27 +342,78 @@ class KapFonIstemci:
                 continue
 
     def member_filter(self, fon_kodu: str) -> Optional[dict]:
+        """SADECE tam kod eşleşmesi — "ilk sonucu döndür" yedeği KALDIRILDI.
+        O yedek, KAP'ın alakasız bir kaydını "bulundu" diye işaretleyip
+        sessizce YANLIŞ fona bağlanma riski taşıyordu; hiç bulamamak, yanlış
+        bulmaktan daha güvenli (bkz. fon_uyesi_bul — asıl arama artık orada,
+        isim doğrulamalı)."""
+        adaylar = self.uye_ara(fon_kodu)
+        for kayit in adaylar:
+            if isinstance(kayit, dict) and str(kayit.get("companyCode", "")).upper() == fon_kodu.upper():
+                return kayit
+        return None
+
+    def uye_ara(self, sorgu: str) -> list:
+        """KAP'ın genel üye arama ucu — ham aday listesi döner, hiçbir
+        seçim/doğrulama yapmaz (onu çağıran taraf yapar)."""
         try:
-            r = self._istek("GET", f"/tr/api/member/filter/{fon_kodu}",
+            r = self._istek("GET", f"/tr/api/member/filter/{urllib.parse.quote(sorgu)}",
                              headers={"Referer": f"{KAP_BASE}/tr/bist-sirketler"})
         except Exception:
-            return None
+            return []
         if r.status_code != 200:
-            return None
+            return []
         try:
             veri = r.json()
         except Exception:
-            return None
+            return []
         if isinstance(veri, list):
-            for kayit in veri:
-                if isinstance(kayit, dict) and str(kayit.get("companyCode", "")).upper() == fon_kodu.upper():
-                    return kayit
-            return veri[0] if veri and isinstance(veri[0], dict) else None
-        return veri if isinstance(veri, dict) else None
+            return [k for k in veri if isinstance(k, dict)]
+        return [veri] if isinstance(veri, dict) else []
 
-    def son_portfoy_dagilim_bildirimi(self, mkk_member_oid: str, gun_geriye: int = 400) -> Optional[dict]:
-        """Son ~13 ay içindeki bildirimleri tarar, "Portföy Dağılım Raporu"
-        başlıklı / DG tipli EN GÜNCEL bildirimi döndürür."""
+    def fon_uyesi_bul(self, fon_kodu: str, fon_adi: str) -> Optional[dict]:
+        """DÜZELTME (bu, tara #3'te ~%85 'kap_uye_bulunamadi' ile sonuçlanan
+        asıl kök sebep): TEFAS'ın 3 harfli fon kodu (AAV, ABJ, AC5...) çoğu
+        fon için KAP'ın kendi 'companyCode' alanıyla AYNI DEĞİL — sadece bazı
+        fonlarda (BIO, ADE, AKU gibi — log'da bunlar 'kap_uye' BULUNDU ama
+        sonraki adımda bildirim bulunamadı diye düştü) tesadüfen örtüşüyor.
+        Bu yüzden önce kod dener, bulamazsa fon ADIYLA arar ve KAP'tan gelen
+        adayın başlığını fon_adi ile ANLAMLI KELİME örtüşmesiyle doğrular.
+        En az 2 anlamlı kelime örtüşmesi YOKSA None döner — 'her ne bulduysan
+        onu kabul et' YAPMIYORUZ, çünkü yanlış fonu doğru sanıp onun
+        hisselerini göstermek, hiç göstermemekten daha kötü bir hata olurdu.
+        """
+        uye = self.member_filter(fon_kodu)
+        if uye and uye.get("mkkMemberOid"):
+            return uye
+
+        hedef_kelimeler = _anlamli_kelimeler(fon_adi)
+        if not hedef_kelimeler:
+            return None
+        arama_sorgusu = " ".join(list(hedef_kelimeler)[:4])
+        adaylar = self.uye_ara(arama_sorgusu)
+        en_iyi, en_iyi_skor = None, 0
+        for k in adaylar:
+            baslik = str(k.get("title") or k.get("companyTitle") or "")
+            ortak = hedef_kelimeler & _anlamli_kelimeler(baslik)
+            if len(ortak) > en_iyi_skor:
+                en_iyi_skor, en_iyi = len(ortak), k
+        if en_iyi_skor >= 2 and en_iyi and en_iyi.get("mkkMemberOid"):
+            return en_iyi
+        return None
+
+    def son_tanitici_bilgiler_bildirimi(self, mkk_member_oid: str, gun_geriye: int = 400) -> Optional[dict]:
+        """Son ~13 ay içindeki bildirimleri tarar, EN GÜNCEL "I-FONU TANITICI
+        BİLGİLER" bildirimini döndürür.
+
+        DÜZELTME (kritik): İlk sürüm "Portföy Dağılım Raporu" başlığı
+        arıyordu — CANLI bir KAP belgesini (DOH, Ekim-2025) tam içeriğiyle
+        inceleyince, hisse bazlı kırılımın ASIL aylık bildirim türünün
+        "I-FONU TANITICI BİLGİLER" olduğu görüldü (başlık formatı: "{Ay-Yıl}
+        {FONKOD}-{FON ADI} · I-FONU TANITICI BİLGİLER"). Bu belge "III-FON
+        PORTFÖY DEĞERİ TABLOSU" içinde "HİSSE SENETLERİ" alt bölümünde her
+        hisse için kod, ISIN, TAM pay adedi (nominal değer) ve fon içindeki
+        yüzdesini satır satır veriyor — DOH örneğinde bizzat doğrulandı."""
         from datetime import date, timedelta
         bugun = date.today()
         try:
@@ -361,7 +437,7 @@ class KapFonIstemci:
             return None
         adaylar = [
             k for k in kayitlar
-            if isinstance(k, dict) and "portföy dağılım" in str(k.get("title", "") or k.get("subject", "")).lower()
+            if isinstance(k, dict) and "TANITICI BİLGİLER" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))
         ]
         if not adaylar:
             return None
@@ -393,77 +469,116 @@ class KapFonIstemci:
 
 
 # ───────────────────────── PDF parse ─────────────────────────
+#
+# GERÇEK BİR KAP BELGESİNDEN (DOH-Tera Portföy Dördüncü Hisse Senedi Serbest
+# TL Fon, Ekim-2025 "I-FONU TANITICI BİLGİLER" bildirimi, canlı çekilip tam
+# içeriğiyle incelendi) doğrulanmış satır yapısı:
+#
+#   ASELS ASELSAN
+#   ELEKTRON
+#   İK SANAYİ
+#   VE
+#   TİCARET
+#   A.Ş.
+#   TL TRAASELS91H2 250.000,00 189,796215 30/10/25 80100511 203,600000 50.900.000,00 13,07 10,79 12,19
+#
+# Yani: TİCKER + ŞİRKET ÜNVANI (çok satıra sarabiliyor), sonra TEK satırda
+# DÖVİZ, ISIN, NOMİNAL DEĞER (=TAM pay adedi, tahmini değil), fiyat/tarih
+# alanları, TOPLAM DEĞER (TL), ve son 3 sayı: GRUP(%) / TOPLAM-FPD-GÖRE(%)
+# / TOPLAM-FTD-GÖRE(%). "GRUP TOPLAMI" satırındaki (100,00 / 82,30 / 93,18)
+# ile bölümün toplam değerleri çapraz kontrol edilip bu sıralama DOĞRULANDI.
+# "TOPLAM (FPD GÖRE)" — yani ORTADAKİ yüzde — standart "portföy içindeki
+# payı" kavramına karşılık geliyor, pay_yuzde bunu kullanıyor.
+#
+# NOT: Bu, TEK bir gerçek belgeden doğrulandı. Farklı fon/dönemlerde döviz
+# cinsi farklı satırlar (USD/EUR), farklı sütun sırası çıkarsa regex
+# genişletilmesi gerekebilir — bu yüzden hiç eşleşme yoksa "eksik"
+# işaretlenir, ASLA sayı uydurulmaz.
 
-HISSE_KOD_BASLIK = ["Hisse Kodu", "Kod", "Menkul Kıymet Kodu", "Sembol", "Enstrüman"]
-ORAN_BASLIK = ["Portföy İçindeki Oranı (%)", "Fon Toplam Değerine Oranı (%)", "Oran (%)", "Pay (%)", "%"]
-ADET_BASLIK = ["Nominal/Adet", "Adet", "Nominal Adet", "Lot"]
-TL_BASLIK = ["Rayiç Değer (TL)", "Piyasa Değeri (TL)", "TL Değer", "Değer (TL)"]
-
-# BIST hisse kodları 4-6 büyük harf; tabloda "TOPLAM", "HİSSE SENEDİ" gibi
-# alt toplam/başlık satırlarını elemek için basit bir filtre
-GECERSIZ_SATIR = re.compile(
-    r"^(TOPLAM|GENEL TOPLAM|ARA TOPLAM|HİSSE SENEDİ|PAY SENEDİ|DİĞER|NAKİT)\b", re.IGNORECASE
+HİSSE_SATIR_DESENI = re.compile(
+    r"(TL|USD|EUR)\s+"                      # döviz cinsi
+    r"([A-Z]{2}[A-Z0-9]{10})\s+"             # ISIN kodu (TRxxxxxxxxxx)
+    r"([\d.,]+)\s+"                          # nominal değer (= pay adedi)
+    r"([\d.,]+)\s+"                          # fiyat/oran alanı 1
+    r"(\d{2}/\d{2}/\d{2})\s+"                # satın alış tarihi
+    r"(\d+)\s+"                              # borsa sözleşme no
+    r"([\d.,]+)\s+"                          # fiyat/oran alanı 2
+    r"([\d.,\-]+)\s+"                        # toplam değer (TL)
+    r"([\d.,\-]+)\s+"                        # GRUP (%)
+    r"([\d.,\-]+)\s+"                        # TOPLAM (FPD GÖRE) (%) — kullandığımız
+    r"([\d.,\-]+)"                           # TOPLAM (FTD GÖRE) (%)
 )
-
-
-def _baslik_indeksi(basliklar: list, adaylar: list) -> Optional[int]:
-    for i, b in enumerate(basliklar):
-        for a in adaylar:
-            if a.lower() in b.lower():
-                return i
-    return None
+TICKER_DESENI = re.compile(r"^[A-ZİĞÜŞÖÇ0-9]{2,6}$")
+_HISSE_BOLUM_BASLANGIC = ["HİSSE SENETLERİ", "HISSE SENETLERI"]
+_HISSE_BOLUM_BITIS = ["VIOP Nakit Teminatı", "GRUP TOPLAMI", "FON PORTFÖY DEĞERİ",
+                       "IV-FON TOPLAM DEĞERİ", "IV-FON TOPLAM DEGERI"]
 
 
 def extract_hisseler_from_pdf(pdf_bytes: bytes) -> tuple:
-    """PDF'teki tabloları tarar, hisse kodu + oran (+ varsa adet/TL değer)
-    sütunlarını başlık metnine göre bulur. Bulamazsa boş liste + 'eksik' notu
-    döner — UYDURMA VERİ ÜRETİLMEZ."""
+    """KAP'ın 'I-FONU TANITICI BİLGİLER' bildirimindeki 'III-FON PORTFÖY
+    DEĞERİ TABLOSU' / 'HİSSE SENETLERİ' bölümünü ayrıştırır (yukarıdaki
+    doğrulanmış satır yapısına göre). pdfplumber ile TAM METİN çıkarır
+    (extract_tables DEĞİL — bu belge tipinde çok karmaşık/çok satırlı
+    başlıklı bir tablo, hücre bazlı çıkarım güvenilir değil; tam metin +
+    regex, GERÇEK örnekte doğrulanan yöntem). Eşleşme yoksa 'eksik'
+    işaretler, ASLA sayı uydurmaz."""
     if pdfplumber is None:
         return [], ["pdfplumber_yuklu_degil"]
 
     import io
-    hisseler = []
-    eksik = []
+    tam_metin = ""
     try:
         with io.BytesIO(pdf_bytes) as buf, pdfplumber.open(buf) as pdf:
-            for sayfa_no, sayfa in enumerate(pdf.pages[:PDF_MAX_SAYFA]):
-                for tablo in (sayfa.extract_tables() or []):
-                    if not tablo or len(tablo) < 2:
-                        continue
-                    basliklar = [_hucre(x) for x in tablo[0]]
-                    kod_i = _baslik_indeksi(basliklar, HISSE_KOD_BASLIK)
-                    oran_i = _baslik_indeksi(basliklar, ORAN_BASLIK)
-                    if kod_i is None or oran_i is None:
-                        continue
-                    adet_i = _baslik_indeksi(basliklar, ADET_BASLIK)
-                    tl_i = _baslik_indeksi(basliklar, TL_BASLIK)
-                    for satir in tablo[1:]:
-                        kod = _hucre(satir[kod_i]) if kod_i < len(satir) else ""
-                        if not kod or GECERSIZ_SATIR.match(kod):
-                            continue
-                        if not re.fullmatch(r"[A-ZİĞÜŞÖÇ]{3,6}", kod.upper()):
-                            continue
-                        oran = parse_tr_sayi(satir[oran_i]) if oran_i < len(satir) else None
-                        adet = parse_tr_sayi(satir[adet_i]) if (adet_i is not None and adet_i < len(satir)) else None
-                        tl = parse_tr_sayi(satir[tl_i]) if (tl_i is not None and tl_i < len(satir)) else None
-                        hisseler.append(HisseKalemi(
-                            hisse_kodu=kod.upper(),
-                            pay_yuzde=oran,
-                            tl_deger=tl,
-                            tahmini_lot=int(adet) if adet is not None else None,
-                        ))
+            for sayfa in pdf.pages[:PDF_MAX_SAYFA]:
+                tam_metin += (sayfa.extract_text() or "") + "\n"
     except Exception as e:
-        eksik.append(f"pdf_parse_hata: {e}")
+        return [], [f"pdf_okuma_hata: {e}"]
 
-    if not hisseler:
-        eksik.append("hisse_tablosu_bulunamadi")
+    baslangic = -1
+    for etiket in _HISSE_BOLUM_BASLANGIC:
+        i = tam_metin.find(etiket)
+        if i != -1:
+            baslangic = i
+            break
+    if baslangic == -1:
+        return [], ["hisse_senetleri_bolumu_bulunamadi"]
+
+    bitis_adaylari = [tam_metin.find(e, baslangic + 20) for e in _HISSE_BOLUM_BITIS]
+    bitis_adaylari = [b for b in bitis_adaylari if b != -1]
+    bitis = min(bitis_adaylari) if bitis_adaylari else len(tam_metin)
+    bolum = tam_metin[baslangic:bitis]
+
+    hisseler = []
+    onceki_bitis = 0
+    _baslik_gurultu = {"HİSSE SENETLERİ", "HISSE SENETLERI", "HİSSE TÜRK", "HISSE TURK"}
+    for m in HİSSE_SATIR_DESENI.finditer(bolum):
+        # ticker, bu satırla BİR ÖNCEKİ eşleşme arasındaki (isim bloğu)
+        # metnin İLK "gerçek" satırının İLK kelimesi — gerçek örnekte
+        # doğrulandı. Bölüm başlığı/kolon başlığı gürültüsü (ör. "HİSSE
+        # SENETLERİ", "Hisse Türk") İLK bloktan ELENİR, yoksa "HİSSE" ticker
+        # sanılabiliyordu (tespit edilip düzeltildi).
+        isim_bloku = bolum[onceki_bitis:m.start()]
+        onceki_bitis = m.end()
+        satirlar = [s.strip() for s in isim_bloku.splitlines() if s.strip()]
+        satirlar = [s for s in satirlar if _tr_upper(s) not in _baslik_gurultu]
+        if not satirlar:
+            continue
+        ilk_kelime = satirlar[0].split()[0] if satirlar[0].split() else ""
+        if not TICKER_DESENI.fullmatch(ilk_kelime):
+            continue
+        (_doviz, _isin, nominal, _f1, _tarih, _kod, _f2, tl_deger,
+         _grup_yuzde, fpd_yuzde, _ftd_yuzde) = m.groups()
+        nominal_sayi = parse_tr_sayi(nominal)
+        hisseler.append(HisseKalemi(
+            hisse_kodu=ilk_kelime,
+            pay_yuzde=parse_tr_sayi(fpd_yuzde),
+            tl_deger=parse_tr_sayi(tl_deger),
+            tahmini_lot=int(nominal_sayi) if nominal_sayi is not None else None,
+        ))
+
+    eksik = [] if hisseler else ["hisse_satiri_regex_eslesmedi"]
     return hisseler, eksik
 
-
-def _hucre(x) -> str:
-    if x is None:
-        return ""
-    return re.sub(r"\s+", " ", str(x).replace("\n", " ")).strip()
 
 
 # ───────────────────────── ana akış ─────────────────────────
@@ -473,14 +588,14 @@ def fon_isle(kap: KapFonIstemci, fon_kodu: str, fon_adi: str, semsiye_turu: str,
     kart = FonKarti(fon_kodu=fon_kodu, fon_adi=fon_adi, semsiye_turu=semsiye_turu,
                      kurucu=kurucu, fon_buyuklugu_tl=buyukluk)
 
-    uye = kap.member_filter(fon_kodu)
+    uye = kap.fon_uyesi_bul(fon_kodu, fon_adi)
     if not uye or not uye.get("mkkMemberOid"):
         kart.veri_eksik.append("kap_uye_bulunamadi")
         return kart
 
-    bildirim = kap.son_portfoy_dagilim_bildirimi(uye["mkkMemberOid"])
+    bildirim = kap.son_tanitici_bilgiler_bildirimi(uye["mkkMemberOid"])
     if not bildirim:
-        kart.veri_eksik.append("portfoy_dagilim_bildirimi_bulunamadi")
+        kart.veri_eksik.append("tanitici_bilgiler_bildirimi_bulunamadi")
         return kart
     kart.bildirim_index = bildirim.get("disclosureIndex") or bildirim.get("id")
     kart.rapor_donemi = str(bildirim.get("publishDate", ""))[:7]
