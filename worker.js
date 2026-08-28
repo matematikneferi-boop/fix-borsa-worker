@@ -4417,6 +4417,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
   s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
   s.push('<button class="sek'+(sekme==="ortaklik"?" on":"")+'" data-r="nötr" data-s="ortaklik">🔗 Ortaklık Haritası</button>');
+  s.push('<button class="sek'+(sekme==="fonlar"?" on":"")+'" data-r="nötr" data-s="fonlar">🐣 Fonlar</button>');
   if(D&&D.yon)s.push('<button class="sek'+(sekme==="yesil"?" on":"")+'" data-r="nötr" data-s="yesil">📐 Fibo Aralığı Ölçüm İstasyonu 🔐</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
   if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
@@ -4464,6 +4465,7 @@ function ciz(){
   if(sekme==="sag")return saglikCiz();
   if(sekme==="abs")return absCiz();
   if(sekme==="ortaklik")return ortaklikCiz();
+  if(sekme==="fonlar")return fonlarCiz();
   if(sekme==="malboga")return mbCiz();
   if(sekme==="yesil")return ykCiz();
   if(sekme==="rot")return rotCiz();
@@ -6833,6 +6835,135 @@ function ortaklikKisiGoster(v){
       }).join("");
     }).catch(function(){var kap=el("ortFonPortfoy");if(kap)kap.innerHTML=""});
   }
+}
+/* ================== 🐣 FONLAR SEKMESİ ==========
+   Kaynak: fon_hisse_scraper.py'nin ürettiği fonHisseHaritasi + worker'ın
+   /api/fonYukle push'unda otomatik arşivlediği önceki ay kovaları.
+   Dashboard: yeni giren / artıran / azaltan / çıkan (diff, sadece geçmiş
+   varsa) + en çok fon tarafından tutulan (konsensüs, her zaman var).
+   Hisse koduna dokununca detay, fon adına dokununca "benzer fonlar"
+   (hisse örtüşmesi) açılır. */
+var fonD=null;            // /api/fonOzet sonucu
+var fonAramaKod="";       // seçili/aranan hisse kodu
+var fonDetay=null;        // /api/fonHisseDetay sonucu
+var fonBenzerFonKodu=null,fonBenzerD=null; // /api/fonBenzer sonucu
+function fonlarCiz(){
+  if(fonD){fonlarGoster(fonD);return}
+  el("govde").innerHTML='<div class="yukleniyor">fon verisi okunuyor…</div>';
+  post("/api/fonOzet",{}).then(function(v){fonD=v;fonlarGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Okunamadı. Birazdan tekrar dene.</div>'});
+}
+function fonlarBolumHtml(baslik,liste,satirFn){
+  if(!liste||!liste.length)return "";
+  var h='<div class="uyari"><b>'+baslik+'</b></div>';
+  h+=liste.map(function(x){
+    return '<div class="satir" data-fonhisse="'+E(x.hisse)+'" style="cursor:pointer">'+
+      '<div class="sol"><div class="kod">'+satirFn(x)+'</div></div><div class="sag">👉</div></div>';
+  }).join("");
+  return h;
+}
+function fonlarGoster(v){
+  if(!v||!v.ok){
+    el("govde").innerHTML='<div class="bos">Fon verisi henüz hazır değil.<br>Veri kaynağı (TEFAS+KAP taraması) ilk çalıştırmasını bekliyor olabilir.</div>';
+    return;
+  }
+  if(v.hazirDegil){
+    el("govde").innerHTML='<div class="bos">Fon verisi henüz hiç yüklenmemiş.</div>';
+    return;
+  }
+  if(fonBenzerFonKodu){fonBenzerGoster(fonBenzerD);return}
+  if(fonAramaKod){fonDetayGoster(fonDetay);return}
+  var h='<div class="uyari" style="margin-top:0"><b>🐣 Fonlar</b><br>'+
+    'TEFAS hisse yoğun/değişken fonların KAP\'a bildirdiği aylık portföyler üzerinden — '+
+    'kim ne alıyor, kim ne satıyor, hangi hisseye kaç fon aynı anda giriyor.<br>'+
+    '<span style="opacity:.7">Kaynak: TEFAS + KAP aylık portföy bildirimi · güncelleme: '+E(v.guncelleme||"—")+'</span></div>';
+  h+='<input id="fonAramaKutu" type="text" placeholder="Hisse kodu yaz (örn. THYAO) ve Enter…" value="" '+
+    'style="width:100%;box-sizing:border-box;padding:10px;margin:6px 0;border-radius:8px;'+
+    'border:1px solid #444;background:#111;color:#eee;font-size:15px;text-transform:uppercase">';
+  if(!v.gecmisVarMi){
+    h+='<div class="uyari">📌 Bu ilk tarama — henüz karşılaştırılacak önceki ay yok. '+
+      'Bir sonraki aylık taramadan itibaren "yeni giren / artıran / azaltan / çıkan" listeleri burada dolacak. '+
+      'Aşağıda şu an itibariyle en çok fon tarafından tutulan hisseler var.</div>';
+  }else{
+    h+='<div class="altbilgi" style="margin:4px 0 10px">Karşılaştırma: '+E(v.oncekiAy)+' → '+E(v.guncelAy)+'</div>';
+    h+=fonlarBolumHtml("🆕 Bu ay yeni giren",v.yeniAlim,function(x){
+      return E(x.hisse)+' <span style="opacity:.7">— '+x.fonSayisi+' fon</span>';
+    });
+    h+=fonlarBolumHtml("📈 Payını artıranlar",v.artiranlar,function(x){
+      return E(x.hisse)+' <span style="opacity:.7">— %'+x.toplamPayOnce+' → %'+x.toplamPaySimdi+
+        (x.farkYuzde!=null?' ('+(x.farkYuzde>0?"+":"")+x.farkYuzde+'%)':'')+'</span>';
+    });
+    h+=fonlarBolumHtml("📉 Payını azaltanlar",v.azaltanlar,function(x){
+      return E(x.hisse)+' <span style="opacity:.7">— %'+x.toplamPayOnce+' → %'+x.toplamPaySimdi+
+        (x.farkYuzde!=null?' ('+x.farkYuzde+'%)':'')+'</span>';
+    });
+    h+=fonlarBolumHtml("🚪 Bu ay tamamen çıkan",v.cikanlar,function(x){
+      return E(x.hisse)+' <span style="opacity:.7">— önceden '+x.fonSayisiOnce+' fon tutuyordu</span>';
+    });
+  }
+  h+=fonlarBolumHtml("🏆 En çok fon tarafından tutulan (konsensüs)",v.konsensus,function(x){
+    return E(x.hisse)+' <span style="opacity:.7">— '+x.fonSayisi+' fon · toplam pay %'+x.toplamPay+'</span>';
+  });
+  h+='<div class="uyari" style="opacity:.7">🔒 Kurumsal alım-satımı şirket içi (yönetici/pay sahibi) işlemleriyle '+
+    'çakıştırma henüz eklenmedi — bunun için KAP\'taki yönetici işlem bildirimlerini çeken ayrı bir tarayıcı gerekiyor.</div>';
+  el("govde").innerHTML=h;
+  var kutu=el("fonAramaKutu");
+  if(kutu)kutu.onkeydown=function(e2){if(e2.key==="Enter")fonAramaCalistir(kutu.value)};
+  [].forEach.call(document.querySelectorAll("[data-fonhisse]"),function(b){
+    b.onclick=function(){tit();fonAramaCalistir(b.dataset.fonhisse)};
+  });
+}
+function fonAramaCalistir(kod){
+  kod=String(kod||"").trim().toUpperCase();
+  if(!kod)return;
+  fonAramaKod=kod;fonDetay=null;
+  el("govde").innerHTML='<div class="yukleniyor">'+E(kod)+' için fon bilgisi çıkarılıyor…</div>';
+  post("/api/fonHisseDetay",{kod:kod}).then(function(v){fonDetay=v;fonlarGoster(fonD)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Bulunamadı.</div>'});
+}
+function fonDetayGoster(v){
+  var h='<button class="sir" id="fonGeri">◀ Fonlara dön</button>';
+  if(!v||!v.ok||v.bulunamadi){
+    h+='<div class="bos">'+E(fonAramaKod)+' hiçbir fon portföyünde bulunamadı.</div>';
+  }else{
+    h+='<div class="kutu"><h3>'+E(v.kod)+'</h3>'+
+      '<div class="altbilgi">'+v.fonSayisi+' fon tutuyor · toplam pay %'+v.toplamPay+
+      (v.gecmisVarMi?(' · önceki ay ('+E(v.oncekiAy)+'): '+v.oncekiFonSayisi+' fon · %'+v.oncekiToplamPay):
+        ' · henüz karşılaştırılacak önceki ay yok')+'</div></div>';
+    h+='<div class="uyari"><b>Bu hisseyi tutan fonlar</b></div>';
+    h+=v.fonlar.map(function(f){
+      return '<div class="satir"><div class="sol">'+
+        '<div class="kod"><span data-fonkodu="'+E(f.fonKodu)+'" style="text-decoration:underline;cursor:pointer">'+
+        E(f.fonKodu)+' — '+E(f.fonAdi)+'</span></div>'+
+        '<div class="altbilgi">'+(f.rapordonemi?E(f.rapordonemi)+' dönemi':'')+'</div></div>'+
+        '<div class="sag"><div class="yuzde">%'+E(String(f.payYuzde))+'</div></div></div>';
+    }).join("");
+  }
+  el("govde").innerHTML=h;
+  var g=el("fonGeri");if(g)g.onclick=function(){tit();fonAramaKod="";fonDetay=null;fonlarGoster(fonD)};
+  [].forEach.call(document.querySelectorAll("[data-fonkodu]"),function(b){
+    b.onclick=function(){tit();fonBenzerFonKodu=b.dataset.fonkodu;fonBenzerAc(fonBenzerFonKodu)};
+  });
+}
+function fonBenzerAc(fonKodu){
+  el("govde").innerHTML='<div class="yukleniyor">'+E(fonKodu)+' için benzer fonlar aranıyor…</div>';
+  post("/api/fonBenzer",{fonKodu:fonKodu}).then(function(v){fonBenzerD=v;fonBenzerGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Bulunamadı.</div>'});
+}
+function fonBenzerGoster(v){
+  var h='<button class="sir" id="fonBenzerGeri">◀ Geri</button>';
+  if(!v||!v.ok||v.bulunamadi||!v.benzerler||!v.benzerler.length){
+    h+='<div class="bos">'+E((v&&v.fonAdi)||fonBenzerFonKodu||"")+' için örtüşen fon bulunamadı.</div>';
+  }else{
+    h+='<div class="kutu"><h3>'+E(v.fonKodu)+' — '+E(v.fonAdi)+'</h3>'+
+      '<div class="altbilgi">'+v.hisseSayisi+' hisse tutuyor. En çok örtüşen fonlar (aynı hisselere aynı anda giren):</div></div>';
+    h+=v.benzerler.map(function(b){
+      return '<div class="satir"><div class="sol"><div class="kod">'+E(b.fonKodu)+' — '+E(b.fonAdi)+'</div>'+
+        '<div class="altbilgi">'+b.ortakHisseSayisi+' ortak hisse / '+b.toplamHisseSayisi+' toplam</div></div></div>';
+    }).join("");
+  }
+  el("govde").innerHTML=h;
+  var g=el("fonBenzerGeri");if(g)g.onclick=function(){tit();fonBenzerFonKodu=null;fonBenzerD=null;fonlarGoster(fonD)};
 }
 /* ================== 🐂🐻 TARAMA SEKMESİ (MAL · DİP · AYI/BOĞA) ==========
    Üç bağımsız tarama modülü tek ekranda. Her modülün kendi aç/kapa tiki
@@ -9916,7 +10047,27 @@ if("/api/fonYukle"===$.pathname&&"POST"===p.method){
   const anahtar=A.PANEL_KEY||t;
   if(!gov2||gov2.key!==anahtar)return JS2({ok:!1,hata:"yetkisiz"},403);
   if(!A.VERI)return JS2({ok:!1,hata:"KV bağlı değil"});
-  await A.VERI.put("fonHisseHaritasi",JSON.stringify(gov2.veri||{}));
+  const yeniVeri=gov2.veri||{};
+  /* 📦 AYLIK ARŞİV — FONLAR sekmesindeki diff/konsensüs/geçmiş özellikleri
+     için, üzerine yazmadan ÖNCE mevcut halini "fonGecmis:YYYY-MM" anahtarına
+     arşivle. Kova, YENİ verinin değil, bu push'tan HEMEN ÖNCEKİ verinin
+     KENDİ guncelleme ayına göre seçilir. Aynı ay içinde tekrar push edilirse
+     aynı kovanın üzerine yazılır (idempotent) — farklı aylar ASLA silinmez,
+     bu append-only bir geçmiş (bkz. fonGecmisListe). */
+  const eskiHam=await A.VERI.get("fonHisseHaritasi");
+  if(eskiHam){
+    try{
+      const eskiVeri=JSON.parse(eskiHam);
+      const eskiAy=String(eskiVeri.guncelleme||"").slice(0,7);
+      if(/^\d{4}-\d{2}$/.test(eskiAy)){
+        await A.VERI.put("fonGecmis:"+eskiAy,eskiHam);
+        let liste=[];
+        try{liste=JSON.parse(await A.VERI.get("fonGecmisListe"))||[]}catch(e){}
+        if(!liste.includes(eskiAy)){liste.push(eskiAy);liste.sort();await A.VERI.put("fonGecmisListe",JSON.stringify(liste))}
+      }
+    }catch(e){}
+  }
+  await A.VERI.put("fonHisseHaritasi",JSON.stringify(yeniVeri));
   return JS2({ok:!0})
 }
 /* 📤 KALDIĞI YERDEN DEVAM — kap_ortaklik_scraper.py ve fon_hisse_scraper.py
@@ -10327,6 +10478,116 @@ if("/api/ortaklikKisi"===$.pathname){
   if(!kayit)return JS({ok:!0,isim:isim,kayitlar:[]});
   return JS({ok:!0,isim:isim,goruntuIsim:kayit.goruntu_isim,tuzelMi:kayit.tuzel_mi,
     kayitlar:(kayit.kayitlar||[]).map(k=>({ticker:k.ticker,unvan:k.unvan,rol:k.rol,payYuzde:k.pay_yuzde,tuzelMi:k.tuzel_mi}))})
+}
+/* ═══ 🐣 FON ANALİZ KATMANI — FONLAR sekmesi ═══
+   /api/fonYukle push'unda arşivlenen "fonGecmis:YYYY-MM" kovalarını, güncel
+   "fonHisseHaritasi" ile karşılaştırıp diff/konsensüs/örtüşme üretir.
+   İlk taramada (henüz arşiv yokken) diff alanları BOŞ döner — UYDURMA SAYI
+   ASLA yok, sadece "henüz karşılaştırılacak ay yok" bilgisi verilir. */
+async function fonVeriOku(A){
+  const ham=await A.VERI.get("fonHisseHaritasi");
+  if(!ham)return null;
+  try{return JSON.parse(ham)}catch(e){return null}
+}
+async function fonOncekiAyVeriOku(A,guncelAy){
+  let liste=[];
+  try{liste=JSON.parse(await A.VERI.get("fonGecmisListe"))||[]}catch(e){}
+  liste=liste.filter(ay=>ay<guncelAy).sort();
+  if(!liste.length)return null;
+  const oncekiAy=liste[liste.length-1];
+  const ham=await A.VERI.get("fonGecmis:"+oncekiAy);
+  if(!ham)return null;
+  try{const v=JSON.parse(ham);v.__ay=oncekiAy;return v}catch(e){return null}
+}
+/* hisse_kodu -> {fonSayisi, toplamPay} — hisseIndeksi zaten fon_hisse_scraper.py
+   tarafından ters-indekslenmiş geliyor, burada sadece toplam pay çıkarılıyor. */
+function fonHisseOzetCikar(veri){
+  const ozet={};
+  const idx=(veri&&veri.hisseIndeksi)||{};
+  for(const hisse in idx){
+    const kayitlar=idx[hisse]||[];
+    let toplamPay=0;
+    for(const k of kayitlar)toplamPay+=(k.pay_yuzde||0);
+    ozet[hisse]={fonSayisi:kayitlar.length,toplamPay:toplamPay};
+  }
+  return ozet;
+}
+if("/api/fonOzet"===$.pathname){
+  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
+  const guncel=await fonVeriOku(A);
+  if(!guncel)return JS({ok:!0,hazirDegil:!0});
+  const guncelAy=String(guncel.guncelleme||"").slice(0,7);
+  const oncekiVeri=/^\d{4}-\d{2}$/.test(guncelAy)?await fonOncekiAyVeriOku(A,guncelAy):null;
+  const guncelOzet=fonHisseOzetCikar(guncel);
+  const oncekiOzet=oncekiVeri?fonHisseOzetCikar(oncekiVeri):null;
+  const yeniAlim=[],artiranlar=[],azaltanlar=[],cikanlar=[];
+  for(const hisse in guncelOzet){
+    if(!oncekiOzet)break; // geçmiş yoksa diff hesaplanamaz — uydurma yok
+    const g=guncelOzet[hisse],o=oncekiOzet[hisse];
+    if(!o){yeniAlim.push({hisse,fonSayisi:g.fonSayisi,toplamPay:Math.round(g.toplamPay*100)/100});continue}
+    const fark=g.toplamPay-o.toplamPay;
+    const farkYuzde=o.toplamPay>0?Math.round((fark/o.toplamPay*100)*100)/100:null;
+    const satir={hisse,fonSayisiOnce:o.fonSayisi,fonSayisiSimdi:g.fonSayisi,
+      toplamPayOnce:Math.round(o.toplamPay*100)/100,toplamPaySimdi:Math.round(g.toplamPay*100)/100,farkYuzde};
+    if(fark>0.01)artiranlar.push(satir);
+    else if(fark<-0.01)azaltanlar.push(satir);
+  }
+  if(oncekiOzet)for(const hisse in oncekiOzet)
+    if(!guncelOzet[hisse])cikanlar.push({hisse,fonSayisiOnce:oncekiOzet[hisse].fonSayisi,toplamPayOnce:Math.round(oncekiOzet[hisse].toplamPay*100)/100});
+  yeniAlim.sort((a,b)=>b.fonSayisi-a.fonSayisi);
+  artiranlar.sort((a,b)=>(b.farkYuzde||0)-(a.farkYuzde||0));
+  azaltanlar.sort((a,b)=>(a.farkYuzde||0)-(b.farkYuzde||0));
+  cikanlar.sort((a,b)=>b.fonSayisiOnce-a.fonSayisiOnce);
+  const konsensus=Object.keys(guncelOzet).map(h=>({hisse:h,fonSayisi:guncelOzet[h].fonSayisi,toplamPay:Math.round(guncelOzet[h].toplamPay*100)/100}))
+    .sort((a,b)=>b.fonSayisi-a.fonSayisi).slice(0,30);
+  return JS({ok:!0,guncelleme:guncel.guncelleme,guncelAy:guncelAy,
+    gecmisVarMi:!!oncekiOzet,oncekiAy:oncekiOzet?oncekiVeri.__ay:null,
+    yeniAlim:yeniAlim.slice(0,30),artiranlar:artiranlar.slice(0,30),
+    azaltanlar:azaltanlar.slice(0,30),cikanlar:cikanlar.slice(0,30),konsensus})
+}
+/* 🔎 Tek hissenin fon derinliği: kim tutuyor + varsa önceki ayla farkı. */
+if("/api/fonHisseDetay"===$.pathname){
+  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
+  const kod=KOD(gov.kod||"");
+  if(!kod)return JS({ok:!1,hata:"kod gerekli"});
+  const veri=await fonVeriOku(A);
+  if(!veri)return JS({ok:!0,hazirDegil:!0});
+  const kayitlar=(veri.hisseIndeksi||{})[kod]||[];
+  if(!kayitlar.length)return JS({ok:!0,bulunamadi:!0,kod});
+  const guncelAy=String(veri.guncelleme||"").slice(0,7);
+  const onceki=/^\d{4}-\d{2}$/.test(guncelAy)?await fonOncekiAyVeriOku(A,guncelAy):null;
+  const oncekiKayitlar=onceki?((onceki.hisseIndeksi||{})[kod]||null):null;
+  const oncekiToplam=oncekiKayitlar?oncekiKayitlar.reduce((s,k)=>s+(k.pay_yuzde||0),0):null;
+  const guncelToplam=kayitlar.reduce((s,k)=>s+(k.pay_yuzde||0),0);
+  return JS({ok:!0,kod,fonSayisi:kayitlar.length,toplamPay:Math.round(guncelToplam*100)/100,
+    fonlar:kayitlar.map(k=>({fonKodu:k.fon_kodu,fonAdi:k.fon_adi,payYuzde:k.pay_yuzde,tahminiLot:k.tahmini_lot,rapordonemi:k.rapor_donemi}))
+      .sort((a,b)=>(b.payYuzde||0)-(a.payYuzde||0)),
+    gecmisVarMi:!!oncekiKayitlar,oncekiAy:onceki?onceki.__ay:null,
+    oncekiFonSayisi:oncekiKayitlar?oncekiKayitlar.length:null,
+    oncekiToplamPay:oncekiToplam==null?null:Math.round(oncekiToplam*100)/100})
+}
+/* 🔗 Bir fona en çok "hisse örtüşen" diğer fonlar — akıllı para kümelenmesi. */
+if("/api/fonBenzer"===$.pathname){
+  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
+  const fonKodu=String((gov&&gov.fonKodu)||"").trim().toUpperCase();
+  if(!fonKodu)return JS({ok:!1,hata:"fonKodu gerekli"});
+  const veri=await fonVeriOku(A);
+  if(!veri)return JS({ok:!0,hazirDegil:!0});
+  const fonlar=veri.fonlar||{};
+  const hedef=fonlar[fonKodu];
+  if(!hedef)return JS({ok:!0,bulunamadi:!0});
+  const hedefHisseler=new Set((hedef.hisseler||[]).map(h=>h.hisse_kodu));
+  const sonuclar=[];
+  for(const kod in fonlar){
+    if(kod===fonKodu)continue;
+    const f=fonlar[kod];
+    const hisseler=(f.hisseler||[]).map(h=>h.hisse_kodu);
+    let ortak=0;
+    for(const h of hisseler)if(hedefHisseler.has(h))ortak++;
+    if(ortak>0)sonuclar.push({fonKodu:kod,fonAdi:f.fon_adi,ortakHisseSayisi:ortak,toplamHisseSayisi:hisseler.length});
+  }
+  sonuclar.sort((a,b)=>b.ortakHisseSayisi-a.ortakHisseSayisi);
+  return JS({ok:!0,fonKodu,fonAdi:hedef.fon_adi,hisseSayisi:hedefHisseler.size,benzerler:sonuclar.slice(0,15)})
 }
 /* ═══ 🐂🐻 MAL TOPLAMA/DAĞITIM + AYI/BOĞA — TÜM ZAMAN DİLİMLERİ ═══
    Üç iş tek uçta:
