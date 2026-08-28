@@ -1,0 +1,48 @@
+name: Fon Hisse Taraması
+
+on:
+  workflow_dispatch:
+    inputs:
+      fon_sayisi:
+        description: "Kaç fon işlensin? Boş bırak = TÜMÜ (kaldığı yerden devam eder)"
+        required: false
+        default: ""
+  schedule:
+    # SPK kuralı: fonlar bir önceki ayın Portföy Dağılım Raporu'nu takip eden
+    # ayın İLK 6 İŞ GÜNÜ içinde KAP'a yüklemek zorunda. Ayın 10'unda
+    # çalıştırmak, o ayki raporların büyük çoğunluğunun yayınlanmış
+    # olmasını garantiler. (İstersen bu satırı silip sadece elle çalıştır.)
+    - cron: "0 3 10 * *"
+
+jobs:
+  tara:
+    runs-on: ubuntu-latest
+    # kap_ortaklik_scraper.py'deki MAX_TOPLAM_SANIYE=5*3600 (5 saat) + biraz
+    # pay — GitHub'ın workflow_dispatch/schedule için sert üst sınırı 6 saat.
+    timeout-minutes: 355
+    steps:
+      - name: Kodu çek
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Bağımlılıkları kur
+        run: pip install httpx pdfplumber
+
+      - name: Fon hisse taraması çalıştır
+        env:
+          FON_SAYISI: ${{ github.event.inputs.fon_sayisi }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          PANEL_KEY: ${{ secrets.PANEL_KEY }}
+        run: python fon_hisse_scraper.py
+
+      - name: Çıktıyı artifact olarak sakla
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fon_hisse_haritasi
+          path: fon_hisse_haritasi.json
+          retention-days: 14
