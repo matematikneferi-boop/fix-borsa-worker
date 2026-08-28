@@ -415,22 +415,44 @@ class KapFonIstemci:
             return [k for k in veri if isinstance(k, dict)]
         return [veri] if isinstance(veri, dict) else []
 
-    def fon_uyesi_bul(self, fon_kodu: str, fon_adi: str) -> Optional[dict]:
-        """DÜZELTME (bu, tara #3'te ~%85 'kap_uye_bulunamadi' ile sonuçlanan
-        asıl kök sebep): TEFAS'ın 3 harfli fon kodu (AAV, ABJ, AC5...) çoğu
-        fon için KAP'ın kendi 'companyCode' alanıyla AYNI DEĞİL — sadece bazı
-        fonlarda (BIO, ADE, AKU gibi — log'da bunlar 'kap_uye' BULUNDU ama
-        sonraki adımda bildirim bulunamadı diye düştü) tesadüfen örtüşüyor.
-        Bu yüzden önce kod dener, bulamazsa fon ADIYLA arar ve KAP'tan gelen
-        adayın başlığını fon_adi ile ANLAMLI KELİME örtüşmesiyle doğrular.
-        En az 2 anlamlı kelime örtüşmesi YOKSA None döner — 'her ne bulduysan
-        onu kabul et' YAPMIYORUZ, çünkü yanlış fonu doğru sanıp onun
-        hisselerini göstermek, hiç göstermemekten daha kötü bir hata olurdu.
+    def fon_uyesi_bul(self, fon_kodu: str, fon_adi: str, kurucu: str = "") -> Optional[dict]:
+        """DÜZELTME (tara #8): Eski sürüm SADECE fon_adi'ndan çıkardığı
+        kelimelerle arıyordu ve >=2 örtüşme istiyordu. Ama fon adı
+        "[KURUCU] Portföy ... Fon" kalıbında, KAP'taki karşılığı ise sadece
+        "[KURUCU] Portföy Yönetimi A.Ş." — PORTFÖY/YÖNETİMİ/FON gibi
+        kelimeler zaten anlamsız sayılıp elendiğinden geriye SADECE kurucu
+        adı (1 kelime) kalıyordu. >=2 eşiği bu yüzden pratikte HİÇBİR ZAMAN
+        tutmuyordu (tara #8 log'u: 50 fonun neredeyse tamamı bu yüzden
+        düştü). Düzeltme: TEFAS'ın verdiği `kurucu` alanını DOĞRUDAN arama
+        ve doğrulama temeli yap — bu, KAP'taki üye başlığıyla neredeyse
+        birebir örtüşen, çok daha güvenilir bir sinyal. `kurucu` boşsa (TEFAS
+        bazen döndürmüyor) eski fon_adi tabanlı yönteme düşülür, ama eşik
+        artık >=1 (kurucu adı zaten anlamsız kelimelerden arındırılmış tek
+        güçlü sinyal olduğu için >=2 istemek yine imkansız olurdu).
         """
         uye = self.member_filter(fon_kodu)
         if uye and uye.get("mkkMemberOid"):
             return uye
 
+        # 1) Kurucu adıyla ara (varsa) — en güvenilir yol
+        if kurucu.strip():
+            kurucu_kelimeler = _anlamli_kelimeler(kurucu)
+            if kurucu_kelimeler:
+                adaylar = self.uye_ara(kurucu.strip())
+                en_iyi, en_iyi_skor = None, 0
+                for k in adaylar:
+                    baslik = str(k.get("title") or k.get("companyTitle") or "")
+                    ortak = kurucu_kelimeler & _anlamli_kelimeler(baslik)
+                    if len(ortak) > en_iyi_skor:
+                        en_iyi_skor, en_iyi = len(ortak), k
+                if self.debug:
+                    print(f"    🐛 fon_uyesi_bul('{fon_kodu}'): kurucu araması='{kurucu}', "
+                          f"{len(adaylar)} aday, en iyi skor={en_iyi_skor} "
+                          f"(başlık={en_iyi.get('title') if en_iyi else None!r}, oid={en_iyi.get('mkkMemberOid') if en_iyi else None})")
+                if en_iyi_skor >= 1 and en_iyi and en_iyi.get("mkkMemberOid"):
+                    return en_iyi
+
+        # 2) Yedek: tam fon adından çıkarılan kelimelerle ara
         hedef_kelimeler = _anlamli_kelimeler(fon_adi)
         if not hedef_kelimeler:
             if self.debug:
@@ -448,22 +470,25 @@ class KapFonIstemci:
             print(f"    🐛 fon_uyesi_bul('{fon_kodu}'): isim araması='{arama_sorgusu}', "
                   f"{len(adaylar)} aday, en iyi skor={en_iyi_skor} "
                   f"(başlık={en_iyi.get('title') if en_iyi else None!r}, oid={en_iyi.get('mkkMemberOid') if en_iyi else None})")
-        if en_iyi_skor >= 2 and en_iyi and en_iyi.get("mkkMemberOid"):
+        if en_iyi_skor >= 1 and en_iyi and en_iyi.get("mkkMemberOid"):
             return en_iyi
         return None
 
-    def son_tanitici_bilgiler_bildirimi(self, mkk_member_oid: str, gun_geriye: int = 400) -> Optional[dict]:
+    def son_tanitici_bilgiler_bildirimi(self, mkk_member_oid: str, fon_kodu: str, gun_geriye: int = 400) -> Optional[dict]:
         """Son ~13 ay içindeki bildirimleri tarar, EN GÜNCEL "I-FONU TANITICI
         BİLGİLER" bildirimini döndürür.
 
-        DÜZELTME (kritik): İlk sürüm "Portföy Dağılım Raporu" başlığı
-        arıyordu — CANLI bir KAP belgesini (DOH, Ekim-2025) tam içeriğiyle
-        inceleyince, hisse bazlı kırılımın ASIL aylık bildirim türünün
-        "I-FONU TANITICI BİLGİLER" olduğu görüldü (başlık formatı: "{Ay-Yıl}
-        {FONKOD}-{FON ADI} · I-FONU TANITICI BİLGİLER"). Bu belge "III-FON
-        PORTFÖY DEĞERİ TABLOSU" içinde "HİSSE SENETLERİ" alt bölümünde her
-        hisse için kod, ISIN, TAM pay adedi (nominal değer) ve fon içindeki
-        yüzdesini satır satır veriyor — DOH örneğinde bizzat doğrulandı."""
+        DÜZELTME (kritik, tara #8): mkkMemberOid FON'a değil KURUCUYA
+        (portföy yönetim şirketine) ait — yani aynı kurucunun BİRDEN FAZLA
+        fonu aynı OID altında bildirim yapıyor. Eski sürüm sadece başlıkta
+        "TANITICI BİLGİLER" geçiyor mu diye bakıyordu, HANGİ FONA ait
+        olduğuna bakmıyordu — kurucunun en güncel bildirimi TAMAMEN BAŞKA
+        bir fonun raporu olabilir ve bu, istenen fonun verisiymiş gibi
+        sessizce yanlış gösterilebilirdi (hiç göstermemekten daha kötü).
+        Başlık formatı belgeyle doğrulanmıştı: "{Ay-Yıl} {FONKOD}-{FON ADI}
+        · I-FONU TANITICI BİLGİLER" — artık başlıkta bu FONUN KODU ile
+        başlayan "{FONKOD}-" kalıbı da aranıyor, sadece "TANITICI BİLGİLER"
+        değil."""
         from datetime import date, timedelta
         bugun = date.today()
         try:
@@ -485,16 +510,23 @@ class KapFonIstemci:
             kayitlar = r.json()
         except Exception:
             return None
-        adaylar = [
-            k for k in kayitlar
-            if isinstance(k, dict) and "TANITICI BİLGİLER" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))
-        ]
+        fon_kodu_n = _tr_upper(fon_kodu.strip())
+        adaylar = []
+        for k in kayitlar:
+            if not isinstance(k, dict):
+                continue
+            baslik_n = _tr_upper(str(k.get("title", "") or k.get("subject", "")))
+            if "TANITICI BİLGİLER" not in baslik_n:
+                continue
+            if f"{fon_kodu_n}-" not in baslik_n:
+                continue
+            adaylar.append(k)
         if not adaylar:
             return None
         adaylar.sort(key=lambda k: str(k.get("publishDate", "") or k.get("basicDate", "")), reverse=True)
         return adaylar[0]
 
-    def tum_tanitici_bilgiler_bildirimleri(self, mkk_member_oid: str, gun_geriye: int = 760) -> dict:
+    def tum_tanitici_bilgiler_bildirimleri(self, mkk_member_oid: str, fon_kodu: str, gun_geriye: int = 760) -> dict:
         """son_tanitici_bilgiler_bildirimi ile AYNI sorgu, ama sadece EN
         GÜNCEL'i değil, KAP'ın döndürdüğü penceredeki TÜM 'I-FONU TANITICI
         BİLGİLER' bildirimlerini AY BAZINDA döner: {AY(YYYY-MM): bildirim}.
@@ -502,7 +534,11 @@ class KapFonIstemci:
         hisse kırılımı yok ama KAP'ın bildirim sorgusu zaten geriye dönük
         bir pencere döndürüyor, ayrı bir 'tarihsel API' gerekmiyor. Aynı ay
         için birden fazla bildirim varsa (düzeltme/tekrar), o ayın EN
-        GÜNCELİ tutulur."""
+        GÜNCELİ tutulur.
+
+        DÜZELTME (tara #8): son_tanitici_bilgiler_bildirimi'ndeki AYNI kritik
+        düzeltme burada da gerekli — aynı kurucunun BAŞKA fonlarının
+        bildirimleri karışmasın diye başlıkta "{FONKOD}-" kalıbı da aranıyor."""
         from datetime import date, timedelta
         bugun = date.today()
         try:
@@ -524,10 +560,17 @@ class KapFonIstemci:
             kayitlar = r.json()
         except Exception:
             return {}
-        adaylar = [
-            k for k in kayitlar
-            if isinstance(k, dict) and "TANITICI BİLGİLER" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))
-        ]
+        fon_kodu_n = _tr_upper(fon_kodu.strip())
+        adaylar = []
+        for k in kayitlar:
+            if not isinstance(k, dict):
+                continue
+            baslik_n = _tr_upper(str(k.get("title", "") or k.get("subject", "")))
+            if "TANITICI BİLGİLER" not in baslik_n:
+                continue
+            if f"{fon_kodu_n}-" not in baslik_n:
+                continue
+            adaylar.append(k)
         sonuc = {}
         for k in adaylar:
             tarih = str(k.get("publishDate", "") or k.get("basicDate", ""))
@@ -683,12 +726,12 @@ def fon_isle(kap: KapFonIstemci, fon_kodu: str, fon_adi: str, semsiye_turu: str,
     kart = FonKarti(fon_kodu=fon_kodu, fon_adi=fon_adi, semsiye_turu=semsiye_turu,
                      kurucu=kurucu, fon_buyuklugu_tl=buyukluk)
 
-    uye = kap.fon_uyesi_bul(fon_kodu, fon_adi)
+    uye = kap.fon_uyesi_bul(fon_kodu, fon_adi, kurucu)
     if not uye or not uye.get("mkkMemberOid"):
         kart.veri_eksik.append("kap_uye_bulunamadi")
         return kart
 
-    bildirim = kap.son_tanitici_bilgiler_bildirimi(uye["mkkMemberOid"])
+    bildirim = kap.son_tanitici_bilgiler_bildirimi(uye["mkkMemberOid"], fon_kodu)
     if not bildirim:
         kart.veri_eksik.append("tanitici_bilgiler_bildirimi_bulunamadi")
         return kart
@@ -970,10 +1013,10 @@ def kap_uyesini_ve_gecmisini_isle(kap: "KapFonIstemci", f: dict, tamamlanmis_ayl
     — ama fon yine de çağıran tarafta 'islenen' sayılır: KAP'ta o an
     yoksa, tekrar denemek de bulmaz."""
     sonuc = {}
-    uye = kap.fon_uyesi_bul(f["fon_kodu"], f["fon_adi"])
+    uye = kap.fon_uyesi_bul(f["fon_kodu"], f["fon_adi"], f.get("kurucu", ""))
     if not uye or not uye.get("mkkMemberOid"):
         return sonuc
-    bildirimler = kap.tum_tanitici_bilgiler_bildirimleri(uye["mkkMemberOid"], GECMIS_GUN_GERIYE)
+    bildirimler = kap.tum_tanitici_bilgiler_bildirimleri(uye["mkkMemberOid"], f["fon_kodu"], GECMIS_GUN_GERIYE)
     for ay, bildirim in bildirimler.items():
         if ay in tamamlanmis_aylar:
             continue
