@@ -6,11 +6,11 @@ Fon Hisse Scraper — TEFAS + KAP Portföy Dağılım Raporu
 
 Ne yapar
 --------
-1) TEFAS'ın herkese açık karşılaştırma uç noktasından (BindComparisonFundReturns)
-   TÜM TEFAS fonlarının listesini çeker, "Hisse Senedi Şemsiye Fonu" ve
-   "Değişken Şemsiye Fonu" (BIST'e bakan, hisse yoğun/değişken) türündekileri
-   filtreler — senin seçimin: sadece bu ikisi, para piyasası/borçlanma/altın
-   fonları DIŞARIDA.
+1) TEFAS'ın YENİ (2026, Next.js) resmi API'sinden (fonGnlBlgSiraliGetir)
+   TÜM "YAT" fonlarının listesini çeker, unvanında SPK mevzuatınca ZORUNLU
+   geçen "(HİSSE SENEDİ YOĞUN FON)" / "... DEĞİŞKEN FON" ibarelerine göre
+   BIST'e bakan fonları filtreler — senin seçimin: sadece bu ikisi, para
+   piyasası/borçlanma/altın fonları DIŞARIDA.
 2) Her fon için KAP'ta o fonun kendi bildirim akışında "Portföy Dağılım
    Raporu" (Bildirim Tipi: DG, aylık) bildirimini arar, EN GÜNCEL olanı bulur.
 3) O bildirimin PDF ekini indirir, içindeki hisse bazlı satırları (kod,
@@ -20,24 +20,33 @@ Ne yapar
    olsun diye).
 
 Çıktı: fon_hisse_haritasi.json — worker'daki KV'ye "fonHisseHaritasi" anahtarıyla
-yazılması için push_to_worker() ile /api/fonYukle route'una POST eder (bu route
-worker.js'e ayrıca eklenmeli, bkz. dosya sonu).
+yazılması için push_to_worker() ile /api/fonYukle route'una POST eder.
 
 DÜRÜST NOTLAR (gerçek kısıtlar, gizlenmedi)
 --------------------------------------------
+- 1. sürümde TEFAS'ın ESKİ /api/DB/BindComparisonFundReturns ucu kullanılmıştı
+  — TEFAS 2026'da SİTEYİ TAMAMEN YENİLEDİ (Next.js), o uç 404 verip kaldı.
+  Bu sürüm yeni resmi ucu (fonGnlBlgSiraliGetir) kullanıyor — bağımsız açık
+  kaynak bir istemcinin (github.com/mirzazad/pytefas) canlı doğrulanmış
+  kaynak kodundan teyit edildi, kör tahmin değil.
+- Fon TÜRÜ (hisse yoğun/değişken) filtrelemesi TEFAS'ın döndürdüğü bir
+  kategori alanına değil, fon UNVANINA dayanıyor — çünkü yeni API'nin
+  kategori alanının kesin adı bu sandbox'ta (internet kapalı) CANLI
+  DOĞRULANAMADI. Unvan deseni (SPK'nın zorunlu kıldığı ibare) daha güvenilir
+  bir temel: var olduğunu bilmediğim bir alana güvenmek yerine.
 - TEFAS, bir fonun VARLIK SINIFI dağılımını (örn. "%62 Hisse Senedi, %20
   Tahvil...") herkese açık API'sinden net veriyor. AMA "hangi hisse, ne kadar"
   bilgisi TEFAS'ta YOK. Bu bilgi sadece SPK mevzuatı gereği fonların her ayın
   ilk haftasında KAP'a yüklediği "Aylık Portföy Dağılım Raporu" ekinde var.
-  Kaynak zorunlu olarak KAP — TEFAS sadece fon listesi/isim/tür/büyüklük için
+  Kaynak zorunlu olarak KAP — TEFAS sadece fon listesi/isim/büyüklük için
   kullanılıyor.
 - KAP tarafı, kap_ortaklik_scraper.py'daki AYNI KapIstemci makinesini
   (member/filter, disclosure/byCriteria, attachment-detail, file/download)
   kullanıyor. Fonların da (BIO, TTE, KPH, TGE gibi) şirket ticker'ları gibi
   3 harfli KAP kodları olduğu ve aynı uçlarla sorgulanabildiği, KAP'ın halka
-  açık bildirim sayfalarında GÖZLEMLENDİ (bkz. isportfoy.com.tr KAP duyuru
-  listesi) — ama bu varsayım BU SANDBOX'TA CANLI TEST EDİLEMEDİ (internet
-  kapalı, kap.org.tr ve tefas.gov.tr'ye bu ortamdan erişim yok).
+  açık bildirim sayfalarında GÖZLEMLENDİ (bkz. isportfoy.com.tr / ekofin.net
+  KAP duyuru linkleri) — ama bu varsayım BU SANDBOX'TA CANLI TEST EDİLEMEDİ
+  (internet kapalı, kap.org.tr'ye bu ortamdan erişim yok).
 - PDF içindeki hisse tablosunun sütun/başlık yapısı fondan fona, dönemden
   döneme değişebiliyor (ortaklık yapısı PDF'lerinde görülen sorunun aynısı).
   extract_hisseler_from_pdf() esnek başlık eşleştirmesi kullanıyor ve
@@ -90,18 +99,26 @@ def zaman_siniri(saniye: int):
 
 
 KAP_BASE = "https://www.kap.org.tr"
-TEFAS_BASE = "https://www.tefas.gov.tr"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
 RATE_LIMIT_SEC = 1.2
 PDF_MAX_SAYFA = 25          # portföy tablosu genelde raporun ilk sayfalarında
 PDF_MAX_SANIYE = 25
 MAX_TOPLAM_SANIYE = 5 * 3600
 
-# Senin seçimin: sadece BIST'e bakan (hisse yoğun / değişken) şemsiye fon türleri
-HEDEF_SEMSIYE_TURLERI = {
-    "Hisse Senedi Şemsiye Fonu",
-    "Değişken Şemsiye Fonu",
-}
+# Senin seçimin: sadece BIST'e bakan (hisse yoğun / değişken) fonlar —
+# bu iki fon tipinin resmi unvanında SPK mevzuatı gereği ZORUNLU olarak
+# geçen ibareler (bkz. TefasIstemci.hisse_yogun_fon_listesi):
+_TR_CEVIRI = str.maketrans({"i": "İ", "ı": "I", "ğ": "Ğ", "ü": "Ü", "ş": "Ş", "ö": "Ö", "ç": "Ç"})
+
+
+def _tr_upper(s: str) -> str:
+    """Python'un str.upper()'ı Türkçe i/İ ayrımını doğru yapmıyor
+    (kap_ortaklik_scraper.py'deki normalize_isim ile aynı sorun/çözüm)."""
+    return (s or "").translate(_TR_CEVIRI).upper()
+
+
+HISSE_YOGUN_DESENI = re.compile(r"HİSSE SENEDİ YOĞUN FON")
+DEGISKEN_DESENI = re.compile(r"DEĞİŞKEN FON")
 
 
 # ───────────────────────── yardımcılar ─────────────────────────
@@ -163,76 +180,102 @@ class FonKarti:
 # ───────────────────────── TEFAS istemcisi ─────────────────────────
 
 class TefasIstemci:
+    """TEFAS 2026'da Next.js tabanlı yeni bir altyapıya geçti, ESKİ
+    /api/DB/BindComparisonFundReturns ucu KALDIRILDI (404). Yeni resmi uçlar
+    (bkz. github.com/mirzazad/pytefas — canlı kaynak kodundan doğrulandı):
+      https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir  (fon listesi/bilgisi)
+      https://www.tefas.gov.tr/api/funds/dagilimSiraliGetirT   (portföy varlık dağılımı)
+    Bu script sadece fon LİSTESİ için ilkini kullanıyor — hisse bazlı kırılım
+    zaten TEFAS'ta yok, KAP'tan geliyor (bkz. dosya başındaki DÜRÜST NOTLAR)."""
+
+    INFO_URL = "https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir"
+
     def __init__(self):
         self.c = httpx.Client(
-            base_url=TEFAS_BASE,
             headers={
+                "Accept": "*/*",
+                "Content-Type": "application/json",
+                "Origin": "https://www.tefas.gov.tr",
+                "Referer": "https://www.tefas.gov.tr/tr/fon-verileri",
                 "User-Agent": UA,
-                "Accept": "application/json, text/plain, */*",
-                "X-Requested-With": "XMLHttpRequest",
-                "Referer": f"{TEFAS_BASE}/TarihselVeriler.aspx",
             },
-            timeout=20.0,
+            timeout=30.0,
             follow_redirects=True,
         )
-        try:
-            self.c.get("/TarihselVeriler.aspx")  # oturum çerezi almak için
-        except Exception:
-            pass
 
     def hisse_yogun_fon_listesi(self) -> list:
-        """BindComparisonFundReturns üzerinden tüm fon listesini çeker,
-        HEDEF_SEMSIYE_TURLERI ile filtreler.
+        """TEFAS'ın YENİ fonGnlBlgSiraliGetir ucundan TÜM "YAT" (yatırım,
+        emeklilik değil) fonlarını çeker, isim bazlı desenle "Hisse Senedi
+        Yoğun Fon" / "Değişken Fon" olanları seçer.
 
-        NOT: Bu uç yaygın Python/Node TEFAS scraper'larında (pytefas, tefas_scraper
-        vb.) kullanılan, tersine mühendislikle bulunmuş GAYRIRESMI bir uçtur.
-        Alan adları (fontip/sfontur/...) TEFAS'ın kendi ön yüzünün gönderdiği
-        form alanlarıdır. TEFAS bunu değiştirirse bu fonksiyon 0 sonuç
-        döndürür — sessizce geçmek yerine RuntimeError fırlatır ki fark edilsin.
-        """
-        try:
-            r = self.c.post(
-                "/api/DB/BindComparisonFundReturns",
-                data={
-                    "fontip": "YAT",       # yatırım fonu (emeklilik değil)
-                    "sfontur": "",
-                    "fonkod": "",
-                    "fongrup": "",
-                    "bastarih": "",
-                    "bittarih": "",
-                    "fonturkod": "",
-                    "fonunvantip": "",
-                    "strperiod": "1A",
-                    "islemdurum": "1",
-                },
-            )
-            r.raise_for_status()
-            veri = r.json()
-        except Exception as e:
-            raise RuntimeError(f"TEFAS fon listesi alınamadı: {e}")
+        NEDEN İSİM DESENİ (kategori alanı değil): SPK mevzuatı gereği bu iki
+        fon tipinin resmi unvanı "(HİSSE SENEDİ YOĞUN FON)" ibaresini ya da
+        "... DEĞİŞKEN FON" kalıbını ZORUNLU olarak içerir — bu, TEFAS'ın yeni
+        API'sinde kategori alanının kesin adını CANLI DOĞRULAYAMADIĞIM
+        (bu sandbox'ta internet yok) bu aşamada isme dayanmak, var olduğunu
+        bilmediğim bir alana güvenmekten daha sağlam.
 
-        kayitlar = veri.get("data", veri) if isinstance(veri, dict) else veri
-        if not isinstance(kayitlar, list) or len(kayitlar) < 50:
+        Tatil/hafta sonu için TEFAS boş sonuç dönebiliyor — son 10 günü
+        geriye doğru dener, ilk dolu günde durur."""
+        from datetime import date, timedelta
+
+        satirlar, son_hata = None, None
+        for gun_geri in range(10):
+            gun = date.today() - timedelta(days=gun_geri)
+            body = {
+                "fonTipi": "YAT", "fonKodu": None, "aramaMetni": None,
+                "fonTurKod": None, "fonGrubu": None, "sfonTurKod": None,
+                "fonTurAciklama": None, "kurucuKod": None,
+                "basTarih": gun.strftime("%Y%m%d"), "bitTarih": gun.strftime("%Y%m%d"),
+                "basSira": 1, "bitSira": 100000, "dil": "TR",
+                "sFonTurKod": "", "fonKod": "", "fonGrup": "", "fonUnvanTip": "",
+            }
+            try:
+                r = self.c.post(self.INFO_URL, json=body)
+                r.raise_for_status()
+                veri = r.json()
+            except Exception as e:
+                son_hata = str(e)
+                continue
+            adaylar = veri.get("resultList") or []
+            if adaylar:
+                satirlar = adaylar
+                break
+            son_hata = veri.get("errorMessage") or "boş sonuç (tatil/hafta sonu olabilir)"
+
+        if not satirlar:
+            raise RuntimeError(f"TEFAS'tan son 10 günde hiç veri alınamadı (son hata: {son_hata})")
+        if len(satirlar) < 200:
             raise RuntimeError(
-                f"TEFAS'tan beklenenden az/hatalı kayıt geldi ({len(kayitlar) if isinstance(kayitlar, list) else 'liste değil'}) "
-                "— TEFAS uç noktası/alan adları değişmiş olabilir, canlı kontrol gerekiyor."
+                f"TEFAS'tan beklenenden az kayıt geldi ({len(satirlar)}, beklenen 900+) "
+                "— API/alan adları yine değişmiş olabilir, canlı kontrol gerekiyor."
             )
 
         sonuc = []
-        for k in kayitlar:
-            tur = str(k.get("FONTURACIKLAMA") or k.get("fontur") or k.get("SFONTURACIKLAMA") or "").strip()
-            if HEDEF_SEMSIYE_TURLERI and not any(h in tur for h in HEDEF_SEMSIYE_TURLERI):
+        for k in satirlar:
+            fon_adi = str(k.get("fonUnvan") or "").strip()
+            ad_n = _tr_upper(fon_adi)
+            hisse_yogun = bool(HISSE_YOGUN_DESENI.search(ad_n))
+            degisken = bool(DEGISKEN_DESENI.search(ad_n))
+            if not (hisse_yogun or degisken):
                 continue
-            kod = normalize_kod(k.get("FONKODU") or k.get("fonkodu") or "")
+            kod = normalize_kod(k.get("fonKodu") or "")
             if not kod:
                 continue
             sonuc.append({
                 "fon_kodu": kod,
-                "fon_adi": str(k.get("FONUNVAN") or k.get("fonunvan") or "").strip(),
-                "semsiye_turu": tur,
-                "kurucu": str(k.get("KURUCU") or k.get("kurucu") or "").strip(),
-                "fon_buyuklugu_tl": parse_tr_sayi(k.get("PORTFOYBUYUKLUK") or k.get("portfoyBuyukluk")),
+                "fon_adi": fon_adi,
+                "semsiye_turu": "Hisse Senedi Şemsiye Fonu" if hisse_yogun else "Değişken Şemsiye Fonu",
+                # kurucuUnvan yeni API'de dönüyor mu CANLI DOĞRULANAMADI —
+                # gelmezse boş kalır, script'in geri kalanını etkilemez.
+                "kurucu": str(k.get("kurucuUnvan") or k.get("kurucu") or "").strip(),
+                "fon_buyuklugu_tl": parse_tr_sayi(k.get("portfoyBuyukluk")),
             })
+        if not sonuc:
+            raise RuntimeError(
+                "İsim deseniyle (HİSSE SENEDİ YOĞUN FON / DEĞİŞKEN FON) hiç fon eşleşmedi "
+                "— fonUnvan alan adı değişmiş olabilir, canlı kontrol gerekiyor."
+            )
         return sonuc
 
 
