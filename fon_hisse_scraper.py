@@ -511,16 +511,18 @@ class KapFonIstemci:
         except Exception:
             return None
         fon_kodu_n = _tr_upper(fon_kodu.strip())
-        adaylar = []
-        for k in kayitlar:
-            if not isinstance(k, dict):
-                continue
-            baslik_n = _tr_upper(str(k.get("title", "") or k.get("subject", "")))
-            if "TANITICI BİLGİLER" not in baslik_n:
-                continue
-            if f"{fon_kodu_n}-" not in baslik_n:
-                continue
-            adaylar.append(k)
+        tanitici_hepsi = [
+            k for k in kayitlar
+            if isinstance(k, dict) and "TANITICI BİLGİLER" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))
+        ]
+        adaylar = [k for k in tanitici_hepsi
+                   if f"{fon_kodu_n}-" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))]
+        if self.debug:
+            print(f"    🐛 son_tanitici_bilgiler_bildirimi('{fon_kodu}'): {len(kayitlar)} toplam bildirim, "
+                  f"{len(tanitici_hepsi)} 'TANITICI BİLGİLER' içeren, {len(adaylar)} bu FON kodunu içeren.")
+            if tanitici_hepsi and not adaylar:
+                print(f"    🐛   ↳ '{fon_kodu_n}-' hiçbirinde geçmiyor, örnek başlıklar: "
+                      f"{[str(k.get('title') or k.get('subject')) for k in tanitici_hepsi[:5]]}")
         if not adaylar:
             return None
         adaylar.sort(key=lambda k: str(k.get("publishDate", "") or k.get("basicDate", "")), reverse=True)
