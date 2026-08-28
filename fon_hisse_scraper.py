@@ -320,6 +320,7 @@ class KapFonIstemci:
             follow_redirects=True,
         )
         self._son_istek = 0.0
+        self.durum_sayaci = {}   # {http_status: kaç kez görüldü} — tara sonunda basılır, teşhis için
 
     def _bekle(self):
         gecen = time.time() - self._son_istek
@@ -327,19 +328,41 @@ class KapFonIstemci:
             time.sleep(RATE_LIMIT_SEC - gecen)
         self._son_istek = time.time()
 
+    _RETRY_DURUMLARI = {429, 500, 502, 503, 504}
+
     def _istek(self, method: str, yol: str, **kwargs):
-        gecikmeler = [2, 5, 12]
+        """DÜZELTME (tara #5 logu): script'in kendi DÜRÜST NOTLAR'ında canlı
+        doğrulanmış diye belirtilen DOH dahil, run ilerledikçe art arda
+        'kap_uye_bulunamadi' çıkması — eskiden SADECE bağlantı kopmasında
+        (timeout/connection error) tekrar deniyorduk, KAP'ın 429/5xx HTTP
+        durum koduyla döndüğü "çok hızlı gidiyorsun" / geçici hata
+        durumlarında TEK denemede 'bulunamadı' sayıp geçiyorduk. Artık bu
+        durum kodları da backoff ile (ve varsa Retry-After başlığına uyarak)
+        tekrar deneniyor; son denemede hâlâ kötüyse yanıt YİNE DE dönülür
+        (exception fırlatılmaz) ki çağıran taraf mevcut 'eksik' işaretleme
+        mantığıyla devam edebilsin."""
+        gecikmeler = [2, 5, 12, 30]
+        r = None
         for deneme, gecikme in enumerate([0] + gecikmeler):
             if gecikme:
                 time.sleep(gecikme)
             self._bekle()
             try:
-                return self.c.request(method, yol, **kwargs)
+                r = self.c.request(method, yol, **kwargs)
             except (httpx.RemoteProtocolError, httpx.ConnectError, httpx.ConnectTimeout,
                     httpx.ReadTimeout, httpx.ReadError, httpx.PoolTimeout):
                 if deneme == len(gecikmeler):
                     raise
                 continue
+            if r.status_code not in self._RETRY_DURUMLARI:
+                return r
+            self.durum_sayaci[r.status_code] = self.durum_sayaci.get(r.status_code, 0) + 1
+            if deneme == len(gecikmeler):
+                return r
+            ra = r.headers.get("Retry-After")
+            if ra and ra.strip().isdigit():
+                time.sleep(min(int(ra), 60))
+        return r
 
     def member_filter(self, fon_kodu: str) -> Optional[dict]:
         """SADECE tam kod eşleşmesi — "ilk sonucu döndür" yedeği KALDIRILDI.
@@ -830,6 +853,9 @@ def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "fon_hisse_harita
     if eksikli:
         print("   İlk çalıştırmaysa: bu fonlardan 2-3 tanesinin bildirim linkini")
         print("   (https://www.kap.org.tr/tr/Bildirim/<index>) yapıştır, parse'ı düzeltelim.")
+    if kap.durum_sayaci:
+        print(f"📊 KAP'tan alınan tekrar-denenen HTTP durum kodları: {kap.durum_sayaci} "
+              "— bunlar yüksekse KAP bu IP'yi geçici sınırlıyor demektir, RATE_LIMIT_SEC artırılabilir.")
 
 
 def push_to_worker(cikti_yolu: str, worker_url: str, panel_key: str):
@@ -1027,6 +1053,8 @@ def gecmis_doldur():
         print(f"\n⏭️ Tarama TAM DEĞİL — {kalan} fon henüz taranmadı. Script'i TEKRAR çalıştır, "
               "kaldığı yerden devam edecek. Hiçbir ay henüz kesinleştirilmedi (yarım veriyle "
               "'tamamlandı' izlenimi vermemek için).")
+        if kap.durum_sayaci:
+            print(f"📊 KAP'tan alınan tekrar-denenen HTTP durum kodları: {kap.durum_sayaci}")
         return
 
     print(f"\n✅ TÜM {len(fon_listesi)} fon tarandı. {len(aylar)} ay kesinleştiriliyor…")
@@ -1047,6 +1075,8 @@ def gecmis_doldur():
 
     taslak_yaz(worker_url, panel_key, {"islenenFonlar": [], "aylar": {}})
     print("🧹 Taslak temizlendi. Backfill tamamlandı — FONLAR sekmesi artık geçmiş verilerle dolu olmalı.")
+    if kap.durum_sayaci:
+        print(f"📊 KAP'tan alınan tekrar-denenen HTTP durum kodları: {kap.durum_sayaci}")
 
 
 if __name__ == "__main__":
