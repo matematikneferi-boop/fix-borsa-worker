@@ -329,7 +329,14 @@ class KapFonIstemci:
             time.sleep(RATE_LIMIT_SEC - gecen)
         self._son_istek = time.time()
 
-    _RETRY_DURUMLARI = {429, 500, 502, 503, 504}
+    # DÜZELTME (tara #7 kökneden analizi): 403 (WAF/erişim engeli) burada
+    # YOKTU — KAP bir noktadan sonra IP'yi engellemeye başlayınca (veya
+    # WAF tetiklenince) 403 dönüyor, kod bunu TEK denemede "sonuç yok"
+    # sayıp anında pes ediyordu. Bir kez engel başladığında bundan sonraki
+    # HER fon art arda aynı şekilde düşüyordu (tara #7 log'undaki HKP'den
+    # itibaren kesintisiz "eksik" serisi tam olarak bu). Artık 403 de
+    # backoff ile tekrar deneniyor.
+    _RETRY_DURUMLARI = {403, 429, 500, 502, 503, 504}
 
     def _istek(self, method: str, yol: str, **kwargs):
         """DÜZELTME (tara #5 logu): script'in kendi DÜRÜST NOTLAR'ında canlı
@@ -355,9 +362,14 @@ class KapFonIstemci:
                 if deneme == len(gecikmeler):
                     raise
                 continue
+            if r.status_code != 200:
+                # DÜZELTME: eskiden SADECE _RETRY_DURUMLARI içindeki kodlar
+                # sayılıyordu — 403 gibi listede olmayan bir kod run boyunca
+                # binlerce kez gelse bile özet çıktıda HİÇ görünmüyordu.
+                # Artık ne gelirse gelsin sayılıyor, teşhis gerçeği yansıtsın.
+                self.durum_sayaci[r.status_code] = self.durum_sayaci.get(r.status_code, 0) + 1
             if r.status_code not in self._RETRY_DURUMLARI:
                 return r
-            self.durum_sayaci[r.status_code] = self.durum_sayaci.get(r.status_code, 0) + 1
             if deneme == len(gecikmeler):
                 return r
             ra = r.headers.get("Retry-After")
@@ -822,7 +834,15 @@ def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "fon_hisse_harita
     fonlar = [fon_karti_from_dict(onceki_fonlar[k]) for k in tamamlanan_kodlar]
 
     if sinirli_sayi:
-        ham_liste = ham_liste[:sinirli_sayi]
+        # DÜZELTME: eskiden ham_liste[:sinirli_sayi] TEFAS'ın döndürdüğü
+        # SIRAYLA ilk N fonu alıyordu — bu sıra büyüklükle alakasız
+        # (alfabetik/keyfi olabiliyor). "En popüler N fon" = "en büyük
+        # (AUM) N fon" demek, o yüzden önce fon_buyuklugu_tl'ye göre
+        # BÜYÜKTEN KÜÇÜĞE sırala, sonra ilk N'i al. Büyüklüğü None/eksik
+        # gelenler (TEFAS'tan o alan gelmemiş) sona düşer, elenmez.
+        ham_liste = sorted(ham_liste, key=lambda f: f.get("fon_buyuklugu_tl") or 0, reverse=True)[:sinirli_sayi]
+        print(f"  ℹ️ Büyüklüğe göre sıralanan ilk {len(ham_liste)} fon seçildi "
+              f"(en büyüğü: {ham_liste[0]['fon_kodu']} — {ham_liste[0].get('fon_buyuklugu_tl')})")
     islenecekler = [f for f in ham_liste if f["fon_kodu"] not in tamamlanan_kodlar]
     print(f"  İşlenecek: {len(islenecekler)} / toplam {len(ham_liste)} fon "
           f"({len(ham_liste)-len(islenecekler)} zaten tamam).")
@@ -1019,7 +1039,7 @@ def gecmis_doldur():
 
     sinir_ham = os.environ.get("FON_SAYISI", "").strip()
     if sinir_ham and sinir_ham.lower() != "tumu":
-        fon_listesi = fon_listesi[: int(sinir_ham)]
+        fon_listesi = sorted(fon_listesi, key=lambda f: f.get("fon_buyuklugu_tl") or 0, reverse=True)[: int(sinir_ham)]
         print(f"  ℹ️ Test modu: sadece ilk {len(fon_listesi)} fon.")
 
     tamamlanmis_aylar = tamamlanmis_aylari_getir(worker_url, panel_key)
