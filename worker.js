@@ -6874,7 +6874,7 @@ function fonlarGoster(v){
   if(fonBenzerFonKodu){fonBenzerGoster(fonBenzerD);return}
   if(fonAramaKod){fonDetayGoster(fonDetay);return}
   var h='<div class="uyari" style="margin-top:0"><b>🐣 Fonlar</b><br>'+
-    'TEFAS hisse yoğun/değişken fonların KAP\'a bildirdiği aylık portföyler üzerinden — '+
+    'TEFAS hisse yoğun/değişken fonların KAP\\'a bildirdiği aylık portföyler üzerinden — '+
     'kim ne alıyor, kim ne satıyor, hangi hisseye kaç fon aynı anda giriyor.<br>'+
     '<span style="opacity:.7">Kaynak: TEFAS + KAP aylık portföy bildirimi · güncelleme: '+E(v.guncelleme||"—")+'</span></div>';
   h+='<input id="fonAramaKutu" type="text" placeholder="Hisse kodu yaz (örn. THYAO) ve Enter…" value="" '+
@@ -6905,7 +6905,7 @@ function fonlarGoster(v){
     return E(x.hisse)+' <span style="opacity:.7">— '+x.fonSayisi+' fon · toplam pay %'+x.toplamPay+'</span>';
   });
   h+='<div class="uyari" style="opacity:.7">🔒 Kurumsal alım-satımı şirket içi (yönetici/pay sahibi) işlemleriyle '+
-    'çakıştırma henüz eklenmedi — bunun için KAP\'taki yönetici işlem bildirimlerini çeken ayrı bir tarayıcı gerekiyor.</div>';
+    'çakıştırma henüz eklenmedi — bunun için KAP\\'taki yönetici işlem bildirimlerini çeken ayrı bir tarayıcı gerekiyor.</div>';
   el("govde").innerHTML=h;
   var kutu=el("fonAramaKutu");
   if(kutu)kutu.onkeydown=function(e2){if(e2.key==="Enter")fonAramaCalistir(kutu.value)};
