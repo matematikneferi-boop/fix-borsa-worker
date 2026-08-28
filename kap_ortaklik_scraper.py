@@ -40,6 +40,7 @@ DÜRÜST NOTLAR (gerçek kısıtlar, gizlenmedi)
 """
 
 import json
+import os
 import re
 import signal
 import struct
@@ -777,21 +778,54 @@ def _ara_kayit_yaz(sirketler: list, cikti_yolu: str):
 def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "ortaklik_haritasi.json"):
     kap = KapIstemci()
     ham_liste = kap.sirket_listesi()
+
+    # ── KALDIĞI YERDEN DEVAM ─────────────────────────────────────────
+    # Tek çalıştırma 5 saatlik zaman bütçesine sığmıyor (784 şirket için
+    # ~784*45sn ≈ 10 saat). Eskiden her run SIFIRDAN başlıyordu, yani hep
+    # aynı ~420 şirkette takılıp kalınıyordu, geri kalan 360+ şirkete HİÇ
+    # sıra gelmiyordu. Şimdi: worker'daki KV'den önceki sonucu çekip, DAHA
+    # ÖNCE BAŞARIYLA ortaklık yapısı bulunmuş şirketleri bu run'da atlıyoruz
+    # — böylece her run bir öncekinin ÜZERİNE, kaldığı yerden devam ediyor.
+    # "Eksik" kalanlar bilerek ATLANMIYOR, her run'da tekrar denenir (zira
+    # eksik kalma sebebi çoğunlukla zaman/ağ, kalıcı olmayabilir).
+    onceki_sirketler: dict = {}
+    worker_url = os.environ.get("WORKER_URL", "").strip().rstrip("/")
+    panel_key = os.environ.get("PANEL_KEY", "").strip()
+    if worker_url and panel_key:
+        try:
+            onceki_ham = onceki_veriyi_getir(worker_url, panel_key)
+            if onceki_ham and onceki_ham.get("sirketler"):
+                onceki_sirketler = onceki_ham["sirketler"]
+                print(f"↩️ Önceki taramadan {len(onceki_sirketler)} şirket kaydı bulundu (worker KV).")
+        except Exception as e:
+            print(f"⚠️ Önceki veri alınamadı, bu run sıfırdan başlıyor: {e}")
+    else:
+        print("ℹ️ WORKER_URL/PANEL_KEY yok — kaldığı yerden devam edilemiyor, sıfırdan başlanıyor.")
+
+    tamamlanan_tickerlar = {t for t, d in onceki_sirketler.items() if d.get("ortaklik_yapisi")}
+    if tamamlanan_tickerlar:
+        print(f"✅ {len(tamamlanan_tickerlar)} şirket zaten başarıyla işlenmiş — bu run'da ATLANACAK.")
+
+    sirketler = [sirket_karti_from_dict(onceki_sirketler[t]) for t in tamamlanan_tickerlar]
+
     if sinirli_sayi:
         ham_liste = ham_liste[:sinirli_sayi]
+    islenecekler = [s for s in ham_liste if s.get("stockCode") and s["stockCode"] not in tamamlanan_tickerlar]
+    print(f"İşlenecek: {len(islenecekler)} / toplam {len(ham_liste)} şirket "
+          f"({len(ham_liste)-len(islenecekler)} zaten tamam).")
 
-    sirketler = []
     baslangic_t = time.monotonic()
-    for i, s in enumerate(ham_liste):
+    for i, s in enumerate(islenecekler):
         if time.monotonic() - baslangic_t > MAX_TOPLAM_SANIYE:
             print(f"\n⏹️ Zaman bütçesi doldu ({MAX_TOPLAM_SANIYE/3600:.1f} saat) — "
-                  f"kalan {len(ham_liste)-i} şirket atlanıp o ana kadar toplanan veri kaydediliyor.")
+                  f"kalan {len(islenecekler)-i} şirket bir SONRAKİ run'a kalacak, "
+                  "o ana kadar toplanan veri (öncekilerle birleşik) kaydediliyor.")
             break
         ticker = s.get("stockCode")
         unvan = s.get("kapMemberTitle", "")
         if not ticker:
             continue
-        print(f"[{i+1}/{len(ham_liste)}] {ticker} işleniyor…")
+        print(f"[{i+1}/{len(islenecekler)}] {ticker} işleniyor…")
         try:
             with zaman_siniri(180):  # bir şirket en fazla 3 dakika işlenir, ne olursa olsun
                 kart = sirket_isle(kap, ticker, unvan)
@@ -807,23 +841,63 @@ def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "ortaklik_haritas
         # ÇARPARSA / elektrik giderse — daha önce JSON sadece döngü TAMAMEN
         # bitince yazılıyordu, yani saatlerce sürüp yarıda kesilen bir koşuda
         # HİÇBİR ŞEY kaydedilmiyordu (gerçekte yaşandı: 8+ saatlik ilerleme
-        # riske girdi). Artık her 25 şirkette bir o ana kadarki veri diske
-        # yazılıyor — en kötü ihtimalle 25 şirketlik ilerleme kaybedilir,
-        # tüm koşu değil.
+        # riske girdi). Artık her 17 şirkette bir o ana kadarki veri diske
+        # (ve worker'a) yazılıyor — en kötü ihtimalle 17 şirketlik ilerleme
+        # kaybedilir, tüm koşu değil.
         if len(sirketler) % 17 == 0:
             _ara_kayit_yaz(sirketler, cikti_yolu)
 
     cikti = _cikti_olustur(sirketler)
-    cikti["tamamlandi"] = True
+    cikti["tamamlandi"] = len(islenecekler) == 0 or (time.monotonic() - baslangic_t <= MAX_TOPLAM_SANIYE)
 
     with open(cikti_yolu, "w", encoding="utf-8") as f:
         json.dump(cikti, f, ensure_ascii=False, indent=2)
 
     eksikli = [s.ticker for s in sirketler if s.veri_eksik]
-    print(f"\n✅ {len(sirketler)} şirket işlendi. Çıktı: {cikti_yolu}")
+    kalan = len(ham_liste) - len(sirketler)
+    print(f"\n✅ {len(sirketler)} şirket toplamda hazır ({len(sirketler)-len(tamamlanan_tickerlar)} bu run'da işlendi). Çıktı: {cikti_yolu}")
+    if kalan > 0:
+        print(f"⏭️ {kalan} şirket henüz hiç işlenmedi — bir sonraki run'da devam edecek.")
     print(f"⚠️ Eksik veri içeren {len(eksikli)} şirket: {', '.join(eksikli[:30])}"
           + (" ..." if len(eksikli) > 30 else ""))
     print("Bu şirketleri elle/PDF formatını genişleterek tamamlaman gerekebilir.")
+
+
+def sirket_karti_from_dict(d: dict) -> SirketKarti:
+    """asdict(SirketKarti)'nin JSON'dan geri dönüşü — KALDIĞI YERDEN DEVAM
+    özelliği için: worker'daki KV'de duran ÖNCEKİ taramanın sonucunu tekrar
+    SirketKarti nesnelerine çeviriyoruz ki bu run'da yeniden işlemeyelim."""
+    return SirketKarti(
+        ticker=d.get("ticker", ""),
+        unvan=d.get("unvan", ""),
+        mkk_member_oid=d.get("mkk_member_oid", ""),
+        perma_link=d.get("perma_link", ""),
+        yonetim_kurulu=[YonetimUyesi(**y) for y in (d.get("yonetim_kurulu") or [])],
+        ust_yonetim=[YonetimUyesi(**y) for y in (d.get("ust_yonetim") or [])],
+        ortaklik_yapisi=[OrtaklikKalemi(**o) for o in (d.get("ortaklik_yapisi") or [])],
+        halka_aciklik_tahmini=d.get("halka_aciklik_tahmini"),
+        veri_eksik=d.get("veri_eksik") or [],
+    )
+
+
+def onceki_veriyi_getir(worker_url: str, panel_key: str) -> Optional[dict]:
+    """worker'ın KV'sinde duran EN SON push edilen ortaklik_haritasi.json'u
+    okur (bkz. worker.js /api/ortaklikHam — bu script için eklendi).
+    Ağ/format hatasında None döner — çağıran taraf sıfırdan başlamaya düşer,
+    asla eski veri UYDURMAZ."""
+    try:
+        r = httpx.get(f"{worker_url}/api/ortaklikHam", params={"key": panel_key}, timeout=30)
+    except Exception:
+        return None
+    if r.status_code != 200:
+        return None
+    try:
+        cevap = r.json()
+    except Exception:
+        return None
+    if not cevap.get("ok"):
+        return None
+    return cevap.get("veri")
 
 
 def push_to_worker(cikti_yolu: str, worker_url: str, panel_key: str):

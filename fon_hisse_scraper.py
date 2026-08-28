@@ -52,6 +52,7 @@ DÜRÜST NOTLAR (gerçek kısıtlar, gizlenmedi)
 """
 
 import json
+import os
 import re
 import signal
 import struct
@@ -514,22 +515,85 @@ def _ara_kayit_yaz(fonlar: list, cikti_yolu: str):
             print(f"  ⚠️ Ara kayıt worker'a gönderilemedi: {e}")
 
 
+def fon_karti_from_dict(d: dict) -> FonKarti:
+    """asdict(FonKarti)'nin JSON'dan geri dönüşü — KALDIĞI YERDEN DEVAM için
+    (kap_ortaklik_scraper.py'deki sirket_karti_from_dict ile aynı desen)."""
+    return FonKarti(
+        fon_kodu=d.get("fon_kodu", ""),
+        fon_adi=d.get("fon_adi", ""),
+        semsiye_turu=d.get("semsiye_turu", ""),
+        kurucu=d.get("kurucu", ""),
+        fon_buyuklugu_tl=d.get("fon_buyuklugu_tl"),
+        rapor_donemi=d.get("rapor_donemi", ""),
+        bildirim_index=d.get("bildirim_index"),
+        hisseler=[HisseKalemi(**h) for h in (d.get("hisseler") or [])],
+        veri_eksik=d.get("veri_eksik") or [],
+    )
+
+
+def onceki_veriyi_getir(worker_url: str, panel_key: str) -> Optional[dict]:
+    """worker'daki KV'de duran EN SON push edilen fon_hisse_haritasi.json'u
+    okur (bkz. worker.js /api/fonHam). Hata/yoklukta None — asla uydurma."""
+    try:
+        r = httpx.get(f"{worker_url}/api/fonHam", params={"key": panel_key}, timeout=30)
+    except Exception:
+        return None
+    if r.status_code != 200:
+        return None
+    try:
+        cevap = r.json()
+    except Exception:
+        return None
+    if not cevap.get("ok"):
+        return None
+    return cevap.get("veri")
+
+
 def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "fon_hisse_haritasi.json"):
     print("TEFAS fon listesi çekiliyor…")
     tefas = TefasIstemci()
     ham_liste = tefas.hisse_yogun_fon_listesi()
     print(f"  {len(ham_liste)} hisse yoğun/değişken fon bulundu.")
+
+    # ── KALDIĞI YERDEN DEVAM ───────────────────────────────────────────
+    # kap_ortaklik_scraper.py'deki AYNI mantık: worker KV'sinden önceki
+    # sonucu çek, hisseleri başarıyla çıkarılmış fonları bu run'da ATLA;
+    # eksik kalanlar (zaman/ağ kaynaklı olabileceği için) her run'da
+    # tekrar denenir.
+    onceki_fonlar: dict = {}
+    worker_url = os.environ.get("WORKER_URL", "").strip().rstrip("/")
+    panel_key = os.environ.get("PANEL_KEY", "").strip()
+    if worker_url and panel_key:
+        try:
+            onceki_ham = onceki_veriyi_getir(worker_url, panel_key)
+            if onceki_ham and onceki_ham.get("fonlar"):
+                onceki_fonlar = onceki_ham["fonlar"]
+                print(f"  ↩️ Önceki taramadan {len(onceki_fonlar)} fon kaydı bulundu (worker KV).")
+        except Exception as e:
+            print(f"  ⚠️ Önceki veri alınamadı, bu run sıfırdan başlıyor: {e}")
+    else:
+        print("  ℹ️ WORKER_URL/PANEL_KEY yok — kaldığı yerden devam edilemiyor, sıfırdan başlanıyor.")
+
+    tamamlanan_kodlar = {k for k, d in onceki_fonlar.items() if d.get("hisseler")}
+    if tamamlanan_kodlar:
+        print(f"  ✅ {len(tamamlanan_kodlar)} fon zaten başarıyla işlenmiş — bu run'da ATLANACAK.")
+
+    fonlar = [fon_karti_from_dict(onceki_fonlar[k]) for k in tamamlanan_kodlar]
+
     if sinirli_sayi:
         ham_liste = ham_liste[:sinirli_sayi]
+    islenecekler = [f for f in ham_liste if f["fon_kodu"] not in tamamlanan_kodlar]
+    print(f"  İşlenecek: {len(islenecekler)} / toplam {len(ham_liste)} fon "
+          f"({len(ham_liste)-len(islenecekler)} zaten tamam).")
 
     kap = KapFonIstemci()
-    fonlar = []
     baslangic_t = time.monotonic()
-    for i, f in enumerate(ham_liste):
+    for i, f in enumerate(islenecekler):
         if time.monotonic() - baslangic_t > MAX_TOPLAM_SANIYE:
-            print(f"\n⏹️ Zaman bütçesi doldu — kalan {len(ham_liste)-i} fon atlanıp o ana kadarki veri kaydediliyor.")
+            print(f"\n⏹️ Zaman bütçesi doldu — kalan {len(islenecekler)-i} fon bir SONRAKİ run'a kalacak, "
+                  "o ana kadarki veri (öncekilerle birleşik) kaydediliyor.")
             break
-        print(f"[{i+1}/{len(ham_liste)}] {f['fon_kodu']} işleniyor…")
+        print(f"[{i+1}/{len(islenecekler)}] {f['fon_kodu']} işleniyor…")
         try:
             with zaman_siniri(180):
                 kart = fon_isle(kap, f["fon_kodu"], f["fon_adi"], f["semsiye_turu"],
@@ -549,12 +613,15 @@ def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "fon_hisse_harita
             _ara_kayit_yaz(fonlar, cikti_yolu)
 
     cikti = _cikti_olustur(fonlar)
-    cikti["tamamlandi"] = True
+    cikti["tamamlandi"] = len(islenecekler) == 0 or (time.monotonic() - baslangic_t <= MAX_TOPLAM_SANIYE)
     with open(cikti_yolu, "w", encoding="utf-8") as f:
         json.dump(cikti, f, ensure_ascii=False, indent=2)
 
     eksikli = [f.fon_kodu for f in fonlar if f.veri_eksik]
-    print(f"\n✅ {len(fonlar)} fon işlendi. Çıktı: {cikti_yolu}")
+    kalan = len(ham_liste) - len(fonlar)
+    print(f"\n✅ {len(fonlar)} fon toplamda hazır ({len(fonlar)-len(tamamlanan_kodlar)} bu run'da işlendi). Çıktı: {cikti_yolu}")
+    if kalan > 0:
+        print(f"⏭️ {kalan} fon henüz hiç işlenmedi — bir sonraki run'da devam edecek.")
     print(f"⚠️ Eksik veri içeren {len(eksikli)} fon: {', '.join(eksikli[:30])}"
           + (" ..." if len(eksikli) > 30 else ""))
     if eksikli:

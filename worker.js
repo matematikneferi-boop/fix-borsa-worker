@@ -9919,6 +9919,30 @@ if("/api/fonYukle"===$.pathname&&"POST"===p.method){
   await A.VERI.put("fonHisseHaritasi",JSON.stringify(gov2.veri||{}));
   return JS2({ok:!0})
 }
+/* 📤 KALDIĞI YERDEN DEVAM — kap_ortaklik_scraper.py ve fon_hisse_scraper.py
+   her run'ın başında BUNLARI çağırıp önceki sonucu okuyor, daha önce
+   başarıyla işlenmiş kayıtları atlıyor. GET (query'de key) — script'ler
+   POST /api/*Yukle ile YAZIYOR, bunlar sadece OKUYOR, aynı PANEL_KEY ile
+   korunuyor. initData gerektiren genel /api/ kapısından önce, /api/*Yukle
+   ile aynı yerde tutuluyor. */
+if("/api/ortaklikHam"===$.pathname){
+  const JS2=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
+  const anahtar=A.PANEL_KEY||t;
+  if(($.searchParams.get("key")||"")!==anahtar)return JS2({ok:!1,hata:"yetkisiz"},403);
+  if(!A.VERI)return JS2({ok:!1,hata:"KV bağlı değil"});
+  const ham=await A.VERI.get("ortaklikHaritasi");
+  if(!ham)return JS2({ok:!0,veri:null});
+  try{return JS2({ok:!0,veri:JSON.parse(ham)})}catch(e){return JS2({ok:!1,hata:"veri bozuk"})}
+}
+if("/api/fonHam"===$.pathname){
+  const JS2=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
+  const anahtar=A.PANEL_KEY||t;
+  if(($.searchParams.get("key")||"")!==anahtar)return JS2({ok:!1,hata:"yetkisiz"},403);
+  if(!A.VERI)return JS2({ok:!1,hata:"KV bağlı değil"});
+  const ham=await A.VERI.get("fonHisseHaritasi");
+  if(!ham)return JS2({ok:!0,veri:null});
+  try{return JS2({ok:!0,veri:JSON.parse(ham)})}catch(e){return JS2({ok:!1,hata:"veri bozuk"})}
+}
 if($.pathname.startsWith("/api/")){
 const JS=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
 if("POST"!==p.method)return JS({ok:!1,hata:"POST bekleniyor"},405);
