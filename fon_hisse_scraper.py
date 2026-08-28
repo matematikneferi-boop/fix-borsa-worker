@@ -321,6 +321,7 @@ class KapFonIstemci:
         )
         self._son_istek = 0.0
         self.durum_sayaci = {}   # {http_status: kaç kez görüldü} — tara sonunda basılır, teşhis için
+        self.debug = os.environ.get("KAP_DEBUG", "").strip() == "1"
 
     def _bekle(self):
         gecen = time.time() - self._son_istek
@@ -371,6 +372,9 @@ class KapFonIstemci:
         bulmaktan daha güvenli (bkz. fon_uyesi_bul — asıl arama artık orada,
         isim doğrulamalı)."""
         adaylar = self.uye_ara(fon_kodu)
+        if self.debug:
+            print(f"    🐛 member_filter('{fon_kodu}'): {len(adaylar)} aday, "
+                  f"companyCode'lar: {[a.get('companyCode') for a in adaylar][:10]}")
         for kayit in adaylar:
             if isinstance(kayit, dict) and str(kayit.get("companyCode", "")).upper() == fon_kodu.upper():
                 return kayit
@@ -382,8 +386,13 @@ class KapFonIstemci:
         try:
             r = self._istek("GET", f"/tr/api/member/filter/{urllib.parse.quote(sorgu)}",
                              headers={"Referer": f"{KAP_BASE}/tr/bist-sirketler"})
-        except Exception:
+        except Exception as e:
+            if self.debug:
+                print(f"    🐛 uye_ara('{sorgu}') İSTİSNA: {e}")
             return []
+        if self.debug:
+            gövde = r.text[:300] if r is not None else "(yanıt yok)"
+            print(f"    🐛 uye_ara('{sorgu}') -> HTTP {r.status_code if r is not None else '?'}, gövde: {gövde!r}")
         if r.status_code != 200:
             return []
         try:
@@ -412,6 +421,8 @@ class KapFonIstemci:
 
         hedef_kelimeler = _anlamli_kelimeler(fon_adi)
         if not hedef_kelimeler:
+            if self.debug:
+                print(f"    🐛 fon_uyesi_bul('{fon_kodu}'): fon_adi'ndan hiç anlamlı kelime çıkmadı (fon_adi={fon_adi!r})")
             return None
         arama_sorgusu = " ".join(list(hedef_kelimeler)[:4])
         adaylar = self.uye_ara(arama_sorgusu)
@@ -421,6 +432,10 @@ class KapFonIstemci:
             ortak = hedef_kelimeler & _anlamli_kelimeler(baslik)
             if len(ortak) > en_iyi_skor:
                 en_iyi_skor, en_iyi = len(ortak), k
+        if self.debug:
+            print(f"    🐛 fon_uyesi_bul('{fon_kodu}'): isim araması='{arama_sorgusu}', "
+                  f"{len(adaylar)} aday, en iyi skor={en_iyi_skor} "
+                  f"(başlık={en_iyi.get('title') if en_iyi else None!r}, oid={en_iyi.get('mkkMemberOid') if en_iyi else None})")
         if en_iyi_skor >= 2 and en_iyi and en_iyi.get("mkkMemberOid"):
             return en_iyi
         return None
