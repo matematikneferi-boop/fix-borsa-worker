@@ -810,7 +810,7 @@ def main(sinirli_sayi: Optional[int] = None, cikti_yolu: str = "ortaklik_haritas
         # riske girdi). Artık her 25 şirkette bir o ana kadarki veri diske
         # yazılıyor — en kötü ihtimalle 25 şirketlik ilerleme kaybedilir,
         # tüm koşu değil.
-        if len(sirketler) % 25 == 0:
+        if len(sirketler) % 17 == 0:
             _ara_kayit_yaz(sirketler, cikti_yolu)
 
     cikti = _cikti_olustur(sirketler)

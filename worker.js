@@ -6696,10 +6696,19 @@ function ortaklikAramaOlaylariBagla(){
       clearTimeout(ortAramaZamanlayici);
       ortAramaZamanlayici=setTimeout(function(){
         if(ortAramaMetin.trim().length<2){ortAramaSonuc=null;ortaklikGoster(ortD);return}
+        /* DÜZELTME: 2 karaktere İLK ULAŞILDIĞINDA #ortAramaSonuclar alanı
+           DOM'da henüz yok (o alan sadece tam yeniden çizimde, uzunluk>=2
+           koşuluyla ekleniyor). Eskiden burada direkt innerHTML güncellemesi
+           deneniyordu, alan yoksa sessizce hiçbir şey olmuyordu — "yazarken
+           hiçbir şey görünmüyor" hatası buydu. Alan yoksa önce tam çizimi
+           tetikleyip (kutu odağı ortaklikAramaOlaylariBagla() içinde zaten
+           korunuyor), öyle devam ediyoruz. */
+        if(!el("ortAramaSonuclar"))ortaklikGoster(ortD);
         post("/api/ortaklikAra",{q:ortAramaMetin.trim(),tip:ortAramaTip}).then(function(r){
           ortAramaSonuc=r;
           var kap=el("ortAramaSonuclar");
           if(kap){kap.innerHTML=ortaklikAramaSonucHtml();ortaklikAramaSonucOlaylariBagla()}
+          else{ortaklikGoster(ortD)}  // güvenlik ağı — yine de yoksa tam çiz
         });
       },350);
     };
@@ -6791,6 +6800,12 @@ function ortaklikKisiGoster(v){
     h+='<div class="kutu"><h3>'+(v.tuzelMi?"🏦 ":"👤 ")+E(v.goruntuIsim||v.isim)+'</h3>'+
       '<div class="altbilgi">'+v.kayitlar.length+' şirkette kayıt bulundu — '+
       'aynı görünen farklı kişiler otomatik ayrıştırılmadı, isim tam eşleşmesi kullanıldı.</div></div>';
+    /* 🐣 Bu bir fon/kurumsa (tuzelMi), o fonun KENDİ portföyündeki hisseleri
+       de göster — kaynak farklı: TEFAS+KAP Portföy Dağılım Raporu üzerinden
+       fon_hisse_scraper.py'nin ürettiği ayrı veri seti (fonHisseHaritasi).
+       Burada sadece isim eşleştirmesiyle bağlanıyor, %100 garantili değil —
+       eşleşme yoksa bölüm hiç gösterilmiyor (uydurma/boş kutu yok). */
+    if(v.tuzelMi)h+='<div id="ortFonPortfoy"></div>';
     h+=v.kayitlar.map(function(k){
       return '<div class="satir"><div class="sol"><div class="kod">'+E(k.ticker)+' — '+E(k.unvan)+'</div>'+
         '<div class="altbilgi">'+E(k.rol)+(k.payYuzde!=null?' · %'+E(String(k.payYuzde)):"")+'</div></div></div>';
@@ -6798,6 +6813,26 @@ function ortaklikKisiGoster(v){
   }
   el("govde").innerHTML=h;
   var g=el("ortGeri");if(g)g.onclick=function(){tit();ortSeciliKisi=null;ortSeciliSirket=null;ortaklikGoster(ortD)};
+  if(v&&v.ok&&v.tuzelMi&&v.kayitlar&&v.kayitlar.length){
+    post("/api/fonHisseleri",{isim:v.goruntuIsim||v.isim}).then(function(r){
+      var kap=el("ortFonPortfoy");
+      if(!kap)return;
+      if(!r||!r.ok||!r.eslesme||!r.fonlar||!r.fonlar.length){kap.innerHTML="";return}
+      kap.innerHTML=r.fonlar.map(function(f){
+        var hisseler=f.hisseler||[];
+        if(!hisseler.length)return "";
+        return '<div class="kutu"><h3>📦 '+E(f.fonAdi)+' — portföyü</h3>'+
+          '<div class="altbilgi">'+(f.rapordonemi?"dönem: "+E(f.rapordonemi)+" · ":"")+
+          hisseler.length+' hisse · kaynak: KAP Portföy Dağılım Raporu</div></div>'+
+          hisseler.map(function(hh){
+            return '<div class="satir"><div class="sol"><div class="kod">'+E(hh.hisseKodu)+'</div></div>'+
+              '<div class="sag"><div class="yuzde">'+(hh.payYuzde!=null?'%'+E(String(hh.payYuzde)):"—")+'</div>'+
+              (hh.tahminiLot!=null?'<div class="altbilgi">'+E(String(hh.tahminiLot))+' lot</div>':"")+
+              '</div></div>';
+          }).join("");
+      }).join("");
+    }).catch(function(){var kap=el("ortFonPortfoy");if(kap)kap.innerHTML=""});
+  }
 }
 /* ================== 🐂🐻 TARAMA SEKMESİ (MAL · DİP · AYI/BOĞA) ==========
    Üç bağımsız tarama modülü tek ekranda. Her modülün kendi aç/kapa tiki
@@ -9872,6 +9907,18 @@ if("/api/ortaklikYukle"===$.pathname&&"POST"===p.method){
   await A.VERI.put("ortaklikHaritasi",JSON.stringify(gov2.veri||{}));
   return JS2({ok:!0})
 }
+/* 📥 fon_hisse_scraper.py'nin push_to_worker() fonksiyonu buraya POST atar.
+   /api/ortaklikYukle ile BİREBİR AYNI desen — ayrı bir KV anahtarına
+   (fonHisseHaritasi) yazıyor ki ortaklık haritası verisiyle karışmasın. */
+if("/api/fonYukle"===$.pathname&&"POST"===p.method){
+  const JS2=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
+  const gov2=await p.json().catch(()=>null);
+  const anahtar=A.PANEL_KEY||t;
+  if(!gov2||gov2.key!==anahtar)return JS2({ok:!1,hata:"yetkisiz"},403);
+  if(!A.VERI)return JS2({ok:!1,hata:"KV bağlı değil"});
+  await A.VERI.put("fonHisseHaritasi",JSON.stringify(gov2.veri||{}));
+  return JS2({ok:!0})
+}
 if($.pathname.startsWith("/api/")){
 const JS=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
 if("POST"!==p.method)return JS({ok:!1,hata:"POST bekleniyor"},405);
@@ -10208,6 +10255,37 @@ if("/api/ortaklikSirket"===$.pathname){
     ortaklikYapisi:(kart.ortaklik_yapisi||[]).map(o=>({isim:o.isim,payYuzde:o.pay_yuzde,tuzelMi:o.tuzel_mi})),
     halkaAciklikTahmini:kart.halka_aciklik_tahmini,
     veriEksik:kart.veri_eksik||[]})
+}
+/* 📦 Bir fonun (kişi/kurum ismiyle) KENDİ portföyündeki hisseleri —
+   kaynak fonHisseHaritasi (fon_hisse_scraper.py, TEFAS+KAP Portföy Dağılım
+   Raporu). Ortaklık haritasındaki isim (KAP ortaklık yapısı tablosundan
+   gelir) ile TEFAS fon adı BİREBİR aynı yazılmayabiliyor — bu yüzden tam
+   eşleşme değil, normalize edilmiş metin İÇERME eşleşmesi kullanılıyor.
+   Eşleşme yoksa dürüstçe eslesme:false döner, uydurma sonuç YOK. */
+if("/api/fonHisseleri"===$.pathname){
+  if(!A.VERI)return JS({ok:!1,hata:"KV bağlı değil"});
+  const isim=String((gov&&gov.isim)||"").trim();
+  if(!isim)return JS({ok:!1,hata:"isim gerekli"});
+  const ham=await A.VERI.get("fonHisseHaritasi");
+  if(!ham)return JS({ok:!0,eslesme:!1});
+  let v;try{v=JSON.parse(ham)}catch(e){return JS({ok:!1,hata:"veri bozuk"})}
+  const normTR=s=>String(s||"").replace(/i/g,"İ").replace(/ı/g,"I").replace(/ğ/g,"Ğ")
+    .replace(/ü/g,"Ü").replace(/ş/g,"Ş").replace(/ö/g,"Ö").replace(/ç/g,"Ç")
+    .toUpperCase().replace(/\(.*?\)/g," ").replace(/\s+/g," ").trim();
+  const hedef=normTR(isim);
+  const fonlar=v.fonlar||{};
+  const eslesenler=[];
+  for(const kod in fonlar){
+    const f=fonlar[kod]||{};
+    const adN=normTR(f.fon_adi);
+    if(adN&&hedef&&(adN===hedef||adN.includes(hedef)||hedef.includes(adN)))eslesenler.push(f);
+  }
+  if(!eslesenler.length)return JS({ok:!0,eslesme:!1});
+  return JS({ok:!0,eslesme:!0,fonlar:eslesenler.map(f=>({
+    fonKodu:f.fon_kodu,fonAdi:f.fon_adi,rapordonemi:f.rapor_donemi,
+    hisseler:(f.hisseler||[]).map(h=>({hisseKodu:h.hisse_kodu,payYuzde:h.pay_yuzde,tahminiLot:h.tahmini_lot}))
+      .sort((a,b)=>(b.payYuzde||0)-(a.payYuzde||0))
+  }))})
 }
 /* 🔎 Tek kişinin borsadaki tüm haritası. İsim eşleştirme normalize edilmiş
    anahtar üzerinden TAM eşleşme — benzer/kısmi isimler asla birleştirilmez. */
