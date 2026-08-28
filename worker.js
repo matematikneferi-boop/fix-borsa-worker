@@ -10070,6 +10070,65 @@ if("/api/fonYukle"===$.pathname&&"POST"===p.method){
   await A.VERI.put("fonHisseHaritasi",JSON.stringify(yeniVeri));
   return JS2({ok:!0})
 }
+/* 🕰️ TARİHSEL YEDEKLEME — fon_hisse_scraper.py'nin backfill modu, TEFAS'ın
+   GEÇMİŞ tarihli Fon Portföy Dağılım raporlarından çektiği ESKİ ayları
+   doğrudan buraya POST eder. /api/fonYukle'den farkı: güncel
+   fonHisseHaritasi'ye HİÇ dokunmaz, doğrudan "fonGecmis:YYYY-MM" kovasına
+   yazar — böylece FONLAR sekmesi aylarca gerçek zamanlı push beklemeden
+   geçmişle dolar. Dolu bir ay kazara ezilmesin diye uzerineYaz:true
+   gönderilmediği sürece üzerine yazmaz. */
+if("/api/fonGecmisYukle"===$.pathname&&"POST"===p.method){
+  const JS2=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
+  const gov2=await p.json().catch(()=>null);
+  const anahtar=A.PANEL_KEY||t;
+  if(!gov2||gov2.key!==anahtar)return JS2({ok:!1,hata:"yetkisiz"},403);
+  if(!A.VERI)return JS2({ok:!1,hata:"KV bağlı değil"});
+  const ay=String(gov2.ay||"").trim();
+  if(!/^\d{4}-\d{2}$/.test(ay))return JS2({ok:!1,hata:"ay YYYY-MM formatında olmalı"},400);
+  const veri=gov2.veri||{};
+  if(!veri.fonlar||!veri.hisseIndeksi)return JS2({ok:!1,hata:"veri eksik (fonlar/hisseIndeksi gerekli)"},400);
+  if(!gov2.uzerineYaz&&await A.VERI.get("fonGecmis:"+ay))
+    return JS2({ok:!1,hata:"bu ay zaten dolu — üzerine yazmak için uzerineYaz:true gönder",ay});
+  await A.VERI.put("fonGecmis:"+ay,JSON.stringify(veri));
+  let liste=[];
+  try{liste=JSON.parse(await A.VERI.get("fonGecmisListe"))||[]}catch(e){}
+  if(!liste.includes(ay)){liste.push(ay);liste.sort();await A.VERI.put("fonGecmisListe",JSON.stringify(liste))}
+  return JS2({ok:!0,ay,fonSayisi:Object.keys(veri.fonlar).length})
+}
+/* 📋 Kesinleşmiş (fonGecmis:AY olarak yazılmış) ayların listesi — backfill
+   script'i hangi ayları ATLAYABİLECEĞİNİ (zaten tamam) buradan öğrenir. */
+if("/api/fonGecmisListeOku"===$.pathname){
+  const JS2=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
+  const anahtar=A.PANEL_KEY||t;
+  if(($.searchParams.get("key")||"")!==anahtar)return JS2({ok:!1,hata:"yetkisiz"},403);
+  if(!A.VERI)return JS2({ok:!1,hata:"KV bağlı değil"});
+  let liste=[];
+  try{liste=JSON.parse(await A.VERI.get("fonGecmisListe"))||[]}catch(e){}
+  return JS2({ok:!0,aylar:liste})
+}
+/* 🚧 BACKFILL TASLAĞI — 610 fonun tüm geçmişini taramak tek run'a sığmaz.
+   Script, run'lar arasında "hangi fonları taradım + o taramadan çıkan
+   ay->fon verisi" durumunu buraya yazar/buradan okur; hiçbir ay TAM
+   taranmadan "fonGecmis:AY" olarak KESİNLEŞTİRİLMEZ (bkz. fonGecmisYukle) —
+   bu sadece ARA durak, worker KV'de "fonGecmisTaslak" anahtarında durur. */
+if("/api/fonGecmisTaslakOku"===$.pathname){
+  const JS2=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
+  const anahtar=A.PANEL_KEY||t;
+  if(($.searchParams.get("key")||"")!==anahtar)return JS2({ok:!1,hata:"yetkisiz"},403);
+  if(!A.VERI)return JS2({ok:!1,hata:"KV bağlı değil"});
+  const ham=await A.VERI.get("fonGecmisTaslak");
+  if(!ham)return JS2({ok:!0,veri:null});
+  try{return JS2({ok:!0,veri:JSON.parse(ham)})}catch(e){return JS2({ok:!1,hata:"veri bozuk"})}
+}
+if("/api/fonGecmisTaslakYaz"===$.pathname&&"POST"===p.method){
+  const JS2=(o,st)=>new Response(JSON.stringify(o),{status:st||200,headers:Object.assign({"content-type":"application/json; charset=utf-8","cache-control":"no-store"},ee)});
+  const gov2=await p.json().catch(()=>null);
+  const anahtar=A.PANEL_KEY||t;
+  if(!gov2||gov2.key!==anahtar)return JS2({ok:!1,hata:"yetkisiz"},403);
+  if(!A.VERI)return JS2({ok:!1,hata:"KV bağlı değil"});
+  await A.VERI.put("fonGecmisTaslak",JSON.stringify(gov2.veri||{}));
+  return JS2({ok:!0})
+}
 /* 📤 KALDIĞI YERDEN DEVAM — kap_ortaklik_scraper.py ve fon_hisse_scraper.py
    her run'ın başında BUNLARI çağırıp önceki sonucu okuyor, daha önce
    başarıyla işlenmiş kayıtları atlıyor. GET (query'de key) — script'ler

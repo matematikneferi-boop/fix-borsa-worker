@@ -444,6 +444,51 @@ class KapFonIstemci:
         adaylar.sort(key=lambda k: str(k.get("publishDate", "") or k.get("basicDate", "")), reverse=True)
         return adaylar[0]
 
+    def tum_tanitici_bilgiler_bildirimleri(self, mkk_member_oid: str, gun_geriye: int = 760) -> dict:
+        """son_tanitici_bilgiler_bildirimi ile AYNI sorgu, ama sadece EN
+        GÜNCEL'i değil, KAP'ın döndürdüğü penceredeki TÜM 'I-FONU TANITICI
+        BİLGİLER' bildirimlerini AY BAZINDA döner: {AY(YYYY-MM): bildirim}.
+        Bu, backfill (geçmiş doldurma) modunun temeli — TEFAS'ta geçmiş
+        hisse kırılımı yok ama KAP'ın bildirim sorgusu zaten geriye dönük
+        bir pencere döndürüyor, ayrı bir 'tarihsel API' gerekmiyor. Aynı ay
+        için birden fazla bildirim varsa (düzeltme/tekrar), o ayın EN
+        GÜNCELİ tutulur."""
+        from datetime import date, timedelta
+        bugun = date.today()
+        try:
+            r = self._istek(
+                "POST", "/tr/api/disclosure/members/byCriteria",
+                json={
+                    "fromDate": (bugun - timedelta(days=gun_geriye)).isoformat(),
+                    "toDate": bugun.isoformat(),
+                    "mkkMemberOidList": [mkk_member_oid],
+                    "subjectList": [],
+                },
+                headers={"Referer": f"{KAP_BASE}/tr/bildirim-sorgu"},
+            )
+        except Exception:
+            return {}
+        if r.status_code != 200:
+            return {}
+        try:
+            kayitlar = r.json()
+        except Exception:
+            return {}
+        adaylar = [
+            k for k in kayitlar
+            if isinstance(k, dict) and "TANITICI BİLGİLER" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))
+        ]
+        sonuc = {}
+        for k in adaylar:
+            tarih = str(k.get("publishDate", "") or k.get("basicDate", ""))
+            ay = tarih[:7]
+            if not re.match(r"^\d{4}-\d{2}$", ay):
+                continue
+            mevcut = sonuc.get(ay)
+            if not mevcut or tarih > str(mevcut.get("publishDate", "") or mevcut.get("basicDate", "")):
+                sonuc[ay] = k
+        return sonuc
+
     def disclosure_detay(self, disclosure_index: int) -> Optional[dict]:
         try:
             r = self._istek("GET", f"/tr/api/notification/attachment-detail/{disclosure_index}",
@@ -805,26 +850,229 @@ def push_to_worker(cikti_yolu: str, worker_url: str, panel_key: str):
         raise RuntimeError(f"Worker push reddetti: {cevap.get('hata', 'bilinmeyen hata')}")
 
 
+# ═══════════════════════ 🕰️ GEÇMİŞ DOLDURMA (backfill) ═══════════════════════
+#
+# main() SADECE en güncel ayı işler. Bu bölüm AYNI KAP kaynağından
+# (tum_tanitici_bilgiler_bildirimleri) geriye dönük TÜM ayları tarar —
+# TEFAS'ta hisse kırılımının geçmişi YOK, ama KAP'ın bildirim sorgusu
+# zaten geriye dönük bir pencere (~25 ay) döndürüyor; ayrı bir "tarihsel
+# API" gerekmiyor, sadece o pencerede bulduğun HER ayı (sadece en
+# güncelini değil) işlemen gerekiyor.
+#
+# 610 fon × geçmişteki ay sayısı kadar PDF indirme — bu TEK run'a SIĞMAZ.
+# Kaldığı yerden devam, worker KV'de iki katmanda:
+#   - "fonGecmisListe"  (mevcut, worker.js'de zaten vardı) : KESİNLEŞMİŞ aylar.
+#   - "fonGecmisTaslak" (yeni)  : sürmekte olan taramanın ARA hali —
+#     {"islenenFonlar": [...], "aylar": {AY: {fonKodu: fonKartDict}}}.
+#   Bir ay ancak fon_listesi'ndeki TÜM fonlar (bu run + önceki run'larda
+#   birikerek) taranmış olunca "fonGecmis:AY" olarak KESİNLEŞTİRİLİR —
+#   yoksa eksik fonlarla "tamamlanmış ay" diye YANLIŞ bir sonuç worker'a
+#   yazılmış olurdu (dosya başındaki "asla sayı uydurma" ilkesiyle aynı
+#   mantık, burada "asla eksik ayı tam diye işaretleme").
+
+GECMIS_GUN_GERIYE = 760  # ~25 ay — KAP'ın döndürdüğü kadarını al, fazlası boş gelir
+
+
+def taslak_getir(worker_url: str, panel_key: str) -> dict:
+    try:
+        r = httpx.get(f"{worker_url}/api/fonGecmisTaslakOku", params={"key": panel_key}, timeout=30)
+        if r.status_code == 200 and r.json().get("ok"):
+            return r.json().get("veri") or {"islenenFonlar": [], "aylar": {}}
+    except Exception:
+        pass
+    return {"islenenFonlar": [], "aylar": {}}
+
+
+def taslak_yaz(worker_url: str, panel_key: str, taslak: dict):
+    try:
+        r = httpx.post(f"{worker_url}/api/fonGecmisTaslakYaz", json={"key": panel_key, "veri": taslak}, timeout=60)
+        if r.status_code != 200 or not r.json().get("ok"):
+            print(f"  ⚠️ Taslak worker'a yazılamadı: {r.status_code} {r.text[:200]}")
+    except Exception as e:
+        print(f"  ⚠️ Taslak worker'a yazılamadı: {e}")
+
+
+def tamamlanmis_aylari_getir(worker_url: str, panel_key: str) -> set:
+    try:
+        r = httpx.get(f"{worker_url}/api/fonGecmisListeOku", params={"key": panel_key}, timeout=30)
+        if r.status_code == 200 and r.json().get("ok"):
+            return set(r.json().get("aylar") or [])
+    except Exception:
+        pass
+    return set()
+
+
+def kap_uyesini_ve_gecmisini_isle(kap: "KapFonIstemci", f: dict, tamamlanmis_aylar: set) -> dict:
+    """Bir fon için, henüz KESİNLEŞMEMİŞ (tamamlanmis_aylar dışındaki) tüm
+    geçmiş aylık 'I-FONU TANITICI BİLGİLER' bildirimlerini indirir, parse
+    eder. Dönüş: {ay: fonKartDict}. Üye/bildirim bulunamazsa boş dict döner
+    — ama fon yine de çağıran tarafta 'islenen' sayılır: KAP'ta o an
+    yoksa, tekrar denemek de bulmaz."""
+    sonuc = {}
+    uye = kap.fon_uyesi_bul(f["fon_kodu"], f["fon_adi"])
+    if not uye or not uye.get("mkkMemberOid"):
+        return sonuc
+    bildirimler = kap.tum_tanitici_bilgiler_bildirimleri(uye["mkkMemberOid"], GECMIS_GUN_GERIYE)
+    for ay, bildirim in bildirimler.items():
+        if ay in tamamlanmis_aylar:
+            continue
+        kart = FonKarti(fon_kodu=f["fon_kodu"], fon_adi=f["fon_adi"],
+                         semsiye_turu=f["semsiye_turu"], kurucu=f["kurucu"],
+                         fon_buyuklugu_tl=f["fon_buyuklugu_tl"], rapor_donemi=ay)
+        bildirim_index = bildirim.get("disclosureIndex") or bildirim.get("id")
+        if not bildirim_index:
+            kart.veri_eksik.append("bildirim_index_yok")
+            sonuc[ay] = asdict(kart)
+            continue
+        kart.bildirim_index = bildirim_index
+        detay = kap.disclosure_detay(bildirim_index)
+        if not detay or not detay.get("objId"):
+            kart.veri_eksik.append("ek_dosya_bulunamadi")
+            sonuc[ay] = asdict(kart)
+            continue
+        try:
+            with zaman_siniri(PDF_MAX_SANIYE):
+                pdf_bytes = kap.pdf_indir(detay["objId"])
+        except ZamanAsimi:
+            kart.veri_eksik.append("pdf_indirme_zaman_asimi")
+            sonuc[ay] = asdict(kart)
+            continue
+        if not pdf_bytes:
+            kart.veri_eksik.append("pdf_indirilemedi")
+            sonuc[ay] = asdict(kart)
+            continue
+        hisseler, eksik = extract_hisseler_from_pdf(pdf_bytes)
+        kart.hisseler = hisseler
+        kart.veri_eksik.extend(eksik)
+        sonuc[ay] = asdict(kart)
+    return sonuc
+
+
+def _ay_veri_paketle(ay: str, fon_dict: dict) -> dict:
+    """taslak['aylar'][ay] ({fonKodu: fonKartDict}) -> worker'ın
+    /api/fonGecmisYukle beklediği {guncelleme, fonSayisi, fonlar, hisseIndeksi}."""
+    fonlar_listesi = [fon_karti_from_dict(d) for d in fon_dict.values()]
+    return {
+        "guncelleme": f"{ay}-01 00:00:00",
+        "fonSayisi": len(fonlar_listesi),
+        "fonlar": {f.fon_kodu: asdict(f) for f in fonlar_listesi},
+        "hisseIndeksi": ters_indeks_kur(fonlar_listesi),
+    }
+
+
+def gecmis_doldur():
+    """Backfill ana akışı. Tek run'da bitmezse ('⏭️ Tarama TAM DEĞİL' mesajı)
+    script'i AYNEN TEKRAR çalıştır — kaldığı fondan devam eder, hiçbir şeyi
+    yeniden indirmez (worker'daki taslaktan okur)."""
+    worker_url = os.environ.get("WORKER_URL", "").strip().rstrip("/")
+    panel_key = os.environ.get("PANEL_KEY", "").strip()
+    if not worker_url or not panel_key:
+        print("❌ WORKER_URL / PANEL_KEY tanımlı değil — backfill worker'sız çalışamaz "
+              "(taslak durumu orada, KV'de tutuluyor).")
+        return
+
+    print("TEFAS fon listesi çekiliyor…")
+    tefas = TefasIstemci()
+    fon_listesi = tefas.hisse_yogun_fon_listesi()
+    print(f"  {len(fon_listesi)} hisse yoğun/değişken fon bulundu.")
+
+    sinir_ham = os.environ.get("FON_SAYISI", "").strip()
+    if sinir_ham and sinir_ham.lower() != "tumu":
+        fon_listesi = fon_listesi[: int(sinir_ham)]
+        print(f"  ℹ️ Test modu: sadece ilk {len(fon_listesi)} fon.")
+
+    tamamlanmis_aylar = tamamlanmis_aylari_getir(worker_url, panel_key)
+    print(f"  📅 Worker'da zaten kesinleşmiş {len(tamamlanmis_aylar)} ay var: {sorted(tamamlanmis_aylar)}")
+
+    taslak = taslak_getir(worker_url, panel_key)
+    islenen = set(taslak.get("islenenFonlar") or [])
+    aylar = taslak.get("aylar") or {}
+    print(f"  ↩️ Önceki run'lardan {len(islenen)} fon zaten taranmış (bu run'da atlanacak).")
+
+    kap = KapFonIstemci()
+    baslangic_t = time.monotonic()
+    islenecekler = [f for f in fon_listesi if f["fon_kodu"] not in islenen]
+    print(f"  İşlenecek: {len(islenecekler)} / toplam {len(fon_listesi)} fon.")
+
+    for i, f in enumerate(islenecekler):
+        if time.monotonic() - baslangic_t > MAX_TOPLAM_SANIYE:
+            print(f"\n⏹️ Zaman bütçesi doldu — kalan {len(islenecekler)-i} fon SONRAKİ run'a kalacak.")
+            break
+        print(f"[{i+1}/{len(islenecekler)}] {f['fon_kodu']} geçmişi taranıyor…")
+        try:
+            with zaman_siniri(600):  # bir fonun TÜM geçmişi (çoklu PDF) tek aydan uzun sürer
+                fon_aylari = kap_uyesini_ve_gecmisini_isle(kap, f, tamamlanmis_aylar)
+        except ZamanAsimi:
+            print(f"  ⏱️ {f['fon_kodu']} 10 dakikada bitmedi, atlanıyor (bu run'da 'islenen' SAYILMAYACAK)")
+            continue
+        except Exception as e:
+            print(f"  ⚠️ {f['fon_kodu']} hata: {e}")
+            continue
+        for ay, kart_dict in fon_aylari.items():
+            aylar.setdefault(ay, {})[f["fon_kodu"]] = kart_dict
+        islenen.add(f["fon_kodu"])
+        print(f"  ✅ {len(fon_aylari)} ay bulundu: {sorted(fon_aylari.keys())}")
+
+        if (i + 1) % 10 == 0:
+            taslak_yaz(worker_url, panel_key, {"islenenFonlar": sorted(islenen), "aylar": aylar})
+            print(f"  💾 Taslak worker'a kaydedildi ({len(islenen)} fon işlenmiş, {len(aylar)} ay biriktirilmiş)")
+
+    print("💾 Taslak worker'a kaydediliyor…")
+    taslak_yaz(worker_url, panel_key, {"islenenFonlar": sorted(islenen), "aylar": aylar})
+
+    tum_fon_kodlari = {f["fon_kodu"] for f in fon_listesi}
+    tamamlandi = tum_fon_kodlari.issubset(islenen)
+    if not tamamlandi:
+        kalan = len(tum_fon_kodlari - islenen)
+        print(f"\n⏭️ Tarama TAM DEĞİL — {kalan} fon henüz taranmadı. Script'i TEKRAR çalıştır, "
+              "kaldığı yerden devam edecek. Hiçbir ay henüz kesinleştirilmedi (yarım veriyle "
+              "'tamamlandı' izlenimi vermemek için).")
+        return
+
+    print(f"\n✅ TÜM {len(fon_listesi)} fon tarandı. {len(aylar)} ay kesinleştiriliyor…")
+    for ay in sorted(aylar.keys()):
+        if ay in tamamlanmis_aylar:
+            continue
+        paket = _ay_veri_paketle(ay, aylar[ay])
+        try:
+            r = httpx.post(f"{worker_url}/api/fonGecmisYukle", timeout=60,
+                            json={"key": panel_key, "ay": ay, "veri": paket})
+            cevap = r.json() if r.status_code == 200 else {}
+            if r.status_code == 200 and cevap.get("ok"):
+                print(f"  📤 {ay} kesinleşti — {cevap.get('fonSayisi')} fon.")
+            else:
+                print(f"  ⚠️ {ay} worker'a yazılamadı: {r.status_code} {r.text[:200]}")
+        except Exception as e:
+            print(f"  ⚠️ {ay} worker'a gönderilemedi: {e}")
+
+    taslak_yaz(worker_url, panel_key, {"islenenFonlar": [], "aylar": {}})
+    print("🧹 Taslak temizlendi. Backfill tamamlandı — FONLAR sekmesi artık geçmiş verilerle dolu olmalı.")
+
+
 if __name__ == "__main__":
     import os
     import sys
 
-    sinir_ham = os.environ.get("FON_SAYISI", "").strip()
-    sinirli = None if (not sinir_ham or sinir_ham.lower() == "tumu") else int(sinir_ham)
-    cikti_yolu = "fon_hisse_haritasi.json"
-
-    print(f"Başlıyor — fon sınırı: {sinirli or 'YOK (tüm hisse yoğun/değişken fonlar)'}")
-    main(sinirli_sayi=sinirli, cikti_yolu=cikti_yolu)
-
-    worker_url = os.environ.get("WORKER_URL", "").strip().rstrip("/")
-    panel_key = os.environ.get("PANEL_KEY", "").strip()
-    if worker_url and panel_key:
-        print(f"Worker'a gönderiliyor: {worker_url}")
-        try:
-            push_to_worker(cikti_yolu, worker_url, panel_key)
-            print("✅ Worker'a gönderildi.")
-        except Exception as e:
-            print(f"⚠️ Worker'a gönderilemedi: {e}")
-            sys.exit(1)
+    if os.environ.get("GECMIS_DOLDUR", "").strip() == "1" or (len(sys.argv) > 1 and sys.argv[1] == "gecmis"):
+        print("🕰️ GEÇMİŞ DOLDURMA (backfill) modu başlıyor…")
+        gecmis_doldur()
     else:
-        print("ℹ️ WORKER_URL / PANEL_KEY tanımlı değil — sadece dosya üretildi.")
+        sinir_ham = os.environ.get("FON_SAYISI", "").strip()
+        sinirli = None if (not sinir_ham or sinir_ham.lower() == "tumu") else int(sinir_ham)
+        cikti_yolu = "fon_hisse_haritasi.json"
+
+        print(f"Başlıyor — fon sınırı: {sinirli or 'YOK (tüm hisse yoğun/değişken fonlar)'}")
+        main(sinirli_sayi=sinirli, cikti_yolu=cikti_yolu)
+
+        worker_url = os.environ.get("WORKER_URL", "").strip().rstrip("/")
+        panel_key = os.environ.get("PANEL_KEY", "").strip()
+        if worker_url and panel_key:
+            print(f"Worker'a gönderiliyor: {worker_url}")
+            try:
+                push_to_worker(cikti_yolu, worker_url, panel_key)
+                print("✅ Worker'a gönderildi.")
+            except Exception as e:
+                print(f"⚠️ Worker'a gönderilemedi: {e}")
+                sys.exit(1)
+        else:
+            print("ℹ️ WORKER_URL / PANEL_KEY tanımlı değil — sadece dosya üretildi.")
