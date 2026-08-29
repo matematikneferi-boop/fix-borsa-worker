@@ -323,6 +323,24 @@ class KapFonIstemci:
         self.durum_sayaci = {}   # {http_status: kaç kez görüldü} — tara sonunda basılır, teşhis için
         self.debug = os.environ.get("KAP_DEBUG", "").strip() == "1"
 
+        # DÜZELTME (tara #14, canlı debug ile kanıtlandı): POST
+        # /tr/api/disclosure/members/byCriteria HER ZAMAN "HTTP 500 —
+        # errorMessage: HTTP 400" ile reddediliyordu, gövde formatı doğru
+        # olmasına rağmen. Bağımsız bir KAP API dokümantasyonu şunu
+        # doğruluyor: bu endpoint'e gitmeden önce /tr/bildirim-sorgu
+        # sayfasına bir GET atmak WAF'ın gerektirdiği session cookie'lerini
+        # kuruyor — cookie'siz direkt POST reddediliyor. httpx.Client
+        # cookie'leri otomatik tutuyor, o yüzden bu sadece BİR KEZ,
+        # başlangıçta yapılıyor.
+        try:
+            isinma = self.c.get("/tr/bildirim-sorgu")
+            if self.debug:
+                print(f"    🐛 oturum ısınması: GET /tr/bildirim-sorgu -> HTTP {isinma.status_code}, "
+                      f"{len(self.c.cookies)} cookie alındı")
+        except Exception as e:
+            if self.debug:
+                print(f"    🐛 oturum ısınması BAŞARISIZ: {e!r} — devam ediliyor, byCriteria yine de denenecek")
+
     def _bekle(self):
         gecen = time.time() - self._son_istek
         if gecen < RATE_LIMIT_SEC:
@@ -376,6 +394,44 @@ class KapFonIstemci:
             if ra and ra.strip().isdigit():
                 time.sleep(min(int(ra), 60))
         return r
+
+    def fon_filter(self, fon_kodu: str) -> Optional[dict]:
+        """DÜZELTME (tara #14 — derin araştırma sonrası): KAP'ın kendi resmi
+        REST API dokümantasyonu ('KAP Veri Yayın Servisi'), 'funds' (Fon
+        Listesi) ve 'fundDetail' (Fon Detay) servislerinin 'members' (Şirket
+        Listesi) servisinden AYRI olduğunu doğruluyor. Ayrıca canlı arama şunu
+        gösterdi: kap.org.tr'de her fonun KENDİ SAYFASI var
+        (kap.org.tr/tr/fon-bilgileri/ozet/{permalink veya mkkMemberOid}) —
+        bu da fonların kurucu portföy şirketinden BAĞIMSIZ kendi
+        mkkMemberOid'i olabileceğini gösteriyor. Şimdiye kadar kod hep
+        /tr/api/member/filter/{kod} kullanıyordu (şirketler için) ve fon
+        kodlarında hep 0 sonuç veriyordu — çünkü bu şirket ucu, fon ucu değil.
+        Burada, dokümante edilmiş member/filter kalıbının fonlar için
+        muhtemel eşdeğerini deniyoruz: /tr/api/fund/filter/{kod}. KAP bunu
+        herkese açık dokümante etmediği için bu kesin değil — debug çıktısı
+        (aşağıda) bunu ilk canlı run'da KESİN olarak doğrulayacak/çürütecek.
+        Başarısız olursa (404/boş), sessizce None döner ve fon_uyesi_bul
+        zaten var olan kurucu-tabanlı yönteme düşer."""
+        try:
+            r = self._istek("GET", f"/tr/api/fund/filter/{urllib.parse.quote(fon_kodu)}",
+                             headers={"Referer": f"{KAP_BASE}/tr/YatirimFonlari/YF"})
+        except Exception as e:
+            if self.debug:
+                print(f"    🐛 fon_filter('{fon_kodu}'): istek EXCEPTION: {e!r}")
+            return None
+        if self.debug:
+            print(f"    🐛 fon_filter('{fon_kodu}') -> HTTP {r.status_code}, gövde: {r.text[:300]!r}")
+        if r.status_code != 200:
+            return None
+        try:
+            veri = r.json()
+        except Exception:
+            return None
+        adaylar = veri if isinstance(veri, list) else ([veri] if isinstance(veri, dict) else [])
+        for kayit in adaylar:
+            if isinstance(kayit, dict) and str(kayit.get("companyCode") or kayit.get("fundCode") or "").upper() == fon_kodu.upper():
+                return kayit
+        return None
 
     def member_filter(self, fon_kodu: str) -> Optional[dict]:
         """SADECE tam kod eşleşmesi — "ilk sonucu döndür" yedeği KALDIRILDI.
@@ -472,6 +528,12 @@ class KapFonIstemci:
         ayrı ayrı sorgulanıyor (bkz. _en_iyi_uye_esles) ve TEFAS'ın verdiği
         `kurucu` alanı (doluysa) öncelikli, daha güvenilir kaynak.
         """
+        uye = self.fon_filter(fon_kodu)
+        if uye and uye.get("mkkMemberOid"):
+            if self.debug:
+                print(f"    🐛 fon_uyesi_bul('{fon_kodu}'): fon_filter İLE BULUNDU (fonun kendi OID'i): {uye.get('mkkMemberOid')}")
+            return uye
+
         uye = self.member_filter(fon_kodu)
         if uye and uye.get("mkkMemberOid"):
             return uye
@@ -531,12 +593,25 @@ class KapFonIstemci:
                 print(f"    🐛 son_tanitici_bilgiler_bildirimi('{fon_kodu}'): JSON parse hatası: {e!r}, gövde: {r.text[:300]!r}")
             return None
         fon_kodu_n = _tr_upper(fon_kodu.strip())
+        if self.debug and kayitlar:
+            ornek = next((k for k in kayitlar if isinstance(k, dict)), None)
+            if ornek:
+                print(f"    🐛 son_tanitici_bilgiler_bildirimi('{fon_kodu}'): örnek kayıt alanları: "
+                      f"{sorted(ornek.keys())}")
         tanitici_hepsi = [
             k for k in kayitlar
             if isinstance(k, dict) and "TANITICI BİLGİLER" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))
         ]
-        adaylar = [k for k in tanitici_hepsi
-                   if f"{fon_kodu_n}-" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))]
+        # DÜZELTME (tara #14): KAP'ın gerçek şeması "fundCode" adında AYRI
+        # bir alan içeriyor olabilir (bağımsız dokümantasyonda görüldü) —
+        # varsa, başlıkta "{FONKOD}-" arayan kırılgan yöntem yerine bunu
+        # ÖNCELİKLİ ve kesin filtre olarak kullan.
+        fundcode_ile = [k for k in tanitici_hepsi if _tr_upper(str(k.get("fundCode") or "")) == fon_kodu_n]
+        if fundcode_ile:
+            adaylar = fundcode_ile
+        else:
+            adaylar = [k for k in tanitici_hepsi
+                       if f"{fon_kodu_n}-" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))]
         if self.debug:
             print(f"    🐛 son_tanitici_bilgiler_bildirimi('{fon_kodu}'): {len(kayitlar)} toplam bildirim, "
                   f"{len(tanitici_hepsi)} 'TANITICI BİLGİLER' içeren, {len(adaylar)} bu FON kodunu içeren.")
@@ -589,16 +664,16 @@ class KapFonIstemci:
                 print(f"    🐛 tum_tanitici_bilgiler_bildirimleri('{fon_kodu}'): JSON parse hatası: {e!r}")
             return {}
         fon_kodu_n = _tr_upper(fon_kodu.strip())
-        adaylar = []
-        for k in kayitlar:
-            if not isinstance(k, dict):
-                continue
-            baslik_n = _tr_upper(str(k.get("title", "") or k.get("subject", "")))
-            if "TANITICI BİLGİLER" not in baslik_n:
-                continue
-            if f"{fon_kodu_n}-" not in baslik_n:
-                continue
-            adaylar.append(k)
+        tanitici_hepsi = [
+            k for k in kayitlar
+            if isinstance(k, dict) and "TANITICI BİLGİLER" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))
+        ]
+        fundcode_ile = [k for k in tanitici_hepsi if _tr_upper(str(k.get("fundCode") or "")) == fon_kodu_n]
+        if fundcode_ile:
+            adaylar = fundcode_ile
+        else:
+            adaylar = [k for k in tanitici_hepsi
+                       if f"{fon_kodu_n}-" in _tr_upper(str(k.get("title", "") or k.get("subject", "")))]
         sonuc = {}
         for k in adaylar:
             tarih = str(k.get("publishDate", "") or k.get("basicDate", ""))
