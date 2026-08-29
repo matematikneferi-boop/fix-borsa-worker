@@ -3817,6 +3817,7 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .sek.on[data-r="1HAF"]{background:var(--t1h);color:#2a1400}
 .sek.on[data-r="aday"]{background:var(--tad);color:#1d1503}
 .sek.on[data-r="nötr"]{background:var(--mavi)}
+.sek.mbTamam{background:var(--yes) !important;color:#04140a !important;border-color:transparent !important;font-weight:800}
 .govde{padding:10px 12px}
 .sirala{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none}
 .sirala::-webkit-scrollbar{display:none}
@@ -4384,6 +4385,7 @@ function basla(){
     if(!D.onay)return onayCiz();
     izSekmeDegisti(sekme);
     ciz();
+    mbArkaplanBaslat();  /* 🆕 uygulama açılır açılmaz Hisse Taraması arka planda başlasın */
   }).catch(function(){splashKapat();el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
   setTimeout(splashKapat,4000); /* güvenlik: yavaş bağlantıda sonsuza dek takılı kalmasın */
 }
@@ -4403,7 +4405,7 @@ function sekCiz(){
   /* 🔝 ÖNCELİKLİ İKİ SEKME: Formasyon ve Hisse Taraması artık şeridin en
      başında — Ana Menü'nün hemen altında ilk görülen iki düğme bunlar. */
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon Tarama'+(D.super?"":" 🔒")+'</button>');
-  s.push('<button class="sek'+(sekme==="malboga"?" on":"")+'" data-r="nötr" data-s="malboga">🔎 Hisse Taraması'+(D.super?"":" 🔒")+'</button>');
+  s.push('<button class="sek'+(sekme==="malboga"?" on":"")+(mbTaramaTamamMi()?" mbTamam":"")+'" data-r="nötr" data-s="malboga">'+(mbTaramaTamamMi()?"✅":"🔎")+' Hisse Taraması'+(D.super?"":" 🔒")+'</button>');
   ["potansiyel","fibo","uzunvade"].forEach(function(k){
     var t=TF[k],n=((D.kartlar&&D.kartlar[k])||[]).filter(hedefEsikGecti).length;
     s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
@@ -7293,7 +7295,11 @@ function mbAlarmBekci(){
 /* Açılış = TradingView varsayılanına yakın: günlükte son 5 barda mal toplanmış. */
 var mbIst={
   kapsam:"hepsi",          /* hepsi = seçili dilimlerin HEPSİNDE tutsun */
-  tfler:["1G"],
+  /* 🆕 Varsayılan artık dört dilim birden, İSTENEN SIRAYLA: günlük, 4 saat,
+     1 saat, haftalık. mbEfektifTfler() hiçbir modülde özel dilim seçilmediği
+     sürece bu diziyi AYNEN (sırasını bozmadan) döndürür, tarama kuyruğu da
+     bu sırayla dolar. */
+  tfler:["1G","4SA","1SA","1HAF"],
   /* tfler:null → modül GENEL dilim seçimini (yukarıdaki mbIst.tfler) kullanır.
      tfler:[...] → modül KENDİ dilimini kullanır, genelden bağımsız çalışır.
      Varsayılan hep null: kimse dokunmazsa sistem birebir eskisi gibi davranır. */
@@ -7383,8 +7389,7 @@ var mbSonTarama=0, mbZamanlayici=null;
 function mbTazelemeKur(){
   if(mbZamanlayici)return;
   mbZamanlayici=setInterval(function(){
-    if(sekme!=="malboga"){return}
-    mbAlarmBekci();
+    if(sekme==="malboga")mbAlarmBekci();   /* alarm bekçisi yalnız o sekmedeyken anlamlı */
     if(mbTaraDurum&&mbTaraDurum.suruyor)return;
     var tfl=mbEfektifTfler();
     if(!tfl.length)return;
@@ -7406,6 +7411,36 @@ function mbOtomatikBaslat(){
   var ilr=mbIlerleme();
   if(ilr.gereken&&ilr.olculen>=ilr.gereken)return;   /* zaten tamam */
   mbTaraBaslat();
+}
+/* 🆕 mbTaramaTamamMi — dört zaman diliminin (ya da o an seçili olan
+   dilimlerin) HEPSİ, evrendeki TÜM hisseler için ölçülmüş mü? Sekme
+   şeridindeki "Hisse Taraması" düğmesini yeşile boyamak için kullanılır. */
+function mbTaramaTamamMi(){
+  if(!D||!D.super)return false;
+  if(!mbEvrenKod||!mbEvrenKod.length)return false;
+  if(!mbEfektifTfler().length)return false;
+  var ilr=mbIlerleme();
+  return !!(ilr.gereken&&ilr.olculen>=ilr.gereken);
+}
+/* 🆕 mbArkaplanBaslat — uygulama açılır açılmaz (kullanıcı "Hisse Taraması"
+   sekmesine hiç tıklamasa bile) günlük/4 saat/1 saat/haftalık taramayı
+   arka planda sırayla başlatır. mbNobetciKur/mbTaraTur artık sekme şartına
+   bakmadan çalışıyor (bkz. aşağıdaki değişiklikler); ekrana yalnız
+   "Hisse Taraması" sekmesindeyken yazılıyor (mbCizYenile kendi içinde
+   kontrol ediyor), bu yüzden başka bir sekmedeyken çalışması güvenli. */
+function mbArkaplanBaslat(){
+  if(!D||!D.super||!D.onay)return;
+  if(!mbEvrenKod){
+    post("/api/malboga",{is:"evren"}).then(function(r){
+      if(r&&r.ok&&r.kodlar){mbEvrenKod=r.kodlar;mbEvrenKaynak=r.kaynak||""}
+      mbOtomatikBaslat();
+      mbTazelemeKur();
+      if(sekme!=="malboga")sekCiz();
+    }).catch(function(){});
+    return;
+  }
+  mbOtomatikBaslat();
+  mbTazelemeKur();
 }
 /* Tik değişti → seçimi hemen boya, sonucu tazele. */
 function mbUygula(){ mbCizYenile(); }
@@ -7914,7 +7949,9 @@ function mbNobetciKur(){
   mbNobetci=setInterval(function(){
     var d=mbTaraDurum;
     if(!d||!d.suruyor){mbNobetciKapat();return}
-    if(sekme!=="malboga")return;          /* sekme dışında bekle, iptal etme */
+    /* 🆕 artık sekme dışında da çalışır — arka planda taramanın durmaması
+       için kaldırıldı. Ekrana yazma işi zaten mbCizYenile() içinde
+       sekmeye göre ayrıca korunuyor, o yüzden burada güvenli. */
     var simdi=Date.now(),kurtarilan=0;
     for(var i=d.ucusta.length-1;i>=0;i--){
       if(simdi-d.ucusta[i].ts>MB_ISTEK_ZAMAN){
@@ -7929,16 +7966,15 @@ function mbNobetciKur(){
     /* Hiçbir kanal yolda değilse ama iş varsa döngü ölmüş demektir — ittir. */
     if(d.acik===0&&d.kuyruk.length)mbTaraTur();
     else if(d.acik===0&&!d.kuyruk.length){d.suruyor=false;mbSonTarama=Date.now();
-      mbNobetciKapat();mbCizYenile()}
+      mbNobetciKapat();mbCizYenile();sekCiz();}   /* 🆕 tarama bitti → düğmeyi yeşile boya */
   },4000);
 }
 function mbNobetciKapat(){if(mbNobetci){clearInterval(mbNobetci);mbNobetci=null}}
 function mbTaraTur(){
   var d=mbTaraDurum;
   if(!d||!d.suruyor)return;
-  /* Sekme dışındayken YENİ istek açma ama taramayı da iptal etme —
-     nöbetçi, sekmeye dönülünce kaldığı yerden sürdürür. */
-  if(sekme!=="malboga")return;
+  /* 🆕 artık sekme dışında da yeni istek açar — uygulama açılır açılmaz
+     arka planda taramanın kesintisiz sürmesi için kaldırıldı. */
   while(d.acik<MB_KANAL&&d.kuyruk.length){
     var is=d.kuyruk.shift();
     d.acik++;d.tf=is.tf;
@@ -7978,15 +8014,18 @@ function mbTaraTur(){
         /* Başarısız parça KUYRUĞA GERİ — imleç geri sarma yok, kayıp yok. */
         if(d.hata<MB_HATA_TAVAN){d.kuyruk.push({tf:is2.tf,kodlar:is2.kodlar});
           mbCizYenile();setTimeout(mbTaraTur,1200);
-        }else{d.suruyor=false;mbNobetciKapat();mbCizYenile()}
+        }else{d.suruyor=false;mbNobetciKapat();mbCizYenile();sekCiz();}
       });
     })(is,kayit);
   }
   /* iş kalmadı ve uçuşta istek yoksa bitti */
   if(!d.acik&&!d.kuyruk.length){d.suruyor=false;mbSonTarama=Date.now();
-    mbNobetciKapat();mbCizYenile()}
+    mbNobetciKapat();mbCizYenile();sekCiz();}   /* 🆕 tarama bitti → düğmeyi yeşile boya */
 }
-function mbCizYenile(){mbD=mbPaketUret();mbGoster(mbD)}
+/* 🆕 Ekrana yalnız "Hisse Taraması" sekmesindeyken yazar — arka planda
+   başka bir sekmedeyken çağrılırsa, o an ekranda olan başka bir sekmenin
+   içeriğinin (paylaşılan #govde alanı) üzerine yazıp bozmasın diye. */
+function mbCizYenile(){if(sekme!=="malboga")return;mbD=mbPaketUret();mbGoster(mbD)}
 /* MAL hücresi — Pine tablosuyla aynı: toplama yaşı 5 barı geçtiyse "-" */
 function mbMalHucre(x){
   if(x.top<9999)return{t:(x.top===0?"TOP☀":"TOP")+" "+x.top+"B",r:x.top<=2?"var(--yes)":"#40E0D0"};
