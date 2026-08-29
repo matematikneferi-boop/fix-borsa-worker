@@ -4751,12 +4751,27 @@ function takipHam(ad){
    kurulmadığı için. Diğer tüm dilimlerde (ORTA/UZUN/HAFTA) bir alt dilimin
    pivotuna göre hesaplanan stop noktası zaten var, D.dusenler üzerinden gelir. */
 function takipStopVar(ad){return ad!=="potansiyel"}
-function takipSatirHtml(k){
+function takipSatirHtml(k,acik){
   var kr=kar(k);
+  var pot1=(k.hedef1Yuzde==null)?null:Number(k.hedef1Yuzde);
+  var pot2=(k.potansiyel==null)?null:Number(k.potansiyel);
+  var orta;
+  if(acik==="hedef1"){
+    /* Hedef1'i tutmuş ama Hedef2'yi henüz tutmamış — H2'ye kalan yüzde. */
+    orta="sinyal <b>"+N(k.giris)+"</b> · 🏆 Hedef1 <b>"+N(k.hedef1)+"</b> tuttu"+
+      (k.hedef!=null?" · H2 <b>"+N(k.hedef)+"</b>"+(pot2!=null?" (%"+pot2.toFixed(1)+" kaldı)":""):"");
+  }else if(acik==="hedef2"){
+    orta="sinyal <b>"+N(k.giris)+"</b> · 🏆 Hedef2 <b>"+N(k.hedef)+"</b> tuttu (nihai)";
+  }else{
+    /* Yolda: iki hedefe de kalan yüzdeyi göster, mükerrer "şimdi fiyat" yazma —
+       sağ tarafta zaten güncel fiyat var. */
+    orta="sinyal <b>"+N(k.giris)+"</b>"+
+      (k.hedef1!=null?" · H1 <b>"+N(k.hedef1)+"</b>"+(pot1!=null?" (%"+pot1.toFixed(1)+" kaldı)":""):"")+
+      (k.hedef!=null?" · H2 <b>"+N(k.hedef)+"</b>"+(pot2!=null?" (%"+pot2.toFixed(1)+" kaldı)":""):"");
+  }
   return '<div class="satir" data-kod="'+E(k.kod)+'" style="border-left-color:var(--ciz)">'+
     '<div class="sol"><div class="kod">'+kodHtml(k)+"</div>"+
-    '<div class="altbilgi">sinyal <b>'+N(k.giris)+'</b> → şimdi <b>'+N(k.fiyat)+"</b>"+
-    (k.hedef1!=null?" · H1 "+N(k.hedef1):"")+(k.hedef!=null?" · H2 "+N(k.hedef):"")+"</div></div>"+
+    '<div class="altbilgi">'+orta+"</div></div>"+
     '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
     '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+"</div></div></div>";
 }
@@ -4786,7 +4801,7 @@ function takipKutuCiz(ad){
   if(acik){
     var liste=v[acik]||[];
     h+='<div style="margin-top:8px">'+(liste.length?
-      (acik==="stop"?liste.map(takipStopSatirHtml).join(""):liste.map(takipSatirHtml).join(""))
+      (acik==="stop"?liste.map(takipStopSatirHtml).join(""):liste.map(function(k){return takipSatirHtml(k,acik)}).join(""))
       :'<div class="bos" style="padding:14px">Bu kategoride şu an hisse yok.</div>')+"</div>";
   }
   return h+"</div>";
