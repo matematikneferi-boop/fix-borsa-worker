@@ -3563,7 +3563,10 @@ async function mbAlarmTohumla(A,uid,ist,yuvaId){
 async function mbAlarmTara(A){
   if(!A||!A.VERI||!A.BOT_TOKEN)return;
   if(!mbSeansIci())return;                           /* seans dışı */
-  const kullanicilar=await mbAlarmKullanicilari(A);
+  const kullanicilar=(await mbAlarmKullanicilari(A)).filter(u=>d(u));
+  /* 🔒 2026-08-30: eski (süper üyeler de kurabiliyordu dönemine ait)
+     kayıtlar KV'de kalmış olsa bile artık yalnız yönetici uid'leri
+     işleniyor — bildirimler garanti şekilde sadece admin'e gider. */
   if(!kullanicilar.length)return;                     /* hiç kimse kurmamış */
   const kanal=String((A.ALARM_KANAL||"")).trim();
   for(const uid of kullanicilar){
@@ -4748,14 +4751,21 @@ function takipHam(ad){
     /* Hedef2'yi zaten tutmuş bir sinyal milestone'a ulaşmıştır — %3.7
        eşiği burada anlamsız, doğrudan gösterilir. */
     if(pot!=null&&pot<=0){hedef2.push(k);return}
-    /* 🎯 %3.7 EŞİĞİ artık burada da: ana listeyle (dizil→hedefEsikGecti)
-       birebir aynı kural. Hedefe (H2) kalan yüzde 3.7'nin altındaysa —
-       henüz tutmamış olsa bile — ne Yolda'da ne Hedef1'de gösterilir.
-       Kullanıcı isteği: "süzgeç heryerde olsun" — Takip artık ana listeyle
-       tutarlı sayım veriyor, süzgeçsiz eski davranış kaldırıldı. */
+    /* 🐞 DÜZELTİLEN HATA — HEDEF1'İ TUTMUŞ SİNYALLER SESSİZCE KAYBOLUYORDU.
+       Eskiden %3.7 eşiği (hedefEsikGecti) HER ŞEYDEN ÖNCE uygulanıyordu —
+       yani Hedef1'i çoktan tutmuş ama artık Hedef2'ye de %3.7'den yakın
+       kalmış bir sinyal, bu kapıdan "henüz tutmamış gibi" süzülüp hiçbir
+       yerde (ne Hedef1'de ne Yolda'da) gösterilmiyordu. Kullanıcı bunu
+       "sinyaller sessizce kayboluyor, öncekiler nereye gitti" olarak
+       fark etti — 12 Ağustos'tan beri biriken sinyallerin büyük kısmı
+       tam bu durumdaydı. Artık Hedef1 kontrolü eşikten ÖNCE yapılıyor:
+       bir milestone'a ulaşmış sinyal, hedefe ne kadar yakın olursa olsun
+       her zaman gösterilir. Eşik yalnız gerçekten HENÜZ hiçbir hedefi
+       tutmamış "Yolda" adaylarını süzmek için kalıyor — ana listeyle
+       (dizil→hedefEsikGecti) tutarlılık orada korunuyor. */
+    if(pot1!=null&&pot1<=0){hedef1.push(k);return}
     if(!hedefEsikGecti(k))return;
-    if(pot1!=null&&pot1<=0)hedef1.push(k);
-    else yolda.push(k);
+    yolda.push(k);
   });
   var stop=(D.dusenler||[]).filter(function(x){return x.liste===ad});
   return{yolda:yolda,hedef1:hedef1,hedef2:hedef2,stop:stop};
@@ -8470,14 +8480,14 @@ function mbGoster(v,yerel){
     alL.forEach(function(a,i){
       h+='<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;'+
          (i?'border-top:1px solid var(--ciz)':'')+'">'+
-         '<div style="flex:1;min-width:0'+(D.super?';cursor:pointer':'')+'"'+
-         (D.super?' data-mbalyukle="'+i+'"':'')+'>'+
+         '<div style="flex:1;min-width:0'+(D.yon?';cursor:pointer':'')+'"'+
+         (D.yon?' data-mbalyukle="'+i+'"':'')+'>'+
          '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+(a.ad?E(a.ad):E(a.ozet))+'</div>'+
          (a.ad?'<div class="altbilgi" style="opacity:.7">'+E(a.ozet)+'</div>':'')+
          '<div class="altbilgi" style="opacity:.7">'+a.tfler.map(function(t){return E(t)}).join(" · ")+'</div>'+
-         (D.super?'<div class="altbilgi" style="opacity:.5">↩️ dokun — kriterleri yukarıya geri yükle</div>':'')+
+         (D.yon?'<div class="altbilgi" style="opacity:.5">↩️ dokun — kriterleri yukarıya geri yükle</div>':'')+
          '</div>'+
-         (D.super?'<button class="sir" data-mbalsil="'+E(a.id)+'" '+
+         (D.yon?'<button class="sir" data-mbalsil="'+E(a.id)+'" '+
            'style="padding:4px 9px;font-size:12px;flex:0 0 auto">🚫</button>':"")+
          '</div>';
     });
@@ -8487,7 +8497,9 @@ function mbGoster(v,yerel){
        'seans içinde listeye <b>yeni giren</b> hisseler sana bildirim olarak gider. '+
        'En fazla <b>'+alYuva+'</b> ayrı filtre aynı anda kurulu kalabilir.</div>';
   }
-  if(D.super){
+  /* 🔒 2026-08-30: filtre alarmı yalnız yöneticiye (D.yon) açık — bildirimler
+     sadece admin'e gitsin istendi, süper üye geneline değil. */
+  if(D.yon){
     h+='<div class="sirala" style="flex-wrap:wrap;margin-top:6px">'+
        '<button class="dg" id="mbAlarmKur" style="width:auto;padding:8px 14px"'+
        (alL.length>=alYuva?' disabled':'')+'>'+
@@ -8495,7 +8507,7 @@ function mbGoster(v,yerel){
        (alL.length>1?'<button class="sir" id="mbAlarmHepsi">🚫 Hepsini kaldır</button>':"")+'</div>'+
        '<div class="altbilgi" id="mbAlarmDurum" style="margin-top:6px"></div>';
   }else{
-    h+='<div class="altbilgi" style="opacity:.6">Alarm filtresi süper üyelik gerektirir.</div>';
+    h+='<div class="altbilgi" style="opacity:.6">Bu alarm özelliği şimdilik yalnız yönetici içindir.</div>';
   }
   h+='</div>';
   /* ── 11) DURUM ── */
@@ -11134,15 +11146,17 @@ if("/api/malboga"===$.pathname){
     if(!r)return JS({ok:!1,hata:"ölçüm alınamadı"});
     return JS({ok:!0,tek:r,sozluk:sozluk});
   }
-  /* 🔔 FİLTREYİ ALARMA GÖNDER / KALDIR — her SÜPER ÜYE kendi 5 yuvasını
-     kurar (eskiden yalnız yönetici kurabiliyordu ve tek bir global kayıt
-     herkes arasında paylaşılıyordu — "alarm siliniyor" şikayetinin asıl
-     sebebi buydu). Yönetici zaten suparUyeMi() içinde otomatik geçer. */
+  /* 🔔 FİLTREYİ ALARMA GÖNDER / KALDIR — 2026-08-30: kullanıcı isteğiyle
+     tekrar YÖNETİCİ-ÖZEL yapıldı. Bildirimler yalnız admin'e (Fix) gitsin
+     istendi; eskiden her süper üye kendi 5 yuvasını kurabiliyordu, o
+     davranış kaldırıldı — suparUyeMi() yerine doğrudan YON (admin) şartı
+     arandı. suparUyeMi() zaten admin için de otomatik true döndüğü için
+     bu, admin'in kendi kullanımını hiç etkilemiyor. */
   if(gov&&gov.is==="alarmListe"){
     return JS({ok:!0,alarm:await mbAlarmOzetListe(A,uid)});
   }
   if(gov&&gov.alarmKur){
-    if(!await suparUyeMi(A,uid))return JS({ok:!1,hata:"yetkisiz — süper üyelik gerekli"},403);
+    if(!YON)return JS({ok:!1,hata:"yetkisiz — bu özellik şimdilik yönetici içindir"},403);
     const kur=mbIstekNorm(gov);
     if(!mbFiltreVarMi(kur))return JS({ok:!1,hata:"önce en az bir modül aç"},400);
     if(!kur.tfler.length)return JS({ok:!1,hata:"önce zaman dilimi seç"},400);
@@ -11154,7 +11168,7 @@ if("/api/malboga"===$.pathname){
       alarm:mbAlarmOzetPaketle(r.liste)});
   }
   if(gov&&gov.alarmSil){
-    if(!await suparUyeMi(A,uid))return JS({ok:!1,hata:"yetkisiz — süper üyelik gerekli"},403);
+    if(!YON)return JS({ok:!1,hata:"yetkisiz — bu özellik şimdilik yönetici içindir"},403);
     const kalanListe=await mbAlarmYuvaSil(A,uid,gov.alarmId===true?null:(gov.alarmId||null));
     return JS({ok:!0,alarmSilindi:!0,alarm:mbAlarmOzetPaketle(kalanListe)});
   }
