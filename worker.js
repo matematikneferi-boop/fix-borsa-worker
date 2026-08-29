@@ -935,7 +935,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -3090,6 +3090,18 @@ function mbIstekNorm(gov){
   /* Alan YOKSA varsayılan, VARSA doğruluk değeri. (m.top!==false yazılsaydı
      istemciden gelen 0 "tikli" sayılırdı — JSON'da tip garantisi yok.) */
   const bl=(v,vars)=>v===undefined||v===null?vars:!!v;
+  /* 🐞 DÜZELTİLEN HATA — MODÜL-ÖZEL DİLİM ALARMDA KAYBOLUYORDU
+     Ekranda her modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) kendi zaman dilimini
+     seçebiliyor (mbIst.X.tfler), ama bu fonksiyon o alanı hiç okumuyordu —
+     yalnız en üstteki GENEL dilim listesi (gov.tfler) kaydediliyordu.
+     Sonuç: modül başına farklı dilim seçilmiş bir tarama alarma
+     eklendiğinde, o özel seçimler sessizce silinip hepsi genel dilime
+     eşitleniyordu — kaydedilen yuva ekrandakiyle uyuşmuyordu. Artık her
+     modülün kendi tfler'i de (varsa) ayrıca normalize edilip saklanıyor. */
+  const modTfNorm=arr=>{
+    const t=(Array.isArray(arr)?arr:[]).filter(x=>MB_TF[x]);
+    return t.length?MB_TF_LISTE.filter(x=>t.indexOf(x)>=0):null;
+  };
   /* 🐞 DÜZELTİLEN HATA — "filtreden su kaçıyor"
      Eskiden her dilim AYRI süzülüp ayrı kart olarak listeleniyordu: 1 saatlik
      kartı, 1 saatlikte boğa olan her hisseyi gösteriyordu — o hisse günlükte
@@ -3100,17 +3112,20 @@ function mbIstekNorm(gov){
     kapsam:gov.kapsam==="herhangi"?"herhangi":"hepsi",
     tfler:tfler,
     mal:{acik:bl(m.acik,!1),top:bl(m.top,!0),dag:bl(m.dag,!1),temiz:bl(m.temiz,!1),
-         sinirsiz:bl(m.sinirsiz,!1),n:mbYasNorm(m.n,5)},
-    dip:{acik:bl(d.acik,!1),kademe:MB_DIP_KADEME[d.kademe]?d.kademe:"dip"},
+         sinirsiz:bl(m.sinirsiz,!1),n:mbYasNorm(m.n,5),tfler:modTfNorm(m.tfler)},
+    dip:{acik:bl(d.acik,!1),kademe:MB_DIP_KADEME[d.kademe]?d.kademe:"dip",
+         tfler:modTfNorm(d.tfler)},
     ab :{acik:bl(a.acik,!1),boga:bl(a.boga,!0),ayi:bl(a.ayi,!1),
-         sinirsiz:bl(a.sinirsiz,!1),n:mbYasNorm(a.n,5)},
+         sinirsiz:bl(a.sinirsiz,!1),n:mbYasNorm(a.n,5),tfler:modTfNorm(a.tfler)},
     /* ⚛ Enerji — 6.2:177 show_enz_tarama ile aynı tikler ve varsayılanlar */
     enerji:{acik:bl(ez.acik,!1),olustu:bl(ez.olustu,!0),icinde:bl(ez.icinde,!0),
             b0:bl(ez.b0,!0),b1:bl(ez.b1,!1),
-            mesafeAcik:bl(ez.mesafeAcik,!0),mesafe:mbSayiNorm(ez.mesafe,5,0.1,30)},
+            mesafeAcik:bl(ez.mesafeAcik,!0),mesafe:mbSayiNorm(ez.mesafe,5,0.1,30),
+            tfler:modTfNorm(ez.tfler)},
     /* 🪜 Fibo bölgesi */
     bolge:{acik:bl(bo.acik,!1),
-           secili:(Array.isArray(bo.secili)?bo.secili:[]).filter(v=>MB_BOLGE_S[v])},
+           secili:(Array.isArray(bo.secili)?bo.secili:[]).filter(v=>MB_BOLGE_S[v]),
+           tfler:modTfNorm(bo.tfler)},
     /* 📈 Pivot kırılım */
     pivot:{acik:bl(pv.acik,!1),
            dilimler:(Array.isArray(pv.dilimler)?pv.dilimler:[]).filter(v=>MB_PIVOT_S[v]),
@@ -3219,26 +3234,43 @@ function mbPivotGectiS(kod,ist,har){
 /* Tek ölçüm (x) tek dilimde modüllerden geçiyor mu?
    MODÜLLER ARASI = VE (hepsi tutmalı, tikliyse zaten istenmiştir).
    MODÜL İÇİNDE çoklu tik = VEYA (toplama ya da dağıtım / boğa ya da ayı). */
+/* Tek tek modül şartları — mbModulGecti'nin AYNI mantığı, dışarı alındı ki
+   modül-özel dilim yolunda (mbAlarmEslesme) her modül kendi ölçümüyle tek
+   tek çağrılabilsin. Uygulamadaki mbCondMal/mbCondAb ile birebir aynı
+   sırayla yazıldı — tek kaynak olsun. */
+function mbCondMalS(x,ist){
+  const m=ist.mal;
+  if(!m||!m.acik)return!0;
+  const N=m.sinirsiz?1e9:m.n;let ok=!1;
+  if(m.top)ok=ok||(m.temiz?(x.topHam<=N&&x.topHam<x.dagHam):x.topHam<=N);
+  if(m.dag)ok=ok||(x.dagHam<=N);
+  return ok;
+}
+function mbCondDipS(x,ist){
+  const d=ist.dip;
+  if(!d||!d.acik)return!0;
+  return!!x[d.kademe];
+}
+function mbCondAbS(x,ist){
+  const a=ist.ab;
+  if(!a||!a.acik)return!0;
+  const N=a.sinirsiz?1e9:a.n;let ok=!1;
+  if(a.boga)ok=ok||(!!x.boga&&x.rejYas<=N);
+  if(a.ayi) ok=ok||(!!x.ayi &&x.rejYas<=N);
+  return ok;
+}
 function mbModulGecti(x,ist){
-  if(ist.mal.acik){
-    const N=ist.mal.sinirsiz?1e9:ist.mal.n;
-    let ok=!1;
-    if(ist.mal.top)ok=ok||(ist.mal.temiz?(x.topHam<=N&&x.topHam<x.dagHam):x.topHam<=N);
-    if(ist.mal.dag)ok=ok||(x.dagHam<=N);
-    if(!ok)return!1;
-  }
-  if(ist.dip.acik&&!x[ist.dip.kademe])return!1;
+  if(!mbCondMalS(x,ist))return!1;
+  if(!mbCondDipS(x,ist))return!1;
   if(!mbBolgeGectiS(x,ist))return!1;
   if(!mbEnerjiGectiS(x,ist))return!1;
-  if(ist.ab.acik){
-    const N=ist.ab.sinirsiz?1e9:ist.ab.n;
-    let ok=!1;
-    if(ist.ab.boga)ok=ok||(!!x.boga&&x.rejYas<=N);
-    if(ist.ab.ayi) ok=ok||(!!x.ayi &&x.rejYas<=N);
-    if(!ok)return!1;
-  }
+  if(!mbCondAbS(x,ist))return!1;
   return!0;
 }
+/* Bir modülün kendi özel dilimi mi var, yoksa genel listeyi mi kullanıyor —
+   istemcideki mbModTf/mbModOzelMi ile birebir aynı kural. */
+function mbModOzelMiS(mod){return!!(mod&&Array.isArray(mod.tfler)&&mod.tfler.length)}
+function mbModTfS(mod,ist){return mbModOzelMiS(mod)?mod.tfler:ist.tfler}
 /* En taze olay kaç bar önce oldu — sıralama anahtarı. */
 const mbTazelik=x=>Math.min(Number(x.topHam),Number(x.dagHam),Number(x.rejYas));
 
@@ -3461,26 +3493,31 @@ function mbSeansIci(){
   const dk=ist.getUTCHours()*60+ist.getUTCMinutes();
   return dk>=570&&dk<=1090;                      /* 09:30 - 18:10 */
 }
-/* Filtreyi tek satırda özetler — bildirimde hangi tarama olduğu belli olsun. */
+/* Filtreyi tek satırda özetler — bildirimde hangi tarama olduğu belli olsun.
+   🆕 Bir modül GENEL dilimden farklı, kendi özel dilimini kullanıyorsa
+   (mod.tfler doluysa) bu artık özetin sonuna [dilim] olarak ekleniyor —
+   yoksa iki farklı yuva ekranda birbirinden ayırt edilemiyordu, çünkü
+   kart yalnız en üstteki GENEL dilim listesini gösteriyordu. */
 function mbFiltreOzet(ist){
   const p=[];
+  const ozelEk=mod=>(mod&&Array.isArray(mod.tfler)&&mod.tfler.length)?" ["+mod.tfler.join("/")+"]":"";
   if(ist.mal.acik){
     const y=[];if(ist.mal.top)y.push("toplama");if(ist.mal.dag)y.push("dağıtım");
     p.push("📦 "+y.join("/")+(ist.mal.temiz?" (temiz)":"")+
-      (ist.mal.sinirsiz?"":" ≤"+ist.mal.n+"B"));
+      (ist.mal.sinirsiz?"":" ≤"+ist.mal.n+"B")+ozelEk(ist.mal));
   }
-  if(ist.dip.acik)p.push("⬇️ "+(ist.dip.kademe==="dip236"?"en dip":ist.dip.kademe==="dip382"?"derin dip":"dip"));
+  if(ist.dip.acik)p.push("⬇️ "+(ist.dip.kademe==="dip236"?"en dip":ist.dip.kademe==="dip382"?"derin dip":"dip")+ozelEk(ist.dip));
   if(ist.ab.acik){
     const y=[];if(ist.ab.boga)y.push("🐂 boğa");if(ist.ab.ayi)y.push("🐻 ayı");
-    p.push(y.join("/")+(ist.ab.sinirsiz?"":" ≤"+ist.ab.n+"B"));
+    p.push(y.join("/")+(ist.ab.sinirsiz?"":" ≤"+ist.ab.n+"B")+ozelEk(ist.ab));
   }
-  if(ist.bolge&&ist.bolge.acik)p.push("🪜 "+ist.bolge.secili.map(v=>MB_BOLGE_AD[v]||v).join("/"));
+  if(ist.bolge&&ist.bolge.acik)p.push("🪜 "+ist.bolge.secili.map(v=>MB_BOLGE_AD[v]||v).join("/")+ozelEk(ist.bolge));
   if(ist.enerji&&ist.enerji.acik){
     const y=[];
     if(ist.enerji.olustu)y.push("oluştu");if(ist.enerji.icinde)y.push("içinde");
     if(ist.enerji.b0)y.push("0B");if(ist.enerji.b1)y.push("1B");
     p.push("⚛ "+(y.join("/")||"her durum")+
-      (ist.enerji.mesafeAcik?" ≤%"+ist.enerji.mesafe:""));
+      (ist.enerji.mesafeAcik?" ≤%"+ist.enerji.mesafe:"")+ozelEk(ist.enerji));
   }
   if(ist.pivot&&ist.pivot.acik){
     const y=[];
@@ -3521,6 +3558,15 @@ async function mbAlarmEslesme(A,ist,yuvaId){
     }
     return{anahtarlar:anahtarlar,satirlar:satirlar};
   }
+  /* 🐞 DÜZELTİLEN HATA — MODÜL-ÖZEL DİLİM ALARM MOTORUNDA HİÇ YOKTU
+     Ekrandaki özel-dilim yolu (mbPaketUretOzel) her modülün kendi zaman
+     diliminde ayrı ayrı tarayabiliyordu, ama bu fonksiyon — Telegram'a asıl
+     bildirimi gönderen taraf — hep TEK bir genel dilim listesiyle
+     çalışıyordu. Bir modül özel dilim kullanıyorsa bildirim hiç ekranla
+     uyuşmuyordu. Artık aynı ayrım burada da yapılıyor. */
+  if(mbHerhangiOzelTfS(ist)){
+    return await mbAlarmEslesmeOzelS(A,ist,yuvaId);
+  }
   /* "hepsi" kapsamı: hisse seçili dilimlerin HEPSİNDE tutmalı. Uygulamadaki
      kesişim kuralının aynısı — alarm ekranda görünenden farklı davranmasın. */
   const sayac={};
@@ -3542,6 +3588,74 @@ async function mbAlarmEslesme(A,ist,yuvaId){
     const tam=ist.tfler.length;
     return{anahtarlar:anahtarlar.filter(a=>sayac[a.slice(on.length).split("|")[0]]>=tam),
            satirlar:satirlar.filter(x=>sayac[x.kod]>=tam)};
+  }
+  return{anahtarlar:anahtarlar,satirlar:satirlar};
+}
+/* Modül-özel dilim yolu (sunucu tarafı) — istemcideki mbPaketUretOzel ile
+   AYNI kurallar: her aktif modül KENDİ dilim kümesinde (kapsam=hepsi→
+   kesişim, herhangi→birleşim) geçenleri bulur, modüller arası (+pivot)
+   sonuç VE (kesişim) ile birleştirilir. */
+async function mbAlarmEslesmeOzelS(A,ist,yuvaId){
+  const on=yuvaId?(yuvaId+"|"):"";
+  const pivotAktif=!!(ist.pivot&&ist.pivot.acik);
+  const har=pivotAktif?await mbPivotHaritasiS(A).catch(()=>({})):null;
+  const MOD_LISTE=[
+    {k:"mal",ist:ist.mal,cond:mbCondMalS},
+    {k:"dip",ist:ist.dip,cond:mbCondDipS},
+    {k:"bolge",ist:ist.bolge,cond:mbBolgeGectiS},
+    {k:"enerji",ist:ist.enerji,cond:mbEnerjiGectiS},
+    {k:"ab",ist:ist.ab,cond:mbCondAbS}
+  ];
+  const aktifler=MOD_LISTE.filter(m=>m.ist&&m.ist.acik);
+  if(!aktifler.length)return{anahtarlar:[],satirlar:[]};
+  const tfIhtiyac=new Set();
+  aktifler.forEach(m=>mbModTfS(m.ist,ist).forEach(t=>tfIhtiyac.add(t)));
+  const harTf={};
+  for(const tf of tfIhtiyac){
+    const bir=_mbBellek[tf]||await mbTfOku(A,tf);
+    harTf[tf]=(bir&&bir.sonuc)||{};
+  }
+  const modGecen={},modGecenTf={};
+  aktifler.forEach(m=>{
+    const tfl=mbModTfS(m.ist,ist);
+    const birlesim=ist.kapsam!=="hepsi";     /* herhangi=birleşim, hepsi=kesişim */
+    let sonuc=null;const gecTf={};
+    tfl.forEach(tf=>{
+      const h=harTf[tf]||{},s={};
+      for(const kod of Object.keys(h)){
+        if(m.cond(h[kod],ist)){s[kod]=!0;(gecTf[kod]=gecTf[kod]||[]).push(tf)}
+      }
+      if(sonuc===null){sonuc={};for(const k in s)sonuc[k]=!0}
+      else if(birlesim){for(const k in s)sonuc[k]=!0}
+      else{const y={};for(const k in sonuc)if(s[k])y[k]=!0;sonuc=y}
+    });
+    modGecen[m.k]=sonuc||{};
+    modGecenTf[m.k]=gecTf;
+  });
+  let ortak=null;
+  aktifler.forEach(m=>{
+    const s=modGecen[m.k];
+    if(ortak===null){ortak={};for(const k in s)ortak[k]=!0}
+    else{const y={};for(const k in ortak)if(s[k])y[k]=!0;ortak=y}
+  });
+  if(pivotAktif){
+    const pivotGecen={};
+    for(const kod of Object.keys(har||{}))if(mbPivotGectiS(kod,ist,har))pivotGecen[kod]=!0;
+    if(ortak===null){ortak=pivotGecen}
+    else{const y={};for(const k in ortak)if(pivotGecen[k])y[k]=!0;ortak=y}
+  }
+  const anahtarlar=[],satirlar=[];
+  for(const kod of Object.keys(ortak||{})){
+    const tfSet=new Set();
+    aktifler.forEach(m=>{(modGecenTf[m.k][kod]||[]).forEach(t=>tfSet.add(t))});
+    for(const tf of tfSet){
+      const x=harTf[tf]&&harTf[tf][kod];
+      if(!x)continue;
+      anahtarlar.push(on+kod+"|"+tf);
+      satirlar.push({kod:kod,tf:tf,fiyat:x.fiyat,topHam:x.topHam,dagHam:x.dagHam,
+        boga:x.boga,ayi:x.ayi,rejYas:x.rejYas,dip:x.dip,taze:mbTazelik(x),
+        ezAge:x.ezAge,ezMes:x.ezMes,oran:x.oran});
+    }
   }
   return{anahtarlar:anahtarlar,satirlar:satirlar};
 }
@@ -8531,10 +8645,18 @@ function mbAlKriterYukle(ist){
   if(!ist)return;
   mbIst.kapsam=ist.kapsam==="herhangi"?"herhangi":"hepsi";
   mbIst.tfler=(ist.tfler&&ist.tfler.length)?ist.tfler.slice():["1G"];
+  /* 🐞 DÜZELTİLDİ — modül-özel dilim seçimi (mbIst.X.tfler) burada
+     KOŞULSUZ null'a çevriliyordu; yani bir yuva "MAL modülü 4 saatte,
+     AL-BOĞA modülü 1 günde" gibi farklı dilimlerle kurulmuş olsa bile,
+     "↩️ kriterleri geri yükle" ile açıldığında bu özel seçimler silinip
+     hepsi genel dilime eşitleniyordu — kaydedilenle ekranda görünen artık
+     aynı şey değildi ("başka bir yuvanın sonucu" görünümü buradan
+     geliyordu). Artık kaydedilmiş özel dilim varsa AYNEN geri yükleniyor,
+     yoksa (eski kayıtlar / genel seçim) null kalıp genel dilimi kullanır. */
   ["mal","dip","ab","enerji","bolge"].forEach(function(m){
     if(!ist[m])return;
     for(var k in ist[m])mbIst[m][k]=ist[m][k];
-    mbIst[m].tfler=null;
+    mbIst[m].tfler=(ist[m].tfler&&ist[m].tfler.length)?ist[m].tfler.slice():null;
   });
   if(ist.pivot)for(var k2 in ist.pivot)mbIst.pivot[k2]=ist.pivot[k2];
 }
