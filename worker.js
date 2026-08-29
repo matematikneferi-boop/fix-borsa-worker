@@ -3776,7 +3776,7 @@ o+="<i>Düğmede: solda hedefe kalan · sağda "+("aday"===a?"tetiğe kalan 🔓
 e.canli&&(n+="⚡ <i>bar kapanmadı — teyit bekliyor</i>\n"),
 BUGUN_MU(e)&&(n+="🆕 <b>BUGÜN sinyal verdi</b>\n"),
 void 0!==e.giris&&null!==e.giris?n+="💵 Sinyal <b>"+a(e.giris)+"</b> → Şimdi <b>"+a(e.fiyat)+"</b>\n":n+="💵 Şimdi <b>"+a(e.fiyat)+"</b>\n";const i=I(e)
-;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🧱 Direnç <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+="🎯 Hedef <b>"+a(e.hedef)+"</b>",
+;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🧱 TP1 <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+="🎯 TP2 <b>"+a(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  🏆 <b>TUTTU</b>":"  ·  hedefe <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),n+="\n");const r=e.sinyalZaman||e.zaman
 ;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}const MINIAPP=`<!doctype html><html lang="tr"><head>
 <meta charset="utf-8">
@@ -4725,7 +4725,7 @@ function dizil(ad){
   return c;
 }
 /* 🟨 ADAYLAR: bu dört liste anahtarında satır hem tıklanamaz hem de
-   ilk görünen kısımda Direnç (TP1 · tetik) ve Hedef (TP2 · potansiyel)
+   ilk görünen kısımda Sinyal (tetik) ve TP2 (hedef · potansiyel)
    birlikte gösterilir — genel detaya atlayıp yanlış/eski bir dilimin
    verisini göstermesin diye (bkz. adayCiz ve satirBagla). */
 var ADAY_ANAHTAR={adayOrta:1,adayOrtaVade:1,adayUzun:1,adayHafta:1};
@@ -4734,7 +4734,7 @@ function satirHtml(k,ad){
   var kr=kar(k), pot=(k.potansiyel==null?null:Number(k.potansiyel));
   var isAday=!!ADAY_ANAHTAR[ad];
   var sag=(pot==null)?"":(pot<=0?'<span class="sa">🏆 TUTTU</span>':'<span class="so">hedefe <b>+'+pot.toFixed(1)+"%</b></span>");
-  if(isAday)sag=""; /* aynı bilgi aşağıdaki Direnç/Hedef bloğunda zaten var */
+  if(isAday)sag=""; /* aynı bilgi aşağıdaki Sinyal/TP2 bloğunda zaten var */
   var alt=[];
   alt.push(t.kisa);
   /* CANLI: kırılım oluşan barda — bar kapanınca geri dönebilir. */
@@ -4757,9 +4757,9 @@ function satirHtml(k,ad){
   if(isAday){
     var direncYuzde=(k.tetikYuzde==null)?null:Number(k.tetikYuzde);
     adayBlok='<div class="ahBlok">'+
-      '<div class="ahSat">🧱 Direnç <b>'+(k.tetik!=null?N(k.tetik):"—")+"</b>"+
+      '<div class="ahSat">🔓 Sinyal <b>'+(k.tetik!=null?N(k.tetik):"—")+"</b>"+
       (direncYuzde!=null?' <span class="ahYuz">%'+direncYuzde.toFixed(1)+" kaldı</span>":"")+"</div>"+
-      '<div class="ahSat">🎯 Hedef <b>'+(k.hedef!=null?N(k.hedef):"—")+"</b>"+
+      '<div class="ahSat">🎯 TP2 <b>'+(k.hedef!=null?N(k.hedef):"—")+"</b>"+
       (pot!=null?(pot<=0?' <span class="ahYuz sa">🏆 TUTTU</span>':' <span class="ahYuz">%'+pot.toFixed(1)+" kaldı</span>"):"")+"</div></div>";
   }
   return '<div class="satir'+(bg?" bgnSatir":"")+(isAday?" adaySatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'"'+
@@ -6059,7 +6059,7 @@ function tfSenaryoBlok(tfKartlar){
     var s="";
     if(adayMi){
       s+='<div class="sat"><span class="et">Durum</span><b class="sa">🟨 Aday — henüz kırılmadı</b></div>';
-      if(x.tetik!=null)s+='<div class="sat"><span class="et">🧱 Direnç (tetik)</span><b>'+N(x.tetik)+
+      if(x.tetik!=null)s+='<div class="sat"><span class="et">🔓 Sinyal</span><b>'+N(x.tetik)+
         (x.tetikYuzde!=null?"  ("+Number(x.tetikYuzde).toFixed(1)+"% kaldı)":"")+"</b></div>";
     }else{
       var krX=kar(x);
@@ -6067,7 +6067,7 @@ function tfSenaryoBlok(tfKartlar){
       if(x.giris!=null)s+='<div class="sat"><span class="et">Sinyal fiyatı</span><b>'+N(x.giris)+" ₺</b></div>";
       if(krX!=null)s+='<div class="sat"><span class="et">Sinyalden bu yana</span><b class="'+(krX>=0?"ye":"kr")+'">'+Y(krX)+"</b></div>";
     }
-    if(x.hedef!=null)s+='<div class="sat"><span class="et">🎯 Hedef</span><b>'+N(x.hedef)+"</b></div>";
+    if(x.hedef!=null)s+='<div class="sat"><span class="et">🎯 TP2</span><b>'+N(x.hedef)+"</b></div>";
     if(x.potansiyel!=null)s+='<div class="sat"><span class="et">Hedefe kalan</span><b class="'+
       (Number(x.potansiyel)<=0?"sa":"ye")+'">'+(Number(x.potansiyel)<=0?"🏆 hedef tuttu":"+"+Number(x.potansiyel).toFixed(1)+"%")+"</b></div>";
     return '<div class="tfKutu">'+baslik+s+"</div>";
@@ -6185,11 +6185,11 @@ function detay(kod,ad){
       }
       h+="</div>";
       h+='<div class="kutu"><h3>🎯 Hedefler</h3>';
-      if(k.hedef1!=null)h+='<div class="sat"><span class="et">🧱 Direnç</span><b>'+N(k.hedef1)+
+      if(k.hedef1!=null)h+='<div class="sat"><span class="et">🧱 TP1</span><b>'+N(k.hedef1)+
         (k.hedef1Yuzde!=null?"  (+"+Number(k.hedef1Yuzde).toFixed(1)+"%)":"")+"</b></div>";
-      else if(k.direncler&&k.direncler.length)h+='<div class="sat"><span class="et">🧱 Direnç</span><b>'+
+      else if(k.direncler&&k.direncler.length)h+='<div class="sat"><span class="et">🧱 TP1</span><b>'+
         k.direncler.filter(function(x){return x!=null}).map(function(x){return N(x)}).join(" · ")+"</b></div>";
-      if(k.hedef!=null)h+='<div class="sat"><span class="et">🎯 Hedef</span><b>'+N(k.hedef)+"</b></div>";
+      if(k.hedef!=null)h+='<div class="sat"><span class="et">🎯 TP2</span><b>'+N(k.hedef)+"</b></div>";
       if(k.potansiyel!=null)h+='<div class="sat"><span class="et">Hedefe kalan</span><b class="'+
         (Number(k.potansiyel)<=0?"sa":"ye")+'">'+(Number(k.potansiyel)<=0?"🏆 hedef tuttu":
         "+"+Number(k.potansiyel).toFixed(1)+"%")+"</b></div>";
@@ -6294,8 +6294,8 @@ function detay(kod,ad){
       if(k&&t.kisa)satirlar.push("⏱ "+t.kisa+" dilimi");
       if(k&&k.giris!=null)satirlar.push("🚪 Sinyal fiyatı: "+N(k.giris)+" ₺");
       if(kr!=null)satirlar.push((kr>=0?"📈":"📉")+" Sinyalden bu yana: "+Y(kr));
-      if(k&&k.hedef1!=null)satirlar.push("🧱 Direnç: "+N(k.hedef1));
-      if(k&&k.hedef!=null)satirlar.push("🎯 Hedef: "+N(k.hedef)+(k.potansiyel!=null?(Number(k.potansiyel)<=0?" (🏆 tuttu)":" (+"+Number(k.potansiyel).toFixed(1)+"% kaldı)"):""));
+      if(k&&k.hedef1!=null)satirlar.push("🧱 TP1: "+N(k.hedef1));
+      if(k&&k.hedef!=null)satirlar.push("🎯 TP2: "+N(k.hedef)+(k.potansiyel!=null?(Number(k.potansiyel)<=0?" (🏆 tuttu)":" (+"+Number(k.potansiyel).toFixed(1)+"% kaldı)"):""));
       if(k&&k.kalite)satirlar.push("⭐ Kalite: %"+k.kalite);
       var m=satirlar.join("\\n")+"\\n\\n🤖 Fix Borsa Sinyal ile takip ediyorum, sen de katıl 👇";
       var u="https://t.me/share/url?url="+encodeURIComponent(D.link)+"&text="+encodeURIComponent(m);
@@ -9337,7 +9337,7 @@ if(e.avwap>0&&e.avwapBar>=3){
   if(rz.length)a+=rz.join("  ·  ")+"\n";
 }
 if(e.zaman&&(a+="⏱ Sinyal: "+e.zaman+(e.tf?"  ·  "+e.tf:"")+"\n"),void 0!==e.giris&&null!==e.giris){a+="🚪 Sinyal fiyatı: <b>"+t(e.giris)+"</b>\n";null!==kar&&(a+=(kar>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(kar>=0?"+":"")+kar.toFixed(2)+"%</b>\n")}
-return null!=e.tetik&&(a+="🔓 Tetik seviyesi: <b>"+t(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(2)+"% kaldı":"")+"\n<i>Bu seviye kırılırsa o dilimin sinyali başlar — giriş fiyatı değildir.</i>\n"),null!=e.hedef1&&(a+="🎯 Direnç: <b>"+t(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  +"+Number(e.hedef1Yuzde).toFixed(1)+"%":"")+"\n"),e.direncler&&e.direncler.length&&(a+=(null!=e.hedef1?"🧱 Direnç: ":"🧱 Direnç: ")+e.direncler.filter(x=>null!=x).map(e=>t(e)).join(" · ")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(a+="🎯 Hedef: <b>"+t(e.hedef)+"</b>",
+return null!=e.tetik&&(a+="🔓 Tetik seviyesi: <b>"+t(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(2)+"% kaldı":"")+"\n<i>Bu seviye kırılırsa o dilimin sinyali başlar — giriş fiyatı değildir.</i>\n"),null!=e.hedef1&&(a+="🎯 TP1: <b>"+t(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  +"+Number(e.hedef1Yuzde).toFixed(1)+"%":"")+"\n"),e.direncler&&e.direncler.length&&(a+=(null!=e.hedef1?"🧱 TP1: ":"🧱 TP1: ")+e.direncler.filter(x=>null!=x).map(e=>t(e)).join(" · ")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(a+="🎯 TP2: <b>"+t(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(a+=tuttu?"  ·  🏆 fiyat hedefin "+Math.abs(e.potansiyel).toFixed(1)+"% üstünde":"  ·  "+(e.rozet||"➡️")+" <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),a+="\n"),
 e.sinyalZaman&&(a+="🕐 Sinyal zamanı: <b>"+e.sinyalZaman+"</b>\n"),a+="━━━━━━━━━━━━━━━━\n<i>⚠️ Yatırım tavsiyesi değildir.</i>",a}let H={},C=0;async function L(e){if(!e.VERI)return{toplam:0,basis:{},
 gun:{}};const t=await e.VERI.get("istatistik");return t?JSON.parse(t):{toplam:0,basis:{},gun:{}}}async function F(e){if(!e.VERI)return{};const t=await e.VERI.get("referanslar")
@@ -9874,7 +9874,7 @@ if(!g||!g.kart)return "▫️ <b>"+BEK_AD[tfKey]+":</b> aktif sinyal/aday yok\n"
 const x=g.kart,adayMi="aday"===g.tip;let s="▫️ <b>"+BEK_AD[tfKey]+":</b> ";
 if(adayMi){s+="🟨 aday — henüz kırılmadı";if(null!=x.tetik)s+=" · tetik "+f(x.tetik)}
 else{s+="🟢 zaten sinyal aktif";if(null!=x.giris)s+=" · giriş "+f(x.giris)}
-if(null!=x.hedef)s+=" · hedef "+f(x.hedef);
+if(null!=x.hedef)s+=" · TP2 "+f(x.hedef);
 if(null!=x.potansiyel)s+=Number(x.potansiyel)<=0?" (🏆 tuttu)":" (+"+Number(x.potansiyel).toFixed(1)+"% kaldı)";
 return s+"\n"};
 m+="\n⏳ <b>BEKLEYEN SENARYO</b>\n"+bekParca("KISA")+bekParca("UZUN");
