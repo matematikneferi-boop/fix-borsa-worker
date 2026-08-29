@@ -8652,7 +8652,14 @@ function mbBagla(v,dilimler){
   T("[data-mbalyukle]",function(b){
     var i=Number(b.dataset.mbalyukle),a=mbAlarmD&&mbAlarmD.liste&&mbAlarmD.liste[i];
     if(!a||!a.ist)return;
-    mbAlKriterYukle(a.ist);mbUygula();
+    /* 🐞 DÜZELTİLDİ — yuva kriterleri yüklendiğinde ekrandaki sonuçlar
+       ESKİ (bir önceki filtrenin) taranmış verisinden çiziliyordu; çünkü
+       mbUygula() yalnız zaten belleğe alınmış ölçümleri süzer, YENİ
+       kriterlerin ihtiyaç duyduğu dilimler için taze tarama BAŞLATMAZ.
+       Diğer tüm filtre değişikliği kolları (mbtf, mbmodtf, mbmalyon vb.)
+       hep mbUygula()'nın ardından mbOtoTara() da çağırıyordu — bu kol
+       unutulmuştu. Sonuç: "başka bir alarm yuvasının sonuçları" görünümü. */
+    mbAlKriterYukle(a.ist);mbUygula();mbOtoTara();
     var dv=el("mbAlarmDurum");if(dv)dv.textContent="↩️ "+(i+1)+". alarmın kriterleri yukarı yüklendi.";
   });
   T("[data-mbalsil]",function(b){
