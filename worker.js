@@ -12026,11 +12026,15 @@ async scheduled(ev,A,ctx){
   if(A&&A.ADMIN_IDS)try{EK_YON=new Set(String(A.ADMIN_IDS).split(",").map(x=>x.trim()).filter(Boolean))}catch(_){}
   ctx.waitUntil((async()=>{
     try{
-      /* Aynı dakikada dilimi iki kez ilerlet: 8 dakikada 1 parti yerine
-         dakikada 2 parti — havuzun tamamı artık dakikalar içinde,
-         saatler değil, tazelenir. Kilit mekanizması /push ile çakışmayı
-         zaten engelliyor (bellekKilitAl aynı isim üzerinden). */
-      await kilitli(A,"mbDilim",50,()=>mbAlarmOncelikliTara(A)).catch(()=>{});
+      /* 🛑 KV YAZMA KOTASI GÜVENLİĞİ (2026-08-29): Burada eskiden dilim
+         AYNI dakikada iki kez ilerletiliyordu (dakikada 2 parti). Cron
+         zaten dakikada bir tetiklendiği için bu, günde ~3000-6000+ KV
+         put() çağrısına çıkıyordu — ücretsiz planın günlük 1000 yazma
+         kotasını fazlasıyla aşıyor. Kota dolunca put() her yerde hata
+         fırlatmaya başlıyor (bkz. yukarıdaki CORS notu: bu daha önce de
+         yaşanmış bir arıza deseni). Tek pasoya indirildi: hâlâ eski
+         8-dakikalık /push sistemine göre ~4 kat daha hızlı, ama yazma
+         hacmi yarıya iniyor. */
       await kilitli(A,"mbDilim",50,()=>mbAlarmOncelikliTara(A)).catch(()=>{});
       /* Taze ölçümü hemen süz ve kurulu her alarma yeni girenleri gönder. */
       await kilitli(A,"mbAlarm",50,()=>mbAlarmTara(A)).catch(()=>{});
