@@ -4751,7 +4751,28 @@ function takipHam(ad){
    kurulmadığı için. Diğer tüm dilimlerde (ORTA/UZUN/HAFTA) bir alt dilimin
    pivotuna göre hesaplanan stop noktası zaten var, D.dusenler üzerinden gelir. */
 function takipStopVar(ad){return ad!=="potansiyel"}
-function takipSatirHtml(k,acik){
+/* 🛑 TAKİP ÖZETİ İÇİN ZİNCİR STOP: hisse detayındaki tfStopBul (satır ~6143)
+   ile birebir aynı mantık — ORTA'nın stop'u KISA'nın kırdığı seviye (giriş),
+   UZUN'unki ORTA'nın kırdığı seviye. Yön (boğa/ayı) uyuşmuyorsa ya da alt
+   dilimde o kod için sinyal yoksa null döner. KISA'nın (potansiyel) kendi
+   alt dilimi (15DK) ayrı izlenmediği için orada stop çıkmaz — mevcut
+   sınırlamayla birebir aynı, davranış değişmiyor. Kaynak D.kartlar olduğu
+   için bugün alarm/kırılımla oluşmuş sinyaller de otomatik dahildir —
+   ayrı bir "bugünkü alarmlar" yolu yok, hepsi aynı listeden gelir. */
+var TAKIP_ALT_AD={fibo:"potansiyel",uzunvade:"fibo"};
+function takipStopBul(ad,k){
+  var altAd=TAKIP_ALT_AD[ad];if(!altAd)return null;
+  if(k.giris==null||k.hedef==null)return null;
+  var altListe=(D.kartlar&&D.kartlar[altAd])||[];
+  var altKart=altListe.filter(function(x){return x.kod===k.kod})[0];
+  if(!altKart||altKart.giris==null||altKart.hedef==null)return null;
+  var yon=Number(k.hedef)>=Number(k.giris)?"boga":"ayi";
+  var altYon=Number(altKart.hedef)>=Number(altKart.giris)?"boga":"ayi";
+  if(altYon!==yon)return null;
+  var sev=Number(altKart.giris);
+  return{sev:sev,yuzde:(k.fiyat>0?100*(sev/Number(k.fiyat)-1):null)};
+}
+function takipSatirHtml(k,acik,ad){
   var kr=kar(k);
   var pot1=(k.hedef1Yuzde==null)?null:Number(k.hedef1Yuzde);
   var pot2=(k.potansiyel==null)?null:Number(k.potansiyel);
@@ -4769,9 +4790,17 @@ function takipSatirHtml(k,acik){
       (k.hedef1!=null?" · H1 <b>"+N(k.hedef1)+"</b>"+(pot1!=null?" (%"+pot1.toFixed(1)+" kaldı)":""):"")+
       (k.hedef!=null?" · H2 <b>"+N(k.hedef)+"</b>"+(pot2!=null?" (%"+pot2.toFixed(1)+" kaldı)":""):"");
   }
+  /* 🛑 Stop satırı: pozisyon hâlâ açıkken (Yolda / Hedef1 tuttu) anlamlı —
+     Hedef2'yi tutmuş bir sinyal zaten hedefte kapanmış sayılır, stop gösterilmez. */
+  var stopAlt="";
+  if(acik!=="hedef2"){
+    var stopBilgi=takipStopBul(ad,k);
+    if(stopBilgi)stopAlt='<div class="altbilgi">🛑 Stop <b>'+N(stopBilgi.sev)+"</b>"+
+      (stopBilgi.yuzde!=null?"  ·  buradan "+Y(stopBilgi.yuzde):"")+"</div>";
+  }
   return '<div class="satir" data-kod="'+E(k.kod)+'" style="border-left-color:var(--ciz)">'+
     '<div class="sol"><div class="kod">'+kodHtml(k)+"</div>"+
-    '<div class="altbilgi">'+orta+"</div></div>"+
+    '<div class="altbilgi">'+orta+"</div>"+stopAlt+"</div>"+
     '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
     '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+"</div></div></div>";
 }
@@ -4801,7 +4830,7 @@ function takipKutuCiz(ad){
   if(acik){
     var liste=v[acik]||[];
     h+='<div style="margin-top:8px">'+(liste.length?
-      (acik==="stop"?liste.map(takipStopSatirHtml).join(""):liste.map(function(k){return takipSatirHtml(k,acik)}).join(""))
+      (acik==="stop"?liste.map(takipStopSatirHtml).join(""):liste.map(function(k){return takipSatirHtml(k,acik,ad)}).join(""))
       :'<div class="bos" style="padding:14px">Bu kategoride şu an hisse yok.</div>')+"</div>";
   }
   return h+"</div>";
