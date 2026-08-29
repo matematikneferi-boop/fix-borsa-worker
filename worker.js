@@ -7991,14 +7991,27 @@ function mbKuyrukKur(){
    modülün kendi dilimi gerçek anlamda bağımsız olur — "seçtim ama sonuç
    yok" durumu, veri henüz çekilmediği için değil, gerçekten şart
    tutmadığı için oluşur.
-   🔒 KİLİT DAVRANIŞ: tarama zaten SÜRÜYORSA, yeni ihtiyaç mevcut turun
+   🔒 KİLİT DAVRANIŞ 1: tarama zaten SÜRÜYORSA, yeni ihtiyaç mevcut turun
    bitmesini BEKLEMEZ — direkt çalışan kuyruğa eklenir ve mbTaraTur()
    boşta kalan kanalları hemen ittirir. Böylece bir modülde tetiklenen
    tarama tamamlandığı an, o veri zaten ortak mbOlcum'da olduğu için
    açık olan TÜM modüllere aynı anda (sıraya girmeden) yansır — modül
    modül art arda bekleyen ayrı taramalar OLMAZ, tek ve ortak bir akış
-   vardır. */
+   vardır.
+   🔒 KİLİT DAVRANIŞ 2 (bug fix): kullanıcı ne genelde ne de hiçbir
+   modülde dilim BIRAKMAZSA (mbEfektifTfler() boş) — o an sürmekte olan
+   bir tarama varsa artık gereksiz kalmıştır, ekranda anlamsızca
+   "yeniden deneme" sayacıyla asılı kalmasın diye hemen durdurulur ve
+   kalan kuyruk/uçuştaki iş temizlenir. */
 function mbOtoTara(){
+  var tfl=mbEfektifTfler();
+  if(!tfl.length){
+    if(mbTaraDurum&&mbTaraDurum.suruyor){
+      mbTaraDurum.suruyor=false;mbTaraDurum.kuyruk=[];mbTaraDurum.ucusta=[];
+      mbNobetciKapat();mbCizYenile();
+    }
+    return;
+  }
   if(!mbEvrenKod){
     if(!mbTaraDurum||!mbTaraDurum.suruyor)mbTaraBaslat();
     return;
@@ -8008,14 +8021,14 @@ function mbOtoTara(){
     var kuyruktaTf={};
     d.kuyruk.forEach(function(p){kuyruktaTf[p.tf]=true});
     d.ucusta.forEach(function(p){kuyruktaTf[p.tf]=true});
-    mbEfektifTfler().forEach(function(t){
+    tfl.forEach(function(t){
       if(mbOlcumSay(t)<mbEvrenKod.length&&!kuyruktaTf[t])
         d.kuyruk=d.kuyruk.concat(mbEksikParcalar(t));
     });
     mbTaraTur();          /* boşta kanal varsa hemen ittir, 4sn'lik nöbetçiyi bekleme */
     return;
   }
-  var eksikVar=mbEfektifTfler().some(function(t){return mbOlcumSay(t)<mbEvrenKod.length});
+  var eksikVar=tfl.some(function(t){return mbOlcumSay(t)<mbEvrenKod.length});
   if(eksikVar)mbTaraBaslat();
 }
 function mbTaraBaslat(){
