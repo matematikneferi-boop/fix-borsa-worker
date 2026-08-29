@@ -4375,17 +4375,32 @@ function kar(k){
   return null;
 }
 function basla(){
-  post("/api/veri").then(function(v){
+  /* 🐞 DÜZELTİLEN HATA: bu güvenlik zamanlayıcısı eskiden post() çağrısından
+     SONRA kuruluyordu. post() içindeki fetch() bazı kısıtlı/engellenen
+     bağlantılarda (WebView kısıtlaması, DPI/proxy müdahalesi vb.) Promise
+     reddi değil DOĞRUDAN senkron hata fırlatabiliyor; bu durumda basla()
+     fonksiyonu anında kesiliyor, aşağıdaki setTimeout satırına hiç sıra
+     gelmiyor ve splash ekranı SONSUZA DEK açık kalıyordu (kilitlenme
+     görüntüsü). Şimdi güvenlik zamanlayıcısı EN BAŞTA kuruluyor; ne olursa
+     olsun en geç 4 saniyede splash kapanacak. post() çağrısı da try/catch'e
+     alındı ki senkron hata durumunda kullanıcıya "bağlantı kurulamadı"
+     mesajı da hemen gösterilebilsin. */
+  setTimeout(splashKapat,4000); /* güvenlik: her koşulda sonsuza dek takılı kalmasın */
+  try{
+    post("/api/veri").then(function(v){
+      splashKapat();
+      if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Doğrulanamadı.<br>Uygulamayı Telegram üzerinden aç.</div>';return}
+      D=v;
+      onizUygula();
+      if(D.yon)gbRozetGoster(D.gbYeni||0);
+      if(!D.onay)return onayCiz();
+      izSekmeDegisti(sekme);
+      ciz();
+    }).catch(function(){splashKapat();el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
+  }catch(e){
     splashKapat();
-    if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Doğrulanamadı.<br>Uygulamayı Telegram üzerinden aç.</div>';return}
-    D=v;
-    onizUygula();
-    if(D.yon)gbRozetGoster(D.gbYeni||0);
-    if(!D.onay)return onayCiz();
-    izSekmeDegisti(sekme);
-    ciz();
-  }).catch(function(){splashKapat();el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
-  setTimeout(splashKapat,4000); /* güvenlik: yavaş bağlantıda sonsuza dek takılı kalmasın */
+    el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>';
+  }
 }
 function onayCiz(){
   el("sekmeler").innerHTML="";
