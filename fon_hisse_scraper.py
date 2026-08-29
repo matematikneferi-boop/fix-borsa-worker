@@ -415,64 +415,78 @@ class KapFonIstemci:
             return [k for k in veri if isinstance(k, dict)]
         return [veri] if isinstance(veri, dict) else []
 
+    def _en_iyi_uye_esles(self, hedef_kelimeler: set, tanim: str, fon_kodu: str) -> Optional[dict]:
+        """DÜZELTME (tara #12, canlı debug ile kanıtlandı): eskiden hedef
+        kelimeler TEK bir string'de birleştirilip ("ÜÇÜNCÜ PUSULA SERBEST"
+        gibi) KAP'a TEK sorgu olarak gönderiliyordu. KAP'ın arama motoru bunu
+        AND/ifade gibi ele alıyor — fon adındaki bir STRATEJİ kelimesi
+        (ÜÇÜNCÜ, SERBEST, HEDEF, KUZEY...) hiçbir şirket unvanında geçmediği
+        için SIFIR sonuç dönüyordu; oysa aynı sorgudaki asıl kurucu adı
+        (PUSULA, DOĞU...) TEK BAŞINA sorgulansa bulunuyordu (PHE için
+        "PUSULA" tek başına arandığında PUSULA PORTFÖY YÖNETİMİ A.Ş. hemen
+        çıktı). Artık HER kelime AYRI AYRI sorgulanıp sonuçlar birleştiriliyor.
+
+        Ayrıca: TEFAS fonlarının KAP üyesi HER ZAMAN bir "... PORTFÖY
+        YÖNETİMİ A.Ş." unvanlı şirkettir. Aynı kelime başka, alakasız bir
+        şirkette de geçebilir (ör. "TERA" hem "Tera Portföy Yönetimi A.Ş."
+        hem "Tera Finans Faktoring A.Ş."nde geçiyor) — skor eşitliğinde
+        yanlışını seçmemek için unvanında PORTFÖY geçen adaya büyük bonus
+        veriliyor.
+        """
+        if not hedef_kelimeler:
+            return None
+        adaylar_oid = {}
+        for kelime in hedef_kelimeler:
+            for k in self.uye_ara(kelime):
+                oid = k.get("mkkMemberOid")
+                if oid and oid not in adaylar_oid:
+                    adaylar_oid[oid] = k
+        en_iyi, en_iyi_skor = None, 0
+        for k in adaylar_oid.values():
+            baslik = str(k.get("title") or k.get("companyTitle") or "")
+            ortak = hedef_kelimeler & _anlamli_kelimeler(baslik)
+            skor = len(ortak)
+            if skor == 0:
+                continue
+            if "PORTFÖY" in _tr_upper(baslik) or "PORTFOY" in _tr_upper(baslik):
+                skor += 10
+            if skor > en_iyi_skor:
+                en_iyi_skor, en_iyi = skor, k
+        if self.debug:
+            print(f"    🐛 fon_uyesi_bul('{fon_kodu}'): {tanim} kelime kelime arandı ({sorted(hedef_kelimeler)}), "
+                  f"{len(adaylar_oid)} tekil aday, en iyi skor={en_iyi_skor} "
+                  f"(başlık={en_iyi.get('title') if en_iyi else None!r}, oid={en_iyi.get('mkkMemberOid') if en_iyi else None})")
+        if en_iyi and en_iyi.get("mkkMemberOid"):
+            return en_iyi
+        return None
+
     def fon_uyesi_bul(self, fon_kodu: str, fon_adi: str, kurucu: str = "") -> Optional[dict]:
-        """DÜZELTME (tara #8): Eski sürüm SADECE fon_adi'ndan çıkardığı
-        kelimelerle arıyordu ve >=2 örtüşme istiyordu. Ama fon adı
-        "[KURUCU] Portföy ... Fon" kalıbında, KAP'taki karşılığı ise sadece
-        "[KURUCU] Portföy Yönetimi A.Ş." — PORTFÖY/YÖNETİMİ/FON gibi
-        kelimeler zaten anlamsız sayılıp elendiğinden geriye SADECE kurucu
-        adı (1 kelime) kalıyordu. >=2 eşiği bu yüzden pratikte HİÇBİR ZAMAN
-        tutmuyordu (tara #8 log'u: 50 fonun neredeyse tamamı bu yüzden
-        düştü). Düzeltme: TEFAS'ın verdiği `kurucu` alanını DOĞRUDAN arama
-        ve doğrulama temeli yap — bu, KAP'taki üye başlığıyla neredeyse
-        birebir örtüşen, çok daha güvenilir bir sinyal. `kurucu` boşsa (TEFAS
-        bazen döndürmüyor) eski fon_adi tabanlı yönteme düşülür, ama eşik
-        artık >=1 (kurucu adı zaten anlamsız kelimelerden arındırılmış tek
-        güçlü sinyal olduğu için >=2 istemek yine imkansız olurdu).
+        """DÜZELTME (tara #8 + #12): Eski sürüm SADECE fon_adi'ndan çıkardığı
+        kelimelerle arıyordu ve >=2 örtüşme istiyordu — ki bu, fon adı
+        "[KURUCU] Portföy ... Fon" kalıbında olduğundan (PORTFÖY/YÖNETİMİ/FON
+        anlamsız sayılıp elendiği için) pratikte imkansızdı (tara #8).
+        tara #12'de canlı debug ile ikinci bir hata daha bulundu: kalan
+        kelimeler tek bir string'de birleştirilip KAP'a TEK sorgu olarak
+        gönderiliyordu, bu da fon adındaki strateji kelimeleri (ÜÇÜNCÜ,
+        SERBEST, HEDEF...) yüzünden sıfır sonuca düşüyordu. Artık her kelime
+        ayrı ayrı sorgulanıyor (bkz. _en_iyi_uye_esles) ve TEFAS'ın verdiği
+        `kurucu` alanı (doluysa) öncelikli, daha güvenilir kaynak.
         """
         uye = self.member_filter(fon_kodu)
         if uye and uye.get("mkkMemberOid"):
             return uye
 
-        # 1) Kurucu adıyla ara (varsa) — en güvenilir yol
         if kurucu.strip():
-            kurucu_kelimeler = _anlamli_kelimeler(kurucu)
-            if kurucu_kelimeler:
-                adaylar = self.uye_ara(kurucu.strip())
-                en_iyi, en_iyi_skor = None, 0
-                for k in adaylar:
-                    baslik = str(k.get("title") or k.get("companyTitle") or "")
-                    ortak = kurucu_kelimeler & _anlamli_kelimeler(baslik)
-                    if len(ortak) > en_iyi_skor:
-                        en_iyi_skor, en_iyi = len(ortak), k
-                if self.debug:
-                    print(f"    🐛 fon_uyesi_bul('{fon_kodu}'): kurucu araması='{kurucu}', "
-                          f"{len(adaylar)} aday, en iyi skor={en_iyi_skor} "
-                          f"(başlık={en_iyi.get('title') if en_iyi else None!r}, oid={en_iyi.get('mkkMemberOid') if en_iyi else None})")
-                if en_iyi_skor >= 1 and en_iyi and en_iyi.get("mkkMemberOid"):
-                    return en_iyi
+            eslesen = self._en_iyi_uye_esles(_anlamli_kelimeler(kurucu), f"kurucu='{kurucu}'", fon_kodu)
+            if eslesen:
+                return eslesen
 
-        # 2) Yedek: tam fon adından çıkarılan kelimelerle ara
         hedef_kelimeler = _anlamli_kelimeler(fon_adi)
         if not hedef_kelimeler:
             if self.debug:
                 print(f"    🐛 fon_uyesi_bul('{fon_kodu}'): fon_adi'ndan hiç anlamlı kelime çıkmadı (fon_adi={fon_adi!r})")
             return None
-        arama_sorgusu = " ".join(list(hedef_kelimeler)[:4])
-        adaylar = self.uye_ara(arama_sorgusu)
-        en_iyi, en_iyi_skor = None, 0
-        for k in adaylar:
-            baslik = str(k.get("title") or k.get("companyTitle") or "")
-            ortak = hedef_kelimeler & _anlamli_kelimeler(baslik)
-            if len(ortak) > en_iyi_skor:
-                en_iyi_skor, en_iyi = len(ortak), k
-        if self.debug:
-            print(f"    🐛 fon_uyesi_bul('{fon_kodu}'): isim araması='{arama_sorgusu}', "
-                  f"{len(adaylar)} aday, en iyi skor={en_iyi_skor} "
-                  f"(başlık={en_iyi.get('title') if en_iyi else None!r}, oid={en_iyi.get('mkkMemberOid') if en_iyi else None})")
-        if en_iyi_skor >= 1 and en_iyi and en_iyi.get("mkkMemberOid"):
-            return en_iyi
-        return None
+        return self._en_iyi_uye_esles(hedef_kelimeler, f"fon_adi='{fon_adi}'", fon_kodu)
 
     def son_tanitici_bilgiler_bildirimi(self, mkk_member_oid: str, fon_kodu: str, gun_geriye: int = 400) -> Optional[dict]:
         """Son ~13 ay içindeki bildirimleri tarar, EN GÜNCEL "I-FONU TANITICI
