@@ -4222,6 +4222,9 @@ function rozlerHepsi(k){
 /* Varsayılan sıralama "kar": liste açılır açılmaz en çok kazandıran sinyal
    en üstte. Kullanıcı istediğinde 🎯 Hedefe kalan / 🕐 En yeni'ye geçebilir. */
 var D=null, sekme="potansiyel", sira="kar", adayTf="adayOrta", presetSec="kaliteli", portfoySirala="deger";
+/* 📍 TAKİP — hangi dilimde hangi kategori (yolda/hedef1/hedef2/stop) açık
+   tutulduğunu hatırlar; ad (potansiyel/fibo/uzunvade/haftalik) başına ayrı. */
+var takipAcik={};
 var ONIZLEME=(function(){try{return localStorage.getItem("onizlemeModu")==="1"}catch(e){return false}})();
 /* 👁️ SIRADAN ÜYE ÖNİZLEMESİ — yalnız yöneticide görünür bir düğme.
    Gerçek yon/super bayrakları D.yonGercek / D.superGercek'te saklanır;
@@ -4724,6 +4727,75 @@ function dizil(ad){
   if(sira==="kar")c.sort(function(a,b){return(kar(b)==null?-9999:kar(b))-(kar(a)==null?-9999:kar(a))});
   return c;
 }
+/* ══════════════════════════════════════════════════════════════════════
+   📍 TAKİP — ŞEFFAFLIK BÖLÜMÜ (kullanıcılar "listeden kayboldu, dolandırıcı
+   mısın" diyor; sebep şu: dizil() içindeki %3.7 eşiği (hedefEsikGecti)
+   hedefe ulaşmış/yaklaşmış sinyalleri normal listeden GİZLİYOR. Aşağıdaki
+   fonksiyonlar süzgeçsiz HAM veriyi (D.kartlar[ad], D.dusenler) kullanır:
+   her sinyal ya YOLDA'dır, ya HEDEF1/HEDEF2'yi TUTMUŞTUR, ya da STOP
+   olmuştur — üçü de burada, hiçbiri sessizce kaybolmaz. ══════════════ */
+function takipHam(ad){
+  var ham=((D.kartlar&&D.kartlar[ad])||[]).slice();
+  var yolda=[],hedef1=[],hedef2=[];
+  ham.forEach(function(k){
+    var pot=(k.potansiyel==null)?null:Number(k.potansiyel);
+    var pot1=(k.hedef1Yuzde==null)?null:Number(k.hedef1Yuzde);
+    if(pot!=null&&pot<=0)hedef2.push(k);
+    else if(pot1!=null&&pot1<=0)hedef1.push(k);
+    else yolda.push(k);
+  });
+  var stop=(D.dusenler||[]).filter(function(x){return x.liste===ad});
+  return{yolda:yolda,hedef1:hedef1,hedef2:hedef2,stop:stop};
+}
+/* KISA (1SA) dilimde stop noktası henüz tanımlı değil — alt dilim (15dk)
+   kurulmadığı için. Diğer tüm dilimlerde (ORTA/UZUN/HAFTA) bir alt dilimin
+   pivotuna göre hesaplanan stop noktası zaten var, D.dusenler üzerinden gelir. */
+function takipStopVar(ad){return ad!=="potansiyel"}
+function takipSatirHtml(k){
+  var kr=kar(k);
+  return '<div class="satir" data-kod="'+E(k.kod)+'" style="border-left-color:var(--ciz)">'+
+    '<div class="sol"><div class="kod">'+kodHtml(k)+"</div>"+
+    '<div class="altbilgi">sinyal <b>'+N(k.giris)+'</b> → şimdi <b>'+N(k.fiyat)+"</b>"+
+    (k.hedef1!=null?" · H1 "+N(k.hedef1):"")+(k.hedef!=null?" · H2 "+N(k.hedef):"")+"</div></div>"+
+    '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
+    '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+"</div></div></div>";
+}
+function takipStopSatirHtml(x){
+  var kr=(x.kar==null)?null:Number(x.kar);
+  return '<div class="dusSat"><div class="dusUst"><b>'+E(x.kod)+"</b>"+
+    (x.saat?'<span class="btN">'+E(x.saat)+"</span>":"")+
+    (kr==null?"":'<span class="'+(kr>=0?"ye":"kr")+'"><b>'+Y(kr)+"</b></span>")+
+    '</div><div class="dusAlt">'+E(x.sebep||"stop oldu")+
+    (x.sinyalFiyat!=null?" · sinyal "+N(x.sinyalFiyat):"")+
+    (x.sonFiyat!=null?" → "+N(x.sonFiyat):"")+"</div></div>";
+}
+function takipKutuCiz(ad){
+  var v=takipHam(ad), acik=takipAcik[ad]||null, stopVar=takipStopVar(ad);
+  var pil=function(key,ik,baslik,n){
+    return '<button class="sir'+(acik===key?" on":"")+'" data-tk="'+key+'">'+ik+" "+baslik+" ("+n+")</button>";
+  };
+  var h='<div class="kutu" style="margin-bottom:10px"><h3 style="margin:0 0 8px">📍 Takip — bu dilimde her sinyalin durumu</h3>'+
+    '<div class="altbilgi" style="margin-bottom:8px">Süzgeçsiz, tam liste. Bir sinyal asla sessizce kaybolmaz: ya yolda, ya hedefte, ya stopta.</div>'+
+    '<div class="sirala">'+
+      pil("yolda","🟢","Yolda",v.yolda.length)+
+      pil("hedef1","🧱","Hedef1 tuttu",v.hedef1.length)+
+      pil("hedef2","🎯","Hedef2 tuttu",v.hedef2.length)+
+      (stopVar?pil("stop","🔴","Stop oldu",v.stop.length):"")+
+    "</div>";
+  if(!stopVar)h+='<div class="altbilgi" style="margin-top:6px">ℹ️ Bu dilimde (1 saat) alt zaman dilimi (15 dk) henüz kurulmadığı için stop takibi yok.</div>';
+  if(acik){
+    var liste=v[acik]||[];
+    h+='<div style="margin-top:8px">'+(liste.length?
+      (acik==="stop"?liste.map(takipStopSatirHtml).join(""):liste.map(takipSatirHtml).join(""))
+      :'<div class="bos" style="padding:14px">Bu kategoride şu an hisse yok.</div>')+"</div>";
+  }
+  return h+"</div>";
+}
+function takipBagla(ad){
+  [].forEach.call(document.querySelectorAll("[data-tk]"),function(b){
+    b.onclick=function(){tit();var k=b.dataset.tk;takipAcik[ad]=(takipAcik[ad]===k)?null:k;ciz();window.scrollTo(0,0)};
+  });
+}
 /* 🟨 ADAYLAR: bu dört liste anahtarında satır hem tıklanamaz hem de
    ilk görünen kısımda Sinyal (tetik), Hedef 1 (hedef1) ve Hedef 2 (hedef · potansiyel)
    birlikte gösterilir — genel detaya atlayıp yanlış/eski bir dilimin
@@ -4863,17 +4935,18 @@ function dusenlerCiz(ad){
 function listeCiz(ad){
   var l=dizil(ad), t=TF[ad];
   if(!l.length){
-    el("govde").innerHTML='<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>'+
+    el("govde").innerHTML=takipKutuCiz(ad)+'<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>'+
       (sira==="yeni"
         ? 'Bugün bu dilimde henüz sinyal çıkmadı.<br>Önceki günlerin sinyalleri için 💰 ya da 🎯 sekmesine geç.'
         : 'Şu an bu dilimde sinyal yok.<br>Bu dilimde henüz pivot kırılımı oluşmadı. Bar kapanışlarında liste yenilenir.')+
       '</div>'+dusenlerCiz(ad);
+    takipBagla(ad);
     return;
   }
-  el("govde").innerHTML=sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
+  el("govde").innerHTML=takipKutuCiz(ad)+sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
     '<div class="uyari">⚠️ Yatırım tavsiyesi değildir. Teknik tarama geleceği bilmez.</div>'+
     dusenlerCiz(ad);
-  sirBagla();satirBagla();
+  takipBagla(ad);sirBagla();satirBagla();
 }
 function adayCiz(){
   if(!D.super){
