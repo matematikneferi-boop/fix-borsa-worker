@@ -4402,7 +4402,7 @@ function sekCiz(){
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon Tarama'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="malboga"?" on":"")+'" data-r="nötr" data-s="malboga">🔎 Hisse Taraması'+(D.super?"":" 🔒")+'</button>');
   ["potansiyel","fibo","uzunvade"].forEach(function(k){
-    var t=TF[k],n=(D.kartlar&&D.kartlar[k]&&D.kartlar[k].length)||0;
+    var t=TF[k],n=((D.kartlar&&D.kartlar[k])||[]).filter(hedefEsikGecti).length;
     s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
       t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
   });
@@ -6043,6 +6043,13 @@ function gbInboxAc(){
 var TF_META={KISA:TF.potansiyel,ORTA:TF.fibo,UZUN:TF.uzunvade};
 function tfSenaryoBlok(tfKartlar){
   if(!tfKartlar)return "";
+  /* 🚫 ÜÇÜ DE BOŞSA HİÇ GÖSTERME — GARAN örneğinde olduğu gibi bir hisse
+     o an KISA/ORTA/UZUN'un HİÇBİRİNDE sinyal ya da aday değilse, "3 boş
+     kutu" göstermek "bug" gibi algılanıyordu. Bu durumda blok tamamen
+     gizlenir; sayfadaki genel "hiçbir listede değil" mesajı ve aşağıdaki
+     🔎 iki yönlü (ayna) özet zaten aynı bilgiyi veriyor. */
+  var varMi=["KISA","ORTA","UZUN"].some(function(tfKey){return tfKartlar[tfKey]&&tfKartlar[tfKey].kart});
+  if(!varMi)return "";
   var parcalar=["KISA","ORTA","UZUN"].map(function(tfKey){
     var giris=tfKartlar[tfKey], meta=TF_META[tfKey]||{ik:"",ad:tfKey,renk:"var(--ciz)"};
     var baslik='<div class="tfBas" style="border-left-color:'+meta.renk+'">'+meta.ik+" <b>"+meta.ad+"</b></div>";
