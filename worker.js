@@ -264,8 +264,8 @@ if(!(a&&a.kod&&a.giris>0))continue;
 /* ANAHTAR ARTIK kod@dilim: aynı hisse iki dilimde birden sinyal verirse
    ikisi de ayrı ayrı kaydedilir — dilim bazlı performans bunu gerektirir. */
 const KK=a.kod+"@"+(a.tfKod||a.tf||"");
-if(!n.gunler[i].kayitlar[KK])n.gunler[i].kayitlar[KK]={k:a.kod,g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tfKod||a.tf||"",l:e,h:(a.hedef>0?Number(a.hedef):null),h1:(a.hedef1>0?Number(a.hedef1):null),r:1,max:Number(a.fiyat)||Number(a.giris),min:Number(a.fiyat)||Number(a.giris)}}}
-for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayitlar)){const kk=n.gunler[e].kayitlar[t],kd=kk.k||String(t).split("@")[0];if(s[kd]>0){kk.s=s[kd];if(!(kk.max>0)||s[kd]>kk.max)kk.max=s[kd];if(!(kk.min>0)||s[kd]<kk.min)kk.min=s[kd]}}
+if(!n.gunler[i].kayitlar[KK])n.gunler[i].kayitlar[KK]={k:a.kod,g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tfKod||a.tf||"",l:e,h:(a.hedef>0?Number(a.hedef):null),h1:(a.hedef1>0?Number(a.hedef1):null),r:1,max:Number(a.fiyat)||Number(a.giris)}}}
+for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayitlar)){const kk=n.gunler[e].kayitlar[t],kd=kk.k||String(t).split("@")[0];if(s[kd]>0){kk.s=s[kd];if(!(kk.max>0)||s[kd]>kk.max)kk.max=s[kd]}}
 ;n.ozet=n.ozet||{};const gt=Object.keys(n.gunler).sort().reverse(),gk=gt.slice(0,DETAY_GUN),gs=gt.slice(DETAY_GUN)
 ;for(const e of gs){if(!n.ozet[e]){const o=m(e,n.gunler[e]);if(o)n.ozet[e]=o}}const go={};for(const e of gk)go[e]=n.gunler[e];n.gunler=go
 ;const ot=Object.keys(n.ozet).sort().reverse();if(ot.length>OZET_GUN){const oo={};for(const e of ot.slice(0,OZET_GUN))oo[e]=n.ozet[e];n.ozet=oo}
@@ -4375,32 +4375,17 @@ function kar(k){
   return null;
 }
 function basla(){
-  /* 🐞 DÜZELTİLEN HATA: bu güvenlik zamanlayıcısı eskiden post() çağrısından
-     SONRA kuruluyordu. post() içindeki fetch() bazı kısıtlı/engellenen
-     bağlantılarda (WebView kısıtlaması, DPI/proxy müdahalesi vb.) Promise
-     reddi değil DOĞRUDAN senkron hata fırlatabiliyor; bu durumda basla()
-     fonksiyonu anında kesiliyor, aşağıdaki setTimeout satırına hiç sıra
-     gelmiyor ve splash ekranı SONSUZA DEK açık kalıyordu (kilitlenme
-     görüntüsü). Şimdi güvenlik zamanlayıcısı EN BAŞTA kuruluyor; ne olursa
-     olsun en geç 4 saniyede splash kapanacak. post() çağrısı da try/catch'e
-     alındı ki senkron hata durumunda kullanıcıya "bağlantı kurulamadı"
-     mesajı da hemen gösterilebilsin. */
-  setTimeout(splashKapat,4000); /* güvenlik: her koşulda sonsuza dek takılı kalmasın */
-  try{
-    post("/api/veri").then(function(v){
-      splashKapat();
-      if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Doğrulanamadı.<br>Uygulamayı Telegram üzerinden aç.</div>';return}
-      D=v;
-      onizUygula();
-      if(D.yon)gbRozetGoster(D.gbYeni||0);
-      if(!D.onay)return onayCiz();
-      izSekmeDegisti(sekme);
-      ciz();
-    }).catch(function(){splashKapat();el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
-  }catch(e){
+  post("/api/veri").then(function(v){
     splashKapat();
-    el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>';
-  }
+    if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Doğrulanamadı.<br>Uygulamayı Telegram üzerinden aç.</div>';return}
+    D=v;
+    onizUygula();
+    if(D.yon)gbRozetGoster(D.gbYeni||0);
+    if(!D.onay)return onayCiz();
+    izSekmeDegisti(sekme);
+    ciz();
+  }).catch(function(){splashKapat();el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.<br>Birazdan tekrar dene.</div>'});
+  setTimeout(splashKapat,4000); /* güvenlik: yavaş bağlantıda sonsuza dek takılı kalmasın */
 }
 function onayCiz(){
   el("sekmeler").innerHTML="";
@@ -5404,24 +5389,6 @@ function backtestGoster(v){
     });
     h+='<div class="btAc" style="margin-top:7px">Sağdaki sayı beklentidir. '+
        'Bir dilim sürekli eksideyse o dilimi kapatmayı düşün.</div></div>';
-  }
-
-  /* ── 3b. HEDEF1/HEDEF2/STOP ORANI — dilime göre (KISA/ORTA/UZUN/HAFTA) ── */
-  if(v.dilimRapor&&v.dilimRapor.length){
-    h+='<div class="kutu"><h3>🎯 Hedef / Stop oranı (dilime göre)</h3>'+
-       '<div class="btAc" style="margin-bottom:8px">Her dilimin kendi sinyalleri ayrı ayrı sayılır (üstteki tablodaki gibi aynı kod aynı gün birden fazla dilimde kırınca tekilleştirme yok). '+
-       'Stop yalnız ORTA ve UZUN için ölçülebilir (alt dilimin kırdığı seviyeye göre) ve yalnız <b>2026-08-29</b>\'dan sonra açılan sinyallerde — daha eski kayıtlarda "ölçülemedi" ayrı gösterilir, uydurma sayı üretilmez.</div>';
-    v.dilimRapor.forEach(function(d){
-      var h1=d.hedef1.oran==null?"—":d.hedef1.tut+"/"+d.hedef1.n+" (%"+Math.round(d.hedef1.oran)+")";
-      var h2=d.hedef2.oran==null?"—":d.hedef2.tut+"/"+d.hedef2.n+" (%"+Math.round(d.hedef2.oran)+")";
-      var st=d.stop.oran==null?"ölçülemedi":d.stop.oldu+"/"+d.stop.n+" (%"+Math.round(d.stop.oran)+")";
-      h+='<div class="btGun"><div class="btUst"><b style="font-family:inherit">'+E(d.ad)+'</b>'+
-         '<span class="btN">'+d.toplam+' sinyal</span></div>'+
-         '<div class="btAlt">🧱 Hedef1 '+h1+'  ·  🎯 Hedef2 '+h2+'  ·  🛑 Stop '+st+
-         (d.stop.olcumsuz?' <span class="btN">('+d.stop.olcumsuz+' ölçülemedi)</span>':'')+
-         '</div></div>';
-    });
-    h+='</div>';
   }
 
   /* ── 4. GÜN GÜN ── */
@@ -7147,7 +7114,7 @@ function fonlarGoster(v){
   if(fonBenzerFonKodu){fonBenzerGoster(fonBenzerD);return}
   if(fonAramaKod){fonDetayGoster(fonDetay);return}
   var h='<div class="uyari" style="margin-top:0"><b>🐣 Fonlar</b><br>'+
-    'TEFAS hisse yoğun/değişken fonların KAP\'a bildirdiği aylık portföyler üzerinden — '+
+    'TEFAS hisse yoğun/değişken fonların KAP\\'a bildirdiği aylık portföyler üzerinden — '+
     'kim ne alıyor, kim ne satıyor, hangi hisseye kaç fon aynı anda giriyor.<br>'+
     '<span style="opacity:.7">Kaynak: TEFAS + KAP aylık portföy bildirimi · güncelleme: '+E(v.guncelleme||"—")+'</span></div>';
   h+='<input id="fonAramaKutu" type="text" placeholder="Hisse kodu yaz (örn. THYAO) ve Enter…" value="" '+
@@ -7178,7 +7145,7 @@ function fonlarGoster(v){
     return E(x.hisse)+' <span style="opacity:.7">— '+x.fonSayisi+' fon · toplam pay %'+x.toplamPay+'</span>';
   });
   h+='<div class="uyari" style="opacity:.7">🔒 Kurumsal alım-satımı şirket içi (yönetici/pay sahibi) işlemleriyle '+
-    'çakıştırma henüz eklenmedi — bunun için KAP\'taki yönetici işlem bildirimlerini çeken ayrı bir tarayıcı gerekiyor.</div>';
+    'çakıştırma henüz eklenmedi — bunun için KAP\\'taki yönetici işlem bildirimlerini çeken ayrı bir tarayıcı gerekiyor.</div>';
   el("govde").innerHTML=h;
   var kutu=el("fonAramaKutu");
   if(kutu)kutu.onkeydown=function(e2){if(e2.key==="Enter")fonAramaCalistir(kutu.value)};
@@ -9215,7 +9182,7 @@ function perfCiz(){
   (P.dilimler||[]).forEach(function(x){
     var i=x.ist;
     h+='<div class="kutu"><div class="dilimBas"><span class="nokta" style="background:'+DRENK[x.tf]+'"></span>'+
-      "<h3 style=\"margin:0\">"+DAD[x.tf]+"</h3></div>";
+      "<h3 style=\\"margin:0\\">"+DAD[x.tf]+"</h3></div>";
     if(!i){h+='<div class="et">bu dönemde bu dilimden ölçülmüş sinyal yok</div></div>';return}
     h+='<div class="ikili"><div><div class="buyukN '+(i.isabet>=50?"ye":"kr")+'">'+i.isabet.toFixed(0)+
       '%</div><div class="altN">isabet</div></div>'+
@@ -9345,7 +9312,7 @@ function davetCiz(){
   h+='<div class="kutu"><h3>📤 Sistemi paylaş</h3>'+
     '<div class="bilgi">Her <b>20 davette</b> süper üyeliğin <b>1 ay</b> açılır; zaten süper üyeysen mevcut sürenin üstüne <b>1 ay eklenir</b>. Sayaç asla sıfırlanmaz.</div>'+
     '<div class="link">'+E(D.link)+"</div>"+
-    '<button class="dg" id="paylas">📤 Telegram\'da paylaş</button>'+
+    '<button class="dg" id="paylas">📤 Telegram\\'da paylaş</button>'+
     '<button class="dg ik" id="kopyala">📋 Bağlantıyı kopyala</button>'+
     '<div class="durum" id="dvDurum"></div></div>';
   h+='<div class="kutu"><h3>👑 Süper Üyelikte ne açılır?</h3>'+
@@ -11551,54 +11518,8 @@ const dilimAd=["1SA","4SA","1G","1HAF","15DK"];
 const dilimler=dilimAd.map(t=>({tf:t,ist:ozet(hepsi.filter(x=>x.tf===t))}))
   .filter(x=>x.ist&&x.ist.n>0);
 
-/* 🎯 HEDEF1/HEDEF2/STOP ORANI — dilime göre (KISA/ORTA/UZUN/HAFTA).
-   Yukarıdaki "dilimler" tablosundan farkı: orada aynı kod aynı gün
-   birden fazla dilimde kırdıysa TEK sinyal sayılıyordu (teklestir) —
-   burada öyle bir tekilleştirme YOK, her dilimin kendi sinyali kendi
-   başına sayılır, yoksa dilimler arası kıyas yanlış çıkar.
-   Stop: bir dilimin stop'u, bir alt dilimin AYNI GÜN kırdığı seviyedir
-   (bkz. istemci tarafındaki tfStopBul/takipStopBul ile birebir aynı
-   zincir mantığı). Bunun için "min" (görülen en düşük fiyat) gerekir;
-   bu alan yalnız 2026-08-29'dan sonra kaydedilmeye başladı, o tarihten
-   önceki kayıtlarda stop "ölçülemedi" sayılır — UYDURMA SAYI ÜRETİLMEZ. */
-const BT_AD_ADI={potansiyel:"KISA",fibo:"ORTA",uzunvade:"UZUN",haftalik:"HAFTA"};
-const BT_AD_ALT={fibo:"potansiyel",uzunvade:"fibo"};
-const btDilimAgirlik={};
-for(const gun of Object.keys(GD3)){
-  if(gun<KURULUS3||gun>bugun3)continue;
-  const kay=GD3[gun].kayitlar||{};
-  for(const key of Object.keys(kay)){
-    const rec=kay[key];
-    if(!(rec&&rec.g>0&&rec.s>0)||rec.r===0)continue;
-    const ad=rec.l;if(!BT_AD_ADI[ad])continue;
-    if(!btDilimAgirlik[ad])btDilimAgirlik[ad]={toplam:0,h1Tut:0,h1Var:0,h2Tut:0,h2Var:0,stopOldu:0,stopOlcNormal:0,stopOlcumsuz:0};
-    const g2=btDilimAgirlik[ad];
-    g2.toplam++;
-    if(rec.h1>0){g2.h1Var++;if(rec.max>0&&rec.max>=rec.h1)g2.h1Tut++}
-    if(rec.h>0){g2.h2Var++;if(rec.max>0&&rec.max>=rec.h)g2.h2Tut++}
-    const altAd=BT_AD_ALT[ad];
-    const recKod=rec.k||String(key).split("@")[0];
-    let stopSev=null;
-    if(altAd){
-      for(const key2 of Object.keys(kay)){
-        const r2=kay[key2];
-        if(r2&&r2.l===altAd&&r2.g>0&&(r2.k||String(key2).split("@")[0])===recKod){stopSev=Number(r2.g);break}
-      }
-    }
-    if(stopSev==null||!(rec.min>0))g2.stopOlcumsuz++;
-    else{g2.stopOlcNormal++;if(rec.min<=stopSev)g2.stopOldu++}
-  }
-}
-const dilimRapor=Object.keys(BT_AD_ADI).filter(ad=>btDilimAgirlik[ad]).map(ad=>{
-  const g2=btDilimAgirlik[ad];
-  return{ad:BT_AD_ADI[ad],toplam:g2.toplam,
-    hedef1:{n:g2.h1Var,tut:g2.h1Tut,oran:g2.h1Var>0?100*g2.h1Tut/g2.h1Var:null},
-    hedef2:{n:g2.h2Var,tut:g2.h2Tut,oran:g2.h2Var>0?100*g2.h2Tut/g2.h2Var:null},
-    stop:{n:g2.stopOlcNormal,oldu:g2.stopOldu,oran:g2.stopOlcNormal>0?100*g2.stopOldu/g2.stopOlcNormal:null,olcumsuz:g2.stopOlcumsuz}};
-});
-
 return JS({ok:!0,kurulus:KURULUS3,bugun:bugun3,
-genel:ozet(hepsi),dagilim:dagilim,dilimler:dilimler,dilimRapor:dilimRapor,
+genel:ozet(hepsi),dagilim:dagilim,dilimler:dilimler,
 gunler:gunler.reverse(),
 hamSayi:hamSayi,elenenAykiri:elenenAyk,elenenTaze:elenenTaze,
 ayar:ayar3,yonetici:!!YON})}
@@ -12041,15 +11962,11 @@ async scheduled(ev,A,ctx){
   if(A&&A.ADMIN_IDS)try{EK_YON=new Set(String(A.ADMIN_IDS).split(",").map(x=>x.trim()).filter(Boolean))}catch(_){}
   ctx.waitUntil((async()=>{
     try{
-      /* 🛑 KV YAZMA KOTASI GÜVENLİĞİ (2026-08-29): Burada eskiden dilim
-         AYNI dakikada iki kez ilerletiliyordu (dakikada 2 parti). Cron
-         zaten dakikada bir tetiklendiği için bu, günde ~3000-6000+ KV
-         put() çağrısına çıkıyordu — ücretsiz planın günlük 1000 yazma
-         kotasını fazlasıyla aşıyor. Kota dolunca put() her yerde hata
-         fırlatmaya başlıyor (bkz. yukarıdaki CORS notu: bu daha önce de
-         yaşanmış bir arıza deseni). Tek pasoya indirildi: hâlâ eski
-         8-dakikalık /push sistemine göre ~4 kat daha hızlı, ama yazma
-         hacmi yarıya iniyor. */
+      /* Aynı dakikada dilimi iki kez ilerlet: 8 dakikada 1 parti yerine
+         dakikada 2 parti — havuzun tamamı artık dakikalar içinde,
+         saatler değil, tazelenir. Kilit mekanizması /push ile çakışmayı
+         zaten engelliyor (bellekKilitAl aynı isim üzerinden). */
+      await kilitli(A,"mbDilim",50,()=>mbAlarmOncelikliTara(A)).catch(()=>{});
       await kilitli(A,"mbDilim",50,()=>mbAlarmOncelikliTara(A)).catch(()=>{});
       /* Taze ölçümü hemen süz ve kurulu her alarma yeni girenleri gönder. */
       await kilitli(A,"mbAlarm",50,()=>mbAlarmTara(A)).catch(()=>{});
