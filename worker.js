@@ -7966,22 +7966,57 @@ var MB_ISTEK_ZAMAN=20000;    /* bir parça bu kadar sürerse askıda sayılır *
 var MB_HATA_TAVAN=60;        /* bu kadar hatadan sonra tarama durur */
 var mbNobetci=null;
 
+/* Tek bir dilim için eksik hisseleri MB_PARCA'lık parçalara bölüp kuyruk
+   girdisi üretir. mbKuyrukKur (ilk tarama) ve mbOtoTara (tarama SÜRERKEN
+   yeni dilim eklenmesi) aynı bu fonksiyonu kullanır — tekrar yazılmasın. */
+function mbEksikParcalar(tf){
+  var var_=mbOlcum[tf]||{}, eksik=[], k=[];
+  for(var j=0;j<mbEvrenKod.length;j++){
+    var kod=mbEvrenKod[j];
+    if(!var_[kod])eksik.push(kod);
+  }
+  for(var b=0;b<eksik.length;b+=MB_PARCA)
+    k.push({tf:tf,kodlar:eksik.slice(b,b+MB_PARCA)});
+  return k;
+}
 function mbKuyrukKur(){
   var k=[];
   var tfl=mbEfektifTfler();
-  for(var i=0;i<tfl.length;i++){
-    var tf=tfl[i];
-    /* Zaten ölçülmüş hisseleri yeniden isteme — tazeleme mbOlcum'u boşaltır */
-    var var_=mbOlcum[tf]||{};
-    var eksik=[];
-    for(var j=0;j<mbEvrenKod.length;j++){
-      var kod=mbEvrenKod[j];
-      if(!var_[kod])eksik.push(kod);
-    }
-    for(var b=0;b<eksik.length;b+=MB_PARCA)
-      k.push({tf:tf,kodlar:eksik.slice(b,b+MB_PARCA)});
-  }
+  for(var i=0;i<tfl.length;i++)k=k.concat(mbEksikParcalar(tfl[i]));
   return k;
+}
+/* 🆕 Bir modülün (ya da genel şeridin) zaman dilimi değiştiğinde OTOMATİK
+   tetiklenir: yeni seçilen dilim daha önce hiç taranmamışsa (mbOlcum boşsa)
+   kullanıcı fark etmeden arka planda taramayı başlatır/besler. Böylece
+   modülün kendi dilimi gerçek anlamda bağımsız olur — "seçtim ama sonuç
+   yok" durumu, veri henüz çekilmediği için değil, gerçekten şart
+   tutmadığı için oluşur.
+   🔒 KİLİT DAVRANIŞ: tarama zaten SÜRÜYORSA, yeni ihtiyaç mevcut turun
+   bitmesini BEKLEMEZ — direkt çalışan kuyruğa eklenir ve mbTaraTur()
+   boşta kalan kanalları hemen ittirir. Böylece bir modülde tetiklenen
+   tarama tamamlandığı an, o veri zaten ortak mbOlcum'da olduğu için
+   açık olan TÜM modüllere aynı anda (sıraya girmeden) yansır — modül
+   modül art arda bekleyen ayrı taramalar OLMAZ, tek ve ortak bir akış
+   vardır. */
+function mbOtoTara(){
+  if(!mbEvrenKod){
+    if(!mbTaraDurum||!mbTaraDurum.suruyor)mbTaraBaslat();
+    return;
+  }
+  var d=mbTaraDurum;
+  if(d&&d.suruyor){
+    var kuyruktaTf={};
+    d.kuyruk.forEach(function(p){kuyruktaTf[p.tf]=true});
+    d.ucusta.forEach(function(p){kuyruktaTf[p.tf]=true});
+    mbEfektifTfler().forEach(function(t){
+      if(mbOlcumSay(t)<mbEvrenKod.length&&!kuyruktaTf[t])
+        d.kuyruk=d.kuyruk.concat(mbEksikParcalar(t));
+    });
+    mbTaraTur();          /* boşta kanal varsa hemen ittir, 4sn'lik nöbetçiyi bekleme */
+    return;
+  }
+  var eksikVar=mbEfektifTfler().some(function(t){return mbOlcumSay(t)<mbEvrenKod.length});
+  if(eksikVar)mbTaraBaslat();
 }
 function mbTaraBaslat(){
   if(mbTaraDurum&&mbTaraDurum.suruyor){mbTaraDurum.suruyor=false;mbNobetciKapat();mbCizYenile();return}
@@ -8485,23 +8520,26 @@ function mbBagla(v,dilimler){
   T("[data-mbtf]",function(b){
     var t=b.dataset.mbtf,i=mbIst.tfler.indexOf(t);
     if(i>=0)mbIst.tfler.splice(i,1);else mbIst.tfler.push(t);
-    mbUygula()});
+    mbUygula();mbOtoTara()});
   var hp=el("mbTfHepsi");if(hp)hp.onclick=function(){tit();
     mbIst.tfler=(mbIst.tfler.length===dilimler.length)?[]:dilimler.map(function(t){return t.tf});
-    mbUygula()};
+    mbUygula();mbOtoTara()};
   T("[data-mbkapsam]",function(b){mbIst.kapsam=b.dataset.mbkapsam;mbUygula()});
   /* Modül "Genel" e dönsün — kendi özel dilimini bırakır */
   T("[data-mbmodtfg]",function(b){
-    var m=b.dataset.mbmodtfg;mbIst[m].tfler=null;mbUygula()});
+    var m=b.dataset.mbmodtfg;mbIst[m].tfler=null;mbUygula();mbOtoTara()});
   /* Modül kendi dilimini tikler/tik kaldırır — ilk tike basıldığında
-     özel moda geçer (boş diziyle başlar). */
+     özel moda geçer (boş diziyle başlar). 🆕 Yeni seçilen dilim daha önce
+     hiç taranmadıysa mbOtoTara() arka planda otomatik tarama başlatır —
+     modülün dilimi artık GERÇEKTEN bağımsız: veri eksikliğinden değil,
+     yalnızca şart sağlanmadığından "sonuç yok" görülebilsin. */
   T("[data-mbmodtf]",function(b){
     var par=b.dataset.mbmodtf.split(":"),m=par[0],t=par[1];
     if(!mbModOzelMi(mbIst[m]))mbIst[m].tfler=[];
     var i=mbIst[m].tfler.indexOf(t);
     if(i>=0)mbIst[m].tfler.splice(i,1);else mbIst[m].tfler.push(t);
     if(!mbIst[m].tfler.length)mbIst[m].tfler=null;    /* boş kalırsa Genel'e dön */
-    mbUygula()});
+    mbUygula();mbOtoTara()});
   T("[data-mbmod]",function(b){
     var m=b.dataset.mbmod;mbIst[m].acik=!mbIst[m].acik;mbUygula()});
   T("[data-mbmalyon]",function(b){
