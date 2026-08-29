@@ -4728,20 +4728,31 @@ function dizil(ad){
   return c;
 }
 /* ══════════════════════════════════════════════════════════════════════
-   📍 TAKİP — ŞEFFAFLIK BÖLÜMÜ (kullanıcılar "listeden kayboldu, dolandırıcı
-   mısın" diyor; sebep şu: dizil() içindeki %3.7 eşiği (hedefEsikGecti)
-   hedefe ulaşmış/yaklaşmış sinyalleri normal listeden GİZLİYOR. Aşağıdaki
-   fonksiyonlar süzgeçsiz HAM veriyi (D.kartlar[ad], D.dusenler) kullanır:
-   her sinyal ya YOLDA'dır, ya HEDEF1/HEDEF2'yi TUTMUŞTUR, ya da STOP
-   olmuştur — üçü de burada, hiçbiri sessizce kaybolmaz. ══════════════ */
+   📍 TAKİP — DURUM BÖLÜMÜ. Eskiden burası "şeffaflık" amacıyla %3.7
+   eşiğini (hedefEsikGecti) hiç uygulamıyordu — amaç sinyallerin "sessizce
+   kaybolmuş" gibi görünmesini önlemekti. 2026-08-29'da karar değişti:
+   kullanıcı "süzgeç heryerde olsun" dedi, yani artık burası da ana
+   listeyle (dizil→hedefEsikGecti) AYNI %3.7 eşiğini uyguluyor — Yolda ve
+   Hedef1 sayıları artık ana listedeki rozet sayılarıyla tutarlı. Hedef2
+   (zaten tutmuş) ve Stop (D.dusenler) bu eşikten muaf, çünkü onlar zaten
+   kapanmış birer sonuç, "hedefe ne kadar kaldı" sorusu onlar için
+   anlamsız. ══════════════════════════════════════════════════════════ */
 function takipHam(ad){
   var ham=((D.kartlar&&D.kartlar[ad])||[]).slice();
   var yolda=[],hedef1=[],hedef2=[];
   ham.forEach(function(k){
     var pot=(k.potansiyel==null)?null:Number(k.potansiyel);
     var pot1=(k.hedef1Yuzde==null)?null:Number(k.hedef1Yuzde);
-    if(pot!=null&&pot<=0)hedef2.push(k);
-    else if(pot1!=null&&pot1<=0)hedef1.push(k);
+    /* Hedef2'yi zaten tutmuş bir sinyal milestone'a ulaşmıştır — %3.7
+       eşiği burada anlamsız, doğrudan gösterilir. */
+    if(pot!=null&&pot<=0){hedef2.push(k);return}
+    /* 🎯 %3.7 EŞİĞİ artık burada da: ana listeyle (dizil→hedefEsikGecti)
+       birebir aynı kural. Hedefe (H2) kalan yüzde 3.7'nin altındaysa —
+       henüz tutmamış olsa bile — ne Yolda'da ne Hedef1'de gösterilir.
+       Kullanıcı isteği: "süzgeç heryerde olsun" — Takip artık ana listeyle
+       tutarlı sayım veriyor, süzgeçsiz eski davranış kaldırıldı. */
+    if(!hedefEsikGecti(k))return;
+    if(pot1!=null&&pot1<=0)hedef1.push(k);
     else yolda.push(k);
   });
   var stop=(D.dusenler||[]).filter(function(x){return x.liste===ad});
@@ -4819,7 +4830,7 @@ function takipKutuCiz(ad){
     return '<button class="sir'+(acik===key?" on":"")+'" data-tk="'+key+'">'+ik+" "+baslik+" ("+n+")</button>";
   };
   var h='<div class="kutu" style="margin-bottom:10px"><h3 style="margin:0 0 8px">📍 Takip — bu dilimde her sinyalin durumu</h3>'+
-    '<div class="altbilgi" style="margin-bottom:8px">Süzgeçsiz, tam liste. Bir sinyal asla sessizce kaybolmaz: ya yolda, ya hedefte, ya stopta.</div>'+
+    '<div class="altbilgi" style="margin-bottom:8px">Ana listeyle aynı %3.7 eşiği burada da geçerli — hedefe çok yakın/hedefte olanlar ayrı gösterilir.</div>'+
     '<div class="sirala">'+
       pil("yolda","🟢","Yolda",v.yolda.length)+
       pil("hedef1","🧱","Hedef1 tuttu",v.hedef1.length)+
