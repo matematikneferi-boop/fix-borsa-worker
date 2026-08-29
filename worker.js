@@ -2808,7 +2808,7 @@ function ykRaporHTML(o){
    Cloudflare alt-istek sınırı da Mini App bekleme süresi de zorlanmaz.
    Birikim DİLİM BAŞINA ayrı KV anahtarında tutulur (mbBirikim:1G gibi) —
    tek dev anahtar her turda baştan okunup yazılmasın diye. */
-const MB_DILIM_TABAN=8,MB_DILIM_TAVAN=60,MB_SURE_TAVAN_MS=1e4,MB_ES=12;
+const MB_DILIM_TABAN=8,MB_DILIM_TAVAN=60,MB_SURE_TAVAN_MS=1e4,MB_ES=16; /* 🆕 12'den 16'ya — MB_OLC_AZAMI (16) ile eşit, bir parti tek dalgada bitsin */
 /* Mini App isteğinin İÇİNDEN tetiklenen tarama küçük tutulur: o istek
    Cloudflare alt-istek bütçesini absorpsiyon ve KV işlemleriyle paylaşıyor. */
 const MB_ANLIK_AZAMI=12;
@@ -7369,7 +7369,7 @@ function mbCiz(){
   if(!mbEvrenKod){
     el("govde").innerHTML='<div class="yukleniyor">hazırlanıyor…</div>';
     post("/api/malboga",{is:"evren"}).then(function(r){
-      if(r&&r.ok&&r.kodlar){mbEvrenKod=r.kodlar;mbEvrenKaynak=r.kaynak||""}
+      mbEvrenAta(r);
       mbCizYenile();mbOtomatikBaslat();
     }).catch(function(){mbCizYenile()});
     return;
@@ -7393,6 +7393,12 @@ function mbTazelemeKur(){
     if(mbTaraDurum&&mbTaraDurum.suruyor)return;
     var tfl=mbEfektifTfler();
     if(!tfl.length)return;
+    /* 🆕 BOŞLUK DOLDURMA — tam tazeleme zamanı gelmeden de, geçici bir
+       Yahoo hatası yüzünden birkaç hisse eksik kalmışsa (bkz. "1 saat 432,
+       1 gün 430" gibi tutarsızlıklar) sessizce tamamlamayı dener. Sadece
+       EKSİK kalanları ister (mbKuyrukKur), tüm havuzu yeniden taramaz. */
+    var ilrBosluk=mbIlerleme();
+    if(ilrBosluk.gereken&&ilrBosluk.olculen<ilrBosluk.gereken)mbOtomatikBaslat();
     var enHizli=1e9;
     for(var i=0;i<tfl.length;i++){
       var sr=MB_TAZE_SURE[tfl[i]]||9e5;
@@ -7419,8 +7425,14 @@ function mbTaramaTamamMi(){
   if(!D||!D.super)return false;
   if(!mbEvrenKod||!mbEvrenKod.length)return false;
   if(!mbEfektifTfler().length)return false;
+  /* Tam %100'ü ŞART koşmuyoruz: birkaç hisse (yeni işlem görmeye başlamış,
+     haftalık/aylık bar sayısı yetersiz olan vb.) belirli bir dilimde hiç
+     ölçülemeyebilir ve bu NORMALDİR — hepsi ölçülene kadar beklersek düğme
+     hiç yeşermeyebilir. Aktif bir tarama sürmüyorsa VE evrenin en az
+     %97'si ölçülmüşse "tamam" sayılır. */
+  if(mbTaraDurum&&mbTaraDurum.suruyor)return false;
   var ilr=mbIlerleme();
-  return !!(ilr.gereken&&ilr.olculen>=ilr.gereken);
+  return !!(ilr.gereken&&ilr.olculen>=ilr.gereken*0.97);
 }
 /* 🆕 mbArkaplanBaslat — uygulama açılır açılmaz (kullanıcı "Hisse Taraması"
    sekmesine hiç tıklamasa bile) günlük/4 saat/1 saat/haftalık taramayı
@@ -7432,7 +7444,7 @@ function mbArkaplanBaslat(){
   if(!D||!D.super||!D.onay)return;
   if(!mbEvrenKod){
     post("/api/malboga",{is:"evren"}).then(function(r){
-      if(r&&r.ok&&r.kodlar){mbEvrenKod=r.kodlar;mbEvrenKaynak=r.kaynak||""}
+      mbEvrenAta(r);
       mbOtomatikBaslat();
       mbTazelemeKur();
       if(sekme!=="malboga")sekCiz();
@@ -7624,6 +7636,54 @@ var mbOlcum={};          /* dilim → kod → ölçüm */
 var mbEvrenKod=null;     /* havuzdaki bütün kodlar */
 var mbEvrenKaynak="";
 var mbTaraDurum=null;    /* {suruyor,tf,idx,olculen,toplam,baslangic} */
+
+/* 🆕 KALICI ÖNBELLEK — telefonda uygulamayı kapatıp yeniden açsan bile
+   ölçümler sıfırdan taranmasın diye TARAYICININ KENDİ CİHAZ İÇİ deposuna
+   (localStorage) yazılır. Sunucu tarafında KV/isolate önbelleği kasıtlı
+   olarak kullanılmıyor (yukarıdaki "DOĞRUDAN ÖLÇÜM" notuna bakın — KV ile
+   denenmiş, isolate/cron kaynaklı veri sızıntıları yüzünden terk edilmiş).
+   Bu önbellek TAMAMEN cihazda durur, sunucuya hiç dokunmaz, o yüzden aynı
+   sorunları taşımaz. Her dilim kendi MB_TAZE_SURE eşiğinden eskiyse
+   otomatik göz ardı edilir — bayat veri asla kullanılmaz. */
+var MB_YEREL_ANAHTAR="mbOlcumYerel_v1";
+function mbYerelYukle(){
+  var ham=null;
+  try{ham=localStorage.getItem(MB_YEREL_ANAHTAR)}catch(e){return}
+  if(!ham)return;
+  var paket=null;
+  try{paket=JSON.parse(ham)}catch(e){return}
+  if(!paket||typeof paket!=="object")return;
+  var simdi=Date.now();
+  for(var tf in paket){
+    var kayit=paket[tf];
+    if(!kayit||typeof kayit.ts!=="number"||!kayit.veri)continue;
+    var sure=MB_TAZE_SURE[tf]||9e5;
+    if(simdi-kayit.ts>sure)continue;              /* bayatlamış, atla */
+    if(!mbOlcum[tf])mbOlcum[tf]={};
+    for(var kod in kayit.veri)if(!mbOlcum[tf][kod])mbOlcum[tf][kod]=kayit.veri[kod];
+  }
+}
+var mbYerelYazZamanlayici=null;
+function mbYerelYazPlanla(){
+  /* Art arda gelen onlarca parçadan sonra her seferinde değil, 1.5 sn'de
+     bir tek seferde yazılır — hem hızlı hem gereksiz iş yapmaz. */
+  if(mbYerelYazZamanlayici)return;
+  mbYerelYazZamanlayici=setTimeout(function(){
+    mbYerelYazZamanlayici=null;
+    try{
+      var simdi=Date.now(),paket={};
+      for(var tf in mbOlcum)paket[tf]={ts:simdi,veri:mbOlcum[tf]};
+      localStorage.setItem(MB_YEREL_ANAHTAR,JSON.stringify(paket));
+    }catch(e){/* kota/izin sorunu olursa sessizce vazgeç, tarama etkilenmez */}
+  },1500);
+}
+/* 🆕 Evren (hisse listesi) her nereden gelirse gelsin TEK noktadan atanır:
+   hem mbEvrenKod'u set eder hem de yerel önbellekten doldurur — böyle üç
+   ayrı yerde aynı iş tekrar yazılmaz. */
+function mbEvrenAta(r){
+  if(r&&r.ok&&r.kodlar){mbEvrenKod=r.kodlar;mbEvrenKaynak=r.kaynak||""}
+  mbYerelYukle();
+}
 
 function mbOlcumSay(tf){return mbOlcum[tf]?Object.keys(mbOlcum[tf]).length:0}
 /* Seçili dilimlerde toplam kaç ölçüm gerekiyor / kaçı var */
@@ -7900,7 +7960,7 @@ function mbPaketUretOzel(){
   return v;
 }
 /* ── Tarama döngüsü ── */
-var MB_KANAL=3;              /* aynı anda yolda kaç istek */
+var MB_KANAL=6;              /* aynı anda yolda kaç istek (🆕 3'ten 6'ya çıkarıldı — daha hızlı) */
 var MB_PARCA=16;             /* bir istekte kaç hisse (sunucu tavanı 16) */
 var MB_ISTEK_ZAMAN=20000;    /* bir parça bu kadar sürerse askıda sayılır */
 var MB_HATA_TAVAN=60;        /* bu kadar hatadan sonra tarama durur */
@@ -7931,7 +7991,7 @@ function mbTaraBaslat(){
     post("/api/malboga",{is:"evren"}).then(function(r){
       if(!r||!r.ok||!r.kodlar||!r.kodlar.length){
         mbTaraDurum=null;el("govde").innerHTML='<div class="bos">Hisse listesi alınamadı.</div>';return}
-      mbEvrenKod=r.kodlar;mbEvrenKaynak=r.kaynak||"";
+      mbEvrenAta(r);
       mbTaraBaslat();
     }).catch(function(){mbTaraDurum=null;
       el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
@@ -8001,6 +8061,7 @@ function mbTaraTur(){
           for(var i2=0;i2<is2.kodlar.length;i2++)
             if(!mbOlcum[is2.tf][is2.kodlar[i2]])eksik.push(is2.kodlar[i2]);
           if(eksik.length&&d.hata<MB_HATA_TAVAN){d.hata++;d.kuyruk.push({tf:is2.tf,kodlar:eksik})}
+          mbYerelYazPlanla();   /* 🆕 yeni ölçümü cihazdaki kalıcı önbelleğe de yaz */
         }else{
           d.hata++;
           if(d.hata<MB_HATA_TAVAN)d.kuyruk.push({tf:is2.tf,kodlar:is2.kodlar});
@@ -8020,7 +8081,7 @@ function mbTaraTur(){
   }
   /* iş kalmadı ve uçuşta istek yoksa bitti */
   if(!d.acik&&!d.kuyruk.length){d.suruyor=false;mbSonTarama=Date.now();
-    mbNobetciKapat();mbCizYenile();sekCiz();}   /* 🆕 tarama bitti → düğmeyi yeşile boya */
+    mbNobetciKapat();mbYerelYazPlanla();mbCizYenile();sekCiz();}   /* 🆕 tarama bitti → düğmeyi yeşile boya + son hâli kaydet */
 }
 /* 🆕 Ekrana yalnız "Hisse Taraması" sekmesindeyken yazar — arka planda
    başka bir sekmedeyken çağrılırsa, o an ekranda olan başka bir sekmenin
