@@ -9791,10 +9791,33 @@ function ZTum(e,t){
   }
   return out;
 }function AYNA_TS(ts){const d=new Date(ts*1000+108e5),ik=n=>String(n).padStart(2,"0");return ik(d.getUTCDate())+"/"+ik(d.getUTCMonth()+1)+" "+ik(d.getUTCHours())+":"+ik(d.getUTCMinutes())}
-function AYNA(kod,z){const f=v=>Number(v).toFixed(2),yz=y=>(y>=0?"+":"")+Number(y).toFixed(1)+"%",fiyat=z.f;
+/* 🙈 DİLİM GİZLEME: kullanıcı ham kodu (4SA/1SA/1G…) görüp "aa bu 4 saatlik"
+   diye deşifre etmesin — yalnız KISA/ORTA/UZUN gibi kaba bir vade adı görsün. */
+const TF_GIZLE={"15DK":"Kısa","1SA":"Kısa","4SA":"Orta","1G":"Uzun","1HAF":"Uzun","1AY":"Uzun",
+KISA:"Kısa",ORTA:"Orta",UZUN:"Uzun"};
+const TF_KANONIK={"15DK":"KISA","1SA":"KISA","4SA":"ORTA","1G":"UZUN","1HAF":"UZUN","1AY":"UZUN"};
+/* 🛑 ZİNCİR STOP: her dilim bir alt dilime bakar (ORTA→KISA, UZUN→ORTA).
+   KISA'nın kendi alt dilimi (15DK) şu an ayrı bir kırılım katmanı olarak
+   izlenmiyor — o eklenene kadar KISA seviyesinde bu satır çıkmaz.
+   Alt dilimin YÖNÜ, kendi giriş/hedef ilişkisinden çıkarılır (hedef>giriş
+   ise yukarı/boğa) ve ana dilimin yönüyle AYNI olmak zorunda — aksi halde
+   mantıken "üste doğru kırılan nokta fiyatın altında" garantisi bozulur,
+   o yüzden yön uyuşmuyorsa hiç kullanılmaz. Alt dilim henüz aday (kırılmamış)
+   ise de kullanılmaz — "kırdığı" bir seviye yok demektir. */
+const ALT_TF={ORTA:"KISA",UZUN:"ORTA"};
+function zincirStop(tfKartlar,anaTfKey,yon){
+if(!tfKartlar)return null;
+const altKey=ALT_TF[anaTfKey];if(!altKey)return null;
+const g=tfKartlar[altKey];if(!g||!g.kart||"sinyal"!==g.tip)return null;
+const x=g.kart;if(null==x.giris||null==x.hedef)return null;
+const altYon=Number(x.hedef)>=Number(x.giris)?"boga":"ayi";
+if(altYon!==yon)return null;
+return Number(x.giris)}
+function AYNA(kod,z,tfKartlar){const f=v=>Number(v).toFixed(2),yz=y=>(y>=0?"+":"")+Number(y).toFixed(1)+"%",fiyat=z.f;
 const yukHed=z.yuk&&z.yuk.length?z.yuk[z.yuk.length-1].v:null;
 const asgHed=z.asg&&z.asg.length?z.asg[z.asg.length-1].v:null;
-let m="🔎 <b>"+kod+"</b>  ·  <b>"+f(fiyat)+" ₺</b>"+(z.tf?"  ·  <i>"+z.tf+"</i>":"")+"\n";
+const anaTfKey=TF_KANONIK[z.tf]||null;
+let m="🔎 <b>"+kod+"</b>  ·  <b>"+f(fiyat)+" ₺</b>"+(z.tf&&TF_GIZLE[z.tf]?"  ·  <i>"+TF_GIZLE[z.tf]+" vade</i>":"")+"\n";
 /* ---------- DURUM 1: YUKARI KIRILIM ZATEN OLDU ---------- */
 if("boga"===z.yon&&null!=z.ust){const giris=z.ust,kar=100*(fiyat/giris-1);
 m+="\n🟢🟢🟢🟢🟢🟢🟢🟢\n<b>YUKARI KIRILIM AKTİF</b>\n";
@@ -9805,6 +9828,8 @@ if(null!=yukHed){const yol=yukHed>giris?100*(fiyat-giris)/(yukHed-giris):0;
 m+="🎯 <b>HEDEF: "+f(yukHed)+"</b>  ·  girişten "+yz(100*(yukHed/giris-1))+"  ·  buradan <b>"+yz(100*(yukHed/fiyat-1))+"</b>\n";
 m+="📍 Yolun <b>%"+Math.max(0,Math.min(100,yol)).toFixed(0)+"</b>'i tamamlandı\n";
 if(z.yuk.length>1)m+="🧱 Ara dirençler: "+z.yuk.slice(0,z.yuk.length-1).map(x=>f(x.v)).join(" · ")+"\n"}
+{const st=zincirStop(tfKartlar,anaTfKey,"boga");
+if(null!=st)m+="🛑 <b>STOP (alt dilim kırılımı):</b> "+f(st)+"  ·  buradan "+yz(100*(st/fiyat-1))+"\n"}
 if(null!=z.alt)m+="⛔ <b>Geçersiz olur:</b> "+f(z.alt)+" altına inerse ("+yz(100*(z.alt/fiyat-1))+")\n";
 if(null!=asgHed)m+="<i>O durumda aşağı hedef: "+f(asgHed)+"</i>\n"}
 /* ---------- DURUM 2: AŞAĞI KIRILIM ZATEN OLDU ---------- */
@@ -9817,6 +9842,8 @@ if(null!=asgHed){const yol=giris>asgHed?100*(giris-fiyat)/(giris-asgHed):0;
 m+="🎯 <b>DÜŞÜŞ HEDEFİ: "+f(asgHed)+"</b>  ·  girişten "+yz(100*(asgHed/giris-1))+"  ·  buradan <b>"+yz(100*(asgHed/fiyat-1))+"</b>\n";
 m+="📍 Yolun <b>%"+Math.max(0,Math.min(100,yol)).toFixed(0)+"</b>'i tamamlandı\n";
 if(z.asg.length>1)m+="🧱 Ara destekler: "+z.asg.slice(0,z.asg.length-1).map(x=>f(x.v)).join(" · ")+"\n"}
+{const st=zincirStop(tfKartlar,anaTfKey,"ayi");
+if(null!=st)m+="🛑 <b>STOP (alt dilim kırılımı):</b> "+f(st)+"  ·  buradan "+yz(100*(st/fiyat-1))+"\n"}
 if(null!=z.ust)m+="⛔ <b>Geçersiz olur:</b> "+f(z.ust)+" üstüne çıkarsa ("+yz(100*(z.ust/fiyat-1))+")\n";
 if(null!=yukHed)m+="<i>O durumda yukarı hedef: "+f(yukHed)+"</i>\n"}
 /* ---------- DURUM 3: ARA BÖLGE — İKİ SENARYO ---------- */
@@ -9836,10 +9863,26 @@ else m+="<i>aşağı bacak oluşmamış</i>\n";
 if(null!=z.ust)m+="⛔ "+f(z.ust)+" üstüne çıkarsa bu senaryo iptal\n"}
 else m+="<i>alt seviye belirlenemedi</i>\n"}
 if(z.atr)m+="\n📏 Günlük oynaklık (ATR): <b>"+z.atr+"%</b>\n";
+/* ⏳ BEKLEYEN SENARYO: yukarıdaki tek dilimin (ORTA gösterilen) dışında
+   KISA ve UZUN dilimde ne durumda olduğumuzu — aday mı, zaten sinyal mi,
+   hiç yok mu — kısaca ekliyoruz. tfKartlar = ZTum(liste,kod) çıktısı;
+   çağıran taraf vermezse (eski kullanım) bu blok sessizce atlanır. */
+if(tfKartlar){
+const BEK_AD={KISA:"Kısa vade",UZUN:"Uzun vade"};
+const bekParca=tfKey=>{const g=tfKartlar[tfKey];
+if(!g||!g.kart)return "▫️ <b>"+BEK_AD[tfKey]+":</b> aktif sinyal/aday yok\n";
+const x=g.kart,adayMi="aday"===g.tip;let s="▫️ <b>"+BEK_AD[tfKey]+":</b> ";
+if(adayMi){s+="🟨 aday — henüz kırılmadı";if(null!=x.tetik)s+=" · tetik "+f(x.tetik)}
+else{s+="🟢 zaten sinyal aktif";if(null!=x.giris)s+=" · giriş "+f(x.giris)}
+if(null!=x.hedef)s+=" · hedef "+f(x.hedef);
+if(null!=x.potansiyel)s+=Number(x.potansiyel)<=0?" (🏆 tuttu)":" (+"+Number(x.potansiyel).toFixed(1)+"% kaldı)";
+return s+"\n"};
+m+="\n⏳ <b>BEKLEYEN SENARYO</b>\n"+bekParca("KISA")+bekParca("UZUN");
+}
 return m+"\n<i>Seviyeler kapanışa göre değerlendirilir. Fitil kırılımı sinyal sayılmaz.</i>\n<i>⚠️ Yatırım tavsiyesi değildir.</i>"}
-function P(e,t){const a=Z(e,t),z=e&&e.sozluk&&e.sozluk[t];
-if(z&&a)return j(a)+"\n\n"+AYNA(t,z);
-if(z)return AYNA(t,z);
+function P(e,t){const a=Z(e,t),z=e&&e.sozluk&&e.sozluk[t],tfK=ZTum(e,t);
+if(z&&a)return j(a)+"\n\n"+AYNA(t,z,tfK);
+if(z)return AYNA(t,z,tfK);
 if(a)return "🔎 <b>"+t+"</b> için güncel durum\n\n"+j(a);
 return "🔎 <b>"+t+"</b>\n\nBu kod taramada bulunamadı. Yazımı kontrol et (örn. <code>THYAO</code>) ya da yeni tarama sonrası tekrar dene."}function PY(uname,userId,chatId){const link="https://t.me/"+uname+"?start=r"+userId,paylas="https://t.me/share/url?url="+encodeURIComponent(link)+"&text="+encodeURIComponent(DAVET_METIN),menu=u(userId);menu.inline_keyboard=[[{text:"📤 Paylaş",url:paylas}]].concat(menu.inline_keyboard);return{chat_id:chatId,parse_mode:"HTML",disable_web_page_preview:!0,text:"📤 <b>Sistemi paylaş</b>\n\nAşağıdaki düğmeye dokun, Telegram'da kime göndereceğini seç. Davet bağlantın otomatik olarak gönderilir.",reply_markup:menu}}
 const Q={potansiyel:"🟩🟩🟩🟩🟩🟩🟩🟩\n📊 <b>1 SAAT</b> · orta trade\n<i>yalnız 1 saatlik sinyaller</i>\n🟩🟩🟩🟩🟩🟩🟩🟩",fibo:"🟦🟦🟦🟦🟦🟦🟦🟦\n📐 <b>4 SAAT</b> · orta vade\n<i>yalnız 4 saatlik sinyaller</i>\n🟦🟦🟦🟦🟦🟦🟦🟦",uzunvade:"🟪🟪🟪🟪🟪🟪🟪🟪\n🗓 <b>1 GÜN</b> · uzun vade\n<i>yalnız günlük sinyaller</i>\n🟪🟪🟪🟪🟪🟪🟪🟪",haftalik:"🟫🟫🟫🟫🟫🟫🟫🟫\n📅 <b>1 HAFTA</b> · pozisyon\n<i>yalnız haftalık sinyaller</i>\n🟫🟫🟫🟫🟫🟫🟫🟫",adayHafta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📅 <b>1 HAFTA</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrta:"🟨🟨🟨🟨🟨🟨🟨🟨\n📊 <b>1 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayOrtaVade:"🟨🟨🟨🟨🟨🟨🟨🟨\n📐 <b>4 SAAT</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨",adayUzun:"🟨🟨🟨🟨🟨🟨🟨🟨\n🗓 <b>1 GÜN</b> · adaylar\n<i>henüz kırılmadı — tetik bekliyor</i>\n🟨🟨🟨🟨🟨🟨🟨🟨"};const _ANA={async fetch(p,A,q){ORTAM=A;if(A&&A.ADMIN_IDS)try{EK_YON=new Set(String(A.ADMIN_IDS).split(",").map(x=>x.trim()).filter(Boolean))}catch(_){}const $=new URL(p.url);if(n=$.origin,
@@ -10350,7 +10393,7 @@ GC.push({gun:gun,tf:rec.t||"",dolgu:rec.r===0,giris:rec.g,son:rec.s,
 yuzde:100*(rec.s/rec.g-1),zirve:rec.max>0?100*(rec.max/rec.g-1):null,
 yas:Math.max(0,Math.round((new Date(bg)-new Date(gun))/864e5))})}
 if(GC.length>=24)break}}catch(e){}
-return JS({ok:!0,kart:kart||null,tfKartlar:tfKartlar,ayna:z?AYNA(kod,z):"",fav:fav,poz:poz,gecmis:GC})}
+return JS({ok:!0,kart:kart||null,tfKartlar:tfKartlar,ayna:z?AYNA(kod,z,tfKartlar):"",fav:fav,poz:poz,gecmis:GC})}
 if("/api/mumlar"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 const tf=mumTfNormal(gov.tf);
