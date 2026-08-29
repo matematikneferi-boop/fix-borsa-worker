@@ -516,13 +516,19 @@ class KapFonIstemci:
                 },
                 headers={"Referer": f"{KAP_BASE}/tr/bildirim-sorgu"},
             )
-        except Exception:
+        except Exception as e:
+            if self.debug:
+                print(f"    🐛 son_tanitici_bilgiler_bildirimi('{fon_kodu}'): istek EXCEPTION: {e!r}")
             return None
         if r.status_code != 200:
+            if self.debug:
+                print(f"    🐛 son_tanitici_bilgiler_bildirimi('{fon_kodu}'): HTTP {r.status_code}, gövde: {r.text[:300]!r}")
             return None
         try:
             kayitlar = r.json()
-        except Exception:
+        except Exception as e:
+            if self.debug:
+                print(f"    🐛 son_tanitici_bilgiler_bildirimi('{fon_kodu}'): JSON parse hatası: {e!r}, gövde: {r.text[:300]!r}")
             return None
         fon_kodu_n = _tr_upper(fon_kodu.strip())
         tanitici_hepsi = [
@@ -568,13 +574,19 @@ class KapFonIstemci:
                 },
                 headers={"Referer": f"{KAP_BASE}/tr/bildirim-sorgu"},
             )
-        except Exception:
+        except Exception as e:
+            if self.debug:
+                print(f"    🐛 tum_tanitici_bilgiler_bildirimleri('{fon_kodu}'): istek EXCEPTION: {e!r}")
             return {}
         if r.status_code != 200:
+            if self.debug:
+                print(f"    🐛 tum_tanitici_bilgiler_bildirimleri('{fon_kodu}'): HTTP {r.status_code}, gövde: {r.text[:300]!r}")
             return {}
         try:
             kayitlar = r.json()
-        except Exception:
+        except Exception as e:
+            if self.debug:
+                print(f"    🐛 tum_tanitici_bilgiler_bildirimleri('{fon_kodu}'): JSON parse hatası: {e!r}")
             return {}
         fon_kodu_n = _tr_upper(fon_kodu.strip())
         adaylar = []
