@@ -3827,7 +3827,13 @@ body{margin:0;background:var(--bg);color:var(--yazi);
   border:1px solid var(--ciz);border-left:3px solid var(--ciz);
   border-radius:12px;padding:11px 12px;margin-bottom:8px}
 .satir:active{background:var(--kart2)}
+.satir.adaySatir:active{background:var(--kart)}
 .satir .sol{flex:1;min-width:0}
+.ahBlok{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.ahSat{font-size:12.5px;color:var(--yazi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ahSat b{font-variant-numeric:tabular-nums}
+.ahYuz{font-size:11.5px;color:var(--soluk);font-weight:600}
+.ahYuz.sa{color:var(--sar)}
 .kod{font-weight:800;font-size:15.5px;letter-spacing:.3px}
 .altbilgi{font-size:11.5px;color:var(--soluk);margin-top:3px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3883,6 +3889,10 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .sat:last-child{border-bottom:0}
 .sat b{font-variant-numeric:tabular-nums}
 .et{color:var(--soluk);font-size:12.5px}
+.tfSira{display:flex;flex-direction:column;gap:8px}
+.tfKutu{background:var(--kart2);border-radius:10px;padding:9px 10px}
+.tfKutu .sat{font-size:12.5px;padding:3px 0}
+.tfBas{border-left:3px solid var(--ciz);padding-left:7px;font-size:12.5px;margin-bottom:4px}
 .dg{display:block;width:100%;background:var(--mavi);color:#fff;border:0;border-radius:10px;
   padding:13px;font-size:14.5px;font-weight:700;margin-top:9px}
 .dg.ik{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi)}
@@ -4685,8 +4695,20 @@ function sirBagla(){
     b.onclick=function(){tit();sira=b.dataset.sr;ciz()};
   });
 }
+/* 🎯 3.7% EŞİĞİ — hedefe kalan yüzde 3.7'den azsa (hedef neredeyse
+   tutmuş ya da zaten tutmuşsa) ne adaylarda ne de gerçek KISA/ORTA/UZUN
+   listelerinde gösterilmesin. Alanı olmayan (potansiyel hesaplanamayan)
+   kayıtlar süzülmez — yalnız değeri BİLİNEN ve eşiğin altında kalanlar. */
+var HEDEF_ESIK_YUZDE=3.7;
+function hedefEsikGecti(x){
+  if(!x)return!0;
+  if(x.potansiyel==null)return!0;
+  var p=Number(x.potansiyel);
+  if(!isFinite(p))return!0;
+  return p>=HEDEF_ESIK_YUZDE;
+}
 function dizil(ad){
-  var l=(D.kartlar&&D.kartlar[ad])||[];
+  var l=((D.kartlar&&D.kartlar[ad])||[]).filter(hedefEsikGecti);
   /* 📅 BUGÜN: eskiden "En yeni" idi ve yalnızca zamana göre sıralıyordu —
      dünkü sinyaller de listede kalıyordu. Artık bir SÜZGEÇ: sadece bugün
      oluşan sinyaller, en çok kazandırandan en aza doğru. "Bugün ne oldu?"
@@ -4697,23 +4719,32 @@ function dizil(ad){
     });
   }
   var ix=(D.kartlar&&D.kartlar.sira&&D.kartlar.sira[ad]&&D.kartlar.sira[ad][sira])||null;
-  if(ix&&ix.length===l.length)return ix.map(function(i){return l[i]});
+  if(ix&&ix.length===l.length)return ix.map(function(i){return l[i]}).filter(hedefEsikGecti);
   var c=l.slice();
   if(sira==="kar")c.sort(function(a,b){return(kar(b)==null?-9999:kar(b))-(kar(a)==null?-9999:kar(a))});
   return c;
 }
+/* 🟨 ADAYLAR: bu dört liste anahtarında satır hem tıklanamaz hem de
+   ilk görünen kısımda Direnç (TP1 · tetik) ve Hedef (TP2 · potansiyel)
+   birlikte gösterilir — genel detaya atlayıp yanlış/eski bir dilimin
+   verisini göstermesin diye (bkz. adayCiz ve satirBagla). */
+var ADAY_ANAHTAR={adayOrta:1,adayOrtaVade:1,adayUzun:1,adayHafta:1};
 function satirHtml(k,ad){
   var t=TF[ad]||{kisa:k.tf||"",renk:"var(--ciz)"};
   var kr=kar(k), pot=(k.potansiyel==null?null:Number(k.potansiyel));
+  var isAday=!!ADAY_ANAHTAR[ad];
   var sag=(pot==null)?"":(pot<=0?'<span class="sa">🏆 TUTTU</span>':'<span class="so">hedefe <b>+'+pot.toFixed(1)+"%</b></span>");
+  if(isAday)sag=""; /* aynı bilgi aşağıdaki Direnç/Hedef bloğunda zaten var */
   var alt=[];
   alt.push(t.kisa);
   /* CANLI: kırılım oluşan barda — bar kapanınca geri dönebilir. */
   if(k.canli)alt.push("⚡ canlı");
-  if(k.tetik!=null)alt.push("🔓 tetik "+N(k.tetik)+(k.tetikYuzde!=null?" · %"+Number(k.tetikYuzde).toFixed(1)+" kaldı":""));
-  /* Giriş fiyatı da bir ipucudur: "sinyal 138.70" ile hisse bulunabilir.
-     Kilitliyken sayı yerine kilit yazılır. */
-  else if(k.giris!=null)alt.push(buguluMu(k)?"sinyal 🔒":("sinyal "+N(k.giris)));
+  if(!isAday){
+    if(k.tetik!=null)alt.push("🔓 tetik "+N(k.tetik)+(k.tetikYuzde!=null?" · %"+Number(k.tetikYuzde).toFixed(1)+" kaldı":""));
+    /* Giriş fiyatı da bir ipucudur: "sinyal 138.70" ile hisse bulunabilir.
+       Kilitliyken sayı yerine kilit yazılır. */
+    else if(k.giris!=null)alt.push(buguluMu(k)?"sinyal 🔒":("sinyal "+N(k.giris)));
+  }
   /* ⚓ Kirilimdan bu yana alanlarin ortalama maliyetine gore konum.
      Listede tek kelime yeter; ayrinti detay ekraninda. */
   if(k.avwap>0&&k.avwapBar>=3)
@@ -4722,10 +4753,20 @@ function satirHtml(k,ad){
   if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
   var bg=bugunMu(k);
   var kilitli=buguluMu(k);
-  return '<div class="satir'+(bg?" bgnSatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'"'+
-    (kilitli?' data-kilit="1"':"")+' style="border-left-color:'+t.renk+'">'+
+  var adayBlok="";
+  if(isAday){
+    var direncYuzde=(k.tetikYuzde==null)?null:Number(k.tetikYuzde);
+    adayBlok='<div class="ahBlok">'+
+      '<div class="ahSat">🧱 Direnç <b>'+(k.tetik!=null?N(k.tetik):"—")+"</b>"+
+      (direncYuzde!=null?' <span class="ahYuz">%'+direncYuzde.toFixed(1)+" kaldı</span>":"")+"</div>"+
+      '<div class="ahSat">🎯 Hedef <b>'+(k.hedef!=null?N(k.hedef):"—")+"</b>"+
+      (pot!=null?(pot<=0?' <span class="ahYuz sa">🏆 TUTTU</span>':' <span class="ahYuz">%'+pot.toFixed(1)+" kaldı</span>"):"")+"</div></div>";
+  }
+  return '<div class="satir'+(bg?" bgnSatir":"")+(isAday?" adaySatir":"")+'" data-kod="'+E(k.kod)+'" data-l="'+ad+'"'+
+    (kilitli?' data-kilit="1"':"")+(isAday?' data-noklik="1"':"")+' style="border-left-color:'+t.renk+'">'+
     '<div class="sol"><div class="kod">'+havaIkon(k)+(k.rozet?'<span class="rz">'+k.rozet+"</span>":"")+
     (bg?'<span class="bgn">BUGÜN</span>':"")+kodHtml(k)+"</div>"+
+    adayBlok+
     '<div class="altbilgi">'+E(alt.join(" · "))+"</div>"+
     (function(){var rz=rozlerHepsi(k);return rz?'<div class="rozSat">'+rz+"</div>":""})()+"</div>"+
     '<div class="sag"><div class="fiyat'+(kilitli?" buguluKod":"")+'">'+N(k.fiyat)+" ₺</div>"+
@@ -4751,6 +4792,10 @@ function kodHtml(k){
 }
 function satirBagla(){
   [].forEach.call(document.querySelectorAll("[data-kod]"),function(b){
+    /* 🟨 ADAYLAR: bilerek TIKLANAMAZ — genel detay ekranı bu hissenin
+       başka bir dilimdeki kaydını gösterebiliyor (yanlış/eski yüzde
+       sorununun kaynağı buydu), o yüzden aday satırında tıklama yok. */
+    if(b.dataset.noklik)return;
     b.onclick=function(){
       tit();
       /* Buğulu satır: kod detay ekranından okunabilirdi, o yüzden
@@ -4841,7 +4886,7 @@ function adayCiz(){
   }
   var alt=["adayOrta","adayOrtaVade","adayUzun","adayHafta"];
   var h='<div class="sirala">'+alt.map(function(a){
-    var n=(D.kartlar&&D.kartlar[a]&&D.kartlar[a].length)||0;
+    var n=((D.kartlar&&D.kartlar[a])||[]).filter(hedefEsikGecti).length;
     return '<button class="sir'+(adayTf===a?" on":"")+'" data-at="'+a+'">'+TF[a].kisa+(n?" ("+n+")":"")+"</button>";
   }).join("")+"</div>";
   var l=dizil(adayTf);
@@ -5991,6 +6036,37 @@ function gbInboxAc(){
     });
   }).catch(function(){K.innerHTML='<div class="kapat"><b>📩 Bize Ulaşın</b><button id="dkapat">✕ Kapat</button></div><div class="bos">⚠️ yüklenemedi</div>';el("dkapat").onclick=kapatEt});
 }
+/* 🗂 VADEYE GÖRE SENARYO — "Hisse Ara" ile bulunan bir kod için KISA/
+   ORTA/UZUN'un HER BİRİNİN kendi (varsa) sinyal ya da aday kaydını ayrı
+   ayrı gösterir. Böylece tek bir dilimin (Z() ile rastgele bulunan)
+   kaydı diğerlerinin yerine geçmez — her vade kendi yorumunu taşır. */
+var TF_META={KISA:TF.potansiyel,ORTA:TF.fibo,UZUN:TF.uzunvade};
+function tfSenaryoBlok(tfKartlar){
+  if(!tfKartlar)return "";
+  var parcalar=["KISA","ORTA","UZUN"].map(function(tfKey){
+    var giris=tfKartlar[tfKey], meta=TF_META[tfKey]||{ik:"",ad:tfKey,renk:"var(--ciz)"};
+    var baslik='<div class="tfBas" style="border-left-color:'+meta.renk+'">'+meta.ik+" <b>"+meta.ad+"</b></div>";
+    if(!giris||!giris.kart)
+      return '<div class="tfKutu">'+baslik+'<div class="altbilgi">Bu dilimde aktif sinyal ya da aday yok.</div></div>';
+    var x=giris.kart, adayMi=(giris.tip==="aday");
+    var s="";
+    if(adayMi){
+      s+='<div class="sat"><span class="et">Durum</span><b class="sa">🟨 Aday — henüz kırılmadı</b></div>';
+      if(x.tetik!=null)s+='<div class="sat"><span class="et">🧱 Direnç (tetik)</span><b>'+N(x.tetik)+
+        (x.tetikYuzde!=null?"  ("+Number(x.tetikYuzde).toFixed(1)+"% kaldı)":"")+"</b></div>";
+    }else{
+      var krX=kar(x);
+      s+='<div class="sat"><span class="et">Durum</span><b class="ye">🟢 Sinyal aktif'+(x.canli?" · ⚡ canlı":"")+"</b></div>";
+      if(x.giris!=null)s+='<div class="sat"><span class="et">Sinyal fiyatı</span><b>'+N(x.giris)+" ₺</b></div>";
+      if(krX!=null)s+='<div class="sat"><span class="et">Sinyalden bu yana</span><b class="'+(krX>=0?"ye":"kr")+'">'+Y(krX)+"</b></div>";
+    }
+    if(x.hedef!=null)s+='<div class="sat"><span class="et">🎯 Hedef</span><b>'+N(x.hedef)+"</b></div>";
+    if(x.potansiyel!=null)s+='<div class="sat"><span class="et">Hedefe kalan</span><b class="'+
+      (Number(x.potansiyel)<=0?"sa":"ye")+'">'+(Number(x.potansiyel)<=0?"🏆 hedef tuttu":"+"+Number(x.potansiyel).toFixed(1)+"%")+"</b></div>";
+    return '<div class="tfKutu">'+baslik+s+"</div>";
+  });
+  return '<div class="kutu"><h3>🗂 Vadeye göre senaryo</h3><div class="tfSira">'+parcalar.join("")+"</div></div>";
+}
 function detay(kod,ad){
   var K=el("katman");
   K.innerHTML='<div class="kapat"><b>'+E(kod)+'</b><button id="dkapat">✕ Kapat</button></div>'+
@@ -6116,6 +6192,7 @@ function detay(kod,ad){
       h+='<div class="dbas"><div class="k">'+E(kod)+"</div></div>"+
          '<div class="bilgi">Bu hisse şu an hiçbir listede değil — aşağıda güncel iki yönlü durumu var.</div>';
     }
+    h+=tfSenaryoBlok(v&&v.tfKartlar);
     h+='<div class="kutu"><h3>📊 Grafik<span id="desenRozet"></span></h3><div id="mumKutu" class="mumKutu"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div><div id="desenYorum"></div></div>';
     h+='<div id="desenKumulatif"></div>';
     var G=(v&&v.gecmis)||[];
@@ -9685,7 +9762,28 @@ async function XPGUNLUK(e,t){if(!e.VERI)return[];const a=await e.VERI.get("portf
 async function portfoyKullanicilari(e){if(!e.VERI)return[];const out=[];let cursor=void 0
 ;for(;;){const liste=await e.VERI.list({prefix:"portfoy:",limit:1e3,cursor});for(const k of liste.keys)out.push(k.name.slice(8))
 ;if(!liste.list_complete&&liste.cursor){cursor=liste.cursor}else break}return out}function Z(e,t){if(!e||!e.kartlar)return null;for(const a of Object.keys(e.kartlar)){
-if("sira"===a)continue;const n=(e.kartlar[a]||[]).find(e=>e&&e.kod===t);if(n)return n}return null}function AYNA_TS(ts){const d=new Date(ts*1000+108e5),ik=n=>String(n).padStart(2,"0");return ik(d.getUTCDate())+"/"+ik(d.getUTCMonth()+1)+" "+ik(d.getUTCHours())+":"+ik(d.getUTCMinutes())}
+if("sira"===a)continue;const n=(e.kartlar[a]||[]).find(e=>e&&e.kod===t);if(n)return n}return null}
+/* 🔎 HİSSE ARA — üç dilim ayrı ayrı: Z() ilk bulduğu listeyi (hangi
+   dilimden olursa olsun) döndürüyordu, bu yüzden aday listesindeki bir
+   hissenin detayına girildiğinde başka bir dilimin (örn. zaten kırılmış
+   KISA sinyalinin) kaydı gösterilebiliyordu — "adaylarda %40, detayda %7"
+   şikayetinin kök nedeni buydu. ZTum, KISA/ORTA/UZUN'un HER BİRİ için
+   kendi sinyal listesini (varsa) yoksa kendi aday listesini ayrı ayrı
+   arar; hiçbiri diğerinin verisini karıştırmaz. */
+function ZTum(e,t){
+  const out={};
+  if(!e||!e.kartlar)return out;
+  for(const tf of Object.keys(MB_PIVOT_S)){
+    const sinyalListe=e.kartlar[MB_PIVOT_S[tf]]||[];
+    let bulunan=sinyalListe.find(x=>x&&x.kod===t)||null,tip="sinyal";
+    if(!bulunan){
+      const adayListe=e.kartlar[MB_PIVOT_ADAY[tf]]||[];
+      bulunan=adayListe.find(x=>x&&x.kod===t)||null;tip="aday";
+    }
+    out[tf]=bulunan?{kart:bulunan,tip:tip}:null;
+  }
+  return out;
+}function AYNA_TS(ts){const d=new Date(ts*1000+108e5),ik=n=>String(n).padStart(2,"0");return ik(d.getUTCDate())+"/"+ik(d.getUTCMonth()+1)+" "+ik(d.getUTCHours())+":"+ik(d.getUTCMinutes())}
 function AYNA(kod,z){const f=v=>Number(v).toFixed(2),yz=y=>(y>=0?"+":"")+Number(y).toFixed(1)+"%",fiyat=z.f;
 const yukHed=z.yuk&&z.yuk.length?z.yuk[z.yuk.length-1].v:null;
 const asgHed=z.asg&&z.asg.length?z.asg[z.asg.length-1].v:null;
@@ -10231,7 +10329,7 @@ return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,
 link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN,gbYeni:gbYeni})}
 if("/api/hisse"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
-const L2=await g(A),kart=Z(L2,kod),z=L2&&L2.sozluk&&L2.sozluk[kod],fav=(await X(A,uid)).includes(kod),poz=(await XP(A,uid))[kod]||null;
+const L2=await g(A),kart=Z(L2,kod),tfKartlar=ZTum(L2,kod),z=L2&&L2.sozluk&&L2.sozluk[kod],fav=(await X(A,uid)).includes(kod),poz=(await XP(A,uid))[kod]||null;
 /* GEÇMİŞ SİNYALLER: bu hisse daha önce hangi gün, hangi dilimde sinyal
    verdi ve o günden bugüne ne oldu. Kayıt anahtarı kod@dilim. */
 const GC=[];
@@ -10245,7 +10343,7 @@ GC.push({gun:gun,tf:rec.t||"",dolgu:rec.r===0,giris:rec.g,son:rec.s,
 yuzde:100*(rec.s/rec.g-1),zirve:rec.max>0?100*(rec.max/rec.g-1):null,
 yas:Math.max(0,Math.round((new Date(bg)-new Date(gun))/864e5))})}
 if(GC.length>=24)break}}catch(e){}
-return JS({ok:!0,kart:kart||null,ayna:z?AYNA(kod,z):"",fav:fav,poz:poz,gecmis:GC})}
+return JS({ok:!0,kart:kart||null,tfKartlar:tfKartlar,ayna:z?AYNA(kod,z):"",fav:fav,poz:poz,gecmis:GC})}
 if("/api/mumlar"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
 const tf=mumTfNormal(gov.tf);
