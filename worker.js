@@ -316,7 +316,14 @@ function stopSeviyeBul(ad,rec){
     const altKart=altListe.find(x=>x&&x.kod===rec.k);
     if(altKart&&altKart.giris>0&&altKart.hedef>0){
       const altYon=Number(altKart.hedef)>=Number(altKart.giris)?"boga":"ayi";
-      if(altYon===yon)return Number(altKart.giris);
+      const altGiris=Number(altKart.giris);
+      /* 🛠 DÜZELTME (kullanıcı raporu, 2026-08-30): zincir stop bazen orijinal
+         girişin YANLIŞ tarafında çıkıyordu (örn. boğa yönünde stop, girişin
+         ÜSTÜNDE) — bu da fiyat hâlâ kârdayken "stop oldu" diye işaretlenen,
+         mantıksız (kâr + ama stop) kayıtlara yol açıyordu. Artık zincirden
+         gelen seviye yalnızca doğru taraftaysa (boğada girişin altında,
+         ayıda girişin üstünde) kullanılıyor; değilse sabit yüzdeye düşülüyor. */
+      if(altYon===yon&&("boga"===yon?altGiris<rec.g:altGiris>rec.g))return altGiris;
     }
   }
   const sabitOran=STOP_SABIT_ORAN[ad];if(sabitOran==null)return null;
@@ -333,6 +340,10 @@ for(const gg of Object.keys(n.gunler)){
     if(rec.h>0&&rec.max>=rec.h)continue;/* Hedef2 vurulmuş — kapandı sayılır, stop yok */
     const sev=stopSeviyeBul(rec.l,rec);if(sev==null)continue;
     const yon=(rec.h!=null&&Number(rec.h)<Number(rec.g))?"ayi":"boga";
+    /* 🛡 Ek güvenlik: stop seviyesi girişin yanlış tarafındaysa (boğada
+       girişin üstünde, ayıda altında) bu turda atla — "kârda ama stop oldu"
+       gibi tutarsız bir kayıt asla oluşmasın. */
+    if("boga"===yon?sev>=rec.g:sev<=rec.g)continue;
     const stopOldu="boga"===yon?rec.s<=sev:rec.s>=sev;
     if(!stopOldu)continue;
     rec.r=0;
