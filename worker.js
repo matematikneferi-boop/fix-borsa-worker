@@ -294,7 +294,18 @@ if(!(a&&a.kod&&a.giris>0))continue;
 /* ANAHTAR ARTIK kod@dilim: aynı hisse iki dilimde birden sinyal verirse
    ikisi de ayrı ayrı kaydedilir — dilim bazlı performans bunu gerektirir. */
 const KK=a.kod+"@"+(a.tfKod||a.tf||"");
-if(!n.gunler[i].kayitlar[KK])n.gunler[i].kayitlar[KK]={k:a.kod,g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tfKod||a.tf||"",l:e,h:(a.hedef>0?Number(a.hedef):null),h1:(a.hedef1>0?Number(a.hedef1):null),r:1,max:Number(a.fiyat)||Number(a.giris),y3:(y3SartSayisi(a)>=3?1:0)}}}
+if(!n.gunler[i].kayitlar[KK]){n.gunler[i].kayitlar[KK]={k:a.kod,g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tfKod||a.tf||"",l:e,h:(a.hedef>0?Number(a.hedef):null),h1:(a.hedef1>0?Number(a.hedef1):null),r:1,max:Number(a.fiyat)||Number(a.giris),y3:(y3SartSayisi(a)>=3?1:0)}}
+else if(!n.gunler[i].kayitlar[KK].y3&&y3SartSayisi(a)>=3){
+  /* ⭐⭐⭐ RETROAKTİF YAKALAMA: bu güncellemeden ÖNCE açılmış ve hâlâ
+     kartlar'da (yani hâlâ AÇIK/Yolda) duran sinyaller için y3 hiç
+     hesaplanmamıştı. Hâlâ taranıyorsa ve ŞU AN 3/3 şartı sağlıyorsa
+     bugünden itibaren y3=1 işaretlenir — "sinyal anında" değil "ilk
+     fark edildiği anda" 3 yıldız demek olsa da, panel sıfırda kalmasın
+     diye en iyi yaklaşım budur. Zaten kapanmış (hedef vurmuş/stop
+     olmuş, artık kartlar'da olmayan) eski sinyaller için bu satır hiç
+     çalışmaz — o kısım kalıcı olarak eksik kalır. */
+  n.gunler[i].kayitlar[KK].y3=1;
+}}}
 for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayitlar)){const kk=n.gunler[e].kayitlar[t],kd=kk.k||String(t).split("@")[0];if(s[kd]>0){kk.s=s[kd];if(!(kk.max>0)||s[kd]>kk.max)kk.max=s[kd]}}
 /* 🛑 STOP TESPİTİ (2026-08-30): her /push turunda hâlâ AÇIK (r===1,
    Hedef2'yi henüz vurmamış) kayıtların güncel fiyatı hesaplanan stop
