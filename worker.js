@@ -4766,15 +4766,12 @@ function sekCiz(){
      başında — Ana Menü'nün hemen altında ilk görülen iki düğme bunlar. */
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon Tarama'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="malboga"?" on":"")+(mbTaramaTamamMi()?" mbTamam":"")+'" data-r="nötr" data-s="malboga">'+(mbTaramaTamamMi()?"✅":"🔎")+' Hisse Taraması'+(D.super?"":" 🔒")+'</button>');
-  ["potansiyel","fibo","uzunvade"].forEach(function(k){
-    var t=TF[k],n=((D.kartlar&&D.kartlar[k])||[]).filter(hedefEsikGecti).length;
-    s.push('<button class="sek'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
-      t.ik+" "+t.kisa+(n?' <span style="opacity:.75">'+n+"</span>":"")+"</button>");
-  });
-  /* 📋 Temel Analiz — KISA/ORTA/UZUN'un hemen ardında, dördüncü sırada.
-     Sekme şeridi yatay kaydırmalı; arkalara koyunca kimse bulamıyor.
-     Sinyalin arkasında şirket var mı sorusu, listeye bakmakla aynı
-     sıklıkta sorulan bir sorudur — o yüzden görünür yerde. */
+  /* 📊 KISA/ORTA/UZUN düğmeleri buradan kaldırıldı — artık ☀️ Güçlülerin
+     güçlüsü bandının hemen altında ayrı bir satırda (kouSira) duruyorlar. */
+  /* 📋 Temel Analiz — dördüncü sırada. Sekme şeridi yatay kaydırmalı;
+     arkalara koyunca kimse bulamıyor. Sinyalin arkasında şirket var mı
+     sorusu, listeye bakmakla aynı sıklıkta sorulan bir sorudur — o
+     yüzden görünür yerde. */
   s.push('<button class="sek'+(sekme==="temel"?" on":"")+'" data-r="nötr" data-s="temel">📋 Temel</button>');
   s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="alarm"?" on":"")+'" data-r="nötr" data-s="alarm">🔔 Anlık Alarm'+(D.super?"":" 🔒")+'</button>');
