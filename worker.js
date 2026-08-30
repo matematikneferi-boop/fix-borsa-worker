@@ -4631,6 +4631,7 @@ function ekranAdi(){
   if(sekme==="yardim")return"❓ Rozetler ve Sekmeler";
   if(sekme==="alarm")return"🔔 Anlık Alarm";
   if(sekme==="aday")return(TF[adayTf]?TF[adayTf].ad:"Adaylar");
+  if(sekme==="adaytarama")return"🎯 Aday Tarama";
   return TF[sekme]?TF[sekme].ik+" "+TF[sekme].ad:"";
 }
 function gezCiz(){
@@ -4767,6 +4768,10 @@ function sekCiz(){
      başında — Ana Menü'nün hemen altında ilk görülen iki düğme bunlar. */
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon Tarama'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="malboga"?" on":"")+(mbTaramaTamamMi()?" mbTamam":"")+'" data-r="nötr" data-s="malboga">'+(mbTaramaTamamMi()?"✅":"🔎")+' Hisse Taraması'+(D.super?"":" 🔒")+'</button>');
+  /* 🎯 ADAY TARAMA — Hisse Taraması'nın hemen yanında. KISA/ORTA/UZUN/1 HAFTA
+     aday listelerini (zaten D.kartlar içinde yüklü) tek ekranda birleştirir;
+     ek istek atmaz, ek tarama yapmaz — sadece var olan veriyi süzer. */
+  s.push('<button class="sek'+(sekme==="adaytarama"?" on":"")+'" data-r="nötr" data-s="adaytarama">🎯 Aday Tarama'+(D.super?"":" 🔒")+'</button>');
   /* 📊 KISA/ORTA/UZUN düğmeleri buradan kaldırıldı — artık ☀️ Güçlülerin
      güçlüsü bandının hemen altında ayrı bir satırda (kouSira) duruyorlar. */
   /* 📋 Temel Analiz — dördüncü sırada. Sekme şeridi yatay kaydırmalı;
@@ -4854,6 +4859,7 @@ function ciz(){
   if(sekme==="temel")return temelCiz();
   if(sekme==="yardim")return yardimCiz();
   if(sekme==="aday")return adayCiz();
+  if(sekme==="adaytarama")return adayTaramaCiz();
   listeCiz(sekme);
 }
 /* ---------- KAYAN YAZI ----------
@@ -5556,6 +5562,70 @@ function adayCiz(){
   [].forEach.call(document.querySelectorAll("[data-at]"),function(b){
     b.onclick=function(){tit();adayTf=b.dataset.at;ciz()};
   });
+  satirBagla();
+}
+/* ═══ 🎯 ADAY TARAMA ════════════════════════════════════════════════════
+   Hisse Taraması'nın hemen yanındaki sekme. 🟨 Adaylar ekranı dört dilimi
+   (KISA/ORTA/UZUN/1 HAFTA) tek tek gezdirir; burada AYNI dört liste
+   (D.kartlar.adayOrta/adayOrtaVade/adayUzun/adayHafta — zaten uygulamada
+   yüklü) kod bazında BİRLEŞTİRİLİR: bir hisse aynı anda birden çok dilimde
+   aday ise tek satırda, hepsinin rozetiyle görünür. Sunucuya tek istek
+   bile gitmez, yeni bir tarama başlatılmaz — var olan veri süzülür. */
+var ADAY_TARAMA_DILIM=[["adayOrta","KISA","📊"],["adayOrtaVade","ORTA","📐"],
+                       ["adayUzun","UZUN","🗓"],["adayHafta","1 HAFTA","📅"]];
+function adayTaramaTopla(){
+  var har={};
+  ADAY_TARAMA_DILIM.forEach(function(p){
+    var anahtar=p[0],ad=p[1],ik=p[2];
+    var liste=((D.kartlar&&D.kartlar[anahtar])||[]).filter(hedefEsikGecti);
+    liste.forEach(function(k){
+      if(!k||!k.kod)return;
+      if(!har[k.kod])har[k.kod]={kod:k.kod,en:null,dilimler:[]};
+      var yuzde=(k.tetikYuzde==null)?null:Number(k.tetikYuzde);
+      har[k.kod].dilimler.push({ad:ad,ik:ik,yuzde:yuzde,kart:k});
+      if(yuzde!=null&&(har[k.kod].en==null||yuzde<har[k.kod].en))har[k.kod].en=yuzde;
+    });
+  });
+  /* Kırılıma en yakın (yüzde en düşük) en üstte; yüzdesi bilinmeyenler sona. */
+  return Object.keys(har).map(function(kod){return har[kod]}).sort(function(a,b){
+    var av=(a.en==null)?999:a.en, bv=(b.en==null)?999:b.en;
+    return av-bv;
+  });
+}
+function adayTaramaSatirHtml(satir){
+  var ilk=satir.dilimler[0].kart;
+  var rozetler=satir.dilimler.slice().sort(function(a,b){
+    var av=(a.yuzde==null)?999:a.yuzde, bv=(b.yuzde==null)?999:b.yuzde;return av-bv;
+  }).map(function(d){
+    return '<span style="font-size:10px;padding:2px 5px;border-radius:4px;'+
+      'background:rgba(124,77,255,.15);color:var(--sar);font-weight:700">'+
+      d.ik+" "+E(d.ad)+(d.yuzde!=null?" · %"+d.yuzde.toFixed(1)+" kaldı":"")+"</span>";
+  }).join("");
+  return '<div class="satir adaySatir" data-kod="'+E(satir.kod)+'" data-noklik="1" style="border-left-color:var(--tad)">'+
+    '<div class="sol"><div class="kod">'+havaIkon(ilk)+kodHtml(ilk)+"</div>"+
+    '<div style="display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 2px">'+rozetler+"</div></div>"+
+    '<div class="sag"><div class="fiyat">'+N(ilk.fiyat)+" ₺</div></div></div>";
+}
+function adayTaramaCiz(){
+  if(!D.super){
+    el("govde").innerHTML='<div class="kilit"><div class="buyuk">👑</div>'+
+      "<h2>Süper Üyelik gerekli</h2>"+
+      "<p>🎯 Aday Tarama, KISA/ORTA/UZUN/1 HAFTA dilimlerindeki tüm aday hisseleri "+
+      "tek listede toplar — hangi hisse hangi dilimde kırılıma ne kadar yakın, hepsi bir arada.</p>"+
+      "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
+      '<button class="dg" id="davetGitAT">📤 Sistemi paylaş</button></div>';
+    el("davetGitAT").onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz()};
+    return;
+  }
+  var liste=adayTaramaTopla();
+  if(!liste.length){
+    el("govde").innerHTML='<div class="bos"><b>🎯 Aday Tarama</b><br><br>'+
+      "Şu an hiçbir dilimde aday hisse yok.<br>Aday: bir dilimin direncine yaklaşmış ama henüz kırmamış hisse.</div>";
+    return;
+  }
+  var h='<div class="uyari">🎯 KISA/ORTA/UZUN/1 HAFTA dilimlerindeki bütün aday hisseler tek listede, kırılıma en yakın olan en üstte ('+liste.length+" hisse).</div>";
+  h+=liste.map(adayTaramaSatirHtml).join("");
+  el("govde").innerHTML=h;
   satirBagla();
 }
 /* KAMA (WEDGE) LİSTESİ: tüm zaman dilimlerindeki hisseleri tek tek açıp
