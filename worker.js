@@ -4865,12 +4865,14 @@ function ciz(){
     el("serit").innerHTML="";el("hotSerit").innerHTML="";
   }
   sekCiz();
-  /* 🖥 TAM EKRAN: mal+ayı/boğa taraması dar telefon ekranında bütün dikey
-     alana ihtiyaç duyuyor. Bu sekmede üstteki sekme şeridi ve sekme adı
-     tamamen kalkar; 🏠 Ana Menü düğmesi başlıkta kalır, dilimler arası
-     geri/ileri ise ekranın kendi çubuğundan yapılır. */
+  /* 🖥 TAM EKRAN: eskiden yalnız Hisse Taraması (malboga) bu tam ekran
+     davranışını kullanıyordu. Artık varsayılan açılış sekmesi olan
+     KISA (potansiyel) DIŞINDAKİ her sekme aynı şekilde tam sayfa: üstteki
+     sekme şeridi ve sekme adı tamamen kalkar, bütün dikey alan doğrudan
+     o sekmenin içeriğine ayrılır. 🏠 Ana Menü düğmesi başlıkta kalır —
+     geri dönüş hep oradan, tıpkı Hisse Taraması'nda olduğu gibi. */
   var sekS=el("sekmeler");
-  if(sekme==="malboga"){
+  if(sekme!=="potansiyel"){
     if(sekS){sekS.innerHTML="";sekS.style.display="none"}
     if(sekAdi)sekAdi.style.display="none";
   }else if(sekS)sekS.style.display="";
