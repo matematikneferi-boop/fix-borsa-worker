@@ -281,6 +281,28 @@ for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayi
    (gecmis'in kendi yapısı gereği); kod+dilim+giriş üçlüsü aynıysa bunlar
    TEK sinyaldir ve burada birleştirilir. Giriş fiyatı gerçekten değiştiyse
    (pozisyon kapanıp yeniden açılmış demektir) ayrı bir sinyal sayılır. */
+/* 🐞 KÖK SEBEP DÜZELTMESİ (bkz. sohbet — "Hedef1 tuttu" hep 0 çıkıyordu):
+   Karlar (t.kartlar[tf] → /push) hiçbir yerde .hedef1 alanı TAŞIMIYOR —
+   yalnızca .hedef (nihai/uzak hedef, "Hedef 2") ve .giris var. Bu yüzden
+   satır ~267'de a.hedef1 her zaman undefined'dı, h1 hep null kalıyordu,
+   dolayısıyla h1Tuttu hiçbir zaman true olamıyordu. Bu, kartları üreten
+   tarama/pattern kodunda (bu dosyada değil — muhtemelen telefon
+   tarafındaki tarama katmanında) "Hedef 1" için gerçek bir teknik seviye
+   (ör. en yakın direnç) hiç hesaplanmadığı için böyle.
+   Gerçek/teknik bir Hedef 1 seviyesi elde edene kadar ARA ÇÖZÜM: rec.h1
+   gerçekten geldiyse onu kullan (ileride tarama katmanı doldurursa
+   otomatik devreye girer); gelmediyse giriş ile Hedef 2 arasındaki
+   mesafenin HEDEF1_ORAN kadarını "Hedef 1" olarak hesapla. Bu, hem yeni
+   kayıtlar hem de daha önce h1 hiç yazılmamış eski "gecmis" kayıtları
+   için burada (okuma anında) geriye dönük olarak da uygulanır — KV'deki
+   eski veriyi yeniden yazmaya gerek kalmaz. HEDEF1_ORAN'ı gerçek bir
+   direnç/hedef hesaplaması gelene kadar dilediğin gibi ayarlayabilirsin. */
+var HEDEF1_ORAN=0.5;
+function h1Tamamla(rec){
+  if(rec.h1>0)return Number(rec.h1);
+  if(rec.h>0&&rec.g>0)return rec.g+(rec.h-rec.g)*HEDEF1_ORAN;
+  return null;
+}
 function takipKaliciAd(GD,ad){
   var birlesik={};
   Object.keys(GD).sort().forEach(function(gun){
@@ -291,7 +313,7 @@ function takipKaliciAd(GD,ad){
       var kod=rec.k||String(anahtar).split("@")[0],tf=rec.t||"";
       var anah=kod+"@"+tf+"@"+Math.round(rec.g*100);
       if(!birlesik[anah])birlesik[anah]={kod:kod,g:rec.g,h:(rec.h>0?rec.h:null),
-        h1:(rec.h1>0?rec.h1:null),s:rec.s,max:(rec.max>0?rec.max:rec.s),ilkGun:gun};
+        h1:h1Tamamla(rec),s:rec.s,max:(rec.max>0?rec.max:rec.s),ilkGun:gun};
       var b=birlesik[anah];
       if(rec.s>0)b.s=rec.s;
       if(rec.max>0&&(!(b.max>0)||rec.max>b.max))b.max=rec.max;
@@ -4922,10 +4944,18 @@ function takipHam(ad){
   if(kalici)return{yolda:kalici.yolda||[],hedef1:kalici.hedef1||[],hedef2:kalici.hedef2||[],stop:stop,
     toplamYolda:kalici.toplamYolda,toplamHedef1:kalici.toplamHedef1,toplamHedef2:kalici.toplamHedef2};
   /* Kalıcı veri gelmediyse (ör. eski önbellek) eski canlı hesaba düş —
-     hiçbir koşulda panel boş kalmasın. */
+     hiçbir koşulda panel boş kalmasın.
+     🐞 DÜZELTME: bu satırlardaki k nesnelerinde sinyalTs YOKTU — tarih
+     filtresi (takipFiltrele) sinyalTs'i olmayan her kaydı sessizce
+     eliyordu, yani bu yola düşülürse hangi tarih seçilirse seçilsin
+     liste boş görünüyordu. Burada canlı/anlık kartlar olduğu için
+     sinyalTs'i "şimdi" olarak veriyoruz — en azından bugünün tarihiyle
+     filtrelenebilsinler, sessizce kaybolmasınlar. */
+  var simdiTs=Math.floor(Date.now()/1000);
   var ham=((D.kartlar&&D.kartlar[ad])||[]).slice();
   var yolda=[],hedef1=[],hedef2=[];
   ham.forEach(function(k){
+    if(k.sinyalTs==null)k.sinyalTs=simdiTs;
     var pot=(k.potansiyel==null)?null:Number(k.potansiyel);
     var pot1=(k.hedef1Yuzde==null)?null:Number(k.hedef1Yuzde);
     if(pot!=null&&pot<=0){hedef2.push(k);return}
@@ -5044,6 +5074,7 @@ function takipKutuCiz(ad){
       (stopVar?pil("stop","🔴","Stop oldu",v.stop.length):"")+
     "</div>";
   if(!stopVar)h+='<div class="altbilgi" style="margin-top:6px">ℹ️ Bu dilimde (1 saat) alt zaman dilimi (15 dk) henüz kurulmadığı için stop takibi yok.</div>';
+  if(acik==="hedef1")h+='<div class="altbilgi" style="margin-top:6px">ℹ️ Hedef 1, giriş ile Hedef 2 arasının %'+Math.round(HEDEF1_ORAN*100)+'\u2019i olarak hesaplanan ara bir seviyedir (henüz teknik bir direnç seviyesinden gelmiyor).</div>';
   if(acik){
     var hamListe=v[acik]||[];
     var filtreliMi=(acik==="yolda"||acik==="hedef1"||acik==="hedef2");
