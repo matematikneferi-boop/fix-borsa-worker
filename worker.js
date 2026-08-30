@@ -283,6 +283,51 @@ if(!(a&&a.kod&&a.giris>0))continue;
 const KK=a.kod+"@"+(a.tfKod||a.tf||"");
 if(!n.gunler[i].kayitlar[KK])n.gunler[i].kayitlar[KK]={k:a.kod,g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tfKod||a.tf||"",l:e,h:(a.hedef>0?Number(a.hedef):null),h1:(a.hedef1>0?Number(a.hedef1):null),r:1,max:Number(a.fiyat)||Number(a.giris)}}}
 for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayitlar)){const kk=n.gunler[e].kayitlar[t],kd=kk.k||String(t).split("@")[0];if(s[kd]>0){kk.s=s[kd];if(!(kk.max>0)||s[kd]>kk.max)kk.max=s[kd]}}
+/* 🛑 STOP TESPİTİ (2026-08-30): her /push turunda hâlâ AÇIK (r===1,
+   Hedef2'yi henüz vurmamış) kayıtların güncel fiyatı hesaplanan stop
+   seviyesini geçmiş mi diye bakılır — istemcideki takipStopBul ile
+   BİREBİR AYNI mantık: ORTA(fibo)'nun stop'u KISA(potansiyel)'ın o an
+   kırdığı seviye, UZUN(uzunvade)'ninki ORTA(fibo)'nunki; KISA'nın kendi
+   alt dilimi izlenmediği için standart %1 kullanılır. Alt dilim sinyali
+   o an mevcut değilse (yön uyuşmuyor ya da kod alt listede yoksa) o
+   turda kontrol atlanır, bir sonraki turda tekrar denenir — asla yanlış
+   pozitif üretmez, en kötü ihtimalle geç yakalar. Stop tespit edilince
+   kayıt r=0 yapılarak kalıcı olarak "kapandı" işaretlenir (takipKaliciAd
+   zaten r===0 olanları elemesini biliyor) ve n.dusenler'e "📉 listeden
+   düşenler" / "Stop oldu" sekmelerinin okuduğu bir satır eklenir. */
+const STOP_ALT_AD={fibo:"potansiyel",uzunvade:"fibo"};
+const STOP_KISA_ORAN=0.01;
+function stopSeviyeBul(ad,rec){
+  const yon=(rec.h!=null&&Number(rec.h)<Number(rec.g))?"ayi":"boga";
+  if("potansiyel"===ad)return"boga"===yon?rec.g*(1-STOP_KISA_ORAN):rec.g*(1+STOP_KISA_ORAN);
+  const altAd=STOP_ALT_AD[ad];if(!altAd)return null;
+  const altListe=(t.kartlar&&t.kartlar[altAd])||[];
+  const altKart=altListe.find(x=>x&&x.kod===rec.k);
+  if(!altKart||!(altKart.giris>0)||!(altKart.hedef>0))return null;
+  const altYon=Number(altKart.hedef)>=Number(altKart.giris)?"boga":"ayi";
+  if(altYon!==yon)return null;
+  return Number(altKart.giris);
+}
+n.dusenler=Array.isArray(n.dusenler)?n.dusenler:[];
+{const simdiTs=Math.floor(Date.now()/1e3),d2=new Date(Date.now()+108e5),
+  saatStr=String(d2.getUTCHours()).padStart(2,"0")+":"+String(d2.getUTCMinutes()).padStart(2,"0");
+for(const gg of Object.keys(n.gunler)){
+  const kayitlar=n.gunler[gg].kayitlar||{};
+  for(const kk2 of Object.keys(kayitlar)){
+    const rec=kayitlar[kk2];
+    if(!rec||rec.r===0||!(rec.g>0)||!(rec.s>0))continue;
+    if(rec.h>0&&rec.max>=rec.h)continue;/* Hedef2 vurulmuş — kapandı sayılır, stop yok */
+    const sev=stopSeviyeBul(rec.l,rec);if(sev==null)continue;
+    const yon=(rec.h!=null&&Number(rec.h)<Number(rec.g))?"ayi":"boga";
+    const stopOldu="boga"===yon?rec.s<=sev:rec.s>=sev;
+    if(!stopOldu)continue;
+    rec.r=0;
+    n.dusenler.unshift({kod:rec.k,liste:rec.l,tf:rec.t,saat:saatStr,ts:simdiTs,
+      kar:rec.g>0?100*(rec.s/rec.g-1):null,sebep:"stop oldu (🛑 "+Number(sev).toFixed(2)+")",
+      sinyalFiyat:rec.g,sonFiyat:rec.s});
+  }
+}
+if(n.dusenler.length>300)n.dusenler=n.dusenler.slice(0,300)}
 ;n.ozet=n.ozet||{};const gt=Object.keys(n.gunler).sort().reverse(),gk=gt.slice(0,DETAY_GUN),gs=gt.slice(DETAY_GUN)
 ;for(const e of gs){if(!n.ozet[e]){const o=m(e,n.gunler[e]);if(o)n.ozet[e]=o}}const go={};for(const e of gk)go[e]=n.gunler[e];n.gunler=go
 ;const ot=Object.keys(n.ozet).sort().reverse();if(ot.length>OZET_GUN){const oo={};for(const e of ot.slice(0,OZET_GUN))oo[e]=n.ozet[e];n.ozet=oo}
@@ -312,7 +357,22 @@ try{
       for(const kk3 of Object.keys(n.gunler[gg].kayitlar)){
         const ben=n.gunler[gg].kayitlar[kk3],oteki=fg.kayitlar[kk3];
         if(oteki&&oteki.max>0&&(!(ben.max>0)||oteki.max>ben.max))ben.max=oteki.max;
+        /* 🛑 Bir isolate stop tespit edip r=0 yaptıysa bu kalıcı kalmalı —
+           başka bir isolate'in "hâlâ 1" yazan eski kopyası bunu geri açmasın. */
+        if(oteki&&oteki.r===0)ben.r=0;
       }
+    }
+    /* 📉 dusenler listesini de birleştir — iki isolate aynı anda farklı
+       stop'lar tespit etmiş olabilir, hiçbiri kaybolmasın. kod+liste+giriş
+       aynıysa aynı olay sayılır (tekrar eklenmez). */
+    if(tj&&Array.isArray(tj.dusenler)){
+      const gorulen=new Set(n.dusenler.map(x=>x.kod+"|"+x.liste+"|"+x.sinyalFiyat));
+      for(const eski of tj.dusenler){
+        const anah=eski.kod+"|"+eski.liste+"|"+eski.sinyalFiyat;
+        if(!gorulen.has(anah)){n.dusenler.push(eski);gorulen.add(anah)}
+      }
+      n.dusenler.sort((a,b)=>(b.ts||0)-(a.ts||0));
+      if(n.dusenler.length>300)n.dusenler=n.dusenler.slice(0,300);
     }
   }
 }catch(_){}
@@ -5016,22 +5076,30 @@ function takipHam(ad){
   });
   return{yolda:yolda,hedef1:hedef1,hedef2:hedef2,stop:stop};
 }
-/* KISA (1SA) dilimde stop noktası henüz tanımlı değil — alt dilim (15dk)
-   kurulmadığı için. Diğer tüm dilimlerde (ORTA/UZUN/HAFTA) bir alt dilimin
-   pivotuna göre hesaplanan stop noktası zaten var, D.dusenler üzerinden gelir. */
-function takipStopVar(ad){return ad!=="potansiyel"}
+/* Artık TÜM dilimlerde bir stop noktası var: ORTA/UZUN'da alt dilimin
+   kırdığı seviye (zincir stop), KISA'da (potansiyel) alt dilim (15dk)
+   ayrı izlenmediği için standart bir stop — girişin %1 tersi. */
+function takipStopVar(ad){return true}
 /* 🛑 TAKİP ÖZETİ İÇİN ZİNCİR STOP: hisse detayındaki tfStopBul (satır ~6143)
    ile birebir aynı mantık — ORTA'nın stop'u KISA'nın kırdığı seviye (giriş),
    UZUN'unki ORTA'nın kırdığı seviye. Yön (boğa/ayı) uyuşmuyorsa ya da alt
    dilimde o kod için sinyal yoksa null döner. KISA'nın (potansiyel) kendi
-   alt dilimi (15DK) ayrı izlenmediği için orada stop çıkmaz — mevcut
-   sınırlamayla birebir aynı, davranış değişmiyor. Kaynak D.kartlar olduğu
-   için bugün alarm/kırılımla oluşmuş sinyaller de otomatik dahildir —
-   ayrı bir "bugünkü alarmlar" yolu yok, hepsi aynı listeden gelir. */
+   alt dilimi (15DK) ayrı izlenmediği için zincir mantığı çalışmaz — onun
+   yerine TAKIP_KISA_STOP_ORAN kadar standart bir stop kullanılır (girişin
+   boğada %1 altı, ayıda %1 üstü). Kaynak D.kartlar olduğu için bugün
+   alarm/kırılımla oluşmuş sinyaller de otomatik dahildir — ayrı bir
+   "bugünkü alarmlar" yolu yok, hepsi aynı listeden gelir. */
 var TAKIP_ALT_AD={fibo:"potansiyel",uzunvade:"fibo"};
+var TAKIP_KISA_STOP_ORAN=0.01;
 function takipStopBul(ad,k){
+  if(k.giris==null)return null;
+  if(ad==="potansiyel"){
+    var yonK=(k.hedef!=null&&Number(k.hedef)<Number(k.giris))?"ayi":"boga";
+    var sevK="boga"===yonK?Number(k.giris)*(1-TAKIP_KISA_STOP_ORAN):Number(k.giris)*(1+TAKIP_KISA_STOP_ORAN);
+    return{sev:sevK,yuzde:(k.fiyat>0?100*(sevK/Number(k.fiyat)-1):null)};
+  }
   var altAd=TAKIP_ALT_AD[ad];if(!altAd)return null;
-  if(k.giris==null||k.hedef==null)return null;
+  if(k.hedef==null)return null;
   var altListe=(D.kartlar&&D.kartlar[altAd])||[];
   var altKart=altListe.filter(function(x){return x.kod===k.kod})[0];
   if(!altKart||altKart.giris==null||altKart.hedef==null)return null;
@@ -5148,7 +5216,6 @@ function takipKutuCiz(ad){
       pil("hedef2","🎯","Hedef2 tuttu",toplam("Hedef2",v.hedef2))+
       (stopVar?pil("stop","🔴","Stop oldu",v.stop.length):"")+
     "</div>";
-  if(!stopVar)h+='<div class="altbilgi" style="margin-top:6px">ℹ️ Bu dilimde (1 saat) alt zaman dilimi (15 dk) henüz kurulmadığı için stop takibi yok.</div>';
   if(acik==="hedef1")h+='<div class="altbilgi" style="margin-top:6px">ℹ️ Hedef 1, giriş ile Hedef 2 arasının %'+Math.round(HEDEF1_ORAN*100)+'\u2019i olarak hesaplanan ara bir seviyedir (henüz teknik bir direnç seviyesinden gelmiyor).</div>';
   if(acik){
     var hamListe=v[acik]||[];
@@ -6533,11 +6600,18 @@ var TF_META={KISA:TF.potansiyel,ORTA:TF.fibo,UZUN:TF.uzunvade};
    ORTA'nın stop'u KISA'nın kırdığı seviye, UZUN'unki ORTA'nın kırdığı
    seviye — yön (boğa/ayı) uyuşmuyorsa ya da alt dilim henüz aday
    (kırılmamış) ise gösterilmez. KISA'nın kendi alt dilimi (15DK) ayrı
-   izlenmediği için KISA'da stop satırı çıkmaz — bu, mevcut sunucu
-   mantığıyla birebir aynı sınırlama. */
+   izlenmediği için zincir mantığı çalışmaz — onun yerine TF_KISA_STOP_ORAN
+   kadar standart bir stop kullanılır (girişin boğada altı, ayıda üstü). */
 var TF_ALT={ORTA:"KISA",UZUN:"ORTA"};
+var TF_KISA_STOP_ORAN=0.01;
 function tfStopBul(tfKartlar,tfKey,x){
-  if(!tfKartlar||!x||x.giris==null||x.hedef==null)return null;
+  if(!x||x.giris==null)return null;
+  if("KISA"===tfKey){
+    var yonK=x.hedef!=null&&Number(x.hedef)<Number(x.giris)?"ayi":"boga";
+    var sevK="boga"===yonK?Number(x.giris)*(1-TF_KISA_STOP_ORAN):Number(x.giris)*(1+TF_KISA_STOP_ORAN);
+    return{sev:sevK,yuzde:(x.fiyat>0?100*(sevK/Number(x.fiyat)-1):null)};
+  }
+  if(!tfKartlar||x.hedef==null)return null;
   var altKey=TF_ALT[tfKey];if(!altKey)return null;
   var altG=tfKartlar[altKey];if(!altG||!altG.kart||altG.tip!=="sinyal")return null;
   var altX=altG.kart;if(altX.giris==null||altX.hedef==null)return null;
@@ -10483,7 +10557,13 @@ const TF_KANONIK={"15DK":"KISA","1SA":"KISA","4SA":"ORTA","1G":"UZUN","1HAF":"UZ
    o yüzden yön uyuşmuyorsa hiç kullanılmaz. Alt dilim henüz aday (kırılmamış)
    ise de kullanılmaz — "kırdığı" bir seviye yok demektir. */
 const ALT_TF={ORTA:"KISA",UZUN:"ORTA"};
-function zincirStop(tfKartlar,anaTfKey,yon){
+/* KISA'nın kendi alt dilimi (15DK) ayrı bir kırılım katmanı olarak
+   izlenmediği için zincir mantığı KISA'da çalışmaz — onun yerine
+   standart bir stop kullanılır: girişin KISA_STOP_ORAN kadar
+   ters yönü (boğada altı, ayıda üstü). */
+const KISA_STOP_ORAN=0.01;
+function zincirStop(tfKartlar,anaTfKey,yon,giris){
+if("KISA"===anaTfKey)return null==giris?null:("boga"===yon?giris*(1-KISA_STOP_ORAN):giris*(1+KISA_STOP_ORAN));
 if(!tfKartlar)return null;
 const altKey=ALT_TF[anaTfKey];if(!altKey)return null;
 const g=tfKartlar[altKey];if(!g||!g.kart||"sinyal"!==g.tip)return null;
@@ -10506,8 +10586,8 @@ if(null!=yukHed){const yol=yukHed>giris?100*(fiyat-giris)/(yukHed-giris):0;
 m+="🎯 <b>HEDEF: "+f(yukHed)+"</b>  ·  girişten "+yz(100*(yukHed/giris-1))+"  ·  buradan <b>"+yz(100*(yukHed/fiyat-1))+"</b>\n";
 m+="📍 Yolun <b>%"+Math.max(0,Math.min(100,yol)).toFixed(0)+"</b>'i tamamlandı\n";
 if(z.yuk.length>1)m+="🧱 Ara dirençler: "+z.yuk.slice(0,z.yuk.length-1).map(x=>f(x.v)).join(" · ")+"\n"}
-{const st=zincirStop(tfKartlar,anaTfKey,"boga");
-if(null!=st)m+="🛑 <b>STOP (alt dilim kırılımı):</b> "+f(st)+"  ·  buradan "+yz(100*(st/fiyat-1))+"\n"}
+{const st=zincirStop(tfKartlar,anaTfKey,"boga",giris);
+if(null!=st)m+="🛑 <b>STOP ("+("KISA"===anaTfKey?"standart %"+(100*KISA_STOP_ORAN).toFixed(0):"alt dilim kırılımı")+"):</b> "+f(st)+"  ·  buradan "+yz(100*(st/fiyat-1))+"\n"}
 if(null!=z.alt)m+="⛔ <b>Geçersiz olur:</b> "+f(z.alt)+" altına inerse ("+yz(100*(z.alt/fiyat-1))+")\n";
 if(null!=asgHed)m+="<i>O durumda aşağı hedef: "+f(asgHed)+"</i>\n"}
 /* ---------- DURUM 2: AŞAĞI KIRILIM ZATEN OLDU ---------- */
@@ -10520,8 +10600,8 @@ if(null!=asgHed){const yol=giris>asgHed?100*(giris-fiyat)/(giris-asgHed):0;
 m+="🎯 <b>DÜŞÜŞ HEDEFİ: "+f(asgHed)+"</b>  ·  girişten "+yz(100*(asgHed/giris-1))+"  ·  buradan <b>"+yz(100*(asgHed/fiyat-1))+"</b>\n";
 m+="📍 Yolun <b>%"+Math.max(0,Math.min(100,yol)).toFixed(0)+"</b>'i tamamlandı\n";
 if(z.asg.length>1)m+="🧱 Ara destekler: "+z.asg.slice(0,z.asg.length-1).map(x=>f(x.v)).join(" · ")+"\n"}
-{const st=zincirStop(tfKartlar,anaTfKey,"ayi");
-if(null!=st)m+="🛑 <b>STOP (alt dilim kırılımı):</b> "+f(st)+"  ·  buradan "+yz(100*(st/fiyat-1))+"\n"}
+{const st=zincirStop(tfKartlar,anaTfKey,"ayi",giris);
+if(null!=st)m+="🛑 <b>STOP ("+("KISA"===anaTfKey?"standart %"+(100*KISA_STOP_ORAN).toFixed(0):"alt dilim kırılımı")+"):</b> "+f(st)+"  ·  buradan "+yz(100*(st/fiyat-1))+"\n"}
 if(null!=z.ust)m+="⛔ <b>Geçersiz olur:</b> "+f(z.ust)+" üstüne çıkarsa ("+yz(100*(z.ust/fiyat-1))+")\n";
 if(null!=yukHed)m+="<i>O durumda yukarı hedef: "+f(yukHed)+"</i>\n"}
 /* ---------- DURUM 3: ARA BÖLGE — İKİ SENARYO ---------- */
@@ -11059,7 +11139,7 @@ const portfoySektor={};for(const kod of Object.keys(portfoy))portfoySektor[kod]=
 /* 🔔 Yönetici için okunmamış geri bildirim sayısı — yalnız yöneticiye
    hesaplanır (herkeste gereksiz KV okuması olmasın). */
 const gbYeni=YON?await gbOkunmamisSayisi(A).catch(()=>0):0;
-return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,portfoy:portfoy,portfoyGecmis:portfoyGecmis,portfoyGunluk:portfoyGunluk,portfoySektor:portfoySektor,kartlar:kart,guncelleme:gun,temelDurum:temelDurum,dusenler:(L2&&L2.dusenler)||[],takipGecmis:takipGecmis,
+return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,portfoy:portfoy,portfoyGecmis:portfoyGecmis,portfoyGunluk:portfoyGunluk,portfoySektor:portfoySektor,kartlar:kart,guncelleme:gun,temelDurum:temelDurum,dusenler:(GKAL&&GKAL.dusenler)||[],takipGecmis:takipGecmis,
 link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN,gbYeni:gbYeni})}
 if("/api/hisse"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
