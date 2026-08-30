@@ -4152,6 +4152,15 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .sek.on[data-r="aday"]{background:var(--tad);color:#1d1503}
 .sek.on[data-r="nötr"]{background:var(--mavi)}
 .sek.mbTamam{background:var(--yes) !important;color:#04140a !important;border-color:transparent !important;font-weight:800}
+.kouSira{display:flex;flex-direction:row-reverse;gap:6px;margin:8px 0}
+.kouBtn{flex:1 1 0;min-width:0;text-align:center;background:var(--kart);border:1px solid var(--ciz);
+  color:var(--soluk);border-radius:999px;padding:7px 6px;font-size:12.5px;font-weight:700;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kouBtn.on{color:#fff;border-color:transparent}
+.kouBtn.on[data-r="1SA"]{background:var(--t1s);color:#08150c}
+.kouBtn.on[data-r="4SA"]{background:var(--t4s);color:#07182b}
+.kouBtn.on[data-r="1G"]{background:var(--t1g)}
+.kouBtn .kouSayi{opacity:.75}
 .govde{padding:10px 12px}
 .sirala{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none}
 .sirala::-webkit-scrollbar{display:none}
@@ -4980,6 +4989,22 @@ function taraDugmeCiz(){
     });
   };
 }
+function kouSeritHtml(){
+  /* 🔗 Güçlülerin güçlüsü bandının hemen altında, sağdan sola (Kısa en
+     sağda) tek satırlık KISA/ORTA/UZUN kısayolu. Diğer sekme düğmeleri
+     gibi rozetli (o an listede kaç hisse olduğunu gösteren sayı). */
+  var o=[["potansiyel","Kısa Sinyal"],["fibo","Orta Sinyal"],["uzunvade","Uzun Sinyal"]];
+  return '<div class="kouSira">'+o.map(function(x){
+    var k=x[0],t=TF[k],n=((D.kartlar&&D.kartlar[k])||[]).filter(hedefEsikGecti).length;
+    return '<button class="kouBtn'+(sekme===k?" on":"")+'" data-r="'+t.r+'" data-s="'+k+'">'+
+      t.ik+" "+x[1]+(n?' <span class="kouSayi">'+n+"</span>":"")+"</button>";
+  }).join("")+"</div>";
+}
+function kouSeritBagla(){
+  [].forEach.call(document.querySelectorAll(".kouBtn"),function(b){
+    b.onclick=function(){tit();sekme=b.dataset.s;sira="kar";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
+  });
+}
 function hotCiz(){
   var kutu=el("hotSerit"); if(!kutu)return;
   var hepsi=[];
@@ -4988,7 +5013,7 @@ function hotCiz(){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
   });
-  if(!hepsi.length){kutu.innerHTML="";return}
+  if(!hepsi.length){kutu.innerHTML=kouSeritHtml();kouSeritBagla();return}
 
   /* ☀️ GÜÇLÜLERİN GÜÇLÜSÜ — artık genel kalite sıralaması değil, 4 bağlam
      şartını (ortalama üstü + kalın raf + temiz trend)
@@ -5015,10 +5040,12 @@ function hotCiz(){
     var h2='<div class="hotBaslik">🔒 ☀️ Güçlülerin güçlüsü — Süper Üyelik</div>'+
       '<div class="hotKilit" id="hotKilit">'+
         (say?'Şu an <b>'+say+' hisse</b> 4 şartı birden sağlıyor, ama hangileri olduğunu görmek Süper Üyelik gerektiriyor.':'Bu bölüm Süper Üyelere özel.')+
-        ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div>';
+        ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div>'+
+      kouSeritHtml();
     kutu.innerHTML=h2;
     var hl=el("hotKilitLink");
     if(hl)hl.onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
+    kouSeritBagla();
     return;
   }
 
@@ -5037,7 +5064,9 @@ function hotCiz(){
     h+='<div class="hotSira">'+secilen.map(kartHtml).join("")+"</div>";
   else
     h+='<div class="hotAltYazi" style="font-size:11px;color:var(--soluk)">Şu an 3 şartı birden sağlayan hisse yok — bu normaldir, nadir görülür.</div>';
+  h+=kouSeritHtml();
   kutu.innerHTML=h;
+  kouSeritBagla();
   satirBagla();
 }
 function sirCiz(akt){
