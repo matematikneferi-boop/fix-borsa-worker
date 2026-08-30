@@ -4631,7 +4631,6 @@ function ekranAdi(){
   if(sekme==="yardim")return"❓ Rozetler ve Sekmeler";
   if(sekme==="alarm")return"🔔 Anlık Alarm";
   if(sekme==="aday")return(TF[adayTf]?TF[adayTf].ad:"Adaylar");
-  if(sekme==="adaytarama")return"🎯 Aday Tarama";
   return TF[sekme]?TF[sekme].ik+" "+TF[sekme].ad:"";
 }
 function gezCiz(){
@@ -4768,10 +4767,6 @@ function sekCiz(){
      başında — Ana Menü'nün hemen altında ilk görülen iki düğme bunlar. */
   s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon Tarama'+(D.super?"":" 🔒")+'</button>');
   s.push('<button class="sek'+(sekme==="malboga"?" on":"")+(mbTaramaTamamMi()?" mbTamam":"")+'" data-r="nötr" data-s="malboga">'+(mbTaramaTamamMi()?"✅":"🔎")+' Hisse Taraması'+(D.super?"":" 🔒")+'</button>');
-  /* 🎯 ADAY TARAMA — Hisse Taraması'nın hemen yanında. KISA/ORTA/UZUN/1 HAFTA
-     aday listelerini (zaten D.kartlar içinde yüklü) tek ekranda birleştirir;
-     ek istek atmaz, ek tarama yapmaz — sadece var olan veriyi süzer. */
-  s.push('<button class="sek'+(sekme==="adaytarama"?" on":"")+'" data-r="nötr" data-s="adaytarama">🎯 Aday Tarama'+(D.super?"":" 🔒")+'</button>');
   /* 📊 KISA/ORTA/UZUN düğmeleri buradan kaldırıldı — artık ☀️ Güçlülerin
      güçlüsü bandının hemen altında ayrı bir satırda (kouSira) duruyorlar. */
   /* 📋 Temel Analiz — dördüncü sırada. Sekme şeridi yatay kaydırmalı;
@@ -4859,7 +4854,6 @@ function ciz(){
   if(sekme==="temel")return temelCiz();
   if(sekme==="yardim")return yardimCiz();
   if(sekme==="aday")return adayCiz();
-  if(sekme==="adaytarama")return adayTaramaCiz();
   listeCiz(sekme);
 }
 /* ---------- KAYAN YAZI ----------
@@ -5564,69 +5558,24 @@ function adayCiz(){
   });
   satirBagla();
 }
-/* ═══ 🎯 ADAY TARAMA ════════════════════════════════════════════════════
-   Hisse Taraması'nın hemen yanındaki sekme. 🟨 Adaylar ekranı dört dilimi
-   (KISA/ORTA/UZUN/1 HAFTA) tek tek gezdirir; burada AYNI dört liste
-   (D.kartlar.adayOrta/adayOrtaVade/adayUzun/adayHafta — zaten uygulamada
-   yüklü) kod bazında BİRLEŞTİRİLİR: bir hisse aynı anda birden çok dilimde
-   aday ise tek satırda, hepsinin rozetiyle görünür. Sunucuya tek istek
-   bile gitmez, yeni bir tarama başlatılmaz — var olan veri süzülür. */
-var ADAY_TARAMA_DILIM=[["adayOrta","KISA","📊"],["adayOrtaVade","ORTA","📐"],
-                       ["adayUzun","UZUN","🗓"],["adayHafta","1 HAFTA","📅"]];
-function adayTaramaTopla(){
-  var har={};
-  ADAY_TARAMA_DILIM.forEach(function(p){
-    var anahtar=p[0],ad=p[1],ik=p[2];
-    var liste=((D.kartlar&&D.kartlar[anahtar])||[]).filter(hedefEsikGecti);
-    liste.forEach(function(k){
-      if(!k||!k.kod)return;
-      if(!har[k.kod])har[k.kod]={kod:k.kod,en:null,dilimler:[]};
-      var yuzde=(k.tetikYuzde==null)?null:Number(k.tetikYuzde);
-      har[k.kod].dilimler.push({ad:ad,ik:ik,yuzde:yuzde,kart:k});
-      if(yuzde!=null&&(har[k.kod].en==null||yuzde<har[k.kod].en))har[k.kod].en=yuzde;
+/* ═══ 🎯 ADAYLARA GÖRE TARA — Hisse Taraması'nın (mbCiz) içine gömülü ═══
+   KISA/ORTA/UZUN/1 HAFTA aday listelerindeki (D.kartlar.adayOrta/adayOrtaVade/
+   adayUzun/adayHafta — zaten yüklü) kodların kümesini döner. mbCiz'deki 6
+   modül (mal/dip/ab/bölge/enerji/pivot) bu kümeyle kesiştirilerek, "bu aday
+   hisse şu an boğa mı ayı mı, enerji kutusunu kırdı mı" gibi tam analiz
+   üretir — hiç ek istek atmadan. Bkz. mbAdayFiltreAcik / mbAdayFiltreUygula. */
+var mbAdayKodCache=null, mbAdayKodDamga=null;
+function mbAdayKodSeti(){
+  var damga=(D&&D.guncelleme)||"";
+  if(mbAdayKodCache&&mbAdayKodDamga===damga)return mbAdayKodCache;
+  var set={};
+  ["adayOrta","adayOrtaVade","adayUzun","adayHafta"].forEach(function(anahtar){
+    ((D.kartlar&&D.kartlar[anahtar])||[]).filter(hedefEsikGecti).forEach(function(k){
+      if(k&&k.kod)set[k.kod]=true;
     });
   });
-  /* Kırılıma en yakın (yüzde en düşük) en üstte; yüzdesi bilinmeyenler sona. */
-  return Object.keys(har).map(function(kod){return har[kod]}).sort(function(a,b){
-    var av=(a.en==null)?999:a.en, bv=(b.en==null)?999:b.en;
-    return av-bv;
-  });
-}
-function adayTaramaSatirHtml(satir){
-  var ilk=satir.dilimler[0].kart;
-  var rozetler=satir.dilimler.slice().sort(function(a,b){
-    var av=(a.yuzde==null)?999:a.yuzde, bv=(b.yuzde==null)?999:b.yuzde;return av-bv;
-  }).map(function(d){
-    return '<span style="font-size:10px;padding:2px 5px;border-radius:4px;'+
-      'background:rgba(124,77,255,.15);color:var(--sar);font-weight:700">'+
-      d.ik+" "+E(d.ad)+(d.yuzde!=null?" · %"+d.yuzde.toFixed(1)+" kaldı":"")+"</span>";
-  }).join("");
-  return '<div class="satir adaySatir" data-kod="'+E(satir.kod)+'" data-noklik="1" style="border-left-color:var(--tad)">'+
-    '<div class="sol"><div class="kod">'+havaIkon(ilk)+kodHtml(ilk)+"</div>"+
-    '<div style="display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 2px">'+rozetler+"</div></div>"+
-    '<div class="sag"><div class="fiyat">'+N(ilk.fiyat)+" ₺</div></div></div>";
-}
-function adayTaramaCiz(){
-  if(!D.super){
-    el("govde").innerHTML='<div class="kilit"><div class="buyuk">👑</div>'+
-      "<h2>Süper Üyelik gerekli</h2>"+
-      "<p>🎯 Aday Tarama, KISA/ORTA/UZUN/1 HAFTA dilimlerindeki tüm aday hisseleri "+
-      "tek listede toplar — hangi hisse hangi dilimde kırılıma ne kadar yakın, hepsi bir arada.</p>"+
-      "<p>Toplam davetin: <b>"+D.ref+"</b> · açılması için <b>"+D.kalan+" kişi</b> daha.</p>"+
-      '<button class="dg" id="davetGitAT">📤 Sistemi paylaş</button></div>';
-    el("davetGitAT").onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz()};
-    return;
-  }
-  var liste=adayTaramaTopla();
-  if(!liste.length){
-    el("govde").innerHTML='<div class="bos"><b>🎯 Aday Tarama</b><br><br>'+
-      "Şu an hiçbir dilimde aday hisse yok.<br>Aday: bir dilimin direncine yaklaşmış ama henüz kırmamış hisse.</div>";
-    return;
-  }
-  var h='<div class="uyari">🎯 KISA/ORTA/UZUN/1 HAFTA dilimlerindeki bütün aday hisseler tek listede, kırılıma en yakın olan en üstte ('+liste.length+" hisse).</div>";
-  h+=liste.map(adayTaramaSatirHtml).join("");
-  el("govde").innerHTML=h;
-  satirBagla();
+  mbAdayKodCache=set;mbAdayKodDamga=damga;
+  return set;
 }
 /* KAMA (WEDGE) LİSTESİ: tüm zaman dilimlerindeki hisseleri tek tek açıp
    bakmak yorucu olduğu için — sunucu tüm listedeki kodları tarar (KV
@@ -7945,6 +7894,15 @@ function mbEfektifTfler(){
 }
 var MB_BAR=[0,1,2,3,4];
 var MB_KADEME=[["dip","⬇️ Dip bölgesi"],["dip382","⬇️⬇️ Derin (382 altı)"],["dip236","⬇️⬇️⬇️ En dip (236 altı)"]];
+/* 🎯 ADAYLARA GÖRE TARA — açıkken 6 modülün (mal/dip/ab/bölge/enerji/pivot)
+   ürettiği sonuç, yalnız o an aday listesinde olan kodlarla kesiştirilir.
+   Bkz. mbAdayKodSeti() ve mbAdayFiltreUygula(). */
+var mbAdayFiltreAcik=false;
+function mbAdayFiltreUygula(kodlar){
+  if(!mbAdayFiltreAcik)return kodlar;
+  var set=mbAdayKodSeti();
+  return kodlar.filter(function(k){return!!set[k]});
+}
 
 function mbCiz(){
   if(!D.super){
@@ -8398,7 +8356,7 @@ function mbPaketUretGenel(){
     if(ortak===null){ortak={};for(var k in gecen[t])ortak[k]=true}
     else{var y={};for(var k2 in ortak)if(gecen[t][k2])y[k2]=true;ortak=y}
   });
-  var ortakListe=Object.keys(ortak||{}).sort();
+  var ortakListe=mbAdayFiltreUygula(Object.keys(ortak||{}).sort());
   v.ortak=ortakListe;
   function serit(kod){
     return mbIst.tfler.map(function(t){
@@ -8522,7 +8480,7 @@ function mbPaketUretOzel(){
     if(ortakObj===null){ortakObj={};for(var k3 in pivotGecen)ortakObj[k3]=true}
     else{var y2={};for(var k4 in ortakObj)if(pivotGecen[k4])y2[k4]=true;ortakObj=y2}
   }
-  var ortakListe=Object.keys(ortakObj||{}).sort();
+  var ortakListe=mbAdayFiltreUygula(Object.keys(ortakObj||{}).sort());
   v.ortak=ortakListe;
 
   /* Satırda gösterilecek MAL/AB değerleri: eskiden KOŞULSUZ en büyük seçili
@@ -8814,6 +8772,23 @@ function mbGoster(v,yerel){
   var gruplar=(v&&v.gruplar)||[], ortak=(v&&v.ortak)||[];
   var calisiyor=!v||v.calisiyor!==false;
   var h="";
+  /* ── 0) 🎯 ADAYLARA GÖRE TARA ──
+     Açıkken aşağıdaki 6 modül yalnız o an aday listesinde olan kodlarla
+     kesiştirilir — "GARAN aday ama bu saatte boğa mı ayı mı, enerji kutusunu
+     kırdı mı" sorusunun cevabı burada, tek ekranda çıkar. Ek istek yok:
+     D.kartlar'daki aday listeleri zaten yüklü, mbOlcum'daki ölçümler de
+     zaten burada — yalnız kesişim alınıyor. */
+  h+='<div class="kutu" style="margin-top:0;border-left:3px solid var(--tad)">'+
+     '<div style="display:flex;align-items:center;gap:8px">'+
+     '<div style="flex:1;font-weight:800;font-size:14px">🎯 Adaylara göre tara</div>'+
+     '<button class="sir" data-mbadayfiltre="1" style="padding:4px 12px;font-size:16px;'+
+     (mbAdayFiltreAcik?"background:var(--yes);color:#04140a;font-weight:800":"opacity:.6")+'">'+
+     (mbAdayFiltreAcik?"✓":"○")+'</button></div>'+
+     '<div class="altbilgi" style="margin-top:5px;opacity:.75;white-space:normal">'+
+     (mbAdayFiltreAcik
+       ?"Aşağıdaki modüller yalnız şu an aday listesinde olan <b>"+Object.keys(mbAdayKodSeti()).length+" hisse</b> üzerinde çalışıyor."
+       :"Açarsan aşağıdaki 6 modül, yalnız şu an aday listesinde (KISA/ORTA/UZUN/1 HAFTA) olan hisseler üzerinde çalışır.")+
+     '</div></div>';
   /* ── 1) ZAMAN DİLİMLERİ ── */
   h+='<div class="kutu" style="margin-top:0;border-left:3px solid var(--yes)">'+
      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'+
@@ -9168,6 +9143,9 @@ function mbBagla(v,dilimler){
     mbIst.tfler=(mbIst.tfler.length===dilimler.length)?[]:dilimler.map(function(t){return t.tf});
     mbUygula();mbOtoTara()};
   T("[data-mbkapsam]",function(b){mbIst.kapsam=b.dataset.mbkapsam;mbUygula()});
+  /* 🎯 Adaylara göre tara — açıp kapatmak yeni ölçüm gerektirmez, sadece
+     mevcut sonucu aday kümesiyle kesiştirir; mbOtoTara() çağrılmaz. */
+  T("[data-mbadayfiltre]",function(){mbAdayFiltreAcik=!mbAdayFiltreAcik;mbUygula()});
   /* Modül "Genel" e dönsün — kendi özel dilimini bırakır */
   T("[data-mbmodtfg]",function(b){
     var m=b.dataset.mbmodtfg;mbIst[m].tfler=null;mbUygula();mbOtoTara()});
