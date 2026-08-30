@@ -1176,13 +1176,14 @@ async function sinyalMetniUret(A,yalnizCanli){
     (liste.length>n?"\n<i>…ve "+(liste.length-n)+" hisse daha.</i>":"");
 }
 async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;
-/* ⚠️ ALARM SADECE "potansiyel" LİSTESİNİ OKUYORDU — yani yalnızca KISA.
-   ORTA (fibo) ve UZUN (uzunvade) listelerine düşen sinyaller uygulamada
-   görünüyor ama HİÇ bildirim göndermiyordu. Üç liste de alarma girer.
+/* 🔔 KAPSAM (2026-08-30, kullanıcı kararı): alarm artık YALNIZ ORTA (fibo)
+   ve UZUN (uzunvade) sinyallerini bildiriyor. KISA (potansiyel) listede
+   dolmaya devam eder, herkes onu ekranda görür — ama bildirim göndermez.
+   Alıcılar zaten Süper Üye + yönetici ile sınırlı (bkz. alarmKullanicilari).
    Mükerrer gitmez: alarmAnahtar zaten kod|dilim|canlı olduğu için aynı
    hisse iki dilimde kırdıysa iki ayrı sinyaldir ve öyle sayılır. */
 const K=(yeni&&yeni.kartlar)||{};
-const yeniListe=[].concat(K.potansiyel||[],K.fibo||[],K.uzunvade||[]);
+const yeniListe=[].concat(K.fibo||[],K.uzunvade||[]);
 if(!yeniListe.length)return;
 const gecmis=await alarmGecmisi(e),bilinen=new Set(gecmis.kodlar||[]);
 /* ALARM SADECE GERÇEKTEN GÜÇLÜ OLANLARA:
@@ -8145,10 +8146,19 @@ function mbPivotGecti(kod,ist){
   }
   return false;
 }
-/* Satırda gösterilecek kısa özet */
-function mbPivotRozet(kod,ist){
-  var p=ist.pivot;
-  if(!p||!p.acik)return "";
+/* Satırda gösterilecek kısa özet — ADAYLAR TARAMASI (2026-08-30):
+   eskiden yalnız 📈 Pivot Kırılım modülü açıkken görünüyordu; yani ör.
+   AYI/BOĞA modülünde çıkan bir hissenin 🟨 Adaylar listesinde de olup
+   olmadığını görmek için ayrıca Pivot modülünü açman gerekiyordu.
+   Artık hangi modül(ler) açıksa açık olsun HER satırda gösteriliyor —
+   veri kaynağı (mbPivotHaritasi) aynı, yani sistemdeki diğer taramalarla
+   (KISA/ORTA/UZUN kırılan + adayOrta/adayOrtaVade/adayUzun aday listeleri)
+   mantıken bağlantılı kalıyor. Pivot modülü açık ve belirli dilim/durum
+   seçilmişse o seçim yine saygı görür (dilimler daralır); değilse
+   varsayılan olarak üç dilim de (KISA/ORTA/UZUN) gösterilir. */
+function mbPivotRozet(kod,ist,herZaman){
+  var p=(ist&&ist.pivot)||{};
+  if(!herZaman&&!p.acik)return "";
   var har=mbPivotHaritasi(), h=har[kod];
   if(!h)return "";
   var dilimler=(p.dilimler&&p.dilimler.length)?p.dilimler:["KISA","ORTA","UZUN"];
@@ -8160,7 +8170,7 @@ function mbPivotRozet(kod,ist){
     if(d.tip==="kirdi"&&d.sonBar){im="⚡ son bar"+ustu;rk="var(--yes)"}
     else if(d.tip==="kirdi"&&d.uzerinde){im="✅ üzerinde"+ustu;rk="var(--yes)"}
     else if(d.tip==="kirdi"){im="kırdı"+ustu;rk="#8b949e"}
-    else if(d.yuzde!=null){im="🎯 %"+Math.abs(Number(d.yuzde)).toFixed(1)+" kaldı";rk="var(--sar)"}
+    else if(d.yuzde!=null){im="🟨 aday · %"+Math.abs(Number(d.yuzde)).toFixed(1)+" kaldı";rk="var(--sar)"}
     else return;
     par.push('<span style="font-size:10px;padding:2px 5px;border-radius:4px;'+
       'background:rgba(124,77,255,.15);color:'+rk+';font-weight:700">'+E(ad)+' '+im+'</span>');
@@ -8980,7 +8990,7 @@ function mbGoster(v,yerel){
           return bl?'<div style="margin:4px 0 2px"><span style="font-size:10px;padding:2px 5px;'+
             'border-radius:4px;background:rgba(124,77,255,.15);color:#b39dff;font-weight:700">'+
             bl.ik+' '+E(bl.ad)+(x.oran!=null?' · '+Number(x.oran).toFixed(2):'')+'</span></div>':""})()+
-        (mbIst.pivot.acik?mbPivotRozet(x.kod,mbIst):"")+
+        (mbPivotRozet(x.kod,mbIst,true))+
         serit+
         ((x.digerTfler&&x.digerTfler.length)?
           '<div style="margin:3px 0 2px"><span class="rozet" style="background:rgba(124,77,255,.22);color:#b39dff">'+
