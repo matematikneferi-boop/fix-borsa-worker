@@ -5462,14 +5462,14 @@ function dusenlerCiz(ad){
    basıp o dilimi kendi başına süzebilsin — Takip kutusu gibi katlanır,
    preset seçilince altında sadece o dilimin (D.kartlar[ad]) sonucu açılır. */
 function presetKutuAdCiz(ad){
-  var ham=((D.kartlar&&D.kartlar[ad])||[]).filter(hedefEsikGecti);
+  var ham=(D.kartlar&&D.kartlar[ad])||[];
   var sec=presetSecTf[ad]||null;
   var h='<div class="kutu" style="margin-bottom:10px"><h3 style="margin:0 0 8px">🎛 Presetler</h3>'+
     '<div class="sirala" style="flex-wrap:wrap">'+PRESET_CHIPLER.map(function(c){
       return '<button class="sir'+(sec===c[0]?" on":"")+'" data-prtf="'+ad+"|"+c[0]+'">'+c[1]+"</button>";
     }).join("")+"</div>";
   if(sec){
-    var liste=presetUygula(ham,sec).slice(0,15);
+    var liste=presetUygula(ham,sec);
     h+='<div style="margin-top:8px">'+(liste.length?liste.map(function(k){return satirHtml(k,ad)}).join(""):
       '<div class="bos" style="padding:14px">Bu filtreye uyan hisse yok şu an.</div>')+"</div>";
   }
@@ -5792,7 +5792,7 @@ function presetCiz(){
   var h='<div class="sirala" style="flex-wrap:wrap">'+PRESET_CHIPLER.map(function(c){
     return '<button class="sir'+(presetSec===c[0]?" on":"")+'" data-pr="'+c[0]+'">'+c[1]+"</button>";
   }).join("")+"</div>";
-  var liste=presetUygula(hepsi,presetSec).slice(0,15);
+  var liste=presetUygula(hepsi,presetSec);
   el("govde").innerHTML=h+(liste.length?liste.map(function(x){return satirHtml(x,x._ad)}).join(""):
     '<div class="bos">Bu filtreye uyan hisse yok şu an.<br>Az sonra tekrar dene.</div>');
   bindPresetChips();
