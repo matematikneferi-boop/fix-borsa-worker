@@ -256,6 +256,19 @@ async function kapiKontrol(A,$,p,yerelSinir){
     return{ok:!1,kod:401,mesaj:"yetkisiz"};
   }catch(e){return{ok:s(A,$)?!0:!1,kod:401,mesaj:"yetkisiz"}}
 }
+/* ⭐⭐⭐ 3 YILDIZ SUNUCU TARAFI EŞİĞİ — client tarafındaki havaSartlari
+   (MINIAPP içinde, RAF_ESIK/ER_ESIK) ile AYNI eşikleri kullanır; ikisi
+   ayrışırsa "3 yıldızlı hisseler" şeridiyle backtest farklı hisse
+   sayar. Push edilen kart nesnesinde (a) avwap/raf/er alanları zaten
+   var (client bunları D.kartlar üzerinden doğrudan okuyor). */
+var Y3_RAF_ESIK=1.25, Y3_ER_ESIK=0.38;
+function y3SartSayisi(a){
+  var sy=0;
+  if(a&&a.avwap>0&&a.avwapBar>=3&&a.avwapUst!==false)sy++;
+  if(a&&a.raf!=null&&isFinite(a.raf)&&a.raf>=Y3_RAF_ESIK)sy++;
+  if(a&&a.er!=null&&isFinite(a.er)&&a.er>=Y3_ER_ESIK)sy++;
+  return sy;
+}
 let p=0;const DETAY_GUN=90,OZET_GUN=365;async function y(e){if(!e.VERI)return{gunler:{},ozet:{}};const t=await e.VERI.get("gecmis");if(!t)return{gunler:{},ozet:{}};const gp=JSON.parse(t);return gp.gunler=gp.gunler||{},gp.ozet=gp.ozet||{},gp}async function k(e,t,a){if(!e.VERI)return;if(!a&&Date.now()-p<6e5)return
 ;p=Date.now();const n=await y(e),i=new Date((r||Date.now())+108e5).toISOString().slice(0,10);var r;const s=function(e){const t={};
 /* 🐞💀 ÖLÜM AYARI (2026-08-30) — "hedefe gidip geri düşen ama Yolda'da
@@ -281,7 +294,7 @@ if(!(a&&a.kod&&a.giris>0))continue;
 /* ANAHTAR ARTIK kod@dilim: aynı hisse iki dilimde birden sinyal verirse
    ikisi de ayrı ayrı kaydedilir — dilim bazlı performans bunu gerektirir. */
 const KK=a.kod+"@"+(a.tfKod||a.tf||"");
-if(!n.gunler[i].kayitlar[KK])n.gunler[i].kayitlar[KK]={k:a.kod,g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tfKod||a.tf||"",l:e,h:(a.hedef>0?Number(a.hedef):null),h1:(a.hedef1>0?Number(a.hedef1):null),r:1,max:Number(a.fiyat)||Number(a.giris)}}}
+if(!n.gunler[i].kayitlar[KK])n.gunler[i].kayitlar[KK]={k:a.kod,g:Number(a.giris),s:Number(a.fiyat)||Number(a.giris),t:a.tfKod||a.tf||"",l:e,h:(a.hedef>0?Number(a.hedef):null),h1:(a.hedef1>0?Number(a.hedef1):null),r:1,max:Number(a.fiyat)||Number(a.giris),y3:(y3SartSayisi(a)>=3?1:0)}}}
 for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayitlar)){const kk=n.gunler[e].kayitlar[t],kd=kk.k||String(t).split("@")[0];if(s[kd]>0){kk.s=s[kd];if(!(kk.max>0)||s[kd]>kk.max)kk.max=s[kd]}}
 /* 🛑 STOP TESPİTİ (2026-08-30): her /push turunda hâlâ AÇIK (r===1,
    Hedef2'yi henüz vurmamış) kayıtların güncel fiyatı hesaplanan stop
@@ -349,7 +362,7 @@ for(const gg of Object.keys(n.gunler)){
     rec.r=0;
     n.dusenler.unshift({kod:rec.k,liste:rec.l,tf:rec.t,saat:saatStr,ts:simdiTs,
       kar:rec.g>0?100*(rec.s/rec.g-1):null,sebep:"stop oldu (🛑 "+Number(sev).toFixed(2)+")",
-      sinyalFiyat:rec.g,sonFiyat:rec.s});
+      sinyalFiyat:rec.g,sonFiyat:rec.s,y3:rec.y3?1:0});
   }
 }
 if(n.dusenler.length>300)n.dusenler=n.dusenler.slice(0,300)}
@@ -445,11 +458,15 @@ function takipKaliciAd(GD,ad){
       var kod=rec.k||String(anahtar).split("@")[0],tf=rec.t||"";
       var anah=kod+"@"+tf+"@"+Math.round(rec.g*100);
       if(!birlesik[anah])birlesik[anah]={kod:kod,g:rec.g,h:(rec.h>0?rec.h:null),
-        h1:h1Tamamla(rec),s:rec.s,max:(rec.max>0?rec.max:rec.s),ilkGun:gun};
+        h1:h1Tamamla(rec),s:rec.s,max:(rec.max>0?rec.max:rec.s),ilkGun:gun,y3:0};
       var b=birlesik[anah];
       if(rec.s>0)b.s=rec.s;
       if(rec.max>0&&(!(b.max>0)||rec.max>b.max))b.max=rec.max;
       if(gun<b.ilkGun)b.ilkGun=gun;
+      /* ⭐⭐⭐ sinyal AÇILDIĞINDA (ilk gün) 3/3 şart sağlanıyorsa kalıcı
+         olarak işaretli kalır — sonraki günlerde şartlar bozulsa bile
+         "3 yıldızla girdi" gerçeği değişmez, backtest bunu ölçüyor. */
+      if(rec.y3)b.y3=1;
     });
   });
   var yolda=[],hedef1=[],hedef2=[];
@@ -458,7 +475,7 @@ function takipKaliciAd(GD,ad){
     var satir={kod:b.kod,giris:b.g,hedef:b.h,hedef1:b.h1,fiyat:b.s,max:b.max,
       potansiyel:(b.h>0&&b.s>0)?100*(b.h/b.s-1):null,
       hedef1Yuzde:(b.h1>0&&b.s>0)?100*(b.h1/b.s-1):null,
-      sinyalTs:Math.floor(Date.parse(b.ilkGun+"T00:00:00Z")/1000)};
+      sinyalTs:Math.floor(Date.parse(b.ilkGun+"T00:00:00Z")/1000),y3:!!b.y3};
     /* 🐞 DÜZELTME (2026-08-30): Hedef1 ve Hedef2 birbirini DIŞLAMIYOR artık.
        Mantıken Hedef2'ye (uzak/nihai hedef) ulaşan bir sinyal, yol üstündeki
        Hedef1'e (yakın hedef) de mutlaka uğramıştır — o yüzden "Hedef1 tuttu"
@@ -4369,9 +4386,9 @@ textarea.gir{min-height:88px;resize:vertical}
 .roz-iy{color:var(--ye);border-color:rgba(47,191,113,.35);background:rgba(47,191,113,.08)}
 .roz-ko{color:var(--kr);border-color:rgba(229,72,77,.35);background:rgba(229,72,77,.08)}
 .roz-no{color:var(--soluk);border-color:rgba(139,148,158,.35);background:rgba(139,148,158,.08)}
-.roz-gunes{color:#ffb020;border-color:rgba(255,176,32,.5);background:rgba(255,176,32,.12);font-weight:700}
+.roz-gunes{color:#ffb020;border-color:rgba(255,176,32,.5);background:rgba(255,176,32,.12);font-weight:700;letter-spacing:1px;font-size:11.5px}
 .rozSat{margin-top:4px}
-.havaIkon{font-size:13px;margin-right:2px}
+.havaIkon{font-size:16px;margin-right:3px;letter-spacing:1px;font-weight:700;text-shadow:0 0 1px rgba(255,176,32,.6)}
 .yardimBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
   padding:6px 9px;font-size:14px;line-height:1.4}
 .ydBlok{background:var(--kart);border:1px solid var(--ciz);border-radius:12px;padding:12px;margin-bottom:10px}
@@ -4523,9 +4540,9 @@ function havaSartlari(k){
   return s;
 }
 function havaEtiket(s){
-  if(s>=3)return{ik:"☀️",ad:"Güneş",sinif:"roz-gunes",aciklama:"3/3 şart birden sağlanıyor: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend."};
-  if(s===2)return{ik:"⛅",ad:"Parçalı bulutlu",sinif:"roz-iy",aciklama:"3 bağlam şartından 2'si sağlanıyor — güçlü ama eksik bir tarafı var."};
-  if(s===1)return{ik:"☁️",ad:"Bulutlu",sinif:"roz-no",aciklama:"3 şarttan yalnızca 1'i sağlanıyor — zayıf görünüm."};
+  if(s>=3)return{ik:"⭐⭐⭐",ad:"3 Yıldız",sinif:"roz-gunes",aciklama:"3/3 şart birden sağlanıyor: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend."};
+  if(s===2)return{ik:"⭐⭐",ad:"2 Yıldız",sinif:"roz-iy",aciklama:"3 bağlam şartından 2'si sağlanıyor — güçlü ama eksik bir tarafı var."};
+  if(s===1)return{ik:"⭐",ad:"1 Yıldız",sinif:"roz-no",aciklama:"3 şarttan yalnızca 1'i sağlanıyor — zayıf görünüm."};
   return null;
 }
 /* ☀️ Güneş (3/3) katmanı Süper Üyeliğe kilitli — hangi hissenin ☀️ olduğu
@@ -4535,7 +4552,7 @@ function havaKilitliMi(s){ return s>=4&&!(D&&D.super); }
 function havaRozet(k){                 /* satır altındaki rozet sırasında tam etiket */
   var s=havaSartlari(k);
   if(havaKilitliMi(s))
-    return'<span class="roz roz-gunes" title="☀️ Güneş sinyali — sadece Süper Üyelere açık">🔒 Güneş (Süper Üyelik)</span>';
+    return'<span class="roz roz-gunes" title="⭐⭐⭐ 3 Yıldız sinyali — sadece Süper Üyelere açık">🔒 3 Yıldız (Süper Üyelik)</span>';
   var e=havaEtiket(s);
   if(!e)return"";
   return'<span class="roz '+e.sinif+'" title="'+e.aciklama+'">'+e.ik+" "+e.ad+"</span>";
@@ -4543,7 +4560,7 @@ function havaRozet(k){                 /* satır altındaki rozet sırasında ta
 function havaIkon(k){                  /* hisse kodunun hemen önünde tek karakterlik özet */
   var s=havaSartlari(k);
   if(havaKilitliMi(s))
-    return'<span class="havaIkon" title="☀️ Güneş sinyali — sadece Süper Üyelere açık">🔒</span>';
+    return'<span class="havaIkon" title="⭐⭐⭐ 3 Yıldız sinyali — sadece Süper Üyelere açık">🔒</span>';
   var e=havaEtiket(s);
   if(!e)return"";
   return'<span class="havaIkon" title="'+e.aciklama+'">'+e.ik+"</span>";
@@ -4575,6 +4592,7 @@ var presetSecTf={};
 /* 📍 TAKİP — hangi dilimde hangi kategori (yolda/hedef1/hedef2/stop) açık
    tutulduğunu hatırlar; ad (potansiyel/fibo/uzunvade/haftalik) başına ayrı. */
 var takipAcik={};
+var y3Acik=null;         /* ⭐⭐⭐ 3 Yıldız Backtest kutusunun açık sekmesi (yolda/hedef1/hedef2/stop) */
 /* Takip filtreleri — dilim (ad) başına ayrı tutuluyor ki KISA/ORTA/UZUN/
    1 HAFTA sekmeleri birbirini etkilemesin. */
 var takipTarihFiltre={}, takipKalanManuel={};
@@ -4988,7 +5006,7 @@ function taraDugmeCiz(){
   };
 }
 function kouSeritHtml(){
-  /* 🔗 Güçlülerin güçlüsü bandının hemen altında, sağdan sola (Kısa en
+  /* 🔗 3 yıldızlı hisseler bandının hemen altında, sağdan sola (Kısa en
      sağda) tek satırlık KISA/ORTA/UZUN kısayolu. Diğer sekme düğmeleri
      gibi rozetli (o an listede kaç hisse olduğunu gösteren sayı). */
   var o=[["potansiyel","Kısa Sinyal"],["fibo","Orta Sinyal"],["uzunvade","Uzun Sinyal"]];
@@ -5011,9 +5029,9 @@ function hotCiz(){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
   });
-  if(!hepsi.length){kutu.innerHTML=kouSeritHtml();kouSeritBagla();return}
+  if(!hepsi.length){kutu.innerHTML=kouSeritHtml()+y3BacktestCiz();kouSeritBagla();y3BacktestBagla();return}
 
-  /* ☀️ GÜÇLÜLERİN GÜÇLÜSÜ — artık genel kalite sıralaması değil, 4 bağlam
+  /* ⭐⭐⭐ 3 YILDIZLI HİSSELER — artık genel kalite sıralaması değil, 4 bağlam
      şartını (ortalama üstü + kalın raf + temiz trend)
      BİRDEN sağlayan hisseler. Böylece bu şerit yalnız ☀️ rozetli olanları
      gösterir; şartları tam sağlayan hisse yoksa şerit boş kalır. */
@@ -5030,20 +5048,21 @@ function hotCiz(){
   secilen.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
   secilen=secilen.slice(0,12);
 
-  /* 🔒 ☀️ Güneş katmanı Süper Üyeliğe kilitli — non-super kullanıcıya
-     hangi hisselerin ☀️ olduğu gösterilmez, sadece kaç tane olduğu ve
+  /* 🔒 ⭐⭐⭐ 3 Yıldız katmanı Süper Üyeliğe kilitli — non-super kullanıcıya
+     hangi hisselerin ⭐⭐⭐ olduğu gösterilmez, sadece kaç tane olduğu ve
      kilit + davet çağrısı gösterilir. */
   if(!D.super){
     var say=secilen.length;
-    var h2='<div class="hotBaslik">🔒 ☀️ Güçlülerin güçlüsü — Süper Üyelik</div>'+
+    var h2='<div class="hotBaslik">🔒 ⭐⭐⭐ 3 yıldızlı hisseler — Süper Üyelik</div>'+
       '<div class="hotKilit" id="hotKilit">'+
         (say?'Şu an <b>'+say+' hisse</b> 4 şartı birden sağlıyor, ama hangileri olduğunu görmek Süper Üyelik gerektiriyor.':'Bu bölüm Süper Üyelere özel.')+
         ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div>'+
-      kouSeritHtml();
+      kouSeritHtml()+y3BacktestCiz();
     kutu.innerHTML=h2;
     var hl=el("hotKilitLink");
     if(hl)hl.onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
     kouSeritBagla();
+    y3BacktestBagla();
     return;
   }
 
@@ -5051,20 +5070,21 @@ function hotCiz(){
     var t=TF[x._ad]||{kisa:x.tf||"",renk:"var(--ciz)"};
     var kr=kar(x);
     return '<div class="hotKart'+(bugunMu(x)?" bgnKart":"")+'" data-kod="'+E(x.kod)+'" data-l="'+x._ad+'" style="border-left-color:#ffb020">'+
-      '<div class="hotKod">☀️ '+E(x.kod)+'</div>'+
+      '<div class="hotKod">⭐⭐⭐ '+E(x.kod)+'</div>'+
       '<div class="hotDil">'+t.kisa+'</div>'+
       '<div class="hotYuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+'</div>'+
     '</div>';
   }
 
-  var h='<div class="hotBaslik">☀️ Güçlülerin güçlüsü — 3/3 şart birden</div>';
+  var h='<div class="hotBaslik">⭐⭐⭐ 3 yıldızlı hisseler — 3/3 şart birden</div>';
   if(secilen.length)
     h+='<div class="hotSira">'+secilen.map(kartHtml).join("")+"</div>";
   else
     h+='<div class="hotAltYazi" style="font-size:11px;color:var(--soluk)">Şu an 3 şartı birden sağlayan hisse yok — bu normaldir, nadir görülür.</div>';
-  h+=kouSeritHtml();
+  h+=kouSeritHtml()+y3BacktestCiz();
   kutu.innerHTML=h;
   kouSeritBagla();
+  y3BacktestBagla();
   satirBagla();
 }
 function sirCiz(akt){
@@ -5242,6 +5262,55 @@ function takipStopSatirHtml(x){
     '</div><div class="dusAlt">'+E(x.sebep||"stop oldu")+
     (x.sinyalFiyat!=null?" · sinyal "+N(x.sinyalFiyat):"")+
     (x.sonFiyat!=null?" → "+N(x.sonFiyat):"")+"</div></div>";
+}
+/* ⭐⭐⭐ 3 YILDIZ BACKTEST — yalnız sinyal ANINDA 3/3 hava şartını (⭐⭐⭐)
+   sağlamış hisseler için, kuruluştan bugüne ne olduğunu gösterir: hedefe
+   gitti mi (Hedef1/Hedef2), hâlâ yolda mı, yoksa stop mu oldu. Kaynak,
+   "Takip" panelindekiyle AYNI kalıcı geçmiş (D.takipGecmis / D.dusenler,
+   bkz. worker.js'deki takipKaliciAd) — tek fark, kayıt sunucuda y3
+   bayrağıyla işaretlenmişse (sinyal anında ⭐⭐⭐) dahil ediliyor, dört
+   dilim (KISA/ORTA/UZUN/HAFTA) tek çatı altında birleştiriliyor. */
+function y3BacktestVeri(){
+  var dilimler=["potansiyel","fibo","uzunvade","haftalik"];
+  var yolda=[],hedef1=[],hedef2=[];
+  dilimler.forEach(function(ad){
+    var v=(D.takipGecmis&&D.takipGecmis[ad])||null; if(!v)return;
+    (v.yolda||[]).forEach(function(k){if(k.y3){var kk=Object.assign({},k);kk._ad=ad;yolda.push(kk)}});
+    (v.hedef1||[]).forEach(function(k){if(k.y3){var kk=Object.assign({},k);kk._ad=ad;hedef1.push(kk)}});
+    (v.hedef2||[]).forEach(function(k){if(k.y3){var kk=Object.assign({},k);kk._ad=ad;hedef2.push(kk)}});
+  });
+  var stop=(D.dusenler||[]).filter(function(x){return!!x.y3});
+  return{yolda:yolda,hedef1:hedef1,hedef2:hedef2,stop:stop};
+}
+function y3BacktestCiz(){
+  /* Takip kutusuyla AYNI görünürlük kuralı: yalnız yönetici görür. */
+  if(!(D&&D.yon))return"";
+  var v=y3BacktestVeri();
+  var acik=y3Acik;
+  var pil=function(key,ik,baslik,n){
+    return '<button class="sir'+(acik===key?" on":"")+'" data-y3k="'+key+'">'+ik+" "+baslik+" ("+n+")</button>";
+  };
+  var h='<div class="kutu" style="margin-top:10px"><h3 style="margin:0 0 8px">🧪 ⭐⭐⭐ 3 Yıldız — Backtest</h3>'+
+    '<div class="altbilgi" style="margin-bottom:8px">Sinyal ANINDA ⭐⭐⭐ (3/3 şart) olan hisseler, tüm dilimler birlikte — kuruluştan bugüne gerçek sonuç.</div>'+
+    '<div class="sirala">'+
+      pil("yolda","🟢","Yolda",v.yolda.length)+
+      pil("hedef1","🧱","Hedef1 tuttu",v.hedef1.length)+
+      pil("hedef2","🎯","Hedef2 tuttu",v.hedef2.length)+
+      pil("stop","🔴","Stop oldu",v.stop.length)+
+    "</div>";
+  if(acik){
+    var liste=v[acik]||[];
+    h+='<div style="margin-top:8px">'+(liste.length?
+      (acik==="stop"?liste.map(takipStopSatirHtml).join(""):liste.map(function(k){return takipSatirHtml(k,acik,k._ad)}).join(""))
+      :'<div class="bos" style="padding:14px">Bu kategoride hisse yok.</div>')+
+      "</div>";
+  }
+  return h+"</div>";
+}
+function y3BacktestBagla(){
+  [].forEach.call(document.querySelectorAll("[data-y3k]"),function(b){
+    b.onclick=function(){tit();var k=b.dataset.y3k;y3Acik=(y3Acik===k)?null:k;hotCiz();window.scrollTo(0,0)};
+  });
 }
 /* Tarih + "kalan yüzde" filtrelerini bir listeye uygular. Tarih tüm
    kategorilerde (Yolda/Hedef1/Hedef2) çalışır — "şu tarihte sinyal
