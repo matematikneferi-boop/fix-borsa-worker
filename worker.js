@@ -5021,7 +5021,13 @@ function takipSatirHtml(k,acik,ad){
   }
   return '<div class="satir" data-kod="'+E(k.kod)+'" style="border-left-color:var(--ciz)">'+
     '<div class="sol"><div class="kod">'+kodHtml(k)+"</div>"+
-    '<div class="altbilgi">'+orta+"</div>"+stopAlt+"</div>"+
+    /* 🐞 DÜZELTME: .altbilgi sınıfı genelde tek-satır + "..." kesme
+       (white-space:nowrap + ellipsis) kullanıyor — burada sinyal/H1/H2/
+       tarih hepsi aynı satıra sığmayınca H2 (ve bazen tarih) ekranın
+       dışında kalıp görünmüyordu. Bu satıra özel satır kaydırmayı geri
+       açıyoruz, .altbilgi'nin başka yerlerdeki (rozet vb.) tek-satır
+       davranışına dokunmadan. */
+    '<div class="altbilgi" style="white-space:normal;overflow:visible;text-overflow:clip">'+orta+"</div>"+stopAlt+"</div>"+
     '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
     '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+"</div></div></div>";
 }
@@ -5053,7 +5059,7 @@ function takipFiltrele(liste,ad,acik){
     if(km!=null){
       out=out.filter(function(k){
         var kal=takipKalanYuzde(k);
-        return kal!=null&&kal<=km;
+        return kal!=null&&kal>=km;
       });
     }
   }
@@ -5088,7 +5094,7 @@ function takipKutuCiz(ad){
         '<span>📅 <input type="date" class="takipTarihGir" data-ad="'+E(ad)+'" value="'+E(tTarih)+'" style="width:auto"></span>'+
         (tTarih?'<button class="temiz takipTarihTemizle" data-ad="'+E(ad)+'">✕ tarih</button>':"")+
         (acik==="yolda"?(
-          '<span>hedefe kalan ≤ %<input type="number" inputmode="decimal" step="0.1" min="0" class="takipKalanGir" data-ad="'+E(ad)+'" placeholder="ör. 5" value="'+(kManuel!=null?kManuel:"")+'" style="width:60px"></span>'+
+          '<span>hedefe kalan ≥ %<input type="number" inputmode="decimal" step="0.1" min="0" class="takipKalanGir" data-ad="'+E(ad)+'" placeholder="ör. 5" value="'+(kManuel!=null?kManuel:"")+'" style="width:60px"></span>'+
           '<button class="takipKalanUygula" data-ad="'+E(ad)+'">Uygula</button>'+
           (kManuel!=null?'<button class="temiz takipKalanTemizle" data-ad="'+E(ad)+'">✕ yüzde</button>':"")
         ):"")+
