@@ -4172,7 +4172,10 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .baslik{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .anaMenuBtn{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);border-radius:9px;
   padding:7px 11px;font-size:12.5px;font-weight:700;white-space:nowrap;order:-1}
-.sekmeAdi{font-size:15.5px;font-weight:800}
+.sekmeAdi{font-size:13px;font-weight:800;padding:6px 11px;border-radius:999px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38vw;flex:0 1 auto}
+.sekNavBtn{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);border-radius:9px;
+  padding:7px 10px;font-size:13px;font-weight:800;line-height:1;flex:0 0 auto}
 .baslik h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
 .saat{font-size:11.5px;color:var(--soluk);font-variant-numeric:tabular-nums}
 .sekmeler{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,auto);gap:6px;
@@ -4477,7 +4480,7 @@ textarea.gir{min-height:88px;resize:vertical}
 </div>
 
 <div class="ust">
-  <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><button id="baslikYazi" class="anaMenuBtn">📩 Bize Ulaşın</button><span id="sekmeAdi" class="sekmeAdi"></span><div class="saat" id="saat"></div></div>
+  <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><button id="baslikYazi" class="anaMenuBtn">📩 Bize Ulaşın</button><button id="sekOnceki" class="sekNavBtn" style="display:none" title="Önceki sekme">◀</button><span id="sekmeAdi" class="sekmeAdi"></span><button id="sekSonraki" class="sekNavBtn" style="display:none" title="Sonraki sekme">▶</button><div class="saat" id="saat"></div></div>
   <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button><button id="taraBtn" class="araBtn" style="display:none" title="Şimdi tara ve buluta yükle">🔄</button><button id="yardimBtn" class="yardimBtn" title="Rozetler ve sekmeler ne demek?">❓</button><button id="davetBtn" class="yardimBtn" title="Sistemi paylaş, Süper Üyelik kazan">📤</button><button id="onizBtn" class="araBtn" style="display:none" title="Sıradan (süper olmayan) üye gözünden gör">👁️</button></div>
   <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
@@ -4670,8 +4673,50 @@ function ekranAdi(){
   if(sekme==="temel")return"📋 Temel Analiz";
   if(sekme==="yardim")return"❓ Rozetler ve Sekmeler";
   if(sekme==="alarm")return"🔔 Anlık Alarm";
+  if(sekme==="kama")return"📐 Formasyon Tarama";
+  if(sekme==="ortaklik")return"🔗 Ortaklık Haritası";
+  if(sekme==="fonlar")return"🐣 Fonlar";
   if(sekme==="aday")return(TF[adayTf]?TF[adayTf].ad:"Adaylar");
   return TF[sekme]?TF[sekme].ik+" "+TF[sekme].ad:"";
+}
+/* ⬅️➡️ SEKME GEZİNME: header'daki ◀ ▶ düğmeleri bu sırayı takip eder.
+   Sıra, sekmeler şeridinde (sekCiz) ve KISA/ORTA/UZUN şeridinde
+   (kouSira) görünen sırayla birebir aynı — sadece yönetici sekmeleri
+   (backtest/yesil/panel/hata/sag) yönetici değilse listeden çıkar. */
+function sekmeSirasi(){
+  var l=["potansiyel","fibo","uzunvade","kama","malboga","temel","aday","alarm","rot"];
+  if(D&&D.yon)l.push("backtest");
+  l.push("fav","portfoy","preset","abs","ortaklik","fonlar");
+  if(D&&D.yon)l.push("yesil","panel","hata","sag");
+  return l;
+}
+/* 🎨 Hangi sekmede olduğumuzu tek bakışta anlatan renk: KISA/ORTA/UZUN
+   kendi dilim rengini taşır, Adaylar amber, geri kalan her şey mavi. */
+function sekmeRenk(s){
+  if(s==="potansiyel")return"var(--t1s)";
+  if(s==="fibo")return"var(--t4s)";
+  if(s==="uzunvade")return"var(--t1g)";
+  if(s==="haftalik")return"var(--t1h)";
+  if(s==="aday")return"var(--tad)";
+  return"var(--mavi)";
+}
+function sekmeYaziRenk(s){
+  if(s==="potansiyel")return"#08150c";
+  if(s==="fibo")return"#07182b";
+  if(s==="haftalik")return"#2a1400";
+  if(s==="aday")return"#1d1503";
+  return"#fff";
+}
+function sekmeGec(delta){
+  var l=sekmeSirasi();
+  var ix=l.indexOf(sekme);
+  if(ix<0)ix=0;
+  ix=(ix+delta+l.length)%l.length;
+  tit();
+  sekme=l[ix];sira="kar";
+  izSekmeDegisti(sekme);
+  ciz();
+  window.scrollTo(0,0);
 }
 function gezCiz(){
   tgGeriDugme();
@@ -4868,14 +4913,27 @@ function ciz(){
   /* 🖥 TAM EKRAN: eskiden yalnız Hisse Taraması (malboga) bu tam ekran
      davranışını kullanıyordu. Artık varsayılan açılış sekmesi olan
      KISA (potansiyel) DIŞINDAKİ her sekme aynı şekilde tam sayfa: üstteki
-     sekme şeridi ve sekme adı tamamen kalkar, bütün dikey alan doğrudan
-     o sekmenin içeriğine ayrılır. 🏠 Ana Menü düğmesi başlıkta kalır —
-     geri dönüş hep oradan, tıpkı Hisse Taraması'nda olduğu gibi. */
-  var sekS=el("sekmeler");
+     sekme şeridi kalkar, bütün dikey alan doğrudan o sekmenin içeriğine
+     ayrılır. 🏠 Ana Menü düğmesinin yanında artık hangi sekmede olduğumuzu
+     renkli bir etiketle gösteriyoruz, iki yanında da ◀ ▶ ile önceki/sonraki
+     sekmeye tek dokunuşla geçiliyor — hepsi aynı satırda. */
+  var sekS=el("sekmeler"),sekOn=el("sekOnceki"),sekSon=el("sekSonraki");
   if(sekme!=="potansiyel"){
     if(sekS){sekS.innerHTML="";sekS.style.display="none"}
-    if(sekAdi)sekAdi.style.display="none";
-  }else if(sekS)sekS.style.display="";
+    if(sekAdi){
+      sekAdi.style.display="";
+      sekAdi.textContent=ekranAdi();
+      sekAdi.style.background=sekmeRenk(sekme);
+      sekAdi.style.color=sekmeYaziRenk(sekme);
+    }
+    if(sekOn){sekOn.style.display="";sekOn.onclick=function(){sekmeGec(-1)}}
+    if(sekSon){sekSon.style.display="";sekSon.onclick=function(){sekmeGec(1)}}
+  }else{
+    if(sekS)sekS.style.display="";
+    if(sekAdi)sekAdi.style.background="";
+    if(sekOn)sekOn.style.display="none";
+    if(sekSon)sekSon.style.display="none";
+  }
   if(sekme==="hata")return hataCiz();
   if(sekme==="sag")return saglikCiz();
   if(sekme==="abs")return absCiz();
