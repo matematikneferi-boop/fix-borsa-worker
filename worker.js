@@ -5429,6 +5429,9 @@ function formasyonRozetUygula(){
    kaybediyordu. Düşen her hisse, SEBEBİYLE ve son durumuyla burada
    duruyor. Kaybolmuyor, açıklanıyor. */
 function dusenlerCiz(ad){
+  /* 👑 GÖRÜNÜRLÜK (2026-08-30): "Bugün listeden düşenler" artık YALNIZ
+     yöneticiye (D.yon) gösteriliyor. */
+  if(!(D&&D.yon))return"";
   var ds=((D&&D.dusenler)||[]).filter(function(x){return x.liste===ad});
   if(!ds.length)return "";
   var h='<div class="dusBas">📉 Bugün listeden düşenler ('+ds.length+')</div>'+
