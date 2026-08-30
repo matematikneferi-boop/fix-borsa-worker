@@ -286,7 +286,37 @@ for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayi
 ;n.ozet=n.ozet||{};const gt=Object.keys(n.gunler).sort().reverse(),gk=gt.slice(0,DETAY_GUN),gs=gt.slice(DETAY_GUN)
 ;for(const e of gs){if(!n.ozet[e]){const o=m(e,n.gunler[e]);if(o)n.ozet[e]=o}}const go={};for(const e of gk)go[e]=n.gunler[e];n.gunler=go
 ;const ot=Object.keys(n.ozet).sort().reverse();if(ot.length>OZET_GUN){const oo={};for(const e of ot.slice(0,OZET_GUN))oo[e]=n.ozet[e];n.ozet=oo}
-;n.guncelleme=(new Date).toISOString(),await e.VERI.put("gecmis",JSON.stringify(n))}
+;n.guncelleme=(new Date).toISOString();
+/* 💀 ÖLÜM AYARI #3 (2026-08-30) — "hedefe ulaşan sinyal ASLA geri Yolda'ya
+   düşmesin" garantisi artık tek-isolate içinde doğruydu ama Cloudflare
+   Worker'ı AYNI ANDA BİRDEN ÇOK izole kopyada çalıştırıyor (bkz. satır
+   ~3940'taki LİSTE OKUMA notu — aynı sorun burada da var). İki isolate
+   /push'u neredeyse aynı anda işlerse, ikisi de "gecmis"i KV'den okur,
+   kendi belleğinde max'ı günceller, sonra yazar — YARIŞ DURUMU: geç yazan
+   isolate'in belleğindeki max DAHA ESKİ/DÜŞÜK olabilir ve KV'deki daha
+   yeni/yüksek max'ın üzerine yazıp onu SİLER. Kullanıcıya "az önce Hedef1
+   tuttu diyordu şimdi Yolda diyor" olarak görünen tam olarak budur —
+   kalıcı depolamadaki gerçek zirve kayboluyor.
+   DÜZELTME: yazmadan hemen önce KV'yi TAZE bir kez daha okuyup, her kaydın
+   max'ını "benim hesapladığım" ile "KV'de o an duran" değerin BÜYÜĞÜYLE
+   birleştiriyoruz. Böylece bu isolate KV'deki daha yüksek bir max'ı asla
+   ezmez — max artık düz KV üzerinde de pratik olarak monoton artan.
+   (Mutlak/atomik garanti için Durable Object gerekir; bu, düz KV ile
+   ulaşılabilecek en sağlam çözümdür.) */
+try{
+  const taze=await e.VERI.get("gecmis");
+  if(taze){
+    const tj=JSON.parse(taze);
+    if(tj&&tj.gunler)for(const gg of Object.keys(n.gunler)){
+      const fg=tj.gunler[gg];if(!fg||!fg.kayitlar)continue;
+      for(const kk3 of Object.keys(n.gunler[gg].kayitlar)){
+        const ben=n.gunler[gg].kayitlar[kk3],oteki=fg.kayitlar[kk3];
+        if(oteki&&oteki.max>0&&(!(ben.max>0)||oteki.max>ben.max))ben.max=oteki.max;
+      }
+    }
+  }
+}catch(_){}
+await e.VERI.put("gecmis",JSON.stringify(n))}
 /* 📍 TAKİP — KALICI GEÇMİŞ (2026-08-30). Mini App'teki "Takip" paneli eskiden
    D.kartlar'dan (o anki taramanın anlık görüntüsü) besleniyordu — her /push
    önceki taramanın üzerine tamamen yazdığı için hedefe ulaşıp taramadan düşen
