@@ -5231,20 +5231,11 @@ function takipFiltrele(liste,ad,acik){
   return out;
 }
 function takipKutuCiz(ad){
-  /* 👑 GÖRÜNÜRLÜK (2026-08-30): "kuruluştan bugüne HER sinyal" kutusu stoplar
-     hâlâ olgunlaşmadığı için şimdilik yalnız yöneticiye (D.yon) tam
-     hâliyle açık. Normal kullanıcı aynı kutuyu görür ama liste sunucu
-     tarafında değil BURADA (görüntülemede) son iki güne (dün+bugün, TR
-     takvimine göre) süzülür — sunucudaki gecmis/kalıcı veri hiç değişmiyor,
-     yalnız ekrana ne çizildiği değişiyor. Stoplar dolmaya başlayınca bu
-     süzgeç kaldırılıp herkes kuruluştan bugüne görecek. */
-  var vAsil=takipHam(ad), yonMi=!!(D&&D.yon);
-  var v=vAsil;
-  if(!yonMi){
-    var suz=function(dizi){return(dizi||[]).filter(function(k){return dunBugunMu(k)})};
-    v={yolda:suz(vAsil.yolda),hedef1:suz(vAsil.hedef1),hedef2:suz(vAsil.hedef2),
-       stop:(vAsil.stop||[]).filter(function(x){return dunBugunMu(x,"ts")})};
-  }
+  /* 👑 GÖRÜNÜRLÜK (2026-08-30): Takip kutusu artık YALNIZ yöneticiye (D.yon)
+     gösteriliyor. Normal kullanıcı bu kutuyu hiç görmüyor. */
+  var yonMi=!!(D&&D.yon);
+  if(!yonMi)return"";
+  var v=takipHam(ad);
   var acik=takipAcik[ad]||null, stopVar=takipStopVar(ad);
   var toplam=function(anahtar,dizi){return v["toplam"+anahtar]!=null?v["toplam"+anahtar]:dizi.length};
   var pil=function(key,ik,baslik,n){
@@ -5497,7 +5488,6 @@ function listeCiz(ad){
     return;
   }
   el("govde").innerHTML=takipKutuCiz(ad)+presetKutuAdCiz(ad)+sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
-    '<div class="uyari">⚠️ Yatırım tavsiyesi değildir. Teknik tarama geleceği bilmez.</div>'+
     dusenlerCiz(ad);
   takipBagla(ad);presetTfBagla();sirBagla();satirBagla();
 }
