@@ -4196,6 +4196,9 @@ body{margin:0;background:var(--bg);color:var(--yazi);
   color:var(--soluk);border-radius:999px;padding:7px 6px;font-size:12.5px;font-weight:700;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kouBtn.on{color:#fff;border-color:transparent}
+.kouBtn[data-r="1SA"]{border-color:var(--t1s);color:var(--t1s)}
+.kouBtn[data-r="4SA"]{border-color:var(--t4s);color:var(--t4s)}
+.kouBtn[data-r="1G"]{border-color:var(--t1g);color:var(--t1g)}
 .kouBtn.on[data-r="1SA"]{background:var(--t1s);color:#08150c}
 .kouBtn.on[data-r="4SA"]{background:var(--t4s);color:#07182b}
 .kouBtn.on[data-r="1G"]{background:var(--t1g)}
@@ -4423,6 +4426,10 @@ textarea.gir{min-height:88px;resize:vertical}
   padding:6px 11px;font-size:14px;line-height:1.4}
 .araBtn.on{background:#ffb020;border-color:#ffb020;color:#1a1200}
 .hotBaslik{font-size:10px;font-weight:700;color:var(--sar);margin-bottom:3px}
+.y3Kutu{border:1px solid #ffb020;background:rgba(255,176,32,.08);border-radius:12px;
+  padding:9px 10px 10px;margin:8px 0}
+.y3Kutu .hotBaslik{font-size:12.5px;color:#ffb020;margin-bottom:6px;letter-spacing:.2px}
+.y3Kutu .hotKilit{background:transparent;padding:0}
 .hotSira{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
 .hotKart{flex:0 0 54px;background:var(--kart);border:1px solid var(--ciz);
   border-left:3px solid var(--ciz);border-radius:7px;padding:4px 5px;cursor:pointer}
@@ -5141,10 +5148,10 @@ function hotCiz(){
      kilit + davet çağrısı gösterilir. */
   if(!D.super){
     var say=secilen.length;
-    var h2='<div class="hotBaslik">🔑 ⭐⭐⭐ 3 yıldızlı hisseler — Süper Üyelik</div>'+
+    var h2='<div class="y3Kutu"><div class="hotBaslik">🔑 ⭐⭐⭐ 3 yıldızlı hisseler — Süper Üyelik</div>'+
       '<div class="hotKilit" id="hotKilit">'+
         (say?'Şu an <b>'+say+' hisse</b> 3 şartı birden sağlıyor, ama hangileri olduğunu görmek Süper Üyelik gerektiriyor.':'Bu bölüm Süper Üyelere özel.')+
-        ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div>'+
+        ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div></div>'+
       kouSeritHtml()+y3BacktestCiz();
     kutu.innerHTML=h2;
     var hl=el("hotKilitLink");
@@ -5164,12 +5171,12 @@ function hotCiz(){
     '</div>';
   }
 
-  var h='<div class="hotBaslik">⭐⭐⭐ 3 yıldızlı hisseler — 3/3 şart birden</div>';
+  var h='<div class="y3Kutu"><div class="hotBaslik">⭐⭐⭐ 3 yıldızlı hisseler — 3/3 şart birden</div>';
   if(secilen.length)
     h+='<div class="hotSira">'+secilen.map(kartHtml).join("")+"</div>";
   else
     h+='<div class="hotAltYazi" style="font-size:11px;color:var(--soluk)">Şu an 3 şartı birden sağlayan hisse yok — bu normaldir, nadir görülür.</div>';
-  h+=kouSeritHtml()+y3BacktestCiz();
+  h+="</div>"+kouSeritHtml()+y3BacktestCiz();
   kutu.innerHTML=h;
   kouSeritBagla();
   y3BacktestBagla();
