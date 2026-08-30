@@ -1180,7 +1180,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -1204,14 +1204,17 @@ async function sinyalMetniUret(A,yalnizCanli){
     (liste.length>n?"\n<i>…ve "+(liste.length-n)+" hisse daha.</i>":"");
 }
 async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;
-/* 🔔 KAPSAM (2026-08-30, kullanıcı kararı): alarm artık YALNIZ ORTA (fibo)
-   ve UZUN (uzunvade) sinyallerini bildiriyor. KISA (potansiyel) listede
-   dolmaya devam eder, herkes onu ekranda görür — ama bildirim göndermez.
-   Alıcılar zaten Süper Üye + yönetici ile sınırlı (bkz. alarmKullanicilari).
+/* 🔔 KAPSAM (2026-08-31, kullanıcı kararı): KISA (potansiyel) artık ORTA
+   (fibo) ve UZUN (uzunvade) ile birlikte bildirim kapsamına girdi — ama
+   KISA'nın gürültüsü geri gelmesin diye üçü de (KISA/ORTA/UZUN) artık
+   yalnızca ⭐⭐⭐ 3 YILDIZ şartını (⚓ ortalama üstü + 📚 kalın raf + 📐 temiz
+   trend, y3SartSayisi>=3 — bkz. satır ~265) birden sağlayan sinyallerde
+   bildirim gönderiyor. Alıcılar zaten Süper Üye + yönetici ile sınırlı
+   (bkz. alarmKullanicilari).
    Mükerrer gitmez: alarmAnahtar zaten kod|dilim|canlı olduğu için aynı
    hisse iki dilimde kırdıysa iki ayrı sinyaldir ve öyle sayılır. */
 const K=(yeni&&yeni.kartlar)||{};
-const yeniListe=[].concat(K.fibo||[],K.uzunvade||[]);
+const yeniListe=[].concat(K.potansiyel||[],K.fibo||[],K.uzunvade||[]);
 if(!yeniListe.length)return;
 const gecmis=await alarmGecmisi(e),bilinen=new Set(gecmis.kodlar||[]);
 /* ALARM SADECE GERÇEKTEN GÜÇLÜ OLANLARA:
@@ -1226,7 +1229,11 @@ const uygun=yeniListe.filter(x=>x&&x.kod
 /* 🔇 Bilanço açıklamasına 2 gün kala bildirim gönderilmez: o hareket
    teknik kırılım değil, olay riskidir. Kart listede kalır. */
 &&!x.bilancoSessiz
-&&!/İZLEMEDE/.test(String(x.guc||"")));
+&&!/İZLEMEDE/.test(String(x.guc||""))
+/* ⭐⭐⭐ 3/3 hava şartı: server tarafı eşiği y3SartSayisi ile (satır ~265),
+   client'taki havaSartlari ile AYNI eşikleri (Y3_RAF_ESIK/Y3_ER_ESIK)
+   kullanır — bkz. o fonksiyonun başındaki not. */
+&&y3SartSayisi(x)>=3);
 /* DUZELTME: "bilinen" seti gunde bir sifirlaniyor, ama hafta sonu piyasa
    kapaliyken bile takvim gunu degisiyor -- Cuma'nin sinyali Cumartesi/
    Pazar/Pazartesi her sifirlamada yeniden "yeni" sayilip tekrar tekrar
