@@ -4546,6 +4546,11 @@ function rozlerHepsi(k){
 /* Varsayılan sıralama "kar": liste açılır açılmaz en çok kazandıran sinyal
    en üstte. Kullanıcı istediğinde 🎯 Hedefe kalan / 🕐 En yeni'ye geçebilir. */
 var D=null, sekme="potansiyel", sira="kar", adayTf="adayOrta", presetSec="kaliteli", portfoySirala="deger";
+/* 🎛 KISA/ORTA/UZUN'un KENDİ TAB'INDA AYRI PRESETLER (kullanıcı isteği):
+   her dilimin kendi presetSecTf[ad] seçimi var (null = kapalı). Ortak
+   presetSec (yukarıda) hâlâ birleşik "🎛 Presetler" sekmesine ait, ona
+   dokunulmadı — bu yalnız yeni, dilim-bazlı kutular için. */
+var presetSecTf={};
 /* 📍 TAKİP — hangi dilimde hangi kategori (yolda/hedef1/hedef2/stop) açık
    tutulduğunu hatırlar; ad (potansiyel/fibo/uzunvade/haftalik) başına ayrı. */
 var takipAcik={};
@@ -5450,21 +5455,51 @@ function dusenlerCiz(ad){
   });
   return '<div class="kutu" style="margin-top:12px">'+h+'</div>';
 }
+/* 🎛 Kullanıcı isteği: KISA/ORTA/UZUN'un HER BİRİNİN kendi tab'ında, o dilime
+   ÖZEL bir Presetler kutusu (üç dilimi karıştıran ortak sekmeden ayrı).
+   Amaç: eski/durgun sinyaller ana listede kalabalık ettiğinde kullanıcı
+   burada "🆕 Az önce sinyal verdi" ya da "🎯 Hedefe yakın" gibi bir preset'e
+   basıp o dilimi kendi başına süzebilsin — Takip kutusu gibi katlanır,
+   preset seçilince altında sadece o dilimin (D.kartlar[ad]) sonucu açılır. */
+function presetKutuAdCiz(ad){
+  var ham=((D.kartlar&&D.kartlar[ad])||[]).filter(hedefEsikGecti);
+  var sec=presetSecTf[ad]||null;
+  var h='<div class="kutu" style="margin-bottom:10px"><h3 style="margin:0 0 8px">🎛 Presetler</h3>'+
+    '<div class="sirala" style="flex-wrap:wrap">'+PRESET_CHIPLER.map(function(c){
+      return '<button class="sir'+(sec===c[0]?" on":"")+'" data-prtf="'+ad+"|"+c[0]+'">'+c[1]+"</button>";
+    }).join("")+"</div>";
+  if(sec){
+    var liste=presetUygula(ham,sec).slice(0,15);
+    h+='<div style="margin-top:8px">'+(liste.length?liste.map(function(k){return satirHtml(k,ad)}).join(""):
+      '<div class="bos" style="padding:14px">Bu filtreye uyan hisse yok şu an.</div>')+"</div>";
+  }
+  return h+"</div>";
+}
+function presetTfBagla(){
+  [].forEach.call(document.querySelectorAll("[data-prtf]"),function(b){
+    b.onclick=function(){
+      tit();
+      var i=b.dataset.prtf.indexOf("|"),ad=b.dataset.prtf.slice(0,i),sec=b.dataset.prtf.slice(i+1);
+      presetSecTf[ad]=(presetSecTf[ad]===sec)?null:sec;
+      ciz();
+    };
+  });
+}
 function listeCiz(ad){
   var l=dizil(ad), t=TF[ad];
   if(!l.length){
-    el("govde").innerHTML=takipKutuCiz(ad)+'<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>'+
+    el("govde").innerHTML=takipKutuCiz(ad)+presetKutuAdCiz(ad)+'<div class="bos"><b>'+t.ik+" "+t.ad+'</b><br><br>'+
       (sira==="yeni"
         ? 'Bugün bu dilimde henüz sinyal çıkmadı.<br>Önceki günlerin sinyalleri için 💰 ya da 🎯 sekmesine geç.'
         : 'Şu an bu dilimde sinyal yok.<br>Bu dilimde henüz pivot kırılımı oluşmadı. Bar kapanışlarında liste yenilenir.')+
       '</div>'+dusenlerCiz(ad);
-    takipBagla(ad);
+    takipBagla(ad);presetTfBagla();
     return;
   }
-  el("govde").innerHTML=takipKutuCiz(ad)+sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
+  el("govde").innerHTML=takipKutuCiz(ad)+presetKutuAdCiz(ad)+sirCiz(sira)+l.map(function(k){return satirHtml(k,ad)}).join("")+
     '<div class="uyari">⚠️ Yatırım tavsiyesi değildir. Teknik tarama geleceği bilmez.</div>'+
     dusenlerCiz(ad);
-  takipBagla(ad);sirBagla();satirBagla();
+  takipBagla(ad);presetTfBagla();sirBagla();satirBagla();
 }
 function adayCiz(){
   if(!D.super){
@@ -5727,6 +5762,26 @@ function fsBagla(){
    Yabancı payı / temettü verimi gibi KAP-kaynaklı alanlar şu an taramada YOK,
    bu yüzden yalnız gerçekten hesaplanabilen filtreler eklendi — yanlış/boş
    veri göstermemek için. */
+/* Preset filtre/sıralama mantığı — hem birleşik "🎛 Presetler" sekmesinde
+   (üç dilim birden) hem de her dilimin kendi tab'ındaki yeni presetler
+   kutusunda (tek dilim) AYNI mantık kullanılsın diye ortak fonksiyona alındı.
+   Davranış değişmedi, sadece tekrar eden kod tek yere toplandı. */
+var PRESET_CHIPLER=[
+  ["kaliteli","🔥 En kaliteli"],
+  ["tuttu","🏆 Hedef tuttu"],
+  ["yakin","🎯 Hedefe yakın"],
+  ["yeni","🆕 Az önce sinyal verdi"],
+  ["kazandiran","💰 En çok kazandıran"]
+];
+function presetUygula(liste,sec){
+  var c=liste.slice();
+  if(sec==="kaliteli")c.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
+  else if(sec==="tuttu")c=c.filter(function(x){return x.potansiyel!=null&&Number(x.potansiyel)<=0});
+  else if(sec==="yakin")c=c.filter(function(x){return x.potansiyel!=null&&Number(x.potansiyel)>0}).sort(function(a,b){return Number(a.potansiyel)-Number(b.potansiyel)});
+  else if(sec==="yeni")c.sort(function(a,b){return(b.sinyalTs||0)-(a.sinyalTs||0)});
+  else if(sec==="kazandiran")c=c.filter(function(x){return kar(x)!=null}).sort(function(a,b){return kar(b)-kar(a)});
+  return c;
+}
 function presetCiz(){
   var hepsi=[];
   ["potansiyel","fibo","uzunvade"].forEach(function(ad){
@@ -5734,23 +5789,10 @@ function presetCiz(){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
   });
-  var chipler=[
-    ["kaliteli","🔥 En kaliteli 10"],
-    ["tuttu","🏆 Hedef tuttu"],
-    ["yakin","🎯 Hedefe yakın"],
-    ["yeni","🆕 Az önce sinyal verdi"],
-    ["kazandiran","💰 En çok kazandıran"]
-  ];
-  var h='<div class="sirala" style="flex-wrap:wrap">'+chipler.map(function(c){
+  var h='<div class="sirala" style="flex-wrap:wrap">'+PRESET_CHIPLER.map(function(c){
     return '<button class="sir'+(presetSec===c[0]?" on":"")+'" data-pr="'+c[0]+'">'+c[1]+"</button>";
   }).join("")+"</div>";
-  var liste=hepsi.slice();
-  if(presetSec==="kaliteli")liste.sort(function(a,b){return(b.kalite||0)-(a.kalite||0)});
-  else if(presetSec==="tuttu")liste=liste.filter(function(x){return x.potansiyel!=null&&Number(x.potansiyel)<=0});
-  else if(presetSec==="yakin")liste=liste.filter(function(x){return x.potansiyel!=null&&Number(x.potansiyel)>0}).sort(function(a,b){return Number(a.potansiyel)-Number(b.potansiyel)});
-  else if(presetSec==="yeni")liste.sort(function(a,b){return(b.sinyalTs||0)-(a.sinyalTs||0)});
-  else if(presetSec==="kazandiran")liste=liste.filter(function(x){return kar(x)!=null}).sort(function(a,b){return kar(b)-kar(a)});
-  liste=liste.slice(0,15);
+  var liste=presetUygula(hepsi,presetSec).slice(0,15);
   el("govde").innerHTML=h+(liste.length?liste.map(function(x){return satirHtml(x,x._ad)}).join(""):
     '<div class="bos">Bu filtreye uyan hisse yok şu an.<br>Az sonra tekrar dene.</div>');
   bindPresetChips();
