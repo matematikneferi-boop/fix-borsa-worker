@@ -4566,11 +4566,15 @@ function havaEtiket(s){
 /* ☀️ Güneş (3/3) katmanı Süper Üyeliğe kilitli — hangi hissenin ☀️ olduğu
    bilgisi non-super kullanıcıya sızdırılmaz, yerine kilit rozeti gösterilir.
    ⛅ (2/3) ve ☁️ (1/3) herkese açık kalır. */
-function havaKilitliMi(s){ return s>=4&&!(D&&D.super); }
+/* 🔧 DÜZELTME: eşik yanlışlıkla s>=4 idi, ama havaSartlari() en fazla 3
+   döndürüyor (4. şart — endeks ölçüsü — sistemden çıkarılmıştı, bkz. yukarı).
+   Yani kilit HİÇBİR ZAMAN devreye girmiyordu ve Süper Üye olmayan herkes de
+   3 Yıldızlı hisseleri normal üye gibi görebiliyordu. Artık s>=3. */
+function havaKilitliMi(s){ return s>=3&&!(D&&D.super); }
 function havaRozet(k){                 /* satır altındaki rozet sırasında tam etiket */
   var s=havaSartlari(k);
   if(havaKilitliMi(s))
-    return'<span class="roz roz-gunes" title="⭐⭐⭐ 3 Yıldız sinyali — sadece Süper Üyelere açık">🔒 3 Yıldız (Süper Üyelik)</span>';
+    return'<span class="roz roz-gunes" title="⭐⭐⭐ 3 Yıldız sinyali — sadece Süper Üyelere açık">🔑 Süper Üyelik</span>';
   var e=havaEtiket(s);
   if(!e)return"";
   return'<span class="roz '+e.sinif+'" title="'+e.aciklama+'">'+e.ik+" "+e.ad+"</span>";
@@ -4578,7 +4582,7 @@ function havaRozet(k){                 /* satır altındaki rozet sırasında ta
 function havaIkon(k){                  /* hisse kodunun hemen önünde tek karakterlik özet */
   var s=havaSartlari(k);
   if(havaKilitliMi(s))
-    return'<span class="havaIkon" title="⭐⭐⭐ 3 Yıldız sinyali — sadece Süper Üyelere açık">🔒</span>';
+    return'<span class="havaIkon" title="⭐⭐⭐ 3 Yıldız sinyali — sadece Süper Üyelere açık">🔑</span>';
   var e=havaEtiket(s);
   if(!e)return"";
   return'<span class="havaIkon" title="'+e.aciklama+'">'+e.ik+"</span>";
@@ -5043,7 +5047,13 @@ function hotCiz(){
   var kutu=el("hotSerit"); if(!kutu)return;
   var hepsi=[];
   ["potansiyel","fibo","uzunvade"].forEach(function(ad){
-    (D.kartlar&&D.kartlar[ad]||[]).forEach(function(x){
+    /* 🔧 TUTARLILIK: eskiden burada filtre uygulanmıyordu, bu yüzden şerit
+       (örn. "14 hisse") sekmelerdeki (örn. toplam 4) gerçek sayıdan FARKLI
+       çıkıyordu — kullanıcı sekmelere bakınca orada olmayan hisseleri
+       sayıyorduk. Artık tıpkı sekmelerin kendisi (dizil()) gibi
+       hedefEsikGecti filtresinden geçenler sayılıyor; sayı artık birebir
+       eşleşiyor. */
+    (D.kartlar&&D.kartlar[ad]||[]).filter(hedefEsikGecti).forEach(function(x){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
   });
@@ -5071,9 +5081,9 @@ function hotCiz(){
      kilit + davet çağrısı gösterilir. */
   if(!D.super){
     var say=secilen.length;
-    var h2='<div class="hotBaslik">🔒 ⭐⭐⭐ 3 yıldızlı hisseler — Süper Üyelik</div>'+
+    var h2='<div class="hotBaslik">🔑 ⭐⭐⭐ 3 yıldızlı hisseler — Süper Üyelik</div>'+
       '<div class="hotKilit" id="hotKilit">'+
-        (say?'Şu an <b>'+say+' hisse</b> 4 şartı birden sağlıyor, ama hangileri olduğunu görmek Süper Üyelik gerektiriyor.':'Bu bölüm Süper Üyelere özel.')+
+        (say?'Şu an <b>'+say+' hisse</b> 3 şartı birden sağlıyor, ama hangileri olduğunu görmek Süper Üyelik gerektiriyor.':'Bu bölüm Süper Üyelere özel.')+
         ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div>'+
       kouSeritHtml()+y3BacktestCiz();
     kutu.innerHTML=h2;
@@ -5454,7 +5464,7 @@ function satirHtml(k,ad){
     if(k.tetik!=null)alt.push("🔓 tetik "+N(k.tetik)+(k.tetikYuzde!=null?" · %"+Number(k.tetikYuzde).toFixed(1)+" kaldı":""));
     /* Giriş fiyatı da bir ipucudur: "sinyal 138.70" ile hisse bulunabilir.
        Kilitliyken sayı yerine kilit yazılır. */
-    else if(k.giris!=null)alt.push(buguluMu(k)?"sinyal 🔒":("sinyal "+N(k.giris)));
+    else if(k.giris!=null)alt.push((buguluMu(k)||y3Kilitli(k))?"sinyal 🔒":("sinyal "+N(k.giris)));
   }
   /* ⚓ Kirilimdan bu yana alanlarin ortalama maliyetine gore konum.
      Listede tek kelime yeter; ayrinti detay ekraninda. */
@@ -5463,7 +5473,11 @@ function satirHtml(k,ad){
   if(k.zayifHedef)alt.push("🎯 hedef dar");
   if(k.sinyalZaman||k.zaman)alt.push(k.sinyalZaman||k.zaman);
   var bg=bugunMu(k);
-  var kilitli=buguluMu(k);
+  /* 🔑 ⭐⭐⭐ 3 Yıldız kilidi: isim, fiyat ve yüzde birlikte buğulanır —
+     Süper Üye olmayan kullanıcı sadece "böyle bir sinyal var" bilgisini
+     görür, hangi hisse/hangi fiyat/ne kadar kazandırdığı gizli kalır. */
+  var y3lock=y3Kilitli(k);
+  var kilitli=buguluMu(k)||y3lock;
   var adayBlok="";
   if(isAday){
     var direncYuzde=(k.tetikYuzde==null)?null:Number(k.tetikYuzde);
@@ -5482,8 +5496,13 @@ function satirHtml(k,ad){
     adayBlok+
     '<div class="altbilgi">'+E(alt.join(" · "))+"</div>"+
     (function(){var rz=rozlerHepsi(k);return rz?'<div class="rozSat">'+rz+"</div>":""})()+"</div>"+
-    '<div class="sag"><div class="fiyat'+(kilitli?" buguluKod":"")+'">'+N(k.fiyat)+" ₺</div>"+
-    '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?sag:Y(kr))+"</div></div></div>";
+    '<div class="sag">'+(y3lock?
+      ('<div class="fiyat buguluKod">'+N(k.fiyat)+' ₺</div>'+
+       '<div class="yuzde buguluKod">'+(kr==null?"":Y(kr))+'</div>'+
+       '<div class="buguluKilit" style="display:block;text-align:right;margin-top:2px">🔑 Süper Üyelik</div>')
+      :('<div class="fiyat'+(kilitli?" buguluKod":"")+'">'+N(k.fiyat)+" ₺</div>"+
+       '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?sag:Y(kr))+"</div>"))+
+    "</div></div>";
 }
 /* ══════ 🔒 BUĞULU KOD ══════
    Bugün sinyal vermiş VE yüzde 5'ten fazla kazandırmış hisselerin ADI
@@ -5498,7 +5517,13 @@ function buguluMu(k){
   var kr=kar(k);
   return kr!=null&&kr>=BUGULU_ESIK;
 }
+/* 🔑 ⭐⭐⭐ 3 Yıldız kilidi — Süper Üye olmayana isim/fiyat/yüzde birlikte
+   buğulanır (havaKilitliMi ile aynı, tek yerden yönetilsin diye sarmalandı). */
+function y3Kilitli(k){ return havaKilitliMi(havaSartlari(k)); }
 function kodHtml(k){
+  if(y3Kilitli(k))
+    return '<span class="buguluKod">'+E(k.kod)+'</span>'+
+           '<span class="buguluKilit">🔑 Süper Üyelik</span>';
   if(!buguluMu(k))return E(k.kod);
   return '<span class="buguluKod">'+E(k.kod)+'</span>'+
          '<span class="buguluKilit">🔒</span>';
