@@ -305,9 +305,18 @@ function takipKaliciAd(GD,ad){
       potansiyel:(b.h>0&&b.s>0)?100*(b.h/b.s-1):null,
       hedef1Yuzde:(b.h1>0&&b.s>0)?100*(b.h1/b.s-1):null,
       sinyalTs:Math.floor(Date.parse(b.ilkGun+"T00:00:00Z")/1000)};
-    if(b.h>0&&b.max>=b.h)hedef2.push(satir);
-    else if(b.h1>0&&b.max>=b.h1)hedef1.push(satir);
-    else yolda.push(satir);
+    /* 🐞 DÜZELTME (2026-08-30): Hedef1 ve Hedef2 birbirini DIŞLAMIYOR artık.
+       Mantıken Hedef2'ye (uzak/nihai hedef) ulaşan bir sinyal, yol üstündeki
+       Hedef1'e (yakın hedef) de mutlaka uğramıştır — o yüzden "Hedef1 tuttu"
+       sayısı hep "Hedef2 tuttu" sayısından BÜYÜK YA DA EŞİT olmalı. Eskiden
+       Hedef2'ye ulaşan bir sinyal yalnız Hedef2'ye yazılıyordu, Hedef1
+       listesinden düşüyordu — bu yüzden Hedef1 her sekmede 0'a yakın
+       çıkıyordu. Şimdi her milestone (H1/H2) ayrı ayrı ve BAĞIMSIZ kontrol
+       ediliyor; ikisine de ulaşmış bir sinyal her iki listede de görünür. */
+    var h1Tuttu=b.h1>0&&b.max>=b.h1, h2Tuttu=b.h>0&&b.max>=b.h;
+    if(h1Tuttu)hedef1.push(satir);
+    if(h2Tuttu)hedef2.push(satir);
+    if(!h1Tuttu&&!h2Tuttu)yolda.push(satir);
   });
   var kr=function(k){return k.giris>0&&k.fiyat>0?(k.fiyat/k.giris-1)*100:-9999};
   hedef2.sort(function(a,b){return kr(b)-kr(a)});
@@ -4393,6 +4402,9 @@ var D=null, sekme="potansiyel", sira="kar", adayTf="adayOrta", presetSec="kalite
 /* 📍 TAKİP — hangi dilimde hangi kategori (yolda/hedef1/hedef2/stop) açık
    tutulduğunu hatırlar; ad (potansiyel/fibo/uzunvade/haftalik) başına ayrı. */
 var takipAcik={};
+/* Takip filtreleri — dilim (ad) başına ayrı tutuluyor ki KISA/ORTA/UZUN/
+   1 HAFTA sekmeleri birbirini etkilemesin. */
+var takipTarihFiltre={}, takipKalanManuel={};
 var ONIZLEME=(function(){try{return localStorage.getItem("onizlemeModu")==="1"}catch(e){return false}})();
 /* 👁️ SIRADAN ÜYE ÖNİZLEMESİ — yalnız yöneticide görünür bir düğme.
    Gerçek yon/super bayrakları D.yonGercek / D.superGercek'te saklanır;
@@ -4952,19 +4964,22 @@ function takipSatirHtml(k,acik,ad){
   var kr=kar(k);
   var pot1=(k.hedef1Yuzde==null)?null:Number(k.hedef1Yuzde);
   var pot2=(k.potansiyel==null)?null:Number(k.potansiyel);
+  var tarihStr=k.sinyalTs?new Date(k.sinyalTs*1000).toLocaleDateString("tr-TR"):"";
+  var tarihEk=tarihStr?" · 📅 "+tarihStr:"";
   var orta;
   if(acik==="hedef1"){
-    /* Hedef1'i tutmuş ama Hedef2'yi henüz tutmamış — H2'ye kalan yüzde. */
+    /* Hedef1'i tutmuş — Hedef2'ye de ulaştıysa (h2Tuttu) o da ayrıca H2
+       listesinde görünür, burada sadece H1 bilgisini gösteriyoruz. */
     orta="sinyal <b>"+N(k.giris)+"</b> · 🏆 Hedef1 <b>"+N(k.hedef1)+"</b> tuttu"+
-      (k.hedef!=null?" · H2 <b>"+N(k.hedef)+"</b>"+(pot2!=null?" (%"+pot2.toFixed(1)+" kaldı)":""):"");
+      (k.hedef!=null?" · H2 <b>"+N(k.hedef)+"</b>"+(pot2!=null?" (%"+pot2.toFixed(1)+" kaldı)":""):"")+tarihEk;
   }else if(acik==="hedef2"){
-    orta="sinyal <b>"+N(k.giris)+"</b> · 🏆 Hedef2 <b>"+N(k.hedef)+"</b> tuttu (nihai)";
+    orta="sinyal <b>"+N(k.giris)+"</b> · 🏆 Hedef2 <b>"+N(k.hedef)+"</b> tuttu (nihai)"+tarihEk;
   }else{
     /* Yolda: iki hedefe de kalan yüzdeyi göster, mükerrer "şimdi fiyat" yazma —
        sağ tarafta zaten güncel fiyat var. */
     orta="sinyal <b>"+N(k.giris)+"</b>"+
       (k.hedef1!=null?" · H1 <b>"+N(k.hedef1)+"</b>"+(pot1!=null?" (%"+pot1.toFixed(1)+" kaldı)":""):"")+
-      (k.hedef!=null?" · H2 <b>"+N(k.hedef)+"</b>"+(pot2!=null?" (%"+pot2.toFixed(1)+" kaldı)":""):"");
+      (k.hedef!=null?" · H2 <b>"+N(k.hedef)+"</b>"+(pot2!=null?" (%"+pot2.toFixed(1)+" kaldı)":""):"")+tarihEk;
   }
   /* 🛑 Stop satırı: pozisyon hâlâ açıkken (Yolda / Hedef1 tuttu) anlamlı —
      Hedef2'yi tutmuş bir sinyal zaten hedefte kapanmış sayılır, stop gösterilmez. */
@@ -4989,6 +5004,31 @@ function takipStopSatirHtml(x){
     (x.sinyalFiyat!=null?" · sinyal "+N(x.sinyalFiyat):"")+
     (x.sonFiyat!=null?" → "+N(x.sonFiyat):"")+"</div></div>";
 }
+/* Tarih + "kalan yüzde" filtrelerini bir listeye uygular. Tarih tüm
+   kategorilerde (Yolda/Hedef1/Hedef2) çalışır — "şu tarihte sinyal
+   verenler" sorusu. Kalan yüzde eşiği yalnız Yolda'da anlamlı: henüz
+   ulaşılmamış en yakın hedefe (varsa H1, yoksa H2) kalan mesafeyi süzer. */
+function takipKalanYuzde(k){
+  return k.hedef1Yuzde!=null?Number(k.hedef1Yuzde):(k.potansiyel!=null?Number(k.potansiyel):null);
+}
+function takipFiltrele(liste,ad,acik){
+  var out=liste;
+  var tarih=takipTarihFiltre[ad];
+  if(tarih)out=out.filter(function(k){
+    if(!k.sinyalTs)return false;
+    return new Date(k.sinyalTs*1000).toISOString().slice(0,10)===tarih;
+  });
+  if(acik==="yolda"){
+    var km=takipKalanManuel[ad];
+    if(km!=null){
+      out=out.filter(function(k){
+        var kal=takipKalanYuzde(k);
+        return kal!=null&&kal<=km;
+      });
+    }
+  }
+  return out;
+}
 function takipKutuCiz(ad){
   var v=takipHam(ad), acik=takipAcik[ad]||null, stopVar=takipStopVar(ad);
   var toplam=function(anahtar,dizi){return v["toplam"+anahtar]!=null?v["toplam"+anahtar]:dizi.length};
@@ -5005,13 +5045,28 @@ function takipKutuCiz(ad){
     "</div>";
   if(!stopVar)h+='<div class="altbilgi" style="margin-top:6px">ℹ️ Bu dilimde (1 saat) alt zaman dilimi (15 dk) henüz kurulmadığı için stop takibi yok.</div>';
   if(acik){
-    var liste=v[acik]||[];
-    var top=(acik==="yolda"||acik==="hedef1"||acik==="hedef2")?
-      toplam(acik==="yolda"?"Yolda":acik==="hedef1"?"Hedef1":"Hedef2",liste):null;
-    h+='<div style="margin-top:8px">'+(liste.length?
+    var hamListe=v[acik]||[];
+    var filtreliMi=(acik==="yolda"||acik==="hedef1"||acik==="hedef2");
+    var liste=filtreliMi?takipFiltrele(hamListe,ad,acik):hamListe;
+    var top=filtreliMi?toplam(acik==="yolda"?"Yolda":acik==="hedef1"?"Hedef1":"Hedef2",hamListe):null;
+    var filtreHtml="";
+    if(filtreliMi){
+      var tTarih=takipTarihFiltre[ad]||"";
+      var kManuel=takipKalanManuel[ad];
+      filtreHtml='<div class="tFiltre" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 8px;font-size:12.5px">'+
+        '<span>📅 <input type="date" class="takipTarihGir" data-ad="'+E(ad)+'" value="'+E(tTarih)+'" style="width:auto"></span>'+
+        (tTarih?'<button class="temiz takipTarihTemizle" data-ad="'+E(ad)+'">✕ tarih</button>':"")+
+        (acik==="yolda"?(
+          '<span>hedefe kalan ≤ %<input type="number" inputmode="decimal" step="0.1" min="0" class="takipKalanGir" data-ad="'+E(ad)+'" placeholder="ör. 5" value="'+(kManuel!=null?kManuel:"")+'" style="width:60px"></span>'+
+          '<button class="takipKalanUygula" data-ad="'+E(ad)+'">Uygula</button>'+
+          (kManuel!=null?'<button class="temiz takipKalanTemizle" data-ad="'+E(ad)+'">✕ yüzde</button>':"")
+        ):"")+
+        "</div>";
+    }
+    h+='<div style="margin-top:8px">'+filtreHtml+(liste.length?
       (acik==="stop"?liste.map(takipStopSatirHtml).join(""):liste.map(function(k){return takipSatirHtml(k,acik,ad)}).join(""))
-      :'<div class="bos" style="padding:14px">Bu kategoride şu an hisse yok.</div>')+
-      (top!=null&&top>liste.length?'<div class="altbilgi" style="margin-top:6px">İlk '+liste.length+' / toplam '+top+' gösteriliyor.</div>':"")+
+      :'<div class="bos" style="padding:14px">Bu kategoride hisse yok.</div>')+
+      (top!=null&&top>hamListe.length?'<div class="altbilgi" style="margin-top:6px">İlk '+hamListe.length+' / toplam '+top+' gösteriliyor (filtre öncesi).</div>':"")+
       "</div>";
   }
   return h+"</div>";
@@ -5019,6 +5074,31 @@ function takipKutuCiz(ad){
 function takipBagla(ad){
   [].forEach.call(document.querySelectorAll("[data-tk]"),function(b){
     b.onclick=function(){tit();var k=b.dataset.tk;takipAcik[ad]=(takipAcik[ad]===k)?null:k;ciz();window.scrollTo(0,0)};
+  });
+  /* 📅 Tarih filtresi: seçilince (onchange) hemen uygular — native tarih
+     seçici zaten kapanmadan değer commit olmuyor, oninput gibi her
+     tuşta ekranı yeniden çizip odağı kaybettirme riski yok. */
+  [].forEach.call(document.querySelectorAll(".takipTarihGir"),function(el2){
+    el2.onchange=function(){tit();takipTarihFiltre[el2.dataset.ad]=el2.value||"";ciz()};
+  });
+  [].forEach.call(document.querySelectorAll(".takipTarihTemizle"),function(b){
+    b.onclick=function(){tit();takipTarihFiltre[b.dataset.ad]="";ciz()};
+  });
+  /* % kalan filtresi: mesafeManuel'deki gibi Uygula/Enter ile commit
+     edilir — her tuşta yeniden çizip yazarken imleci kaybettirmez. */
+  [].forEach.call(document.querySelectorAll(".takipKalanGir"),function(kutu){
+    var uygula=function(){
+      tit();
+      var v=Number(String(kutu.value).replace(",","."));
+      takipKalanManuel[kutu.dataset.ad]=(kutu.value!==""&&v>=0)?v:null;
+      ciz();
+    };
+    kutu.onkeydown=function(e){if(e.key==="Enter")uygula()};
+    var b=document.querySelector('.takipKalanUygula[data-ad="'+kutu.dataset.ad+'"]');
+    if(b)b.onclick=uygula;
+  });
+  [].forEach.call(document.querySelectorAll(".takipKalanTemizle"),function(b){
+    b.onclick=function(){tit();takipKalanManuel[b.dataset.ad]=null;ciz()};
   });
 }
 /* 🟨 ADAYLAR: bu dört liste anahtarında satır hem tıklanamaz hem de
