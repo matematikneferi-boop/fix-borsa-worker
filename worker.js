@@ -4696,6 +4696,15 @@ function bugunMu(k){
   if(!k||!k.sinyalTs)return false;
   return trGun(k.sinyalTs)===trGun(Date.now()/1000);
 }
+/* 📅 DÜN+BUGÜN: normal kullanıcılar için "Takip" kutusunu kuruluştan bugüne
+   yerine son iki güne indiren süzgeç. sinyalTs bekler (kayıtlar); "stop oldu"
+   akışı gibi ts alanlı kayıtlar için ikinci parametreyle alan adı verilebilir. */
+function dunBugunMu(k,alan){
+  var ts=k&&(alan?k[alan]:k.sinyalTs);
+  if(ts==null)return false;
+  var g=trGun(ts),bugun=trGun(Date.now()/1000);
+  return g===bugun||g===bugun-1;
+}
 function kar(k){
   if(k.kar!=null)return Number(k.kar);
   if(k.giris>0&&k.fiyat>0)return(k.fiyat/k.giris-1)*100;
@@ -5217,13 +5226,30 @@ function takipFiltrele(liste,ad,acik){
   return out;
 }
 function takipKutuCiz(ad){
-  var v=takipHam(ad), acik=takipAcik[ad]||null, stopVar=takipStopVar(ad);
+  /* 👑 GÖRÜNÜRLÜK (2026-08-30): "kuruluştan bugüne HER sinyal" kutusu stoplar
+     hâlâ olgunlaşmadığı için şimdilik yalnız yöneticiye (D.yonetici) tam
+     hâliyle açık. Normal kullanıcı aynı kutuyu görür ama liste sunucu
+     tarafında değil BURADA (görüntülemede) son iki güne (dün+bugün, TR
+     takvimine göre) süzülür — sunucudaki gecmis/kalıcı veri hiç değişmiyor,
+     yalnız ekrana ne çizildiği değişiyor. Stoplar dolmaya başlayınca bu
+     süzgeç kaldırılıp herkes kuruluştan bugüne görecek. */
+  var vAsil=takipHam(ad), yonMi=!!(D&&D.yonetici);
+  var v=vAsil;
+  if(!yonMi){
+    var suz=function(dizi){return(dizi||[]).filter(function(k){return dunBugunMu(k)})};
+    v={yolda:suz(vAsil.yolda),hedef1:suz(vAsil.hedef1),hedef2:suz(vAsil.hedef2),
+       stop:(vAsil.stop||[]).filter(function(x){return dunBugunMu(x,"ts")})};
+  }
+  var acik=takipAcik[ad]||null, stopVar=takipStopVar(ad);
   var toplam=function(anahtar,dizi){return v["toplam"+anahtar]!=null?v["toplam"+anahtar]:dizi.length};
   var pil=function(key,ik,baslik,n){
     return '<button class="sir'+(acik===key?" on":"")+'" data-tk="'+key+'">'+ik+" "+baslik+" ("+n+")</button>";
   };
-  var h='<div class="kutu" style="margin-bottom:10px"><h3 style="margin:0 0 8px">📍 Takip — kuruluştan bugüne bu dilimdeki her sinyal</h3>'+
-    '<div class="altbilgi" style="margin-bottom:8px">Süzgeç yok: hedefe ulaşan da, hâlâ yolda olan da — hepsi burada.</div>'+
+  var h='<div class="kutu" style="margin-bottom:10px"><h3 style="margin:0 0 8px">📍 Takip — '+
+    (yonMi?"kuruluştan bugüne bu dilimdeki her sinyal":"dün ve bugün")+'</h3>'+
+    '<div class="altbilgi" style="margin-bottom:8px">'+
+    (yonMi?"Süzgeç yok: hedefe ulaşan da, hâlâ yolda olan da — hepsi burada.":
+      "Şimdilik yalnızca dün ve bugün oluşan sinyaller gösteriliyor.")+'</div>'+
     '<div class="sirala">'+
       pil("yolda","🟢","Yolda",toplam("Yolda",v.yolda))+
       pil("hedef1","🧱","Hedef1 tuttu",toplam("Hedef1",v.hedef1))+
