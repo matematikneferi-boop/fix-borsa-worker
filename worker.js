@@ -5227,13 +5227,13 @@ function takipFiltrele(liste,ad,acik){
 }
 function takipKutuCiz(ad){
   /* 👑 GÖRÜNÜRLÜK (2026-08-30): "kuruluştan bugüne HER sinyal" kutusu stoplar
-     hâlâ olgunlaşmadığı için şimdilik yalnız yöneticiye (D.yonetici) tam
+     hâlâ olgunlaşmadığı için şimdilik yalnız yöneticiye (D.yon) tam
      hâliyle açık. Normal kullanıcı aynı kutuyu görür ama liste sunucu
      tarafında değil BURADA (görüntülemede) son iki güne (dün+bugün, TR
      takvimine göre) süzülür — sunucudaki gecmis/kalıcı veri hiç değişmiyor,
      yalnız ekrana ne çizildiği değişiyor. Stoplar dolmaya başlayınca bu
      süzgeç kaldırılıp herkes kuruluştan bugüne görecek. */
-  var vAsil=takipHam(ad), yonMi=!!(D&&D.yonetici);
+  var vAsil=takipHam(ad), yonMi=!!(D&&D.yon);
   var v=vAsil;
   if(!yonMi){
     var suz=function(dizi){return(dizi||[]).filter(function(k){return dunBugunMu(k)})};
