@@ -340,7 +340,7 @@ function takipKaliciAd(GD,ad){
   var yolda=[],hedef1=[],hedef2=[];
   Object.keys(birlesik).forEach(function(anah){
     var b=birlesik[anah];
-    var satir={kod:b.kod,giris:b.g,hedef:b.h,hedef1:b.h1,fiyat:b.s,
+    var satir={kod:b.kod,giris:b.g,hedef:b.h,hedef1:b.h1,fiyat:b.s,max:b.max,
       potansiyel:(b.h>0&&b.s>0)?100*(b.h/b.s-1):null,
       hedef1Yuzde:(b.h1>0&&b.s>0)?100*(b.h1/b.s-1):null,
       sinyalTs:Math.floor(Date.parse(b.ilkGun+"T00:00:00Z")/1000)};
@@ -357,9 +357,13 @@ function takipKaliciAd(GD,ad){
     if(h2Tuttu)hedef2.push(satir);
     if(!h1Tuttu&&!h2Tuttu)yolda.push(satir);
   });
-  var kr=function(k){return k.giris>0&&k.fiyat>0?(k.fiyat/k.giris-1)*100:-9999};
-  hedef2.sort(function(a,b){return kr(b)-kr(a)});
-  hedef1.sort(function(a,b){return kr(b)-kr(a)});
+  /* 🏆 Hedef vurmuş kayıtlar ZİRVE getirisine göre sıralanır (kr yerine
+     krZirve) — aşağıdaki takipSatirHtml'deki "başarı yüzdesi" ile aynı
+     mantık: hedefi tutan bir sinyal sonradan geri düşse bile, sıralamada
+     da ekranda da elde ettiği gerçek zirve performansıyla görünür. */
+  var krZirve=function(k){return k.giris>0&&k.max>0?(k.max/k.giris-1)*100:-9999};
+  hedef2.sort(function(a,b){return krZirve(b)-krZirve(a)});
+  hedef1.sort(function(a,b){return krZirve(b)-krZirve(a)});
   yolda.sort(function(a,b){
     var pa=a.potansiyel==null?9999:a.potansiyel,pb=b.potansiyel==null?9999:b.potansiyel;
     return pa-pb;
@@ -5008,7 +5012,23 @@ function takipStopBul(ad,k){
   return{sev:sev,yuzde:(k.fiyat>0?100*(sev/Number(k.fiyat)-1):null)};
 }
 function takipSatirHtml(k,acik,ad){
-  var kr=kar(k);
+  /* 🏆💀 ÖLÜM AYARI #2 (2026-08-30) — bir önceki düzeltme "max"ın artık
+     kesintisiz güncellenmesini sağladı (hisse hedefe gidip taramadan
+     düşse bile yakalanıyor). Ama Hedef1/Hedef2 sekmesindeki kart hâlâ
+     kar(k)'yı, yani CANLI/GÜNCEL fiyatı kullanıyordu: hedefi vurup sonra
+     geri düşen bir hisse 🏆 rozetiyle birlikte KIRMIZI ZARAR yüzdesi
+     gösteriyordu — sistemin doğru çağrısını kendi eliyle yalanlıyordu.
+     DÜZELTME: hedef vurmuş (acik==="hedef1"/"hedef2") kayıtlarda ana
+     yüzde artık ZİRVE getirisi (giriş → max) — gerçekten yaşanmış,
+     asla yalan olmayan bir sayı. Şeffaflık için güncel fiyat/oran da
+     altta küçük not olarak kalıyor, gizlenmiyor — sadece ana vurgu
+     "ne oldu"ya (başarı) kayıyor, "şu an ne"ye değil. */
+  var basarili=(acik==="hedef1"||acik==="hedef2");
+  var krCanli=kar(k);
+  var krZirve=(k.max>0&&k.giris>0)?(k.max/k.giris-1)*100:krCanli;
+  var kr=basarili?krZirve:krCanli;
+  var ustFiyat=basarili&&k.max>0?k.max:k.fiyat;
+  var canliFarkli=basarili&&k.fiyat>0&&k.max>0&&Math.abs(k.fiyat-k.max)>0.005;
   var pot1=(k.hedef1Yuzde==null)?null:Number(k.hedef1Yuzde);
   var pot2=(k.potansiyel==null)?null:Number(k.potansiyel);
   var tarihStr=k.sinyalTs?new Date(k.sinyalTs*1000).toLocaleDateString("tr-TR"):"";
@@ -5045,8 +5065,10 @@ function takipSatirHtml(k,acik,ad){
        açıyoruz, .altbilgi'nin başka yerlerdeki (rozet vb.) tek-satır
        davranışına dokunmadan. */
     '<div class="altbilgi" style="white-space:normal;overflow:visible;text-overflow:clip">'+orta+"</div>"+stopAlt+"</div>"+
-    '<div class="sag"><div class="fiyat">'+N(k.fiyat)+" ₺</div>"+
-    '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+"</div></div></div>";
+    '<div class="sag"><div class="fiyat">'+N(ustFiyat)+" ₺</div>"+
+    '<div class="yuzde '+(kr==null?"so":(kr>=0?"ye":"kr"))+'">'+(kr==null?"":Y(kr))+"</div>"+
+    (canliFarkli?'<div class="altbilgi">şimdi '+N(k.fiyat)+" ₺</div>":"")+
+    "</div></div>";
 }
 function takipStopSatirHtml(x){
   var kr=(x.kar==null)?null:Number(x.kar);
