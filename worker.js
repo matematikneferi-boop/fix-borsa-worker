@@ -270,6 +270,56 @@ for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayi
 ;for(const e of gs){if(!n.ozet[e]){const o=m(e,n.gunler[e]);if(o)n.ozet[e]=o}}const go={};for(const e of gk)go[e]=n.gunler[e];n.gunler=go
 ;const ot=Object.keys(n.ozet).sort().reverse();if(ot.length>OZET_GUN){const oo={};for(const e of ot.slice(0,OZET_GUN))oo[e]=n.ozet[e];n.ozet=oo}
 ;n.guncelleme=(new Date).toISOString(),await e.VERI.put("gecmis",JSON.stringify(n))}
+/* 📍 TAKİP — KALICI GEÇMİŞ (2026-08-30). Mini App'teki "Takip" paneli eskiden
+   D.kartlar'dan (o anki taramanın anlık görüntüsü) besleniyordu — her /push
+   önceki taramanın üzerine tamamen yazdığı için hedefe ulaşıp taramadan düşen
+   sinyaller sessizce kayboluyordu. Artık kaynak, zaten kalıcı olan "gecmis"
+   kaydı: kuruluştan (12 Ağustos) bugüne o dilimde açılmış HER sinyal burada
+   kalır, sonucu (Hedef1/Hedef2/hâlâ yolda) ne olursa olsun. %3.7 eşiği de
+   BİLEREK uygulanmıyor — kullanıcı "herşey açık olsun" istedi.
+   Aynı sinyal, açık kaldığı her gün ayrı bir gün-kaydı olarak düşüyor
+   (gecmis'in kendi yapısı gereği); kod+dilim+giriş üçlüsü aynıysa bunlar
+   TEK sinyaldir ve burada birleştirilir. Giriş fiyatı gerçekten değiştiyse
+   (pozisyon kapanıp yeniden açılmış demektir) ayrı bir sinyal sayılır. */
+function takipKaliciAd(GD,ad){
+  var birlesik={};
+  Object.keys(GD).sort().forEach(function(gun){
+    var kay=(GD[gun]&&GD[gun].kayitlar)||{};
+    Object.keys(kay).forEach(function(anahtar){
+      var rec=kay[anahtar];
+      if(!rec||rec.l!==ad||rec.r===0||!(rec.g>0))return;
+      var kod=rec.k||String(anahtar).split("@")[0],tf=rec.t||"";
+      var anah=kod+"@"+tf+"@"+Math.round(rec.g*100);
+      if(!birlesik[anah])birlesik[anah]={kod:kod,g:rec.g,h:(rec.h>0?rec.h:null),
+        h1:(rec.h1>0?rec.h1:null),s:rec.s,max:(rec.max>0?rec.max:rec.s),ilkGun:gun};
+      var b=birlesik[anah];
+      if(rec.s>0)b.s=rec.s;
+      if(rec.max>0&&(!(b.max>0)||rec.max>b.max))b.max=rec.max;
+      if(gun<b.ilkGun)b.ilkGun=gun;
+    });
+  });
+  var yolda=[],hedef1=[],hedef2=[];
+  Object.keys(birlesik).forEach(function(anah){
+    var b=birlesik[anah];
+    var satir={kod:b.kod,giris:b.g,hedef:b.h,hedef1:b.h1,fiyat:b.s,
+      potansiyel:(b.h>0&&b.s>0)?100*(b.h/b.s-1):null,
+      hedef1Yuzde:(b.h1>0&&b.s>0)?100*(b.h1/b.s-1):null,
+      sinyalTs:Math.floor(Date.parse(b.ilkGun+"T00:00:00Z")/1000)};
+    if(b.h>0&&b.max>=b.h)hedef2.push(satir);
+    else if(b.h1>0&&b.max>=b.h1)hedef1.push(satir);
+    else yolda.push(satir);
+  });
+  var kr=function(k){return k.giris>0&&k.fiyat>0?(k.fiyat/k.giris-1)*100:-9999};
+  hedef2.sort(function(a,b){return kr(b)-kr(a)});
+  hedef1.sort(function(a,b){return kr(b)-kr(a)});
+  yolda.sort(function(a,b){
+    var pa=a.potansiyel==null?9999:a.potansiyel,pb=b.potansiyel==null?9999:b.potansiyel;
+    return pa-pb;
+  });
+  var TAVAN=300;
+  return{toplamYolda:yolda.length,toplamHedef1:hedef1.length,toplamHedef2:hedef2.length,
+    yolda:yolda.slice(0,TAVAN),hedef1:hedef1.slice(0,TAVAN),hedef2:hedef2.slice(0,TAVAN)};
+}
 const KODU=k=>String(k).split("@")[0];
 function m(e,t){const a=Object.keys(t.kayitlar||{});if(!a.length)return null;let n=0,i=null,r=null;for(const e of a){const a=t.kayitlar[e];if(!(a.g>0&&a.s>0))continue;const s=100*(a.s/a.g-1),kd=a.k||KODU(e);n+=s,
 (!i||s>i.y)&&(i={kod:kd,y:s}),(!r||s<r.y)&&(r={kod:kd,y:s})}const s=a.length,l=s?n/s:0;return{gun:e,n:s,ort:l,deger:1e5*(1+l/100),eniyi:i,enkotu:r}}/* DAYANIKLILIK: query1 tek nokta arızasıydı — düşerse/limitlenirse geçmiş
@@ -4847,41 +4897,30 @@ function dizil(ad){
   return c;
 }
 /* ══════════════════════════════════════════════════════════════════════
-   📍 TAKİP — DURUM BÖLÜMÜ. Eskiden burası "şeffaflık" amacıyla %3.7
-   eşiğini (hedefEsikGecti) hiç uygulamıyordu — amaç sinyallerin "sessizce
-   kaybolmuş" gibi görünmesini önlemekti. 2026-08-29'da karar değişti:
-   kullanıcı "süzgeç heryerde olsun" dedi, yani artık burası da ana
-   listeyle (dizil→hedefEsikGecti) AYNI %3.7 eşiğini uyguluyor — Yolda ve
-   Hedef1 sayıları artık ana listedeki rozet sayılarıyla tutarlı. Hedef2
-   (zaten tutmuş) ve Stop (D.dusenler) bu eşikten muaf, çünkü onlar zaten
-   kapanmış birer sonuç, "hedefe ne kadar kaldı" sorusu onlar için
-   anlamsız. ══════════════════════════════════════════════════════════ */
+   📍 TAKİP — DURUM BÖLÜMÜ. 2026-08-30: artık D.kartlar'ın (o anki taramanın
+   anlık görüntüsü) DEĞİL, sunucunun kalıcı "gecmis" kaydından hesapladığı
+   D.takipGecmis'in üzerinden çalışıyor — bkz. worker.js'deki takipKaliciAd.
+   Kuruluştan bugüne o dilimde açılmış HER sinyal burada kalır, taramadan
+   düşse bile. %3.7 eşiği (hedefEsikGecti) burada artık BİLEREK
+   uygulanmıyor — "herşey açık olsun" istendi. Eşik yalnız ana listede
+   (dizil) hâlâ geçerli, o ayrı bir karar. ══════════════════════════════ */
 function takipHam(ad){
+  var stop=(D.dusenler||[]).filter(function(x){return x.liste===ad});
+  var kalici=(D&&D.takipGecmis&&D.takipGecmis[ad])||null;
+  if(kalici)return{yolda:kalici.yolda||[],hedef1:kalici.hedef1||[],hedef2:kalici.hedef2||[],stop:stop,
+    toplamYolda:kalici.toplamYolda,toplamHedef1:kalici.toplamHedef1,toplamHedef2:kalici.toplamHedef2};
+  /* Kalıcı veri gelmediyse (ör. eski önbellek) eski canlı hesaba düş —
+     hiçbir koşulda panel boş kalmasın. */
   var ham=((D.kartlar&&D.kartlar[ad])||[]).slice();
   var yolda=[],hedef1=[],hedef2=[];
   ham.forEach(function(k){
     var pot=(k.potansiyel==null)?null:Number(k.potansiyel);
     var pot1=(k.hedef1Yuzde==null)?null:Number(k.hedef1Yuzde);
-    /* Hedef2'yi zaten tutmuş bir sinyal milestone'a ulaşmıştır — %3.7
-       eşiği burada anlamsız, doğrudan gösterilir. */
     if(pot!=null&&pot<=0){hedef2.push(k);return}
-    /* 🐞 DÜZELTİLEN HATA — HEDEF1'İ TUTMUŞ SİNYALLER SESSİZCE KAYBOLUYORDU.
-       Eskiden %3.7 eşiği (hedefEsikGecti) HER ŞEYDEN ÖNCE uygulanıyordu —
-       yani Hedef1'i çoktan tutmuş ama artık Hedef2'ye de %3.7'den yakın
-       kalmış bir sinyal, bu kapıdan "henüz tutmamış gibi" süzülüp hiçbir
-       yerde (ne Hedef1'de ne Yolda'da) gösterilmiyordu. Kullanıcı bunu
-       "sinyaller sessizce kayboluyor, öncekiler nereye gitti" olarak
-       fark etti — 12 Ağustos'tan beri biriken sinyallerin büyük kısmı
-       tam bu durumdaydı. Artık Hedef1 kontrolü eşikten ÖNCE yapılıyor:
-       bir milestone'a ulaşmış sinyal, hedefe ne kadar yakın olursa olsun
-       her zaman gösterilir. Eşik yalnız gerçekten HENÜZ hiçbir hedefi
-       tutmamış "Yolda" adaylarını süzmek için kalıyor — ana listeyle
-       (dizil→hedefEsikGecti) tutarlılık orada korunuyor. */
     if(pot1!=null&&pot1<=0){hedef1.push(k);return}
     if(!hedefEsikGecti(k))return;
     yolda.push(k);
   });
-  var stop=(D.dusenler||[]).filter(function(x){return x.liste===ad});
   return{yolda:yolda,hedef1:hedef1,hedef2:hedef2,stop:stop};
 }
 /* KISA (1SA) dilimde stop noktası henüz tanımlı değil — alt dilim (15dk)
@@ -4952,23 +4991,28 @@ function takipStopSatirHtml(x){
 }
 function takipKutuCiz(ad){
   var v=takipHam(ad), acik=takipAcik[ad]||null, stopVar=takipStopVar(ad);
+  var toplam=function(anahtar,dizi){return v["toplam"+anahtar]!=null?v["toplam"+anahtar]:dizi.length};
   var pil=function(key,ik,baslik,n){
     return '<button class="sir'+(acik===key?" on":"")+'" data-tk="'+key+'">'+ik+" "+baslik+" ("+n+")</button>";
   };
-  var h='<div class="kutu" style="margin-bottom:10px"><h3 style="margin:0 0 8px">📍 Takip — bu dilimde her sinyalin durumu</h3>'+
-    '<div class="altbilgi" style="margin-bottom:8px">Ana listeyle aynı %3.7 eşiği burada da geçerli — hedefe çok yakın/hedefte olanlar ayrı gösterilir.</div>'+
+  var h='<div class="kutu" style="margin-bottom:10px"><h3 style="margin:0 0 8px">📍 Takip — kuruluştan bugüne bu dilimdeki her sinyal</h3>'+
+    '<div class="altbilgi" style="margin-bottom:8px">Süzgeç yok: hedefe ulaşan da, hâlâ yolda olan da — hepsi burada.</div>'+
     '<div class="sirala">'+
-      pil("yolda","🟢","Yolda",v.yolda.length)+
-      pil("hedef1","🧱","Hedef1 tuttu",v.hedef1.length)+
-      pil("hedef2","🎯","Hedef2 tuttu",v.hedef2.length)+
+      pil("yolda","🟢","Yolda",toplam("Yolda",v.yolda))+
+      pil("hedef1","🧱","Hedef1 tuttu",toplam("Hedef1",v.hedef1))+
+      pil("hedef2","🎯","Hedef2 tuttu",toplam("Hedef2",v.hedef2))+
       (stopVar?pil("stop","🔴","Stop oldu",v.stop.length):"")+
     "</div>";
   if(!stopVar)h+='<div class="altbilgi" style="margin-top:6px">ℹ️ Bu dilimde (1 saat) alt zaman dilimi (15 dk) henüz kurulmadığı için stop takibi yok.</div>';
   if(acik){
     var liste=v[acik]||[];
+    var top=(acik==="yolda"||acik==="hedef1"||acik==="hedef2")?
+      toplam(acik==="yolda"?"Yolda":acik==="hedef1"?"Hedef1":"Hedef2",liste):null;
     h+='<div style="margin-top:8px">'+(liste.length?
       (acik==="stop"?liste.map(takipStopSatirHtml).join(""):liste.map(function(k){return takipSatirHtml(k,acik,ad)}).join(""))
-      :'<div class="bos" style="padding:14px">Bu kategoride şu an hisse yok.</div>')+"</div>";
+      :'<div class="bos" style="padding:14px">Bu kategoride şu an hisse yok.</div>')+
+      (top!=null&&top>liste.length?'<div class="altbilgi" style="margin-top:6px">İlk '+liste.length+' / toplam '+top+' gösteriliyor.</div>':"")+
+      "</div>";
   }
   return h+"</div>";
 }
@@ -10798,6 +10842,11 @@ if(sekme&&sn>0)q.waitUntil(izYaz(A,uid,sekme,sn).catch(()=>{}));
 return JS({ok:!0})}
 if("/api/veri"===$.pathname){
 const L2=await g(A),sup=await suparUyeMi(A,uid),ref=(await F(A))[String(uid)]||0,fav=await X(A,uid),portfoy=await XP(A,uid),portfoyGecmis=await XPG(A,uid),portfoyGunluk=await XPGUNLUK(A,uid);
+/* 📍 Takip panelinin kalıcı geçmişi — bkz. takipKaliciAd. Okuması ucuz
+   (tek KV get + JSON parse, zaten "gecmis" başka yerlerde de okunuyor). */
+const GKAL=await y(A).catch(()=>({gunler:{}}));
+const takipGecmis={};
+["potansiyel","fibo","uzunvade","haftalik"].forEach(function(ad){takipGecmis[ad]=takipKaliciAd(GKAL.gunler||{},ad)});
 const un=BUN||await botAd(A).catch(()=>null)||"bot";
 const temelDurum=await temelDurumAl(A).catch(()=>({var:!1}));
 const kart={};
@@ -10824,7 +10873,7 @@ const portfoySektor={};for(const kod of Object.keys(portfoy))portfoySektor[kod]=
 /* 🔔 Yönetici için okunmamış geri bildirim sayısı — yalnız yöneticiye
    hesaplanır (herkeste gereksiz KV okuması olmasın). */
 const gbYeni=YON?await gbOkunmamisSayisi(A).catch(()=>0):0;
-return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,portfoy:portfoy,portfoyGecmis:portfoyGecmis,portfoyGunluk:portfoyGunluk,portfoySektor:portfoySektor,kartlar:kart,guncelleme:gun,temelDurum:temelDurum,dusenler:(L2&&L2.dusenler)||[],
+return JS({ok:!0,onay:onayli,onayMetin:onayli?null:ONAY_METIN,yon:YON,super:sup,ref:ref,kalan:ref%20===0?20:20-ref%20,fav:fav,portfoy:portfoy,portfoyGecmis:portfoyGecmis,portfoyGunluk:portfoyGunluk,portfoySektor:portfoySektor,kartlar:kart,guncelleme:gun,temelDurum:temelDurum,dusenler:(L2&&L2.dusenler)||[],takipGecmis:takipGecmis,
 link:"https://t.me/"+un+"?start=r"+uid,davetMetin:DAVET_METIN,gbYeni:gbYeni})}
 if("/api/hisse"===$.pathname){
 const kod=KOD(gov.kod);if(!kod)return JS({ok:!1,hata:"kod yok"},400);
