@@ -295,18 +295,32 @@ for(const e of Object.keys(n.gunler))for(const t of Object.keys(n.gunler[e].kayi
    kayıt r=0 yapılarak kalıcı olarak "kapandı" işaretlenir (takipKaliciAd
    zaten r===0 olanları elemesini biliyor) ve n.dusenler'e "📉 listeden
    düşenler" / "Stop oldu" sekmelerinin okuduğu bir satır eklenir. */
-const STOP_ALT_AD={fibo:"potansiyel",uzunvade:"fibo"};
+const STOP_ALT_AD={fibo:"potansiyel",uzunvade:"fibo",haftalik:"uzunvade"};
 const STOP_KISA_ORAN=0.01;
+/* 🛠 DÜZELTME (bkz. kullanıcı raporu): zincir stop SADECE alt dilimde aynı
+   kod+yön hâlâ sinyal veriyorsa buluyordu. Alt liste sürekli değiştiği için
+   bu eşleşme çoğu kayıtta hiç oluşmuyor → sev=null → stop asla tetiklenmiyor,
+   kayıt sonsuza dek "Yolda"da takılı kalıyordu. Artık zincir bulunamazsa
+   dilime göre sabit bir yüzde stop'a düşülüyor (KISA'nınkiyle aynı mantık,
+   sadece daha geniş dilimler için daha geniş pay). Zincir varsa yine ONA
+   öncelik veriliyor — bu sadece "hiçbir zaman" durumundan kurtaran bir alt
+   ağ (fallback), mevcut daha isabetli mantığı değiştirmiyor. Yüzdeler
+   varsayımdır, istenirse kolayca değiştirilebilir. */
+const STOP_SABIT_ORAN={fibo:0.02,uzunvade:0.03,haftalik:0.04};
 function stopSeviyeBul(ad,rec){
   const yon=(rec.h!=null&&Number(rec.h)<Number(rec.g))?"ayi":"boga";
   if("potansiyel"===ad)return"boga"===yon?rec.g*(1-STOP_KISA_ORAN):rec.g*(1+STOP_KISA_ORAN);
-  const altAd=STOP_ALT_AD[ad];if(!altAd)return null;
-  const altListe=(t.kartlar&&t.kartlar[altAd])||[];
-  const altKart=altListe.find(x=>x&&x.kod===rec.k);
-  if(!altKart||!(altKart.giris>0)||!(altKart.hedef>0))return null;
-  const altYon=Number(altKart.hedef)>=Number(altKart.giris)?"boga":"ayi";
-  if(altYon!==yon)return null;
-  return Number(altKart.giris);
+  const altAd=STOP_ALT_AD[ad];
+  if(altAd){
+    const altListe=(t.kartlar&&t.kartlar[altAd])||[];
+    const altKart=altListe.find(x=>x&&x.kod===rec.k);
+    if(altKart&&altKart.giris>0&&altKart.hedef>0){
+      const altYon=Number(altKart.hedef)>=Number(altKart.giris)?"boga":"ayi";
+      if(altYon===yon)return Number(altKart.giris);
+    }
+  }
+  const sabitOran=STOP_SABIT_ORAN[ad];if(sabitOran==null)return null;
+  return"boga"===yon?rec.g*(1-sabitOran):rec.g*(1+sabitOran);
 }
 n.dusenler=Array.isArray(n.dusenler)?n.dusenler:[];
 {const simdiTs=Math.floor(Date.now()/1e3),d2=new Date(Date.now()+108e5),
