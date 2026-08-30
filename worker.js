@@ -6806,6 +6806,12 @@ function gbInboxAc(){
    ayrı gösterir. Böylece tek bir dilimin (Z() ile rastgele bulunan)
    kaydı diğerlerinin yerine geçmez — her vade kendi yorumunu taşır. */
 var TF_META={KISA:TF.potansiyel,ORTA:TF.fibo,UZUN:TF.uzunvade};
+/* 🏷️ "gecmis" kayıtlarında dilim ham kod (1SA/4SA/1G/1HAF) olarak
+   tutuluyor; kullanıcıya HER YERDE olduğu gibi burada da KISA/ORTA/
+   UZUN/HAFTA adıyla gösterilsin diye tek noktadan çeviren yardımcı. */
+var DILIM_GOSTER_AD={"1SA":"KISA","4SA":"ORTA","1G":"UZUN","1HAF":"HAFTA",
+  potansiyel:"KISA",fibo:"ORTA",uzunvade:"UZUN"};
+function dilimGosterAd(tf){return DILIM_GOSTER_AD[tf]||tf||"—"}
 /* 🛑 ZİNCİR STOP (istemci tarafı): sunucudaki AYNA() metin özetinde zaten
    vardı (bkz. server tarafındaki zincirStop), ama hisse detay ekranındaki
    "Vadeye göre senaryo" kutusunda hiç gösterilmiyordu. Aynı mantık:
@@ -6882,6 +6888,7 @@ function detay(kod,ad){
     var k=(v&&v.kart)||null, ayna=(v&&v.ayna)||"", fav=!!(v&&v.fav), poz=(v&&v.poz)||null;
     var t=TF[ad]||{kisa:(k&&k.tf)||"",ad:""};
     var h='<div class="kapat"><b>'+E(kod)+'</b><button id="dkapat">✕ Kapat</button></div>';
+    h+=tfSenaryoBlok(v&&v.tfKartlar);
     if(k){
       var kr=kar(k);
       h+='<div class="dbas"><div class="k">'+E(k.kod)+'</div><div class="f">'+N(k.fiyat)+" ₺</div></div>";
@@ -6982,22 +6989,11 @@ function detay(kod,ad){
         h+="</div>";
       }
       h+="</div>";
-      h+='<div class="kutu"><h3>🎯 Hedefler</h3>';
-      if(k.hedef1!=null)h+='<div class="sat"><span class="et">🧱 Hedef 1</span><b>'+N(k.hedef1)+
-        (k.hedef1Yuzde!=null?"  (+"+Number(k.hedef1Yuzde).toFixed(1)+"%)":"")+"</b></div>";
-      else if(k.direncler&&k.direncler.length)h+='<div class="sat"><span class="et">🧱 Hedef 1</span><b>'+
-        k.direncler.filter(function(x){return x!=null}).map(function(x){return N(x)}).join(" · ")+"</b></div>";
-      if(k.hedef!=null)h+='<div class="sat"><span class="et">🎯 Hedef 2</span><b>'+N(k.hedef)+"</b></div>";
-      if(k.potansiyel!=null)h+='<div class="sat"><span class="et">Hedefe kalan</span><b class="'+
-        (Number(k.potansiyel)<=0?"sa":"ye")+'">'+(Number(k.potansiyel)<=0?"🏆 hedef tuttu":
-        "+"+Number(k.potansiyel).toFixed(1)+"%")+"</b></div>";
-      h+="</div>";
       if(k.guc)h+='<div class="ayna">'+k.guc+"</div>";
     }else{
       h+='<div class="dbas"><div class="k">'+E(kod)+"</div></div>"+
          '<div class="bilgi">Bu hisse şu an hiçbir listede değil — aşağıda güncel iki yönlü durumu var.</div>';
     }
-    h+=tfSenaryoBlok(v&&v.tfKartlar);
     h+='<div class="kutu"><h3>📊 Grafik<span id="desenRozet"></span></h3><div id="mumKutu" class="mumKutu"><div class="yukleniyor" style="padding:20px 0">grafik yükleniyor…</div></div><div id="desenYorum"></div></div>';
     h+='<div id="desenKumulatif"></div>';
     var G=(v&&v.gecmis)||[];
@@ -7012,7 +7008,7 @@ function detay(kod,ad){
 
         '<table class="gtab"><tr><th>Gün</th><th>Dilim</th><th>Sinyal</th><th style="text-align:right">Sonuç</th></tr>'+
         gG.slice(0,12).map(function(x){
-          return "<tr><td>"+E(x.gun.slice(8)+"."+x.gun.slice(5,7))+'</td><td><span class="et">'+E(x.tf||"—")+
+          return "<tr><td>"+E(x.gun.slice(8)+"."+x.gun.slice(5,7))+'</td><td><span class="et">'+E(dilimGosterAd(x.tf))+
             "</span></td><td>"+N(x.giris)+'</td><td style="text-align:right"><b class="'+(x.yuzde>=0?"ye":"kr")+'">'+
             Y(x.yuzde)+"</b></td></tr>";
         }).join("")+"</table>"+
