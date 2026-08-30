@@ -7903,6 +7903,24 @@ function mbAdayFiltreUygula(kodlar){
   var set=mbAdayKodSeti();
   return kodlar.filter(function(k){return!!set[k]});
 }
+/* 🚀 HALKA ARZLARA GÖRE TARA — Adaylara Göre Tara ile birebir aynı mantık,
+   tek fark: kesişilen küme dinamik aday listesi değil, sabit bir "yeni halka
+   arz" kod listesi (HALKA_ARZ_KODLAR). Yeni bir halka arz çıktığında bu
+   listeye kodu eklemek yeterli — hisse havuza (havuz.json) girip fiyat
+   geçmişi oluştuğunda otomatik olarak taranmaya başlar. */
+/* 2026-08-30: Fibabanka halka arz takvimi + fintables.com/halka-arzlar taranarak
+   güncellendi. INTET henüz işlem görmüyor (talep toplama tamam, ilk işlem
+   tarihi belli değil) — işlem başlar başlamaz fiyat verisi oluşacağından
+   şimdiden listede. Yeni bir halka arz çıktıkça buraya kod eklemek yeterli. */
+var HALKA_ARZ_KODLAR=["INTET","BKRGY","KPEKS","TKNKA","VEYAS","CITAS","QUICK",
+  "BEWEN","MASFN","KARCL","SSAAT","NETCD","ENDAE","KLYPV","DSTKF","DNYVA","CGCAM"];
+var mbHalkaArzFiltreAcik=false;
+function mbHalkaArzFiltreUygula(kodlar){
+  if(!mbHalkaArzFiltreAcik)return kodlar;
+  var set={};
+  HALKA_ARZ_KODLAR.forEach(function(k){set[k]=true});
+  return kodlar.filter(function(k){return!!set[k]});
+}
 
 function mbCiz(){
   if(!D.super){
@@ -8356,7 +8374,7 @@ function mbPaketUretGenel(){
     if(ortak===null){ortak={};for(var k in gecen[t])ortak[k]=true}
     else{var y={};for(var k2 in ortak)if(gecen[t][k2])y[k2]=true;ortak=y}
   });
-  var ortakListe=mbAdayFiltreUygula(Object.keys(ortak||{}).sort());
+  var ortakListe=mbHalkaArzFiltreUygula(mbAdayFiltreUygula(Object.keys(ortak||{}).sort()));
   v.ortak=ortakListe;
   function serit(kod){
     return mbIst.tfler.map(function(t){
@@ -8480,7 +8498,7 @@ function mbPaketUretOzel(){
     if(ortakObj===null){ortakObj={};for(var k3 in pivotGecen)ortakObj[k3]=true}
     else{var y2={};for(var k4 in ortakObj)if(pivotGecen[k4])y2[k4]=true;ortakObj=y2}
   }
-  var ortakListe=mbAdayFiltreUygula(Object.keys(ortakObj||{}).sort());
+  var ortakListe=mbHalkaArzFiltreUygula(mbAdayFiltreUygula(Object.keys(ortakObj||{}).sort()));
   v.ortak=ortakListe;
 
   /* Satırda gösterilecek MAL/AB değerleri: eskiden KOŞULSUZ en büyük seçili
@@ -8788,6 +8806,21 @@ function mbGoster(v,yerel){
      (mbAdayFiltreAcik
        ?"Aşağıdaki modüller yalnız şu an aday listesinde olan <b>"+Object.keys(mbAdayKodSeti()).length+" hisse</b> üzerinde çalışıyor."
        :"Açarsan aşağıdaki 6 modül, yalnız şu an aday listesinde (KISA/ORTA/UZUN/1 HAFTA) olan hisseler üzerinde çalışır.")+
+     '</div></div>';
+  /* ── 0.5) 🚀 HALKA ARZLARA GÖRE TARA ──
+     Aynı prensip: açıkken 6 modül yalnız HALKA_ARZ_KODLAR listesindeki
+     kodlarla kesiştirilir. Yeni işlem görmeye başlayan halka arzları hızlıca
+     bulmak için. */
+  h+='<div class="kutu" style="margin-top:0;border-left:3px solid var(--mor)">'+
+     '<div style="display:flex;align-items:center;gap:8px">'+
+     '<div style="flex:1;font-weight:800;font-size:14px">🚀 Halka arzlara göre tara</div>'+
+     '<button class="sir" data-mbhalkaarzfiltre="1" style="padding:4px 12px;font-size:16px;'+
+     (mbHalkaArzFiltreAcik?"background:var(--mor);color:#04140a;font-weight:800":"opacity:.6")+'">'+
+     (mbHalkaArzFiltreAcik?"✓":"○")+'</button></div>'+
+     '<div class="altbilgi" style="margin-top:5px;opacity:.75;white-space:normal">'+
+     (mbHalkaArzFiltreAcik
+       ?"Aşağıdaki modüller yalnız yeni halka arz listesindeki <b>"+HALKA_ARZ_KODLAR.length+" hisse</b> üzerinde çalışıyor."
+       :"Açarsan aşağıdaki 6 modül, yalnız yakın zamanda halka arz olmuş ("+HALKA_ARZ_KODLAR.length+" hisse) üzerinde çalışır.")+
      '</div></div>';
   /* ── 1) ZAMAN DİLİMLERİ ── */
   h+='<div class="kutu" style="margin-top:0;border-left:3px solid var(--yes)">'+
@@ -9146,6 +9179,9 @@ function mbBagla(v,dilimler){
   /* 🎯 Adaylara göre tara — açıp kapatmak yeni ölçüm gerektirmez, sadece
      mevcut sonucu aday kümesiyle kesiştirir; mbOtoTara() çağrılmaz. */
   T("[data-mbadayfiltre]",function(){mbAdayFiltreAcik=!mbAdayFiltreAcik;mbUygula()});
+  /* 🚀 Halka arzlara göre tara — aday filtresiyle aynı prensip: yeni ölçüm
+     gerektirmez, mevcut sonucu sabit halka arz kod kümesiyle kesiştirir. */
+  T("[data-mbhalkaarzfiltre]",function(){mbHalkaArzFiltreAcik=!mbHalkaArzFiltreAcik;mbUygula()});
   /* Modül "Genel" e dönsün — kendi özel dilimini bırakır */
   T("[data-mbmodtfg]",function(b){
     var m=b.dataset.mbmodtfg;mbIst[m].tfler=null;mbUygula();mbOtoTara()});

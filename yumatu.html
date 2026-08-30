@@ -1125,7 +1125,15 @@ const MOM_VARSAYILAN=("A1CAP,A1YEN,AAGYO,ACSEL,ADEL,ADESE,ADGYO,AEFES,AFYON,AGES
   "TURSG,UFUK,ULUFA,ULUSE,ULUUN,UNLU,USAK,VAKFA,VBTYZ,VERTU,"+
   "VERUS,VKING,VKFYO,VNGD,VRGYO,VSNMD,YAPRK,YATAS,YAYLA,YEOGY,"+
   "YESIL,YIGIT,YKBNK,YKSLN,YLDAS,YNGAZ,YNS,YONGA,YORUK,YUNSA,"+
-  "ZEDUR,ZERGY,ZGYO,ZOREN").split(",");
+  "ZEDUR,ZERGY,ZGYO,ZOREN,"+
+  /* 2026-08-30: fintables.com/halka-arzlar + Fibabanka halka arz takvimi taranarak
+     havuzda eksik çıkan halka arz kodları eklendi (EFORC hariç — o hisse zaten
+     EFOR kodu altında listede vardı; DMLKT bir gayrimenkul sertifikası olduğu
+     için normal hisse taraması dışında tutuldu; INTET henüz işlem görmediği
+     için — talep toplama tamamlandı ama ilk işlem tarihi belli değil — bu
+     listeye alınmadı, işlem başlayınca eklenmeli). */
+  "KPEKS,TKNKA,VEYAS,CITAS,QUICK,BEWEN,MASFN,KARCL,SSAAT,NETCD,"+
+  "ENDAE,KLYPV,DSTKF,DNYVA,CGCAM,BKRGY").split(",");
 /* Kullanıcının TradingView izleme listesindeki özel hisse seçkisi — Fibo/Sinyal
    taramasında "ilk 100" ve "tümü"nden AYRI, üçüncü bir tarama hedefi olarak
    seçilebilsin diye. Ekran görüntüsünden okunan sıraya sadık kalındı. Liste 27.
