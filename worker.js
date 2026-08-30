@@ -257,7 +257,24 @@ async function kapiKontrol(A,$,p,yerelSinir){
   }catch(e){return{ok:s(A,$)?!0:!1,kod:401,mesaj:"yetkisiz"}}
 }
 let p=0;const DETAY_GUN=90,OZET_GUN=365;async function y(e){if(!e.VERI)return{gunler:{},ozet:{}};const t=await e.VERI.get("gecmis");if(!t)return{gunler:{},ozet:{}};const gp=JSON.parse(t);return gp.gunler=gp.gunler||{},gp.ozet=gp.ozet||{},gp}async function k(e,t,a){if(!e.VERI)return;if(!a&&Date.now()-p<6e5)return
-;p=Date.now();const n=await y(e),i=new Date((r||Date.now())+108e5).toISOString().slice(0,10);var r;const s=function(e){const t={};if(!e||!e.kartlar)return t
+;p=Date.now();const n=await y(e),i=new Date((r||Date.now())+108e5).toISOString().slice(0,10);var r;const s=function(e){const t={};
+/* 🐞💀 ÖLÜM AYARI (2026-08-30) — "hedefe gidip geri düşen ama Yolda'da
+   takılı kalan hisse" bug'ının KÖK SEBEBİ: bu fiyat haritası eskiden
+   YALNIZCA e.kartlar'dan (o an PATERN/SİNYAL kriterini karşılayan dar
+   liste) besleniyordu. Bir hisse hedefe ulaşıp taramadan düştüğü ya da
+   sinyal kriterini artık karşılamadığı AN kartlar'dan silindiği için,
+   bundan sonra fiyatı burada hiç güncellenmiyordu — kk.max o anda
+   dondu. Hisse gerçekte sonradan Hedef1/Hedef2'yi vurup geri düşse bile
+   sistem bunu asla göremiyordu (max hep eski, düşük değerde kalıyordu),
+   dolayısıyla h1Tuttu/h2Tuttu asla true olmuyor, kayıt sonsuza kadar
+   "Yolda" sekmesinde takılı kalıyordu.
+   DÜZELTME: tarayıcının HER turda TÜM taranan evren (460+ hisse) için
+   gönderdiği e.sozluk[kod].f fiyatını da bu haritaya katıyoruz. sozluk,
+   kartlar'ın aksine sinyal/pattern kriterine göre daralmaz — hisse
+   kartlar'dan düşse bile sozluk'ta fiyatı akmaya devam eder. Böylece
+   max artık kesintisiz güncellenir ve gerçek zirve asla kaçırılmaz. */
+if(e&&e.sozluk&&typeof e.sozluk==="object")for(const k of Object.keys(e.sozluk)){const z=e.sozluk[k];if(z&&z.f>0)t[k]=Number(z.f)}
+if(!e||!e.kartlar)return t
 ;for(const a of Object.keys(e.kartlar))if("sira"!==a)for(const n of e.kartlar[a]||[])n&&n.kod&&n.fiyat>0&&(t[n.kod]=Number(n.fiyat));return t}(t);if(n.gunler[i]=n.gunler[i]||{kayitlar:{}},
 t.kartlar)for(const e of Object.keys(t.kartlar)){if("sira"===e)continue;for(const a of t.kartlar[e]||[]){
 if(!(a&&a.kod&&a.giris>0))continue;
