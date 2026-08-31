@@ -11104,7 +11104,42 @@ headers:{"content-type":"text/html; charset=utf-8"}})
 ;await b(A.BOT_TOKEN,"setChatMenuButton",{menu_button:{type:"web_app",text:"📱 Uygulamayı aç",web_app:{url:$.origin+"/app?v="+Date.now()}}}).catch(()=>{})
 ;return a&&a.ok?e("✅ Bağlantı kuruldu","<p>Bot: <b>@"+(t.result.username||"?")+"</b></p><p>Artık Telegram'da bota <b>/start</b> yazabilirsin.</p>"):e("⚠️ Bağlanamadı","<p>"+(a&&a.description||"bilinmeyen hata")+"</p>")
 }const ee={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, GET, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"86400"}
-;if("OPTIONS"===p.method)return new Response(null,{status:204,headers:ee});if("/push"===$.pathname){const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({
+;if("OPTIONS"===p.method)return new Response(null,{status:204,headers:ee})
+/* ============ 🐂🐻 HİSSE TARAMASI (MALBOĞA) — HARİCİ TARAYICI UÇLARI ==========
+   Fibo Tarama gibi: ağır hesap artık Worker CPU sınırında dilim dilim değil,
+   GitHub Actions'ta (hisse-oto-tara.js) TEK SEFERDE tüm evren için yapılır ve
+   buradan doğrudan basılır. Worker'daki eski dilimli tarama (mbDilimTara /
+   scheduled cron) DOKUNULMADI — bu iki uç sadece ÜSTÜNE yeni, hızlı bir yol
+   ekliyor; ikisi aynı KV anahtarını (mbBirikim:tf) paylaştığı için harici
+   tarama geldikçe veri hep taze kalır, eski yol da bozulmadan çalışmaya
+   devam eder (istenirse Cloudflare panelinden Cron Trigger kapatılabilir). */
+;if("/evren-liste"===$.pathname){
+  const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)})
+  ;const kk=await kapiKontrol(A,$,p,!1);if(!kk.ok)return e({ok:!1,hata:429===kk.kod?kk.mesaj:"Şifre yanlış"},kk.kod)
+  ;const liste=await mbEvren(A,[]).catch(()=>[])
+  ;return e({ok:!0,kodlar:liste,sayi:liste.length})
+}
+;if("/push-malboga"===$.pathname){
+  const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)})
+  ;if("POST"!==p.method)return e({ok:!1,hata:"POST bekleniyor"},405)
+  ;const kk=await kapiKontrol(A,$,p,!1);if(!kk.ok)return e({ok:!1,hata:429===kk.kod?kk.mesaj:"Şifre yanlış"},kk.kod)
+  ;const t=await p.json().catch(()=>null);if(!t||"object"!=typeof t)return e({ok:!1,hata:"Paket okunamadı"},400)
+  ;const tf=t.tf;if(!MB_TF[tf])return e({ok:!1,hata:"Geçersiz zaman dilimi: "+tf},400)
+  ;const sonuc=t.sonuc;if(!sonuc||"object"!=typeof sonuc)return e({ok:!1,hata:"sonuc eksik"},400)
+  ;const simdi=Date.now()
+  ;for(const kod in sonuc){if(sonuc[kod]&&"object"==typeof sonuc[kod]){sonuc[kod].ts=simdi;delete sonuc[kod].tf}}
+  ;const evren=await mbEvren(A,[]).catch(()=>[])
+  ;const bir={ts:simdi,sonuc:sonuc,olculen:Object.keys(sonuc).length,evren:evren.length,imlec:0,kaynak:"harici-oto-tara"}
+  ;_mbBellek[tf]=bir
+  ;try{await A.VERI.put("mbBirikim:"+tf,JSON.stringify(bir),{expirationTtl:MB_BIRIKIM_TTL})}
+   catch(kvErr){saglikArtir("kvYazmaHatasi");saglikSet("kvSonHata",String((kvErr&&kvErr.message)||kvErr).slice(0,120))}
+  /* Bu tf için bekleyen eski parçalı-yazma kalıntıları varsa temizle —
+     yoksa bir sonraki mbTfOku(parçalarla) çağrısı bayat parçayı üstüne
+     yazıp taze veriyi ezebilir. */
+  ;try{const l=await A.VERI.list({prefix:"mbP:"+tf+":"});for(const k of(l&&l.keys)||[])await A.VERI.delete(k.name).catch(()=>{})}catch(_){}
+  ;return e({ok:!0,tf:tf,olculen:bir.olculen,evren:bir.evren})
+}
+;if("/push"===$.pathname){const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({
 "content-type":"application/json; charset=utf-8"},ee)});if("POST"!==p.method)return e({ok:!1,hata:"POST bekleniyor"},405);
 /* 4️⃣ /push için de kaba-kuvvet sayacı — ama yerel rate limit YOK:
    tarayıcı uygulaman 10 saniyede bir buraya yazıyor, onu kısıtlamak
