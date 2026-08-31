@@ -4172,15 +4172,22 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .baslik{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .anaMenuBtn{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);border-radius:9px;
   padding:7px 11px;font-size:12.5px;font-weight:700;white-space:nowrap;order:-1}
+.sekMenuBaslik{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--kart);border:1px solid var(--ciz);border-radius:9px;padding:8px 12px;
+  font-size:13px;font-weight:800;cursor:pointer;margin:8px 0 0}
+.sekMenuBaslik .ok{transition:transform .18s;opacity:.75}
+.sekMenuBaslik.acik .ok{transform:rotate(180deg)}
+.sekGrupAd{font-size:10.5px;font-weight:800;color:var(--soluk);text-transform:uppercase;
+  letter-spacing:.4px;margin:9px 2px 4px;width:100%}
+.sekGrupAd:first-child{margin-top:6px}
 .sekmeAdi{font-size:13px;font-weight:800;padding:6px 11px;border-radius:999px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38vw;flex:0 1 auto}
 .sekNavBtn{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);border-radius:9px;
   padding:7px 10px;font-size:13px;font-weight:800;line-height:1;flex:0 0 auto}
 .baslik h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
 .saat{font-size:11.5px;color:var(--soluk);font-variant-numeric:tabular-nums}
-.sekmeler{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,auto);gap:6px;
-  overflow-x:auto;overflow-y:hidden;padding-bottom:9px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.sekmeler::-webkit-scrollbar{display:none}
+.sekmeler{display:none;flex-wrap:wrap;gap:6px;padding:2px 0 8px}
+.sekmeler.acik{display:flex}
 .sek{flex:0 0 auto;background:var(--kart);border:1px solid var(--ciz);color:var(--soluk);
   border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;white-space:nowrap}
 .sek.on{color:#fff;border-color:transparent}
@@ -4581,6 +4588,18 @@ function havaEtiket(s){
    Yani kilit HİÇBİR ZAMAN devreye girmiyordu ve Süper Üye olmayan herkes de
    3 Yıldızlı hisseleri normal üye gibi görebiliyordu. Artık s>=3. */
 function havaKilitliMi(s){ return s>=3&&!(D&&D.super); }
+/* ⭐⭐⭐ Hisse Taraması (malboga) sonuçlarında da işaretlemek için: bir kod
+   KISA/ORTA/UZUN'un HERHANGİ birinde 3/3 şartı (☀️) sağlıyor mu? Aynı
+   hedefEsikGecti + havaSartlari>=3 kuralı — üst şeritteki "3 Yıldızlı
+   hisseler" listesiyle birebir aynı tanım kullanılıyor. */
+function y3VarMi(kod){
+  if(!kod||!D||!D.kartlar)return false;
+  return["potansiyel","fibo","uzunvade"].some(function(ad){
+    return(D.kartlar[ad]||[]).some(function(x){
+      return x&&x.kod===kod&&hedefEsikGecti(x)&&havaSartlari(x)>=3;
+    });
+  });
+}
 function havaRozet(k){                 /* satır altındaki rozet sırasında tam etiket */
   var s=havaSartlari(k);
   if(havaKilitliMi(s))
@@ -4616,6 +4635,7 @@ function rozlerHepsi(k){
 /* Varsayılan sıralama "kar": liste açılır açılmaz en çok kazandıran sinyal
    en üstte. Kullanıcı istediğinde 🎯 Hedefe kalan / 🕐 En yeni'ye geçebilir. */
 var D=null, sekme="potansiyel", sira="kar", adayTf="adayOrta", presetSec="kaliteli", portfoySirala="deger";
+var sekMenuAcik=false; /* 🪗 Sekmeler akordiyonu — sticky üst alanı şişirmesin diye varsayılan kapalı */
 /* 🎛 KISA/ORTA/UZUN'un KENDİ TAB'INDA AYRI PRESETLER (kullanıcı isteği):
    her dilimin kendi presetSecTf[ad] seçimi var (null = kapalı). Ortak
    presetSec (yukarıda) hâlâ birleşik "🎛 Presetler" sekmesine ait, ona
@@ -4854,43 +4874,65 @@ function onayCiz(){
   };
 }
 function sekCiz(){
-  var s=[];
-  /* 🔝 ÖNCELİKLİ İKİ SEKME: Formasyon ve Hisse Taraması artık şeridin en
-     başında — Ana Menü'nün hemen altında ilk görülen iki düğme bunlar. */
-  s.push('<button class="sek'+(sekme==="kama"?" on":"")+'" data-r="nötr" data-s="kama">📐 Formasyon Tarama'+(D.super?"":" 🔒")+'</button>');
-  s.push('<button class="sek'+(sekme==="malboga"?" on":"")+(mbTaramaTamamMi()?" mbTamam":"")+'" data-r="nötr" data-s="malboga">'+(mbTaramaTamamMi()?"✅":"🔎")+' Hisse Taraması'+(D.super?"":" 🔒")+'</button>');
-  /* 📊 KISA/ORTA/UZUN düğmeleri buradan kaldırıldı — artık ☀️ Güçlülerin
-     güçlüsü bandının hemen altında ayrı bir satırda (kouSira) duruyorlar. */
-  /* 📋 Temel Analiz — dördüncü sırada. Sekme şeridi yatay kaydırmalı;
-     arkalara koyunca kimse bulamıyor. Sinyalin arkasında şirket var mı
-     sorusu, listeye bakmakla aynı sıklıkta sorulan bir sorudur — o
-     yüzden görünür yerde. */
-  s.push('<button class="sek'+(sekme==="temel"?" on":"")+'" data-r="nötr" data-s="temel">📋 Temel</button>');
-  s.push('<button class="sek'+(sekme==="aday"?" on":"")+'" data-r="aday" data-s="aday">🟨 Adaylar'+(D.super?"":" 🔒")+'</button>');
-  s.push('<button class="sek'+(sekme==="alarm"?" on":"")+'" data-r="nötr" data-s="alarm">🔔 Anlık Alarm'+(D.super?"":" 🔒")+'</button>');
-  s.push('<button class="sek'+(sekme==="rot"?" on":"")+'" data-r="nötr" data-s="rot">🔄 Rotasyon</button>');
-  /* 📈 PERFORMANS SEKMESİ KAPALI (kullanıcı kararı 19/08).
-     Motor SILINMEDI — /api/performans ve "gecmis" kaydi calismaya devam
-     ediyor, cunku portfoy grafigi ve gunluk ozetler de ayni kayittan
-     besleniyor; silmek onlari da kirardi. Yalnizca sekme gizlendi.
-     GERI ACMAK ICIN: asagidaki satirin basindaki // isaretini kaldir. */
-  //s.push('<button class="sek'+(sekme==="perf"?" on":"")+'" data-r="nötr" data-s="perf">📈 Performans</button>');
-  /* 📊 Backtest — yalnız yönetici. Üyeye açmak istersen d(uid) şartını kaldır. */
-  if(D&&D.yon)s.push('<button class="sek'+(sekme==="backtest"?" on":"")+'" data-r="nötr" data-s="backtest">📊 Backtest 🔐</button>');
-  s.push('<button class="sek'+(sekme==="fav"?" on":"")+'" data-r="nötr" data-s="fav">⭐ Takip</button>');
-  s.push('<button class="sek'+(sekme==="portfoy"?" on":"")+'" data-r="nötr" data-s="portfoy">💼 Portföy</button>');
-  s.push('<button class="sek'+(sekme==="preset"?" on":"")+'" data-r="nötr" data-s="preset">🎛 Presetler</button>');
-  s.push('<button class="sek'+(sekme==="abs"?" on":"")+'" data-r="nötr" data-s="abs">🌊 Absorpsiyon</button>');
-  s.push('<button class="sek'+(sekme==="ortaklik"?" on":"")+'" data-r="nötr" data-s="ortaklik">🔗 Ortaklık Haritası</button>');
-  s.push('<button class="sek'+(sekme==="fonlar"?" on":"")+'" data-r="nötr" data-s="fonlar">🐣 Fonlar</button>');
-  if(D&&D.yon)s.push('<button class="sek'+(sekme==="yesil"?" on":"")+'" data-r="nötr" data-s="yesil">📐 Fibo Aralığı Ölçüm İstasyonu 🔐</button>');
-  if(D.yon)s.push('<button class="sek'+(sekme==="panel"?" on":"")+'" data-r="nötr" data-s="panel">🛠 Panel</button>');
-  if(D.yon)s.push('<button class="sek'+(sekme==="hata"?" on":"")+'" data-r="nötr" data-s="hata">🩺 Hatalar</button>');
-  if(D.yon)s.push('<button class="sek'+(sekme==="sag"?" on":"")+'" data-r="nötr" data-s="sag">🛡 Sistem</button>');
-  el("sekmeler").innerHTML=s.join("");
-  [].forEach.call(el("sekmeler").children,function(b){
-    b.onclick=function(){tit();sekme=b.dataset.s;sira="kar";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
-    b.oncontextmenu=function(e2){e2.preventDefault()};
+  /* 🪗 AKORDİYON: sekmeler artık varsayılan olarak KAPALI geliyor.
+     Eskiden bu şerit sticky üst alanda hep açık duruyordu ve KISA
+     sekmesinde asıl sinyal listesine yer bırakmıyordu. Şimdi tek satırlık
+     bir başlığa basıp açıp kapatıyorsun; içerik de artık tek uzun bir
+     kaydırma şeridi değil, "grup grup" alt başlıklarla düzenli bir liste. */
+  var basSel=el("sekMenuBaslik");
+  if(!basSel){
+    basSel=document.createElement("div");
+    basSel.id="sekMenuBaslik";
+    basSel.className="sekMenuBaslik";
+    var host=el("sekmeler");
+    host.parentNode.insertBefore(basSel,host);
+  }
+  basSel.innerHTML='<span>☰ Diğer sekmeler</span><span class="ok">▾</span>';
+  basSel.className="sekMenuBaslik"+(sekMenuAcik?" acik":"");
+  basSel.onclick=function(){sekMenuAcik=!sekMenuAcik;sekCiz()};
+
+  function grup(ad,dizi){
+    var g=dizi.filter(Boolean);
+    if(!g.length)return"";
+    return '<div class="sekGrupAd">'+ad+'</div>'+g.join("");
+  }
+  var b=function(id,r,ik_ad,kosul){
+    if(kosul===false)return"";
+    return '<button class="sek'+(sekme===id?" on":"")+'" data-r="'+r+'" data-s="'+id+'">'+ik_ad+'</button>';
+  };
+  var s="";
+  s+=grup("🔎 Tarama",[
+    b("kama","nötr",'📐 Formasyon Tarama'+(D.super?"":" 🔒")),
+    b("malboga","nötr",(mbTaramaTamamMi()?"✅":"🔎")+' Hisse Taraması'+(D.super?"":" 🔒")),
+    b("aday","aday",'🟨 Adaylar'+(D.super?"":" 🔒")),
+    b("preset","nötr",'🎛 Presetler')
+  ]);
+  s+=grup("📋 Analiz",[
+    b("temel","nötr",'📋 Temel'),
+    b("rot","nötr",'🔄 Rotasyon'),
+    b("abs","nötr",'🌊 Absorpsiyon'),
+    b("ortaklik","nötr",'🔗 Ortaklık Haritası'),
+    b("fonlar","nötr",'🐣 Fonlar')
+  ]);
+  s+=grup("👤 Kişisel",[
+    b("alarm","nötr",'🔔 Anlık Alarm'+(D.super?"":" 🔒")),
+    b("fav","nötr",'⭐ Takip'),
+    b("portfoy","nötr",'💼 Portföy')
+  ]);
+  if(D&&D.yon)s+=grup("⚙️ Yönetim",[
+    b("backtest","nötr",'📊 Backtest 🔐'),
+    b("yesil","nötr",'📐 Fibo Aralığı Ölçüm İstasyonu 🔐'),
+    b("panel","nötr",'🛠 Panel'),
+    b("hata","nötr",'🩺 Hatalar'),
+    b("sag","nötr",'🛡 Sistem')
+  ]);
+  var host=el("sekmeler");
+  host.className="sekmeler"+(sekMenuAcik?" acik":"");
+  host.innerHTML=s;
+  [].forEach.call(host.children,function(bt){
+    if(bt.tagName!=="BUTTON")return;
+    bt.onclick=function(){tit();sekme=bt.dataset.s;sira="kar";izSekmeDegisti(sekme);sekMenuAcik=false;ciz();window.scrollTo(0,0)};
+    bt.oncontextmenu=function(e2){e2.preventDefault()};
   });
 }
 function ciz(){
@@ -4924,9 +4966,10 @@ function ciz(){
      ayrılır. 🏠 Ana Menü düğmesinin yanında artık hangi sekmede olduğumuzu
      renkli bir etiketle gösteriyoruz, iki yanında da ◀ ▶ ile önceki/sonraki
      sekmeye tek dokunuşla geçiliyor — hepsi aynı satırda. */
-  var sekS=el("sekmeler"),sekOn=el("sekOnceki"),sekSon=el("sekSonraki");
+  var sekS=el("sekmeler"),sekOn=el("sekOnceki"),sekSon=el("sekSonraki"),sekBas=el("sekMenuBaslik");
   if(sekme!=="potansiyel"){
     if(sekS){sekS.innerHTML="";sekS.style.display="none"}
+    if(sekBas)sekBas.style.display="none";
     if(sekAdi){
       sekAdi.style.display="";
       sekAdi.textContent=ekranAdi();
@@ -4937,6 +4980,7 @@ function ciz(){
     if(sekSon){sekSon.style.display="";sekSon.onclick=function(){sekmeGec(1)}}
   }else{
     if(sekS)sekS.style.display="";
+    if(sekBas)sekBas.style.display="";
     if(sekAdi)sekAdi.style.background="";
     if(sekOn)sekOn.style.display="none";
     if(sekSon)sekSon.style.display="none";
@@ -9236,6 +9280,7 @@ function mbGoster(v,yerel){
       return '<div class="satir" style="border-left-color:'+kenar+';align-items:flex-start">'+
         '<div class="sol"><div class="kod">'+E(x.kod)+
         (x.takipte?' <span class="rozet">⭐</span>':"")+
+        (y3VarMi(x.kod)?' <span class="rozet" style="background:#ffb020;color:#2a1400;font-weight:800" title="⭐⭐⭐ 3 Yıldız — KISA/ORTA/UZUN'\''un birinde 3/3 şart birden sağlanıyor">⭐⭐⭐</span>':"")+
         (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀</span>':"")+
         (dip?' <span class="rozet">'+dip+'</span>':"")+'</div>'+
         mbEnerjiRozet(x,mbIst)+
