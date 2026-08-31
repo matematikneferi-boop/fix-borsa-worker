@@ -31,7 +31,7 @@
 
 const WORKER_URL = (process.env.WORKER_URL || "").replace(/\/+$/, "");
 const PUSH_KEY   = process.env.PUSH_KEY || "";
-const ES         = Number(process.env.HISSE_ES || 20);   /* eşzamanlı istek sayısı */
+const ES         = Number(process.env.HISSE_ES || 10);   /* eşzamanlı istek sayısı — Yahoo'yu yormasın diye ölçülü tutuldu */
 const SEANS_BAS_DK   = 580;   /* 09:40 TR */
 const SEANS_BITIS_DK = 1110;  /* 18:30 TR */
 

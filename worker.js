@@ -11137,6 +11137,10 @@ headers:{"content-type":"text/html; charset=utf-8"}})
      yoksa bir sonraki mbTfOku(parçalarla) çağrısı bayat parçayı üstüne
      yazıp taze veriyi ezebilir. */
   ;try{const l=await A.VERI.list({prefix:"mbP:"+tf+":"});for(const k of(l&&l.keys)||[])await A.VERI.delete(k.name).catch(()=>{})}catch(_){}
+  /* 🔔 Taze veri geldiği anda kurulu alarm filtrelerini kontrol et ve
+     eşleşen varsa Telegram'a bildirim gönder — /push'takiyle aynı çağrı,
+     kilit paylaşıldığı için ikisi çakışmaz. */
+  ;q.waitUntil(kilitli(A,"mbAlarm",50,()=>mbAlarmTara(A)).catch(()=>{}))
   ;return e({ok:!0,tf:tf,olculen:bir.olculen,evren:bir.evren})
 }
 ;if("/push"===$.pathname){const e=(e,t)=>new Response(JSON.stringify(e),{status:t||200,headers:Object.assign({
