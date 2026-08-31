@@ -1,0 +1,29 @@
+name: 🐂🐻 Hisse Taraması (Malboğa) Otomatik
+
+on:
+  schedule:
+    # Her 10 dakikada bir. Playwright/tarayıcı YOK — saf Node + fetch
+    # olduğu için Fibo Tarama'dan çok daha hafif, sık çalışabilir.
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}   # Actions sekmesinden elle "Run workflow" ile de tetiklenebilir
+
+concurrency:
+  group: hisse-tara
+  cancel-in-progress: true   # önceki tur bitmeden yenisi gelirse eskisi iptal edilir
+
+jobs:
+  tara:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Hisse taramasını çalıştır
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          PUSH_KEY: ${{ secrets.PUSH_KEY }}
+        run: node hisse-oto-tara.js
