@@ -4169,12 +4169,13 @@ body{margin:0;background:var(--bg);color:var(--yazi);
   padding-bottom:calc(18px + env(safe-area-inset-bottom))}
 .ust{position:sticky;top:0;z-index:20;background:var(--bg);
   padding:10px 12px 0;border-bottom:1px solid var(--ciz)}
-.baslik{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.baslik{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px;position:relative}
 .anaMenuBtn{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);border-radius:9px;
-  padding:7px 11px;font-size:12.5px;font-weight:700;white-space:nowrap;order:-1}
-.sekMenuBaslik{display:flex;align-items:center;justify-content:space-between;gap:8px;
-  background:var(--kart);border:1px solid var(--ciz);border-radius:9px;padding:8px 12px;
-  font-size:13px;font-weight:800;cursor:pointer;margin:8px 0 0}
+  padding:6px 9px;font-size:11.5px;font-weight:700;white-space:nowrap;order:-1}
+.hamBtn{background:var(--kart2);border:1px solid var(--ciz);color:var(--yazi);border-radius:9px;
+  padding:6px 10px;font-size:15px;font-weight:800;line-height:1;flex:0 0 auto;cursor:pointer}
+.hamBtn.acik{background:var(--mavi);color:#fff;border-color:transparent}
+.sekMenuBaslik{display:none}
 .sekMenuBaslik .ok{transition:transform .18s;opacity:.75}
 .sekMenuBaslik.acik .ok{transform:rotate(180deg)}
 .sekGrupAd{font-size:10.5px;font-weight:800;color:var(--soluk);text-transform:uppercase;
@@ -4186,10 +4187,14 @@ body{margin:0;background:var(--bg);color:var(--yazi);
   padding:7px 10px;font-size:13px;font-weight:800;line-height:1;flex:0 0 auto}
 .baslik h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
 .saat{font-size:11.5px;color:var(--soluk);font-variant-numeric:tabular-nums}
-.sekmeler{display:none;flex-wrap:wrap;gap:6px;padding:2px 0 8px}
+.sekmeler{display:none;position:absolute;top:44px;right:0;flex-direction:column;gap:5px;
+  background:var(--kart2);border:1px solid var(--ciz);border-radius:12px;padding:9px;
+  min-width:196px;max-width:260px;max-height:75vh;overflow:auto;z-index:60;
+  box-shadow:0 14px 34px rgba(0,0,0,.5)}
 .sekmeler.acik{display:flex}
 .sek{flex:0 0 auto;background:var(--kart);border:1px solid var(--ciz);color:var(--soluk);
   border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;white-space:nowrap}
+.sekmeler .sek{width:100%;box-sizing:border-box;text-align:left;white-space:normal}
 .sek.on{color:#fff;border-color:transparent}
 .sek.on[data-r="1SA"]{background:var(--t1s);color:#08150c}
 .sek.on[data-r="4SA"]{background:var(--t4s);color:#07182b}
@@ -4408,9 +4413,9 @@ textarea.gir{min-height:88px;resize:vertical}
 .buguluKilit{margin-left:6px;font-size:11px;opacity:.9}
 .buguluSatir{position:relative}
 .hotSerit{margin:0 0 6px}
-.araSat{display:flex;align-items:center;gap:6px;margin-bottom:8px}
-.araGir{flex:0 1 88px;min-width:0;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
-  border-radius:8px;padding:6px 7px;font-size:13px;font-weight:700;text-transform:uppercase}
+.araSat{display:flex;align-items:center;gap:5px;margin-bottom:8px}
+.araGir{flex:0 1 76px;min-width:0;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);
+  border-radius:8px;padding:5px 6px;font-size:12px;font-weight:700;text-transform:uppercase}
 .araGir::placeholder{color:var(--soluk);text-transform:none;font-weight:400}
 .roz{display:inline-block;font-size:10.5px;line-height:1.5;padding:1px 6px;margin:3px 4px 0 0;
   border-radius:5px;border:1px solid var(--ciz);white-space:nowrap}
@@ -4421,7 +4426,7 @@ textarea.gir{min-height:88px;resize:vertical}
 .rozSat{margin-top:4px}
 .havaIkon{font-size:16px;margin-right:3px;letter-spacing:1px;font-weight:700;text-shadow:0 0 1px rgba(255,176,32,.6)}
 .yardimBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
-  padding:6px 9px;font-size:14px;line-height:1.4}
+  padding:5px 7px;font-size:12.5px;line-height:1.4}
 .ydBlok{background:var(--kart);border:1px solid var(--ciz);border-radius:12px;padding:12px;margin-bottom:10px}
 .ydBaslik{font-weight:800;font-size:14.5px;margin-bottom:4px}
 .ydAlt{color:var(--soluk);font-size:12.5px;line-height:1.55;margin-bottom:2px}
@@ -4430,7 +4435,7 @@ textarea.gir{min-height:88px;resize:vertical}
   margin:14px 0 6px}
 .ydGrup:first-child{margin-top:0}
 .araBtn{background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:8px;
-  padding:6px 11px;font-size:14px;line-height:1.4}
+  padding:5px 9px;font-size:12.5px;line-height:1.4}
 .araBtn.on{background:#ffb020;border-color:#ffb020;color:#1a1200}
 .hotBaslik{font-size:10px;font-weight:700;color:var(--sar);margin-bottom:3px}
 .y3Kutu{border:1px solid #ffb020;background:rgba(255,176,32,.08);border-radius:12px;
@@ -4494,7 +4499,7 @@ textarea.gir{min-height:88px;resize:vertical}
 </div>
 
 <div class="ust">
-  <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><button id="baslikYazi" class="anaMenuBtn">📩 Bize Ulaşın</button><button id="sekOnceki" class="sekNavBtn" style="display:none" title="Önceki sekme">◀</button><span id="sekmeAdi" class="sekmeAdi"></span><button id="sekSonraki" class="sekNavBtn" style="display:none" title="Sonraki sekme">▶</button><div class="saat" id="saat"></div></div>
+  <div class="baslik"><button id="anaMenuBtn" class="anaMenuBtn">🏠 Ana Menü</button><button id="baslikYazi" class="anaMenuBtn">📩 Bize Ulaşın</button><button id="sekOnceki" class="sekNavBtn" style="display:none" title="Önceki sekme">◀</button><span id="sekmeAdi" class="sekmeAdi"></span><button id="sekSonraki" class="sekNavBtn" style="display:none" title="Sonraki sekme">▶</button><div class="saat" id="saat"></div><button id="hamMenuBtn" class="hamBtn" title="Menü">☰</button></div>
   <div class="araSat" id="araSat"><input id="araGir" class="araGir" placeholder="Hisse ara" maxlength="6" autocomplete="off" autocapitalize="characters"><button id="araBtn" class="araBtn">🔍</button><button id="taraBtn" class="araBtn" style="display:none" title="Şimdi tara ve buluta yükle">🔄</button><button id="yardimBtn" class="yardimBtn" title="Rozetler ve sekmeler ne demek?">❓</button><button id="davetBtn" class="yardimBtn" title="Sistemi paylaş, Süper Üyelik kazan">📤</button><button id="onizBtn" class="araBtn" style="display:none" title="Sıradan (süper olmayan) üye gözünden gör">👁️</button></div>
   <div class="serit" id="serit"></div>
   <div class="hotSerit" id="hotSerit"></div>
@@ -4891,6 +4896,21 @@ function sekCiz(){
   basSel.className="sekMenuBaslik"+(sekMenuAcik?" acik":"");
   basSel.onclick=function(){sekMenuAcik=!sekMenuAcik;sekCiz()};
 
+  var hb=el("hamMenuBtn");
+  if(hb){
+    hb.classList.toggle("acik",sekMenuAcik);
+    if(!hb.dataset.bagli){
+      hb.dataset.bagli="1";
+      hb.onclick=function(){tit();sekMenuAcik=!sekMenuAcik;sekCiz()};
+      document.addEventListener("click",function(e){
+        if(!sekMenuAcik)return;
+        var host=el("sekmeler");
+        if(host&&(host.contains(e.target)||hb.contains(e.target)))return;
+        sekMenuAcik=false;sekCiz();
+      });
+    }
+  }
+
   function grup(ad,dizi){
     var g=dizi.filter(Boolean);
     if(!g.length)return"";
@@ -4901,6 +4921,10 @@ function sekCiz(){
     return '<button class="sek'+(sekme===id?" on":"")+'" data-r="'+r+'" data-s="'+id+'">'+ik_ad+'</button>';
   };
   var s="";
+  s+=grup("⏱ Sinyal",["potansiyel","fibo","uzunvade"].map(function(k){
+    var t=TF[k],n=((D.kartlar&&D.kartlar[k])||[]).filter(hedefEsikGecti).length;
+    return b(k,t.r,t.ik+" "+t.ad+(n?' <span class="kouSayi">'+n+"</span>":""));
+  }));
   s+=grup("🔎 Tarama",[
     b("kama","nötr",'📐 Formasyon Tarama'+(D.super?"":" 🔒")),
     b("malboga","nötr",(mbTaramaTamamMi()?"✅":"🔎")+' Hisse Taraması'+(D.super?"":" 🔒")),
@@ -4966,10 +4990,8 @@ function ciz(){
      ayrılır. 🏠 Ana Menü düğmesinin yanında artık hangi sekmede olduğumuzu
      renkli bir etiketle gösteriyoruz, iki yanında da ◀ ▶ ile önceki/sonraki
      sekmeye tek dokunuşla geçiliyor — hepsi aynı satırda. */
-  var sekS=el("sekmeler"),sekOn=el("sekOnceki"),sekSon=el("sekSonraki"),sekBas=el("sekMenuBaslik");
+  var sekOn=el("sekOnceki"),sekSon=el("sekSonraki");
   if(sekme!=="potansiyel"){
-    if(sekS){sekS.innerHTML="";sekS.style.display="none"}
-    if(sekBas)sekBas.style.display="none";
     if(sekAdi){
       sekAdi.style.display="";
       sekAdi.textContent=ekranAdi();
@@ -4979,8 +5001,6 @@ function ciz(){
     if(sekOn){sekOn.style.display="";sekOn.onclick=function(){sekmeGec(-1)}}
     if(sekSon){sekSon.style.display="";sekSon.onclick=function(){sekmeGec(1)}}
   }else{
-    if(sekS)sekS.style.display="";
-    if(sekBas)sekBas.style.display="";
     if(sekAdi)sekAdi.style.background="";
     if(sekOn)sekOn.style.display="none";
     if(sekSon)sekSon.style.display="none";
@@ -5168,7 +5188,7 @@ function hotCiz(){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
   });
-  if(!hepsi.length){kutu.innerHTML=kouSeritHtml()+y3BacktestCiz();kouSeritBagla();y3BacktestBagla();return}
+  if(!hepsi.length){kutu.innerHTML=y3BacktestCiz();y3BacktestBagla();return}
 
   /* ⭐⭐⭐ 3 YILDIZLI HİSSELER — artık genel kalite sıralaması değil, 4 bağlam
      şartını (ortalama üstü + kalın raf + temiz trend)
@@ -5196,11 +5216,10 @@ function hotCiz(){
       '<div class="hotKilit" id="hotKilit">'+
         (say?'Şu an <b>'+say+' hisse</b> 3 şartı birden sağlıyor, ama hangileri olduğunu görmek Süper Üyelik gerektiriyor.':'Bu bölüm Süper Üyelere özel.')+
         ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div></div>'+
-      kouSeritHtml()+y3BacktestCiz();
+      y3BacktestCiz();
     kutu.innerHTML=h2;
     var hl=el("hotKilitLink");
     if(hl)hl.onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
-    kouSeritBagla();
     y3BacktestBagla();
     return;
   }
@@ -5220,9 +5239,8 @@ function hotCiz(){
     h+='<div class="hotSira">'+secilen.map(kartHtml).join("")+"</div>";
   else
     h+='<div class="hotAltYazi" style="font-size:11px;color:var(--soluk)">Şu an 3 şartı birden sağlayan hisse yok — bu normaldir, nadir görülür.</div>';
-  h+="</div>"+kouSeritHtml()+y3BacktestCiz();
+  h+="</div>"+y3BacktestCiz();
   kutu.innerHTML=h;
-  kouSeritBagla();
   y3BacktestBagla();
   satirBagla();
 }
