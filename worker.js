@@ -4952,12 +4952,13 @@ function sekCiz(){
   ]);
   var host=el("sekmeler");
   host.className="sekmeler"+(sekMenuAcik?" acik":"");
-  host.innerHTML=s;
+  host.innerHTML=s+y3BacktestCiz();
   [].forEach.call(host.children,function(bt){
     if(bt.tagName!=="BUTTON")return;
     bt.onclick=function(){tit();sekme=bt.dataset.s;sira="kar";izSekmeDegisti(sekme);sekMenuAcik=false;ciz();window.scrollTo(0,0)};
     bt.oncontextmenu=function(e2){e2.preventDefault()};
   });
+  y3BacktestBagla();
 }
 function ciz(){
   yolYaz();
@@ -4991,6 +4992,8 @@ function ciz(){
      renkli bir etiketle gösteriyoruz, iki yanında da ◀ ▶ ile önceki/sonraki
      sekmeye tek dokunuşla geçiliyor — hepsi aynı satırda. */
   var sekOn=el("sekOnceki"),sekSon=el("sekSonraki");
+  if(sekOn)sekOn.style.display="none";
+  if(sekSon)sekSon.style.display="none";
   if(sekme!=="potansiyel"){
     if(sekAdi){
       sekAdi.style.display="";
@@ -4998,12 +5001,8 @@ function ciz(){
       sekAdi.style.background=sekmeRenk(sekme);
       sekAdi.style.color=sekmeYaziRenk(sekme);
     }
-    if(sekOn){sekOn.style.display="";sekOn.onclick=function(){sekmeGec(-1)}}
-    if(sekSon){sekSon.style.display="";sekSon.onclick=function(){sekmeGec(1)}}
   }else{
     if(sekAdi)sekAdi.style.background="";
-    if(sekOn)sekOn.style.display="none";
-    if(sekSon)sekSon.style.display="none";
   }
   if(sekme==="hata")return hataCiz();
   if(sekme==="sag")return saglikCiz();
@@ -5188,7 +5187,7 @@ function hotCiz(){
       var y=Object.assign({},x);y._ad=ad;hepsi.push(y);
     });
   });
-  if(!hepsi.length){kutu.innerHTML=y3BacktestCiz();y3BacktestBagla();return}
+  if(!hepsi.length){kutu.innerHTML="";return}
 
   /* ⭐⭐⭐ 3 YILDIZLI HİSSELER — artık genel kalite sıralaması değil, 4 bağlam
      şartını (ortalama üstü + kalın raf + temiz trend)
@@ -5215,12 +5214,10 @@ function hotCiz(){
     var h2='<div class="y3Kutu"><div class="hotBaslik">🔑 ⭐⭐⭐ 3 yıldızlı hisseler — Süper Üyelik</div>'+
       '<div class="hotKilit" id="hotKilit">'+
         (say?'Şu an <b>'+say+' hisse</b> 3 şartı birden sağlıyor, ama hangileri olduğunu görmek Süper Üyelik gerektiriyor.':'Bu bölüm Süper Üyelere özel.')+
-        ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div></div>'+
-      y3BacktestCiz();
+        ' <span class="hotKilitLink" id="hotKilitLink">📤 Süper Üye ol</span></div></div>';
     kutu.innerHTML=h2;
     var hl=el("hotKilitLink");
     if(hl)hl.onclick=function(){tit();sekme="davet";izSekmeDegisti(sekme);ciz();window.scrollTo(0,0)};
-    y3BacktestBagla();
     return;
   }
 
@@ -5239,9 +5236,8 @@ function hotCiz(){
     h+='<div class="hotSira">'+secilen.map(kartHtml).join("")+"</div>";
   else
     h+='<div class="hotAltYazi" style="font-size:11px;color:var(--soluk)">Şu an 3 şartı birden sağlayan hisse yok — bu normaldir, nadir görülür.</div>';
-  h+="</div>"+y3BacktestCiz();
+  h+="</div>";
   kutu.innerHTML=h;
-  y3BacktestBagla();
   satirBagla();
 }
 function sirCiz(akt){
@@ -5466,7 +5462,7 @@ function y3BacktestCiz(){
 }
 function y3BacktestBagla(){
   [].forEach.call(document.querySelectorAll("[data-y3k]"),function(b){
-    b.onclick=function(){tit();var k=b.dataset.y3k;y3Acik=(y3Acik===k)?null:k;hotCiz();window.scrollTo(0,0)};
+    b.onclick=function(){tit();var k=b.dataset.y3k;y3Acik=(y3Acik===k)?null:k;sekCiz();window.scrollTo(0,0)};
   });
 }
 /* Tarih + "kalan yüzde" filtrelerini bir listeye uygular. Tarih tüm
