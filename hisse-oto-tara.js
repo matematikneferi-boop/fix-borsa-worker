@@ -32,8 +32,8 @@
 const WORKER_URL = (process.env.WORKER_URL || "").replace(/\/+$/, "");
 const PUSH_KEY   = process.env.PUSH_KEY || "";
 const ES         = Number(process.env.HISSE_ES || 10);   /* eşzamanlı istek sayısı — Yahoo'yu yormasın diye ölçülü tutuldu */
-const SEANS_BAS_DK   = 580;   /* 09:40 TR */
-const SEANS_BITIS_DK = 1110;  /* 18:30 TR */
+const SEANS_BAS_DK   = 614;   /* 10:14 TR — 15dk Yahoo gecikmesi + seans açılışının ilk çalkantısı geçsin diye 9:40 değil 10:14 */
+const SEANS_BITIS_DK = 1112;  /* 18:32 TR — Fibo Tarama'nın seansı kapattığı an, peşinden fazladan sürüklenmesin */
 
 if (!WORKER_URL || !PUSH_KEY) {
   console.error("✗ WORKER_URL ve/veya PUSH_KEY tanımlı değil (GitHub secret olarak eklenmeli).");
