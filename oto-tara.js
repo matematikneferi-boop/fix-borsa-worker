@@ -75,11 +75,21 @@ const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
        localStorage'a yazılıyor — tıpkı elle ayarlar sayfasına girip
        şifreyi yapıştırmış gibi. */
     if (process.env.PUSH_KEY) {
-      await sayfa.evaluate(
-        (k) => localStorage.setItem("bulut:key", JSON.stringify(k)),
-        process.env.PUSH_KEY
-      );
-      console.log("🔑 Bulut şifresi GitHub secret'ından yüklendi.");
+      await sayfa.evaluate((k) => {
+        localStorage.setItem("bulut:key", JSON.stringify(k));
+        /* yumatu.html push anında şifreyi localStorage'dan değil,
+           #bulutKey input kutusunun GÖRÜNEN değerinden okuyor
+           (bulutAyarYukle sayfa açılışında kutuyu zaten doldurmuş
+           oluyor). localStorage'ı güncellemek tek başına yetmiyor —
+           kutuyu da elle değiştirip olay tetiklemek gerekiyor. */
+        const kutu = document.getElementById("bulutKey");
+        if (kutu) {
+          kutu.value = k;
+          kutu.dispatchEvent(new Event("input", { bubbles: true }));
+          kutu.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }, process.env.PUSH_KEY);
+      console.log("🔑 Bulut şifresi GitHub secret'ından yüklendi (localStorage + input kutusu).");
     } else {
       console.log("⚠️ PUSH_KEY secret'ı tanımlı değil — eski varsayılan şifre kullanılacak, muhtemelen 401 alınır.");
     }
