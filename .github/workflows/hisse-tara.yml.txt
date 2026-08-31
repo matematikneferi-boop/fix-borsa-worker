@@ -1,0 +1,33 @@
+name: 🐂🐻 Hisse Taraması (Malboğa) Otomatik
+
+on:
+  schedule:
+    # Her 15 dakikada bir. Playwright/tarayıcı YOK — saf Node + fetch
+    # olduğu için Fibo Tarama'dan hafif, ama Cloudflare KV'nin günlük
+    # ücretsiz yazma sınırını (1000) ve Yahoo'nun rate-limit riskini
+    # zorlamamak için 15 dakikada tutuldu. Daha sık istersen (örn. */10)
+    # önce eski dilimli tarama cron'unu (Cloudflare panel → Triggers)
+    # kapatıp KV bütçesini boşaltman iyi olur.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}   # Actions sekmesinden elle "Run workflow" ile de tetiklenebilir
+
+concurrency:
+  group: hisse-tara
+  cancel-in-progress: true   # önceki tur bitmeden yenisi gelirse eskisi iptal edilir
+
+jobs:
+  tara:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Hisse taramasını çalıştır
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          PUSH_KEY: ${{ secrets.PUSH_KEY }}
+        run: node hisse-oto-tara.js
