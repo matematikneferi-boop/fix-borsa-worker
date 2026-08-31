@@ -3102,7 +3102,14 @@ function mbOnbellekKoy(kod,tf,veri){
 /* Dilim başına tazelik eşiği — bakılan dilim bundan eskiyse önceliklendirilir.
    Hızlı dilim sık, yavaş dilim seyrek tazelenir; boşuna çekim yapılmaz. */
 const MB_TAZELIK={"5DK":6e5,"15DK":12e5,"1SA":36e5,"4SA":72e5,"1G":108e5,"1HAF":216e5,"1AY":216e5};
-const MB_BIRIKIM_TTL=21600,MB_YAZMA_ARALIK=6e5,MB_BAYAT_MS=216e5; /* 6 saat */
+const MB_BIRIKIM_TTL=21600,MB_YAZMA_ARALIK=6e5,MB_BAYAT_MS=216e5; /* 6 saat — bayat ölçüm SİLME eşiği, aşağıdaki "tamam mı" kontrolüyle karıştırılmasın */
+/* 🆕 "tamam" (yeniden taranmasın) sayılma eşiği: eskiden MB_BAYAT_MS/2 (3 saat)
+   kullanılıyordu — bir dilim sayıca doluysa arka plan cron'u onu 3 saat
+   boyunca hiç dokunmuyordu, veri sessizce saatlerce bayatlıyordu. Artık
+   15 dakika: bu süre geçince dilim yeniden "eksik" sayılır, cron tekrar
+   tarar. Yahoo'nun kendi ~15 dk gecikmesiyle toplamda ~30 dk civarı gecikme
+   hedefleniyor (öncekinde saatler sürebiliyordu). */
+const MB_TAMAM_TAZE_MS=9e5; /* 15 dakika */
 const _mbBellek={};let _mbYazma={},_mbImlec=null;
 
 async function mbTfOku(A,tf,parcalarla){
@@ -3171,12 +3178,13 @@ async function mbParcalariBirlestir(A,tf){
   }catch(_){}
   return bir;
 }
-/* Bu dilim tamamlandı mı: havuzun tamamı ölçülü ve hiçbiri bayat değil. */
+/* Bu dilim tamamlandı mı: havuzun tamamı ölçülü ve hiçbiri bayat değil.
+   (Eşik artık MB_TAMAM_TAZE_MS = 15 dk — yukarıdaki tanıma bak.) */
 function mbTfTamam(bir,evrenSayi){
   if(!bir||!bir.sonuc)return!1;
   const n=Object.keys(bir.sonuc).length;
   if(!evrenSayi||n<evrenSayi)return!1;
-  return (Date.now()-(bir.ts||0))<(MB_BAYAT_MS/2);
+  return (Date.now()-(bir.ts||0))<MB_TAMAM_TAZE_MS;
 }
 async function mbCalisiyorMu(A){
   try{return(await A.VERI.get("mbDurduruldu"))!=="1"}catch(_){return!0}
