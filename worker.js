@@ -9280,7 +9280,7 @@ function mbGoster(v,yerel){
       return '<div class="satir" style="border-left-color:'+kenar+';align-items:flex-start">'+
         '<div class="sol"><div class="kod">'+E(x.kod)+
         (x.takipte?' <span class="rozet">⭐</span>':"")+
-        (y3VarMi(x.kod)?' <span class="rozet" style="background:#ffb020;color:#2a1400;font-weight:800" title="⭐⭐⭐ 3 Yıldız — KISA/ORTA/UZUN'\''un birinde 3/3 şart birden sağlanıyor">⭐⭐⭐</span>':"")+
+        (y3VarMi(x.kod)?' <span class="rozet" style="background:#ffb020;color:#2a1400;font-weight:800" title="⭐⭐⭐ 3 Yıldız — KISA/ORTA/UZUN\\'un birinde 3/3 şart birden sağlanıyor">⭐⭐⭐</span>':"")+
         (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀</span>':"")+
         (dip?' <span class="rozet">'+dip+'</span>':"")+'</div>'+
         mbEnerjiRozet(x,mbIst)+
