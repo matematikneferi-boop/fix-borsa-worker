@@ -5,17 +5,17 @@ Kama, üçgen, bayrak/flama ve ikili dip-tepe oluşumlarını bulur,
 formasyon.json yazar. Telegram işçisi bu dosyayı okur.
 
 Hisse listesi havuz.json'dan otomatik olarak ayrılır; elle bir sey yapman gereksiz.
-""
+"""
 
-json'u içe aktar
-os'u içe aktar
-içe aktarma sys
-ithalat zamanı
-urllib.request'i içe aktarın
+import json
+import os
+import sys
+import time
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 
-numpy'ı np olarak içe aktarın
+import numpy as np
 
 # ============================================================================
 # TARANACAK HISSELER
@@ -24,8 +24,8 @@ numpy'ı np olarak içe aktarın
 # Havuza ulaşılamazsa asagidaki yedek liste devreye girer.
 # ============================================================================
 
-HAVUZ_URL = işletim sistemi. çevre . elde etmek (
-    "HAVUZ_URL" ,
+HAVUZ_URL = os.environ.get(
+    "HAVUZ_URL",
     "https://raw.githubusercontent.com/matematikneferi-boop/Hisse-havuzu/main/havuz.json" ,
 )
 
