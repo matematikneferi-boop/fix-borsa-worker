@@ -66,6 +66,24 @@ const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
     await sayfa.goto(URL, { waitUntil: "load", timeout: 60000 });
     await sayfa.waitForSelector("#zincirBtn", { timeout: 30000 });
 
+    /* 🔑 BULUT ŞİFRESİ: bu tarayıcı her seferinde SIFIRDAN açıldığı için
+       localStorage boş başlar ve sayfa gerçek şifreyi hiç bilmiyordu —
+       kod içindeki eski varsayılan "kolayfix" gönderiliyordu. Cloudflare'de
+       PUSH_KEY değiştirildiğinde bu, sürekli 401 (yetkisiz) hatasına yol
+       açıyordu. Artık gerçek şifre GitHub Actions "secret" olarak
+       PUSH_KEY ortam değişkeninden okunuyor ve sayfa açılır açılmaz
+       localStorage'a yazılıyor — tıpkı elle ayarlar sayfasına girip
+       şifreyi yapıştırmış gibi. */
+    if (process.env.PUSH_KEY) {
+      await sayfa.evaluate(
+        (k) => localStorage.setItem("bulut:key", JSON.stringify(k)),
+        process.env.PUSH_KEY
+      );
+      console.log("🔑 Bulut şifresi GitHub secret'ından yüklendi.");
+    } else {
+      console.log("⚠️ PUSH_KEY secret'ı tanımlı değil — eski varsayılan şifre kullanılacak, muhtemelen 401 alınır.");
+    }
+
     /* Hangi sürümün çalıştığını loga bas: yanlış/bayat dosya sessizce
        çalışırsa saatler kaybettiriyor. */
     const surum = await sayfa.evaluate(() =>
