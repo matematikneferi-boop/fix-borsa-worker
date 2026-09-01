@@ -4488,6 +4488,20 @@ textarea.gir{min-height:88px;resize:vertical}
 #splash .mum1{animation-delay:.05s}#splash .mum2{animation-delay:.15s}
 #splash .mum3{animation-delay:.25s}#splash .mum4{animation-delay:.35s}
 @keyframes mumbelir{from{transform:scaleY(0);opacity:0}to{transform:scaleY(1);opacity:1}}
+/* ⏸️ MOLA (kapak) EKRANI — süper üye/sıradan üye herkese gösterilen duyuru
+   kapağı; yönetici (D.yon) bundan etkilenmez, arka planda çalışmaya devam
+   eder. 👁️ önizleme açıkken yönetici de bunu görür (D.yon sahte false olur). */
+#molaEkran{position:fixed;inset:0;z-index:1000;background:radial-gradient(120% 120% at 50% 20%,#221a10 0%,var(--bg) 62%);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:28px;text-align:center}
+#molaEkran.acik{display:flex}
+#molaEkran .molaIkon{font-size:50px;line-height:1;filter:drop-shadow(0 6px 22px rgba(210,153,34,.3));animation:sfade .6s ease .1s backwards}
+#molaEkran .molaBas{font-size:20px;font-weight:800;color:var(--yazi);letter-spacing:.2px;max-width:320px;animation:sfade .6s ease .25s backwards}
+#molaEkran .molaSayi{display:flex;gap:18px;margin-top:4px;animation:sfade .6s ease .4s backwards}
+#molaEkran .molaKutu{background:var(--kart2);border:1px solid var(--ciz);border-radius:14px;padding:14px 22px;min-width:92px}
+#molaEkran .molaKutu b{display:block;font-size:24px;font-weight:800;color:var(--sar)}
+#molaEkran .molaKutu span{font-size:10px;color:var(--soluk);text-transform:uppercase;letter-spacing:.4px}
+#molaEkran .molaTsk{font-size:13.5px;color:var(--yazi);margin-top:6px;max-width:320px;line-height:1.6;animation:sfade .6s ease .55s backwards}
+#molaEkran .molaAlt{font-size:11.5px;color:var(--soluk);max-width:300px;line-height:1.5;animation:sfade .6s ease .7s backwards}
 </style></head><body>
 
 <div id="splash">
@@ -4504,6 +4518,18 @@ textarea.gir{min-height:88px;resize:vertical}
   <div class="sad">📊 Fix Borsa Sinyal</div>
   <div class="salt">BIST için teknik tarama &amp; sinyal sistemi</div>
   <div class="spin"></div>
+</div>
+
+<div id="molaEkran">
+  <div class="molaIkon">⏸️</div>
+  <div class="molaBas">Kısa bir süreliğine programla ilgilenmeyi bırakıyoruz</div>
+  <div class="molaSayi">
+    <div class="molaKutu"><b>8145</b><span>güvenen kişi</span></div>
+    <div class="molaKutu"><b>24</b><span>gün</span></div>
+  </div>
+  <div class="molaTsk">24 günde bizlere güvenen <b>8145 kişiye</b> teşekkür ederiz. 🙏</div>
+  <div class="molaAlt">Kısa bir süreliğine aradayız.</div>
+  <button id="molaCikBtn" style="display:none;margin-top:10px;background:var(--kart2);border:1px solid var(--ciz);color:var(--soluk);border-radius:9px;padding:7px 14px;font-size:11.5px;font-weight:700">👁️ önizlemeden çık</button>
 </div>
 
 <div class="ust">
@@ -4675,6 +4701,33 @@ function onizUygula(){
   if(D.superGercek===undefined)D.superGercek=D.super;
   if(ONIZLEME){D.yon=false;D.super=false}
   else{D.yon=D.yonGercek;D.super=D.superGercek}
+}
+/* ⏸️ MOLA KAPAĞI — D.yon false ise (sıradan/süper üye, veya önizlemedeki
+   yönetici) tüm ekranın önüne geçer; gerçek yönetici (önizleme kapalıyken)
+   bundan hiç etkilenmez, panel arka planda normal çalışmaya devam eder. */
+function molaGoster(){
+  var m=el("molaEkran");if(m)m.classList.add("acik");
+  /* Kapağın arkasında sıkışıp kalmasın diye SADECE gerçek yöneticiye
+     (önizlemedeyken bile) küçük bir "önizlemeden çık" düğmesi gösterilir.
+     Sıradan/süper üyede D.yonGercek hiç olmaz, düğme hep gizli kalır. */
+  var cb=el("molaCikBtn");
+  if(cb&&D&&D.yonGercek){
+    cb.style.display="";
+    if(!cb.dataset.bagli){
+      cb.dataset.bagli="1";
+      cb.onclick=function(){
+        ONIZLEME=false;
+        try{localStorage.setItem("onizlemeModu","0")}catch(e){}
+        onizUygula();
+        if(!molaKontrolEt()){izSekmeDegisti(sekme);ciz()}
+      };
+    }
+  }else if(cb)cb.style.display="none";
+}
+function molaGizle(){var m=el("molaEkran");if(m)m.classList.remove("acik")}
+function molaKontrolEt(){
+  if(D&&!D.yon){molaGoster();return true}
+  molaGizle();return false
 }
 /* ---------- GERİ / İLERİ ----------
    Uygulama tek sayfa olduğu için tarayıcı geçmişi yok; her ekran değişimi
@@ -4867,6 +4920,7 @@ function basla(){
     if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Doğrulanamadı.<br>Uygulamayı Telegram üzerinden aç.</div>';return}
     D=v;
     onizUygula();
+    if(molaKontrolEt())return;  /* ⏸️ mola kapağı açıksa geri kalanı hiç çizme */
     if(D.yon)gbRozetGoster(D.gbYeni||0);
     if(!D.onay)return onayCiz();
     izSekmeDegisti(sekme);
@@ -5141,6 +5195,7 @@ function onizDugmeCiz(){
     ONIZLEME=!ONIZLEME;
     try{localStorage.setItem("onizlemeModu",ONIZLEME?"1":"0")}catch(e){}
     onizUygula();
+    if(molaKontrolEt())return;
     ciz();
     window.scrollTo(0,0);
   };
