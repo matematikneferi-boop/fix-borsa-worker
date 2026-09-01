@@ -1,0 +1,32 @@
+name: 🐂🐻 Hisse Taraması (Malboğa) Otomatik
+
+on:
+  # workflow_run zinciri güvenilir tetiklenmedi (otomatik tur hiç görülmedi,
+  # hep elle tetiklenmiş) — bağımsız, garanti çalışan zamanlayıcıya dönüldü.
+  # Script kendi içinde 10:14-18:32 TR dışında zaten çalışmıyor, o yüzden
+  # dışarıda tetiklense bile Yahoo'ya gitmiyor, KV'ye yazmıyor.
+  schedule:
+    - cron: "*/7 * * * *"
+  workflow_dispatch: {}   # Actions sekmesinden elle "Run workflow" ile de tetiklenebilir
+
+concurrency:
+  group: hisse-tara
+  cancel-in-progress: true   # önceki tur bitmeden yenisi gelirse eskisi iptal edilir
+
+jobs:
+  tara:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Hisse taramasını çalıştır
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          PUSH_KEY: ${{ secrets.PUSH_KEY }}
+        run: node hisse-oto-tara.js
+
