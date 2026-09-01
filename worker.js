@@ -4494,7 +4494,7 @@ textarea.gir{min-height:88px;resize:vertical}
 #molaEkran{position:fixed;inset:0;z-index:1000;background:radial-gradient(120% 120% at 50% 20%,#221a10 0%,var(--bg) 62%);
   display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:28px;text-align:center}
 #molaEkran.acik{display:flex}
-#molaEkran .molaIkon{font-size:50px;line-height:1;filter:drop-shadow(0 6px 22px rgba(210,153,34,.3));animation:sfade .6s ease .1s backwards}
+#molaEkran .molaLogo{width:88px;height:88px;filter:drop-shadow(0 6px 22px rgba(210,153,34,.35));animation:sfade .6s ease .1s backwards}
 #molaEkran .molaBas{font-size:20px;font-weight:800;color:var(--yazi);letter-spacing:.2px;max-width:320px;animation:sfade .6s ease .25s backwards}
 #molaEkran .molaSayi{display:flex;gap:18px;margin-top:4px;animation:sfade .6s ease .4s backwards}
 #molaEkran .molaKutu{background:var(--kart2);border:1px solid var(--ciz);border-radius:14px;padding:14px 22px;min-width:92px}
@@ -4502,6 +4502,9 @@ textarea.gir{min-height:88px;resize:vertical}
 #molaEkran .molaKutu span{font-size:10px;color:var(--soluk);text-transform:uppercase;letter-spacing:.4px}
 #molaEkran .molaTsk{font-size:13.5px;color:var(--yazi);margin-top:6px;max-width:320px;line-height:1.6;animation:sfade .6s ease .55s backwards}
 #molaEkran .molaAlt{font-size:11.5px;color:var(--soluk);max-width:300px;line-height:1.5;animation:sfade .6s ease .7s backwards}
+#molaEkran .molaUlasBtn{margin-top:8px;background:var(--sar);border:none;color:#221a10;border-radius:11px;
+  padding:12px 24px;font-size:14px;font-weight:800;cursor:pointer;animation:sfade .6s ease .85s backwards}
+#molaEkran .molaUlasBtn:active{opacity:.85}
 </style></head><body>
 
 <div id="splash">
@@ -4521,14 +4524,24 @@ textarea.gir{min-height:88px;resize:vertical}
 </div>
 
 <div id="molaEkran">
-  <div class="molaIkon">⏸️</div>
-  <div class="molaBas">Kısa bir süreliğine programla ilgilenmeyi bırakıyoruz</div>
+  <svg class="molaLogo" viewBox="0 0 100 100" fill="none">
+    <rect x="11" y="62" width="9" height="20" rx="2.5" fill="#3fb950" opacity=".45"/>
+    <rect x="26" y="50" width="9" height="32" rx="2.5" fill="#f85149" opacity=".45"/>
+    <rect x="41" y="56" width="9" height="26" rx="2.5" fill="#3fb950" opacity=".45"/>
+    <rect x="56" y="42" width="9" height="40" rx="2.5" fill="#f85149" opacity=".45"/>
+    <path d="M79 12a20 20 0 1 0 13 35 15 15 0 0 1 -13 -35z" fill="#ffb020"/>
+    <circle cx="81" cy="17" r="1.6" fill="#ffe3a3"/>
+    <circle cx="89" cy="25" r="1.1" fill="#ffe3a3"/>
+    <circle cx="76" cy="27" r="1" fill="#ffe3a3"/>
+  </svg>
+  <div class="molaBas">Programla ilgilenmeyi uzun bir süreliğine bırakıyoruz</div>
   <div class="molaSayi">
     <div class="molaKutu"><b>8145</b><span>güvenen kişi</span></div>
     <div class="molaKutu"><b>24</b><span>gün</span></div>
   </div>
   <div class="molaTsk">24 günde bizlere güvenen <b>8145 kişiye</b> teşekkür ederiz. 🙏</div>
-  <div class="molaAlt">Kısa bir süreliğine aradayız.</div>
+  <div class="molaAlt">Bu kez ara uzun sürecek, ne zaman döneceğimizi şu an söyleyemiyoruz. Sabrınız için teşekkürler.</div>
+  <button id="molaUlasBtn" class="molaUlasBtn">📩 Bize Ulaşın</button>
   <button id="molaCikBtn" style="display:none;margin-top:10px;background:var(--kart2);border:1px solid var(--ciz);color:var(--soluk);border-radius:9px;padding:7px 14px;font-size:11.5px;font-weight:700">👁️ önizlemeden çık</button>
 </div>
 
@@ -4723,12 +4736,30 @@ function molaGoster(){
       };
     }
   }else if(cb)cb.style.display="none";
+  /* 📩 Kapak ekranındaki "Bize Ulaşın" düğmesi — normal/süper üye de
+     dahil HERKESE açık. Kapağı geçici gizleyip formu açıyoruz; form
+     kapanınca aşağıdaki gözlemci kapağı otomatik geri getiriyor. */
+  var ub=el("molaUlasBtn");
+  if(ub&&!ub.dataset.bagli){
+    ub.dataset.bagli="1";
+    ub.onclick=function(){molaGizle();bizeUlasin()};
+  }
 }
 function molaGizle(){var m=el("molaEkran");if(m)m.classList.remove("acik")}
 function molaKontrolEt(){
   if(D&&!D.yon){molaGoster();return true}
   molaGizle();return false
 }
+/* 🔭 "Bize Ulaşın" katmanı (#katman) kapanınca, kapak hâlâ açık kalması
+   gerekiyorsa (D.yon false) otomatik geri getir. Böylece molaUlasBtn'den
+   açılan form kapatıldığında kullanıcı boş ekranda kalmaz. */
+(function(){
+  var K=el("katman");
+  if(!K||!window.MutationObserver)return;
+  new MutationObserver(function(){
+    if(!K.classList.contains("ac"))molaKontrolEt();
+  }).observe(K,{attributes:!0,attributeFilter:["class"]});
+})();
 /* ---------- GERİ / İLERİ ----------
    Uygulama tek sayfa olduğu için tarayıcı geçmişi yok; her ekran değişimi
    kendi yığınımıza yazılır. Telegram'ın kendi geri düğmesi de buna bağlanır:
