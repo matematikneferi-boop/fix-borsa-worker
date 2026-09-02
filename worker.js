@@ -1180,7 +1180,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-09-03-d · 🔍 Tavan Kombi'ye canlı tarama eklendi: her satırın altında artık \"🔍 Bu kombinasyonla şimdi tara\" butonu var — eskiden 🪜 Bölge/⬇️ Dip filtreleri her elemanda TEK ortak dilim dayattığı için \"1SA'de b3 VE 4SA'de b6\" gibi eleman-başına-farklı-dilim kombinasyonları canlı taramada kurulamıyordu; artık backtest raporundaki HERHANGİ bir satıra tıklayınca o kombinasyonu ŞU AN karşılayan hisseler listeleniyor (yeni /api/tavankombi/tara, mevcut tvkGunSnapUret'i kullanıyor — ek Yahoo isteği yok) · 2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -4230,27 +4230,6 @@ function tvkComboId(c){
   TVK_ELEMAN.forEach((e,i)=>{if(c[i])p.push(e+":"+c[i])});
   return p.join("+");
 }
-/* tvkComboId'nin tersi — rapordaki "dip382:1SA+b6:4SA" gibi bir id'yi
-   tekrar [null|"1SA"|"4SA",...] (TVK_ELEMAN sırasıyla) dizisine çevirir.
-   Canlı tarama (🔍 Bu kombinasyonla tara) burayı kullanır: kullanıcı
-   raporda gördüğü kombinasyonu ŞİMDİ hangi hisselerin karşıladığını
-   görmek istiyor ama ekrandaki 🪜 Bölge/⬇️ Dip filtreleri her bantta/
-   dilimde AYNI zaman dilimini dayattığı için "1SA'de b3 VE 4SA'de b6"
-   gibi eleman-başına-farklı-dilim şartlarını kuramıyordu — bu fonksiyon
-   ve aşağıdaki /api/tavankombi/tara o boşluğu dolduruyor. Geçersiz/
-   tanınmayan parça varsa null döner. */
-function tvkComboFromId(id){
-  if(typeof id!=="string"||!id)return null;
-  const c=TVK_ELEMAN.map(()=>null);
-  for(const parca of id.split("+")){
-    const ikili=parca.split(":");
-    if(ikili.length!==2)return null;
-    const idx=TVK_ELEMAN.indexOf(ikili[0]);
-    if(idx<0||TVK_TF.indexOf(ikili[1])<0)return null;
-    c[idx]=ikili[1];
-  }
-  return c.some(s=>s!==null)?c:null;
-}
 function tvkComboGecti(c,snap){
   for(let i=0;i<TVK_ELEMAN.length;i++){
     const tf=c[i];if(tf===null)continue;
@@ -6596,32 +6575,10 @@ function tavanKombiGoster(v){
        '<div class="btBar"><div class="btDolgu '+(ustu?"btYe":"btKr")+'" style="width:'+
          Math.max(2,Math.min(100,r.oran))+'%"></div></div>'+
        (r.azOrnek?'<div class="btAlt">⚠️ az örnek — henüz güvenilir değil</div>':'')+
-       (r.id?('<button class="tvkTaraBtn" data-tvkid="'+E(r.id)+'" style="margin-top:8px;background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">🔍 Bu kombinasyonla şimdi tara</button>'+
-        '<div class="tvkTaraSonuc" style="margin-top:6px;font-size:12px;color:#8b949e"></div>'):'')+
        '</div>';
   });
   h+='</div>';
   el("govde").innerHTML=h;
-  tvkTaraBagla();
-}
-/* 🔍 Bu kombinasyonla şimdi tara — bkz. /api/tavankombi/tara notu. Her
-   satırın kendi sonuç kutusuna (tvkTaraSonuc) yazar, sayfa yeniden
-   çizilmez. */
-function tvkTaraBagla(){
-  Array.prototype.forEach.call(document.querySelectorAll(".tvkTaraBtn"),function(b){
-    b.onclick=function(){
-      tit();
-      var kutu=b.nextElementSibling;
-      b.disabled=true;b.textContent="taranıyor…";
-      post("/api/tavankombi/tara",{id:b.dataset.tvkid}).then(function(v){
-        b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara";
-        if(!v||!v.ok){kutu.textContent=(v&&v.mesaj)||"taranamadı";return}
-        if(!v.sayi){kutu.textContent="şu anda bu kombinasyonu karşılayan hisse yok ("+v.taranan+" hisse tarandı)";return}
-        kutu.innerHTML="<b style=\"color:#e6edf3\">"+v.sayi+" hisse</b> şu anda bu kombinasyonu karşılıyor ("+v.taranan+" hisse tarandı):<br>"+
-          v.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3">'+E(k)+'</span>'}).join("");
-      }).catch(function(){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara";kutu.textContent="hata — tekrar dene"});
-    };
-  });
 }
 /* Dilim / tip / durum / mesafe / sıralama süzgeçleri: veri zaten yüklü,
    filtreleme tamamen tarayıcıda — yeni istek atılmaz. */
@@ -13143,23 +13100,6 @@ tavanKombiGecmisUrl:YON?(n+"/tavankombi/gecmis?key="+encodeURIComponent(i)):null
 if("/api/tavankombi"===$.pathname){
   const arsiv3=await tvkArsivOku(A);
   return new Response(JSON.stringify(tvkRaporUret(arsiv3)),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
-}
-/* 🔍 Bu kombinasyonla ŞİMDİ tara — Tavan Kombi raporundaki bir satırı
-   (örn. "b3:1SA+b6:4SA") canlı bir hisse taramasına çevirir. Backtest
-   yalnız GEÇMİŞ isabet oranını ölçer; kullanıcı "bu kombinasyon şu an
-   hangi hissede geçerli" sorusuna cevap istiyor — mevcut 🪜 Bölge/⬇️ Dip
-   filtreleri her elemanda tek bir ortak dilim dayattığı için bunu
-   kuramıyordu. tvkGunSnapUret zaten HER /push turunda güncel dip/bölge/
-   pivot durumunu üretiyor (ek Yahoo isteği yok) — burada yalnız o anlık
-   haritayı istenen kombinasyonla süzüyoruz. */
-if("/api/tavankombi/tara"===$.pathname){
-  if("POST"!==p.method)return new Response(JSON.stringify({ok:!1,mesaj:"POST bekleniyor"}),{status:405,headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
-  const gov5=await p.json().catch(()=>null);
-  const kombo=tvkComboFromId(gov5&&gov5.id);
-  if(!kombo)return new Response(JSON.stringify({ok:!1,mesaj:"geçersiz kombinasyon"}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
-  const snap5=await tvkGunSnapUret(A);
-  const kodlar5=Object.keys(snap5).filter(kod=>tvkComboGecti(kombo,snap5[kod])).sort();
-  return new Response(JSON.stringify({ok:!0,id:gov5.id,kodlar:kodlar5,sayi:kodlar5.length,taranan:Object.keys(snap5).length}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
 }
 if("/api/backtest"===$.pathname){
 const G3=await y(A),GD3=G3.gunler||{};
