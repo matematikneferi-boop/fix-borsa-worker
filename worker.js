@@ -1180,7 +1180,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -4156,35 +4156,62 @@ BUGUN_MU(e)&&(n+="🆕 <b>BUGÜN sinyal verdi</b>\n"),
 void 0!==e.giris&&null!==e.giris?n+="💵 Sinyal <b>"+a(e.giris)+"</b> → Şimdi <b>"+a(e.fiyat)+"</b>\n":n+="💵 Şimdi <b>"+a(e.fiyat)+"</b>\n";const i=I(e)
 ;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🧱 Hedef 1 <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+="🎯 Hedef 2 <b>"+a(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  🏆 <b>TUTTU</b>":"  ·  hedefe <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),n+="\n");const r=e.sinyalZaman||e.zaman
-;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}/* ═══════════════════ 🎯 TAVAN KOMBİ BACKTEST (2026-09-02 eklendi) ═══════════
-   Soru: DİP / SEVİYE BÖLGESİ / PİVOT KIRILIM — sistemde hatasız çalıştığı
-   doğrulanan ÜÇ modül — 1SA ve 4SA dilimlerinden kurulan (kapalı/1SA/4SA)^3
-   = 27 kombinasyondan (boş kombinasyon hariç 26) hangisi ERTESİ GÜN TAVAN
+;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}/* ═══════════════════ 🎯 TAVAN KOMBİ BACKTEST (2026-09-02 eklendi,
+   2026-09-03 GENİŞLETİLDİ) ═══════════
+   Soru: DİP (3 kademe) / SEVİYE BÖLGESİ (6 bant) / PİVOT KIRILIM — 1SA ve
+   4SA dilimlerinden kurulan (kapalı/1SA/4SA)^10 = 3^10 = 59.049
+   kombinasyondan (boş kombinasyon hariç 59.048) hangisi ERTESİ GÜN TAVAN
    (kapanış değişimi ≥ %TVK_ESIK) yapan hisseyi en iyi yakalıyor?
    (AYI/BOĞA ve ENERJİ KIRILIMI modülleri bilinçli olarak dışarıda
    bırakıldı — bu ikisi güvenilmez kabul edildiği için backteste katılmıyor.)
 
+   🔍 GENİŞLETME NOTU (2026-09-03): eskiden "dip" ve "bölge" birer TEK kaba
+   koşuldu — dip yalnız en sığ kademeyi (786 altı) test ediyordu, dip382/
+   dip236 hesaplanıp hiç backteste girmiyordu; bölge de 6 bandı (b1-b6) tek
+   "0-2.618 mi" sorusuna indirgiyordu. Artık DİP 3 ayrı eleman (dip/dip382/
+   dip236), BÖLGE 6 ayrı eleman (b1..b6) — TVK_ELEMAN artık 10 eleman.
+   Kaynak (mbMotor/mbTfOku) zaten dip382/dip236/oran hesaplıyordu, yeni bir
+   ölçüm YOK — yalnız daha önce backteste hiç girmeyen ayrımlar artık ayrı
+   ayrı sayılıyor.
+
+   ⚠️ VERİ SEYRELMESİ: 59.048 kombinasyona bölünen ~40.000 gözlemlik havuzda
+   çoğu satır TVK_ASGARI'nin (20) çok altında kalacak — bu satırlar "az
+   örnek" işaretli ve GÜVENİLMEZ sayılmalı; en üstteki birkaç yüz gözlemli
+   satırlara bile ihtiyatla bakılmalı (yüzlerce kombinasyon rastgele veride
+   bile parlak sonuç üretebilir — bkz. YK'daki aynı uyarı).
+
+   ⚙️ CPU KORUMASI: 59.048'i HER gözlemde tek tek gezmek (eski 26'lı yöntem)
+   Cloudflare'in CPU bütçesini fena patlatırdı. Onun yerine tvkGecenIdleriUret
+   yalnız o gözlemde GERÇEKTEN geçen dalları üretir — bir hissede aynı anda
+   genelde birkaç eleman/tf true olur (bölge bantları zaten birbirini
+   dışlar), pratikte üretilen kombinasyon sayısı gözlem başına birkaç yüzü
+   geçmez; 59.048'lik tam liste yalnız toplam sayıyı (kombiSayisi) göstermek
+   için bir kez kuruluyor, döngüde kullanılmıyor.
+
    NEDEN GERİYE DÖNÜK DEĞİL, BUGÜNDEN İTİBAREN BİRİKTİRME:
    dip/bölge motorlarını geçmişteki HER gün için 460+ hissede yeniden
    hesaplamak (dipbacktest'in TEK modülde bile dakikalar sürmesi gibi) burada
-   3 modül × 26 kombinasyon için bile Cloudflare'in tek istekte
-   kullanabileceği süre/alt-istek bütçesini aşar. Onun yerine, zaten HER
-   /push turunda elde var olan iki kaynak kullanılıyor — EK Yahoo isteği YOK:
+   Cloudflare'in tek istekte kullanabileceği süre/alt-istek bütçesini aşar.
+   Onun yerine, zaten HER /push turunda elde var olan iki kaynak kullanılıyor
+   — EK Yahoo isteği YOK:
      1) mbTfOku(A,"1SA"/"4SA").sonuc — arka plan taramasının o an biriktirdiği
         güncel dip/bölge durumu
      2) t.sozluk — /push ile gelen TÜM evrenin (460+) anlık fiyatı
    Gün kapanışına yakın (18:00 TRT sonrası, günde SADECE BİR KEZ) bu ikisi
-   birleştirilip 26 kombinasyonun sayaçlarına (n / isabet) eklenir — HAM
-   veri değil, yalnız sayaç (birkaç KB, YK'daki sayaç mantığıyla aynı).
+   birleştirilip geçen kombinasyonların sayaçlarına (n / isabet) eklenir —
+   HAM veri değil, yalnız sayaç (YK'daki sayaç mantığıyla aynı).
    Yani bugünden itibaren gün gün birikir; güvenilir olması için birkaç
    hafta gerekir (bkz. TVK_ASGARI — altındaki kombinasyonlar "az örnek"). */
-const TVK_ELEMAN=["dip","bolge","pivot"];
+const TVK_ELEMAN=["dip","dip382","dip236","b1","b2","b3","b4","b5","b6","pivot"];
 const TVK_TF=["1SA","4SA"];
 const TVK_ESIK=7;         /* tavan eşiği: gün kapanış değişimi ≥ bu yüzde */
 const TVK_ASGARI=20;      /* bu sayının altındaki kombinasyonlar "az örnek" */
 
-/* 3 eleman × (kapalı/1SA/4SA) = 3^3 = 27, boş (hepsi kapalı) hariç 26.
-   Her kombinasyon [null|"1SA"|"4SA", ...] (TVK_ELEMAN sırasıyla) dizisidir. */
+/* 10 eleman × (kapalı/1SA/4SA) = 3^10 = 59.049, boş (hepsi kapalı) hariç
+   59.048. Her kombinasyon [null|"1SA"|"4SA", ...] (TVK_ELEMAN sırasıyla)
+   dizisidir. Yalnız TOPLAM SAYIYI (kombiSayisi) göstermek için kuruluyor —
+   gözlem başına eşleştirme artık tvkGecenIdleriUret ile yapılıyor, bu
+   listenin tamamı taranmıyor (bkz. yukarıdaki CPU KORUMASI notu). */
 function tvkKombiler(){
   const out=[];
   (function rec(i,secim){
@@ -4197,7 +4224,7 @@ function tvkKombiler(){
   })(0,[]);
   return out;
 }
-const TVK_KOMBI=tvkKombiler();          /* sabit sırayla 242 kombinasyon */
+const TVK_KOMBI=tvkKombiler();          /* sabit sırayla 59.049 kombinasyon */
 function tvkComboId(c){
   const p=[];
   TVK_ELEMAN.forEach((e,i)=>{if(c[i])p.push(e+":"+c[i])});
@@ -4210,6 +4237,25 @@ function tvkComboGecti(c,snap){
     if(!g||!g[tf])return!1;
   }
   return!0;
+}
+/* Bir gözlemin GEÇTİĞİ TÜM kombinasyon id'lerini ÜRETİR — 59.048'i tek tek
+   gezip tvkComboGecti ile süzmek yerine, yalnız snap'te TRUE olan dallara
+   iner. "kapalı" (null) her elemanda koşulsuz bir seçenek olduğu için
+   üretilen kombinasyon sayısı = ürün_i(1 + o elemanda true olan tf sayısı)
+   — bölge bantları birbirini dışladığı ve dip kademeleri iç içe olduğu için
+   bu pratikte birkaç yüzü geçmez (bkz. GENİŞLETME/CPU KORUMASI notları). */
+function tvkGecenIdleriUret(snap){
+  const out=[];
+  (function rec(i,parcalar){
+    if(i===TVK_ELEMAN.length){
+      if(parcalar.length)out.push(parcalar.join("+"));
+      return;
+    }
+    rec(i+1,parcalar);
+    const el=TVK_ELEMAN[i],g=snap[el];
+    if(g)for(const tf of TVK_TF)if(g[tf])rec(i+1,parcalar.concat([el+":"+tf]));
+  })(0,[]);
+  return out;
 }
 
 /* PİVOT KIRILIM'ın KISA(=1SA)/ORTA(=4SA) karşılığı — server tarafında
@@ -4233,11 +4279,13 @@ async function tvkPivotBugunSeti(A){
   return out;
 }
 
-/* O anki evren için 5 modülün 1SA/4SA bayrak haritası.
-   dip/ab/bölge/enerji → mbTfOku'nun zaten hesapladığı x (mbMotor çıktısı).
-   "Herhangi biri" mantığı: DİP TARAMA→dip; AYI/BOĞA→rejim var mı (boğa ya
-   da ayı); SEVİYE BÖLGESİ→boğa VE 0–2.618 merdiven aralığında (b1–b4);
-   ENERJİ KIRILIMI→aktif ya da içinde bir bölge var. */
+/* O anki evren için TVK_ELEMAN'ın (dip/dip382/dip236/b1..b6/pivot) 1SA/4SA
+   bayrak haritası. dip/dip382/dip236 → mbTfOku'nun zaten hesapladığı x
+   (mbMotor çıktısı, aynı DBT_SEVIYE kademeleri). SEVİYE BÖLGESİ artık TEK
+   kaba koşul değil: MB_BOLGE_S'teki 6 bandın HER BİRİ (b1..b6) — mbBolgeGectiS
+   ile AYNI kural (boğa VE oran o bandın [alt,ust) aralığında) — kendi ayrı
+   elemanı. Bantlar birbirini dışladığı için bir tf'te en fazla bir bant
+   true olur. */
 async function tvkGunSnapUret(A){
   const tfVeri={};
   for(const t of TVK_TF)tfVeri[t]=((await mbTfOku(A,t))||{}).sonuc||{};
@@ -4246,13 +4294,17 @@ async function tvkGunSnapUret(A){
   TVK_TF.forEach(t=>Object.keys(tfVeri[t]).forEach(k=>kodlar.add(k)));
   const sonuc={};
   kodlar.forEach(kod=>{
-    const s={dip:{},ab:{},bolge:{},enerji:{}};
+    const s={dip:{},dip382:{},dip236:{},b1:{},b2:{},b3:{},b4:{},b5:{},b6:{}};
     for(const t of TVK_TF){
       const x=tfVeri[t][kod];
       s.dip[t]=!!(x&&x.dip);
-      s.ab[t]=!!(x&&(x.boga||x.ayi));
-      s.bolge[t]=!!(x&&x.boga&&isFinite(x.oran)&&x.oran>=0&&x.oran<2.618);
-      s.enerji[t]=!!(x&&(x.ezAct||x.ezIns));
+      s.dip382[t]=!!(x&&x.dip382);
+      s.dip236[t]=!!(x&&x.dip236);
+      const boga=!!(x&&x.boga),oran=x&&x.oran;
+      for(const bid in MB_BOLGE_S){
+        const b=MB_BOLGE_S[bid];
+        s[bid][t]=!!(boga&&isFinite(oran)&&oran>=b[0]&&oran<b[1]);
+      }
     }
     s.pivot=pivotBugun[kod]||{"1SA":!1,"4SA":!1};
     sonuc[kod]=s;
@@ -4300,9 +4352,7 @@ async function tvkGunSonuIsle(A,e){
     const tavan=degisim>=TVK_ESIK;
     if(tavan)tavanSayisi++;
     const s=snap[kod];if(!s)continue;
-    for(const c of TVK_KOMBI){
-      if(!tvkComboGecti(c,s))continue;
-      const id=tvkComboId(c);
+    for(const id of tvkGecenIdleriUret(s)){
       const say=arsiv.sayac[id]=arsiv.sayac[id]||{n:0,isabet:0};
       say.n++;if(tavan)say.isabet++;
     }
@@ -4400,19 +4450,28 @@ async function tvkGecmisHisseTara(A,kod,gp,yerel){
     const gunStr=tvkGunStrTR(g.time);
     const pivotGun=tvkPivotGunSetiCikar(gp,gunStr);
     const pv=pivotGun[kod]||{"1SA":!1,"4SA":!1};
+    /* dip/dip382/dip236 → mbMotor'un (canlı taramayla birebir aynı fonksiyon)
+       zaten hesapladığı 3 kademe. b1..b6 → MB_BOLGE_S'teki 6 bandın HER BİRİ,
+       tvkGunSnapUret'teki live hesapla AYNI kural (boğa VE oran o bandın
+       [alt,ust) aralığında). */
     const snap={
       dip:{"1SA":!!x1.dip,"4SA":!!x4.dip},
-      bolge:{"1SA":!!(x1.boga&&isFinite(x1.oran)&&x1.oran>=0&&x1.oran<2.618),
-             "4SA":!!(x4.boga&&isFinite(x4.oran)&&x4.oran>=0&&x4.oran<2.618)},
+      dip382:{"1SA":!!x1.dip382,"4SA":!!x4.dip382},
+      dip236:{"1SA":!!x1.dip236,"4SA":!!x4.dip236},
       pivot:pv
     };
+    for(const bid in MB_BOLGE_S){
+      const b=MB_BOLGE_S[bid];
+      snap[bid]={
+        "1SA":!!(x1.boga&&isFinite(x1.oran)&&x1.oran>=b[0]&&x1.oran<b[1]),
+        "4SA":!!(x4.boga&&isFinite(x4.oran)&&x4.oran>=b[0]&&x4.oran<b[1])
+      };
+    }
     const degisim=100*(yarin.close/g.close-1),tavan=degisim>=TVK_ESIK;
     yerel.tavanToplam+=tavan?1:0;
     yerel.karsilastirmaToplam+=1;
     yerel.gunSet[gunStr]=1;
-    for(const c of TVK_KOMBI){
-      if(!tvkComboGecti(c,snap))continue;
-      const id=tvkComboId(c);
+    for(const id of tvkGecenIdleriUret(snap)){
       const say=yerel.sayac[id]=yerel.sayac[id]||{n:0,isabet:0};
       say.n++;if(tavan)say.isabet++;
     }
@@ -6464,10 +6523,12 @@ function tavanKombiGoster(v){
   if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Henüz veri yok.</div>';return}
   var h='';
   h+='<div class="kutu"><h3>🎯 Tavan Kombi Backtest</h3>'+
-     '<div class="btAc">DİP · SEVİYE BÖLGESİ · PİVOT KIRILIM — '+
+     '<div class="btAc">DİP (3 kademe) · SEVİYE BÖLGESİ (6 bant) · PİVOT KIRILIM — '+
      '1SA/4SA açık-kapalı '+v.kombiSayisi+' kombinasyon. Tavan = gün kapanışı ≥%'+v.esik+
      '. Veri '+v.gun+' gündür (bugünden itibaren) birikiyor; '+v.asgari+
-     ' örnekten az olan satırlar "az örnek" işaretli, güvenilmez sayılmalı.</div>'+
+     ' örnekten az olan satırlar "az örnek" işaretli, güvenilmez sayılmalı. '+
+     '⚠️ Kombinasyon sayısı çok arttığı için üstteki satırlar bile az gözleme dayanabilir — '+
+     'gözlem sayısına dikkatle bak.</div>'+
      '<div class="ozIki">'+
        '<div class="ozKart"><div class="ozBuyuk">'+v.taban.toFixed(1)+'%</div>'+
          '<div class="ozAlt">genel taban (filtresiz tavan oranı)</div></div>'+
