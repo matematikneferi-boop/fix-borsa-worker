@@ -4157,31 +4157,33 @@ void 0!==e.giris&&null!==e.giris?n+="💵 Sinyal <b>"+a(e.giris)+"</b> → Şimd
 ;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🧱 Hedef 1 <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+="🎯 Hedef 2 <b>"+a(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  🏆 <b>TUTTU</b>":"  ·  hedefe <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),n+="\n");const r=e.sinyalZaman||e.zaman
 ;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}/* ═══════════════════ 🎯 TAVAN KOMBİ BACKTEST (2026-09-02 eklendi) ═══════════
-   Soru: DİP / AYI-BOĞA / SEVİYE BÖLGESİ / ENERJİ KIRILIMI / PİVOT KIRILIM
-   modüllerinin 1SA ve 4SA dilimlerinden kurulan (kapalı/1SA/4SA)^5 = 243
-   kombinasyondan (boş kombinasyon hariç 242) hangisi ERTESİ GÜN TAVAN
+   Soru: DİP / SEVİYE BÖLGESİ / PİVOT KIRILIM — sistemde hatasız çalıştığı
+   doğrulanan ÜÇ modül — 1SA ve 4SA dilimlerinden kurulan (kapalı/1SA/4SA)^3
+   = 27 kombinasyondan (boş kombinasyon hariç 26) hangisi ERTESİ GÜN TAVAN
    (kapanış değişimi ≥ %TVK_ESIK) yapan hisseyi en iyi yakalıyor?
+   (AYI/BOĞA ve ENERJİ KIRILIMI modülleri bilinçli olarak dışarıda
+   bırakıldı — bu ikisi güvenilmez kabul edildiği için backteste katılmıyor.)
 
    NEDEN GERİYE DÖNÜK DEĞİL, BUGÜNDEN İTİBAREN BİRİKTİRME:
-   571/enerji/bölge motorlarını geçmişteki HER gün için 460+ hissede yeniden
+   dip/bölge motorlarını geçmişteki HER gün için 460+ hissede yeniden
    hesaplamak (dipbacktest'in TEK modülde bile dakikalar sürmesi gibi) burada
-   5 modül × 242 kombinasyon için Cloudflare'in tek istekte kullanabileceği
-   süre/alt-istek bütçesini kat kat aşar. Onun yerine, zaten HER /push
-   turunda elde var olan iki kaynak kullanılıyor — EK Yahoo isteği YOK:
+   3 modül × 26 kombinasyon için bile Cloudflare'in tek istekte
+   kullanabileceği süre/alt-istek bütçesini aşar. Onun yerine, zaten HER
+   /push turunda elde var olan iki kaynak kullanılıyor — EK Yahoo isteği YOK:
      1) mbTfOku(A,"1SA"/"4SA").sonuc — arka plan taramasının o an biriktirdiği
-        güncel dip/ab/bölge/enerji durumu
+        güncel dip/bölge durumu
      2) t.sozluk — /push ile gelen TÜM evrenin (460+) anlık fiyatı
    Gün kapanışına yakın (18:00 TRT sonrası, günde SADECE BİR KEZ) bu ikisi
-   birleştirilip 242 kombinasyonun sayaçlarına (n / isabet) eklenir — HAM
+   birleştirilip 26 kombinasyonun sayaçlarına (n / isabet) eklenir — HAM
    veri değil, yalnız sayaç (birkaç KB, YK'daki sayaç mantığıyla aynı).
    Yani bugünden itibaren gün gün birikir; güvenilir olması için birkaç
    hafta gerekir (bkz. TVK_ASGARI — altındaki kombinasyonlar "az örnek"). */
-const TVK_ELEMAN=["dip","ab","bolge","enerji","pivot"];
+const TVK_ELEMAN=["dip","bolge","pivot"];
 const TVK_TF=["1SA","4SA"];
 const TVK_ESIK=7;         /* tavan eşiği: gün kapanış değişimi ≥ bu yüzde */
 const TVK_ASGARI=20;      /* bu sayının altındaki kombinasyonlar "az örnek" */
 
-/* 5 eleman × (kapalı/1SA/4SA) = 3^5 = 243, boş (hepsi kapalı) hariç 242.
+/* 3 eleman × (kapalı/1SA/4SA) = 3^3 = 27, boş (hepsi kapalı) hariç 26.
    Her kombinasyon [null|"1SA"|"4SA", ...] (TVK_ELEMAN sırasıyla) dizisidir. */
 function tvkKombiler(){
   const out=[];
@@ -4324,6 +4326,130 @@ function tvkRaporUret(arsiv){
   return{ok:!0,gun:arsiv.gun||0,sonGun:arsiv.sonGun||null,taban:taban,
     tavanToplam:arsiv.tavanToplam||0,karsilastirmaToplam:arsiv.karsilastirmaToplam||0,
     satirlar:satirlar,esik:TVK_ESIK,asgari:TVK_ASGARI,kombiSayisi:TVK_KOMBI.length};
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   🕰 TAVAN KOMBİ — GEÇMİŞ TARAMA (backfill)
+   tvkGunSonuIsle YALNIZ bugünden itibaren ileriye doğru birikir (bkz.
+   yukarıdaki not). Bu blok GEÇMİŞİ de aynı sayaç deposuna (tvkArsiv)
+   ekler, böylece rapor artık geçmiş + bugüne kadarki + bundan sonra
+   günlük eklenecek veriyi TEK yerde gösterir:
+     - DİP ve SEVİYE BÖLGESİ: mbMotor() ile (canlı taramayla BİREBİR
+       AYNI fonksiyon) gerçek geçmiş 60 dakikalık Yahoo barlarından
+       yeniden hesaplanır. 4SA, aynı 60dk barların mbGrupla(...,4) ile
+       gruplanmasıyla türetilir — canlı tarama nasıl çalışıyorsa aynısı.
+     - PİVOT KIRILIM: yeniden hesaplanmaz — zaten kalıcı olan "gecmis"
+       arşivi (y(A) → gp.gunler, ~90 günlük detay) üzerinden okunur.
+   Ağır bir iş olduğu için dipbacktest ile AYNI desen kullanılır: KV'de
+   kalıcı bir iş kuyruğu, /tavankombi/gecmis/adim ile parça parça
+   ilerletilir, tek istekte bütün evren taranmaz. */
+const TVK_GECMIS_ADIM=5;     /* bir adımda kaç hisse (her hisse 2 Yahoo isteği: 60dk + 1g) */
+const TVK_GECMIS_GUN=95;     /* geriye en fazla kaç günlük kapanış denenir */
+
+async function tvkGecmisIsOku(A){
+  if(!A.VERI)return null;
+  try{const j=await A.VERI.get("tvkGecmisIs");return j?JSON.parse(j):null}catch(_){return null}
+}
+async function tvkGecmisIsYaz(A,job){
+  if(!A.VERI)return;
+  try{await A.VERI.put("tvkGecmisIs",JSON.stringify(job),{expirationTtl:86400})}catch(_){}
+}
+/* tvkPivotBugunSeti'nin GENEL hâli — "bugün" yerine herhangi bir TR
+   takvim günü (YYYY-MM-DD) için kod→{1SA,4SA} pivot kırılım haritası. */
+function tvkPivotGunSetiCikar(gp,gunStr){
+  const out={};
+  const gun=gp.gunler&&gp.gunler[gunStr];if(!gun)return out;
+  for(const kk of Object.keys(gun.kayitlar||{})){
+    const rec=gun.kayitlar[kk],kod=rec.k;
+    const dilimAd=rec.l==="potansiyel"?"1SA":rec.l==="fibo"?"4SA":null;
+    if(!dilimAd||!kod)continue;
+    if(!out[kod])out[kod]={"1SA":!1,"4SA":!1};
+    out[kod][dilimAd]=!0;
+  }
+  return out;
+}
+function tvkGunStrTR(saniyeUnix){
+  return new Date(saniyeUnix*1000+108e5).toISOString().slice(0,10);
+}
+/* Boş yerel sayaç kabı — tvkArsiv ile AYNI şekil, iş bitince birleştirilir. */
+function tvkGecmisSayacYeni(){return{sayac:{},tavanToplam:0,karsilastirmaToplam:0,gunSet:{}}}
+
+/* Tek hissenin geçmişini tarar. m60/m4 üzerinde iki imleç (p1,p4) ile
+   ilerlenir — her gün için baştan filtrelemek yerine yalnız o günün
+   sonuna kadar olan son ~700 barlık pencere mbMotor'a verilir (canlı
+   taramanın MB_PENCERE=700 penceresiyle birebir aynı mantık). */
+async function tvkGecmisHisseTara(A,kod,gp,yerel){
+  const m60r=await yfMumlar(kod,"60m","2y");
+  const m60=(m60r&&m60r.veri)||[];
+  if(m60.length<50)return;
+  const m4=mbGrupla(m60,4);
+  const g1r=await yfMumlar(kod,"1d","6mo");
+  let g1=mbHayaletAt((g1r&&g1r.veri)||[]);
+  g1=g1.slice(-TVK_GECMIS_GUN);
+  let p1=-1,p4=-1;
+  for(let i=0;i<g1.length-1;i++){
+    const g=g1[i],yarin=g1[i+1];
+    if(!(g.close>0)||!(yarin.close>0))continue;
+    while(p1+1<m60.length&&m60[p1+1].time<=g.time)p1++;
+    while(p4+1<m4.length&&m4[p4+1].time<=g.time)p4++;
+    if(p1<24||p4<24)continue;                 /* mbMotor'un asgari 25 bar şartı */
+    const pencere1=m60.slice(Math.max(0,p1+1-700),p1+1);
+    const pencere4=m4.slice(Math.max(0,p4+1-700),p4+1);
+    const x1=mbMotor(pencere1),x4=mbMotor(pencere4);
+    if(!x1||!x4)continue;
+    const gunStr=tvkGunStrTR(g.time);
+    const pivotGun=tvkPivotGunSetiCikar(gp,gunStr);
+    const pv=pivotGun[kod]||{"1SA":!1,"4SA":!1};
+    const snap={
+      dip:{"1SA":!!x1.dip,"4SA":!!x4.dip},
+      bolge:{"1SA":!!(x1.boga&&isFinite(x1.oran)&&x1.oran>=0&&x1.oran<2.618),
+             "4SA":!!(x4.boga&&isFinite(x4.oran)&&x4.oran>=0&&x4.oran<2.618)},
+      pivot:pv
+    };
+    const degisim=100*(yarin.close/g.close-1),tavan=degisim>=TVK_ESIK;
+    yerel.tavanToplam+=tavan?1:0;
+    yerel.karsilastirmaToplam+=1;
+    yerel.gunSet[gunStr]=1;
+    for(const c of TVK_KOMBI){
+      if(!tvkComboGecti(c,snap))continue;
+      const id=tvkComboId(c);
+      const say=yerel.sayac[id]=yerel.sayac[id]||{n:0,isabet:0};
+      say.n++;if(tavan)say.isabet++;
+    }
+  }
+}
+/* İş tamamlanınca yerel sayacı KALICI tvkArsiv'e ekler — bundan sonra
+   tvkGunSonuIsle (bugünden itibaren) bunun ÜSTÜNE eklemeye devam eder. */
+async function tvkGecmisBirlestir(A,yerel){
+  const arsiv=await tvkArsivOku(A);
+  arsiv.sayac=arsiv.sayac||{};
+  for(const id in yerel.sayac){
+    const s=yerel.sayac[id],hedef=arsiv.sayac[id]=arsiv.sayac[id]||{n:0,isabet:0};
+    hedef.n+=s.n;hedef.isabet+=s.isabet;
+  }
+  arsiv.gun=(arsiv.gun||0)+Object.keys(yerel.gunSet||{}).length;
+  arsiv.tavanToplam=(arsiv.tavanToplam||0)+(yerel.tavanToplam||0);
+  arsiv.karsilastirmaToplam=(arsiv.karsilastirmaToplam||0)+(yerel.karsilastirmaToplam||0);
+  await tvkArsivYaz(A,arsiv);
+}
+function tvkGecmisIlerlemeHTML(anahtar){
+  return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tavan Kombi — Geçmiş Tarama</title>'+DBT_STIL+'</head><body>'+
+  '<h1>🕰 Tavan Kombi — geçmiş barlar taranıyor</h1>'+
+  '<div class="kur" style="border-color:#272e37;background:#161b22"><div id="ilerYazi" class="a">başlıyor…</div>'+
+  '<div style="background:#0d1117;border:1px solid #272e37;border-radius:8px;height:14px;margin-top:8px;overflow:hidden">'+
+  '<div id="ilerBar" style="background:#388bfd;height:100%;width:0%"></div></div></div>'+
+  '<div class="a" style="margin-top:10px">Bu sayfayı açık bırak — bitince uygulamadaki 🎯 Tavan Kombi sekmesi geçmiş verilerle dolu görünecek. Sekmeyi kapatırsan iş KV üzerinde kalır, sayfayı yeniden açınca kaldığı yerden devam eder.</div>'+
+  '<script>'+
+  'var key='+JSON.stringify(anahtar||'')+';'+
+  'function adim(){fetch("/tavankombi/gecmis/adim?key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(v){'+
+  'if(!v||!v.ok){document.getElementById("ilerYazi").textContent="hata — sayfayı yenile";return}'+
+  'var pct=v.toplam?Math.round(100*v.tamam/v.toplam):0;'+
+  'document.getElementById("ilerBar").style.width=pct+"%";'+
+  'document.getElementById("ilerYazi").textContent=v.tamam+" / "+v.toplam+" hisse tarandı ("+pct+"%)"+(v.gunToplam?" · "+v.gunToplam+" gün-gözlem":"");'+
+  'if(v.tamamlandi){document.getElementById("ilerYazi").textContent+=" — tamamlandı! 🎯 Tavan Kombi sekmesine dönebilirsin.";}else{setTimeout(adim,300)}'+
+  '}).catch(function(){setTimeout(adim,2000)})}'+
+  'adim();'+
+  '</script></body></html>';
 }
 
 const MINIAPP=`<!doctype html><html lang="tr"><head>
@@ -6284,10 +6410,10 @@ function mesafeManuelBagla(){
   var t=el("mesafeManuelTemizle");
   if(t)t.onclick=function(){tit();fMesafeManuel=null;kamaGoster()};
 }
-/* 🎯 TAVAN KOMBİ — DİP/AYI-BOĞA/SEVİYE BÖLGESİ/ENERJİ KIRILIMI/PİVOT KIRILIM
-   modüllerinin 1SA/4SA kombinasyonlarından hangisi tavan (≥%7 kapanış)
-   yapan hisseyi en iyi yakalıyor. Veri bugünden itibaren gün gün birikir —
-   bkz. sunucudaki tvkGunSonuIsle. Yalnız yönetici görür. */
+/* 🎯 TAVAN KOMBİ — DİP/SEVİYE BÖLGESİ/PİVOT KIRILIM modüllerinin 1SA/4SA
+   kombinasyonlarından hangisi tavan (≥%7 kapanış) yapan hisseyi en iyi
+   yakalıyor. Veri bugünden itibaren gün gün birikir — bkz. sunucudaki
+   tvkGunSonuIsle. Yalnız yönetici görür. */
 var tkD=null;
 function tavanKombiCiz(){
   if(tkD){tavanKombiGoster(tkD);return}
@@ -6299,7 +6425,7 @@ function tavanKombiGoster(v){
   if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Henüz veri yok.</div>';return}
   var h='';
   h+='<div class="kutu"><h3>🎯 Tavan Kombi Backtest</h3>'+
-     '<div class="btAc">DİP · AYI/BOĞA · SEVİYE BÖLGESİ · ENERJİ KIRILIMI · PİVOT KIRILIM — '+
+     '<div class="btAc">DİP · SEVİYE BÖLGESİ · PİVOT KIRILIM — '+
      '1SA/4SA açık-kapalı '+v.kombiSayisi+' kombinasyon. Tavan = gün kapanışı ≥%'+v.esik+
      '. Veri '+v.gun+' gündür (bugünden itibaren) birikiyor; '+v.asgari+
      ' örnekten az olan satırlar "az örnek" işaretli, güvenilmez sayılmalı.</div>'+
@@ -11574,6 +11700,42 @@ if("/dipbacktest/rapor"===$.pathname){
     ozet:ozet,semboller:job.semboller,sure:sure,
     toplamGiris:job.sonuclar.length,anahtar:anahtar}),{headers:{"content-type":"text/html; charset=utf-8"}})
 }
+if("/tavankombi/gecmis"===$.pathname){
+  /* 🕰 Tavan Kombi'nin GEÇMİŞİ — bkz. tvkGecmisHisseTara. Panelle aynı kapı. */
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
+  const anahtar=$.searchParams.get("key")||$.searchParams.get("t")||"";
+  const mevcutIs=await tvkGecmisIsOku(A);
+  if(mevcutIs&&!mevcutIs.tamamlandi)
+    return new Response(tvkGecmisIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+  const evren=await mbEvren(A,[]);
+  const job={anahtar:anahtar,kuyruk:evren.slice(),toplam:evren.length,tamam:0,gunToplam:0,
+    yerel:tvkGecmisSayacYeni(),baslangic:Date.now(),guncelleme:Date.now(),tamamlandi:!1};
+  await tvkGecmisIsYaz(A,job);
+  return new Response(tvkGecmisIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
+}
+if("/tavankombi/gecmis/adim"===$.pathname){
+  const kk=await kapiKontrol(A,$,p,!0);
+  if(!kk.ok)return new Response(JSON.stringify({ok:!1,mesaj:kk.mesaj||"yetkisiz"}),{status:kk.kod||401,headers:{"content-type":"application/json"}});
+  const job=await tvkGecmisIsOku(A);
+  if(!job)return new Response(JSON.stringify({ok:!1,mesaj:"aktif tarama yok"}),{headers:{"content-type":"application/json"}});
+  if(!job.tamamlandi&&job.kuyruk.length){
+    const grup=job.kuyruk.splice(0,TVK_GECMIS_ADIM);
+    const gp=await y(A);
+    for(const kod of grup){
+      try{await tvkGecmisHisseTara(A,kod,gp,job.yerel)}catch(_){}
+    }
+    job.tamam+=grup.length;
+    job.gunToplam=Object.keys(job.yerel.gunSet||{}).length;
+    job.guncelleme=Date.now();
+    if(!job.kuyruk.length){
+      job.tamamlandi=!0;
+      await tvkGecmisBirlestir(A,job.yerel);
+    }
+    await tvkGecmisIsYaz(A,job);
+  }
+  return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:job.tamamlandi,gunToplam:job.gunToplam}),{headers:{"content-type":"application/json"}})
+}
 if("/yesil"===$.pathname){
   const kk=await kapiKontrol(A,$,p,!0);
   if(!kk.ok)return new Response(kk.mesaj||"yetkisiz",{status:kk.kod||401});
@@ -12794,7 +12956,8 @@ const kurulusGun=Math.max(1,Math.round((new Date(bg)-new Date(KURULUS))/864e5));
 const cikti=JS({ok:!0,donem:{h1:olc(7),a1:olc(30),a3:olc(90),y1:olc(365)},
 kurulus:{tarih:KURULUS,gun:kurulusGun,ist:olc(kurulusGun)},
 ayar:PA,elenenAykiri:elenenAykiri,elenenTaze:elenenTaze,yonetici:!!YON,
-guncelleme:G2.guncelleme||null,dipbacktestUrl:YON?(n+"/dipbacktest?key="+encodeURIComponent(i)):null});return cikti}
+guncelleme:G2.guncelleme||null,dipbacktestUrl:YON?(n+"/dipbacktest?key="+encodeURIComponent(i)):null,
+tavanKombiGecmisUrl:YON?(n+"/tavankombi/gecmis?key="+encodeURIComponent(i)):null});return cikti}
 /* ═══════════════════ 📊 BACKTEST — DÜRÜST ÖLÇÜM ═══════════════════
    İLK SÜRÜM ÜÇ AYRI YERDE YANLIŞTI, HEPSİ BURADA DÜZELTİLDİ:
 
@@ -12999,7 +13162,8 @@ return JS({ok:!0,uye:st.toplam||0,aktif24:Object.values(kl).filter(x=>x.son&&sim
 super:sup,engel:eng.length,depo:!!A.VERI,
 guncelleme:L2&&L2.guncelleme?new Date(L2.guncelleme).toLocaleString("tr-TR"):null,
 ozet:L2&&L2.kartlar?Object.keys(L2.kartlar).filter(x=>"sira"!==x).map(x=>({ad:x,n:L2.kartlar[x].length})):[],
-sonYayin:sy,panelUrl:r(),dipbacktestUrl:n+"/dipbacktest?key="+encodeURIComponent(i),gbYeni:gbYeni})}
+sonYayin:sy,panelUrl:r(),dipbacktestUrl:n+"/dipbacktest?key="+encodeURIComponent(i),
+tavanKombiGecmisUrl:n+"/tavankombi/gecmis?key="+encodeURIComponent(i),gbYeni:gbYeni})}
 if("geribildirimler"===is){
 /* 📩 Geri bildirimleri sistem içinden okuma — mini panelde "Bize Ulaşın"
    kutusu. Açılışta son okunma zamanı güncellenir, işaret (🔔) söner. */
