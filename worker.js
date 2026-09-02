@@ -4418,16 +4418,23 @@ async function tvkGecmisHisseTara(A,kod,gp,yerel){
     }
   }
 }
-/* İş tamamlanınca yerel sayacı KALICI tvkArsiv'e ekler — bundan sonra
-   tvkGunSonuIsle (bugünden itibaren) bunun ÜSTÜNE eklemeye devam eder. */
-async function tvkGecmisBirlestir(A,yerel){
+/* İş tamamlanınca (veya artık her adımda — canlı sonuç için) yerel
+   sayacı KALICI tvkArsiv'e ekler. sayac/tavanToplam/karsilastirmaToplam
+   her (gün,hisse) çiftinde tam bir kez sayıldığı için adım adım
+   eklemek güvenlidir (çakışma yok). "gun" ise FARKLI gün SAYISI olduğu
+   için öyle değil — 434 hissenin çoğu aynı ~94 günü paylaştığından her
+   adımda yerel.gunSet neredeyse aynı günleri içerir; bunu adım adım
+   toplarsak gün sayısı katbekat şişer. Bu yüzden "gun" için çağıran
+   taraf sadece o ana kadar hiç görülmemiş YENİ gün sayısını
+   (gunYeniSayisi) ayrıca hesaplayıp geçirir. */
+async function tvkGecmisBirlestir(A,yerel,gunYeniSayisi){
   const arsiv=await tvkArsivOku(A);
   arsiv.sayac=arsiv.sayac||{};
   for(const id in yerel.sayac){
     const s=yerel.sayac[id],hedef=arsiv.sayac[id]=arsiv.sayac[id]||{n:0,isabet:0};
     hedef.n+=s.n;hedef.isabet+=s.isabet;
   }
-  arsiv.gun=(arsiv.gun||0)+Object.keys(yerel.gunSet||{}).length;
+  arsiv.gun=(arsiv.gun||0)+(gunYeniSayisi==null?Object.keys(yerel.gunSet||{}).length:gunYeniSayisi);
   arsiv.tavanToplam=(arsiv.tavanToplam||0)+(yerel.tavanToplam||0);
   arsiv.karsilastirmaToplam=(arsiv.karsilastirmaToplam||0)+(yerel.karsilastirmaToplam||0);
   await tvkArsivYaz(A,arsiv);
@@ -11731,12 +11738,22 @@ if("/tavankombi/gecmis/adim"===$.pathname){
       try{await tvkGecmisHisseTara(A,kod,gp,job.yerel)}catch(_){}
     }
     job.tamam+=grup.length;
-    job.gunToplam=Object.keys(job.yerel.gunSet||{}).length;
     job.guncelleme=Date.now();
-    if(!job.kuyruk.length){
-      job.tamamlandi=!0;
-      await tvkGecmisBirlestir(A,job.yerel);
+    /* 🔴 Canlı sonuç: her adımda o adımın verisi kalıcı tvkArsiv'e
+       eklenir ve yerel sayaç sıfırlanır — böylece iş %100 bitmeden de
+       uygulamadaki Tavan Kombi sekmesi o ana kadar taranmış olan
+       kısımla güncel görünür. "gun" sayısının şişmemesi için job
+       üzerinde hiç sıfırlanmayan tumGunSet'te daha önce görülmemiş
+       günler ayrıca sayılıp öyle eklenir. */
+    job.tumGunSet=job.tumGunSet||{};
+    let gunYeni=0;
+    for(const gg of Object.keys(job.yerel.gunSet||{})){
+      if(!job.tumGunSet[gg]){job.tumGunSet[gg]=1;gunYeni++}
     }
+    await tvkGecmisBirlestir(A,job.yerel,gunYeni);
+    job.gunToplam=Object.keys(job.tumGunSet).length;
+    job.yerel=tvkGecmisSayacYeni();
+    if(!job.kuyruk.length)job.tamamlandi=!0;
     await tvkGecmisIsYaz(A,job);
   }
   return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:job.tamamlandi,gunToplam:job.gunToplam}),{headers:{"content-type":"application/json"}})
