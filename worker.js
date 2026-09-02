@@ -4156,7 +4156,177 @@ BUGUN_MU(e)&&(n+="🆕 <b>BUGÜN sinyal verdi</b>\n"),
 void 0!==e.giris&&null!==e.giris?n+="💵 Sinyal <b>"+a(e.giris)+"</b> → Şimdi <b>"+a(e.fiyat)+"</b>\n":n+="💵 Şimdi <b>"+a(e.fiyat)+"</b>\n";const i=I(e)
 ;null!==i&&(n+=(i>=0?"🟢":"🔴")+" Sinyalden bu yana: <b>"+(i>=0?"+":"")+i.toFixed(2)+"%</b>\n"),null!=e.tetik&&(n+="🔓 Tetik <b>"+a(e.tetik)+"</b>"+(null!=e.tetikYuzde?"  ·  "+(e.tetikYuzde>=0?"+":"")+Number(e.tetikYuzde).toFixed(1)+"% kaldı":"")+"\n"),null!=e.hedef1&&(n+="🧱 Hedef 1 <b>"+a(e.hedef1)+"</b>"+(null!=e.hedef1Yuzde?"  ·  <b>+"+Number(e.hedef1Yuzde).toFixed(1)+"%</b>":"")+"\n"),void 0!==e.hedef&&null!==e.hedef&&(n+="🎯 Hedef 2 <b>"+a(e.hedef)+"</b>",
 void 0!==e.potansiyel&&null!==e.potansiyel&&(n+=Number(e.potansiyel)<=0?"  ·  🏆 <b>TUTTU</b>":"  ·  hedefe <b>+"+Number(e.potansiyel).toFixed(1)+"%</b>"),n+="\n");const r=e.sinyalZaman||e.zaman
-;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}const MINIAPP=`<!doctype html><html lang="tr"><head>
+;return r&&(n+="🕐 <i>"+r+"</i>\n"),n}(s[e],c+t+1)}),o+="━━━━━━━━━━━━━━━━\n<i>Hisse düğmesine dokun, tam detayını gör.</i>\n",o+="<i>⚠️ Yatırım tavsiyesi değildir.</i>",o}/* ═══════════════════ 🎯 TAVAN KOMBİ BACKTEST (2026-09-02 eklendi) ═══════════
+   Soru: DİP / AYI-BOĞA / SEVİYE BÖLGESİ / ENERJİ KIRILIMI / PİVOT KIRILIM
+   modüllerinin 1SA ve 4SA dilimlerinden kurulan (kapalı/1SA/4SA)^5 = 243
+   kombinasyondan (boş kombinasyon hariç 242) hangisi ERTESİ GÜN TAVAN
+   (kapanış değişimi ≥ %TVK_ESIK) yapan hisseyi en iyi yakalıyor?
+
+   NEDEN GERİYE DÖNÜK DEĞİL, BUGÜNDEN İTİBAREN BİRİKTİRME:
+   571/enerji/bölge motorlarını geçmişteki HER gün için 460+ hissede yeniden
+   hesaplamak (dipbacktest'in TEK modülde bile dakikalar sürmesi gibi) burada
+   5 modül × 242 kombinasyon için Cloudflare'in tek istekte kullanabileceği
+   süre/alt-istek bütçesini kat kat aşar. Onun yerine, zaten HER /push
+   turunda elde var olan iki kaynak kullanılıyor — EK Yahoo isteği YOK:
+     1) mbTfOku(A,"1SA"/"4SA").sonuc — arka plan taramasının o an biriktirdiği
+        güncel dip/ab/bölge/enerji durumu
+     2) t.sozluk — /push ile gelen TÜM evrenin (460+) anlık fiyatı
+   Gün kapanışına yakın (18:00 TRT sonrası, günde SADECE BİR KEZ) bu ikisi
+   birleştirilip 242 kombinasyonun sayaçlarına (n / isabet) eklenir — HAM
+   veri değil, yalnız sayaç (birkaç KB, YK'daki sayaç mantığıyla aynı).
+   Yani bugünden itibaren gün gün birikir; güvenilir olması için birkaç
+   hafta gerekir (bkz. TVK_ASGARI — altındaki kombinasyonlar "az örnek"). */
+const TVK_ELEMAN=["dip","ab","bolge","enerji","pivot"];
+const TVK_TF=["1SA","4SA"];
+const TVK_ESIK=7;         /* tavan eşiği: gün kapanış değişimi ≥ bu yüzde */
+const TVK_ASGARI=20;      /* bu sayının altındaki kombinasyonlar "az örnek" */
+
+/* 5 eleman × (kapalı/1SA/4SA) = 3^5 = 243, boş (hepsi kapalı) hariç 242.
+   Her kombinasyon [null|"1SA"|"4SA", ...] (TVK_ELEMAN sırasıyla) dizisidir. */
+function tvkKombiler(){
+  const out=[];
+  (function rec(i,secim){
+    if(i===TVK_ELEMAN.length){
+      if(secim.some(s=>s!==null))out.push(secim.slice());
+      return;
+    }
+    rec(i+1,secim.concat([null]));
+    for(const tf of TVK_TF)rec(i+1,secim.concat([tf]));
+  })(0,[]);
+  return out;
+}
+const TVK_KOMBI=tvkKombiler();          /* sabit sırayla 242 kombinasyon */
+function tvkComboId(c){
+  const p=[];
+  TVK_ELEMAN.forEach((e,i)=>{if(c[i])p.push(e+":"+c[i])});
+  return p.join("+");
+}
+function tvkComboGecti(c,snap){
+  for(let i=0;i<TVK_ELEMAN.length;i++){
+    const tf=c[i];if(tf===null)continue;
+    const g=snap[TVK_ELEMAN[i]];
+    if(!g||!g[tf])return!1;
+  }
+  return!0;
+}
+
+/* PİVOT KIRILIM'ın KISA(=1SA)/ORTA(=4SA) karşılığı — server tarafında
+   canlı "kartlar" yerine zaten kalıcı olan "gecmis" arşivi kullanılır:
+   BUGÜN o gün-kaydında İLK KEZ görülen kod@dilim = o gün kırılım olmuş
+   demektir (mbPivotHaritasiS'in canlı halinin geçmişe dönük eşdeğeri). */
+async function tvkPivotBugunSeti(A){
+  const out={};
+  try{
+    const gp=await y(A);
+    const d2=new Date(Date.now()+108e5),i=d2.toISOString().slice(0,10);
+    const gun=gp.gunler&&gp.gunler[i];if(!gun)return out;
+    for(const kk of Object.keys(gun.kayitlar||{})){
+      const rec=gun.kayitlar[kk],kod=rec.k;
+      const dilimAd=rec.l==="potansiyel"?"1SA":rec.l==="fibo"?"4SA":null;
+      if(!dilimAd||!kod)continue;
+      if(!out[kod])out[kod]={"1SA":!1,"4SA":!1};
+      out[kod][dilimAd]=!0;
+    }
+  }catch(_){}
+  return out;
+}
+
+/* O anki evren için 5 modülün 1SA/4SA bayrak haritası.
+   dip/ab/bölge/enerji → mbTfOku'nun zaten hesapladığı x (mbMotor çıktısı).
+   "Herhangi biri" mantığı: DİP TARAMA→dip; AYI/BOĞA→rejim var mı (boğa ya
+   da ayı); SEVİYE BÖLGESİ→boğa VE 0–2.618 merdiven aralığında (b1–b4);
+   ENERJİ KIRILIMI→aktif ya da içinde bir bölge var. */
+async function tvkGunSnapUret(A){
+  const tfVeri={};
+  for(const t of TVK_TF)tfVeri[t]=((await mbTfOku(A,t))||{}).sonuc||{};
+  const pivotBugun=await tvkPivotBugunSeti(A);
+  const kodlar=new Set();
+  TVK_TF.forEach(t=>Object.keys(tfVeri[t]).forEach(k=>kodlar.add(k)));
+  const sonuc={};
+  kodlar.forEach(kod=>{
+    const s={dip:{},ab:{},bolge:{},enerji:{}};
+    for(const t of TVK_TF){
+      const x=tfVeri[t][kod];
+      s.dip[t]=!!(x&&x.dip);
+      s.ab[t]=!!(x&&(x.boga||x.ayi));
+      s.bolge[t]=!!(x&&x.boga&&isFinite(x.oran)&&x.oran>=0&&x.oran<2.618);
+      s.enerji[t]=!!(x&&(x.ezAct||x.ezIns));
+    }
+    s.pivot=pivotBugun[kod]||{"1SA":!1,"4SA":!1};
+    sonuc[kod]=s;
+  });
+  return sonuc;
+}
+
+async function tvkArsivOku(A){
+  if(!A.VERI)return{gun:0,sayac:{}};
+  try{const j=await A.VERI.get("tvkArsiv");if(j)return JSON.parse(j)}catch(_){}
+  return{gun:0,sayac:{}};
+}
+async function tvkArsivYaz(A,v){if(A.VERI)try{await A.VERI.put("tvkArsiv",JSON.stringify(v))}catch(_){}}
+async function tvkOncekiFiyatOku(A){
+  if(!A.VERI)return{};
+  try{const j=await A.VERI.get("tvkOncekiFiyat");if(j)return JSON.parse(j)}catch(_){}
+  return{};
+}
+async function tvkOncekiFiyatYaz(A,v){if(A.VERI)try{await A.VERI.put("tvkOncekiFiyat",JSON.stringify(v))}catch(_){}}
+
+/* Gün sonu — günde YALNIZ BİR KEZ çalışır (18:00 TRT sonrası ilk /push).
+   e = /push gövdesi (e.sozluk = tüm evrenin o anki fiyatı). Kilit dışarıda
+   (kilitli(...)) alınır, burada yalnız tvkSonGun bayrağı ile tekrar korunur. */
+async function tvkGunSonuIsle(A,e){
+  if(!A.VERI||!e||!e.sozluk)return;
+  const d2=new Date(Date.now()+108e5),i=d2.toISOString().slice(0,10),saat=d2.getUTCHours();
+  if(saat<18)return;                     /* kapanışa yakın bekle */
+  let bayrak=null;
+  try{bayrak=await A.VERI.get("tvkSonGun")}catch(_){}
+  if(bayrak===i)return;                  /* bugün zaten işlendi */
+  const yeniFiyat={};
+  for(const kod of Object.keys(e.sozluk)){
+    const z=e.sozluk[kod];if(z&&z.f>0)yeniFiyat[kod]=Number(z.f);
+  }
+  const oncekiFiyat=await tvkOncekiFiyatOku(A);
+  const snap=await tvkGunSnapUret(A);
+  const arsiv=await tvkArsivOku(A);
+  arsiv.sayac=arsiv.sayac||{};
+  let tavanSayisi=0,karsilastirma=0;
+  for(const kod of Object.keys(yeniFiyat)){
+    const eski=oncekiFiyat[kod];
+    if(!(eski>0))continue;                       /* ilk gün — kıyas yok */
+    karsilastirma++;
+    const degisim=100*(yeniFiyat[kod]/eski-1);
+    const tavan=degisim>=TVK_ESIK;
+    if(tavan)tavanSayisi++;
+    const s=snap[kod];if(!s)continue;
+    for(const c of TVK_KOMBI){
+      if(!tvkComboGecti(c,s))continue;
+      const id=tvkComboId(c);
+      const say=arsiv.sayac[id]=arsiv.sayac[id]||{n:0,isabet:0};
+      say.n++;if(tavan)say.isabet++;
+    }
+  }
+  arsiv.gun=(arsiv.gun||0)+1;
+  arsiv.tavanToplam=(arsiv.tavanToplam||0)+tavanSayisi;
+  arsiv.karsilastirmaToplam=(arsiv.karsilastirmaToplam||0)+karsilastirma;
+  arsiv.sonGun=i;
+  await tvkArsivYaz(A,arsiv);
+  await tvkOncekiFiyatYaz(A,yeniFiyat);
+  try{await A.VERI.put("tvkSonGun",i)}catch(_){}
+}
+
+function tvkRaporUret(arsiv){
+  const satirlar=Object.keys(arsiv.sayac||{}).map(id=>{
+    const s=arsiv.sayac[id];
+    return{id:id,n:s.n,isabet:s.isabet,
+      oran:s.n?100*s.isabet/s.n:0,azOrnek:s.n<TVK_ASGARI};
+  }).sort((a,b)=>b.oran-a.oran||b.n-a.n);
+  const taban=arsiv.karsilastirmaToplam?100*(arsiv.tavanToplam||0)/arsiv.karsilastirmaToplam:0;
+  return{ok:!0,gun:arsiv.gun||0,sonGun:arsiv.sonGun||null,taban:taban,
+    tavanToplam:arsiv.tavanToplam||0,karsilastirmaToplam:arsiv.karsilastirmaToplam||0,
+    satirlar:satirlar,esik:TVK_ESIK,asgari:TVK_ASGARI,kombiSayisi:TVK_KOMBI.length};
+}
+
+const MINIAPP=`<!doctype html><html lang="tr"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Fix Borsa Sinyal</title>
@@ -4794,6 +4964,7 @@ function ekranAdi(){
   if(sekme==="portfoy")return"💼 Portföyüm";
   if(sekme==="preset")return"🎛 Hazır filtreler";
   if(sekme==="backtest")return"📊 Backtest";
+  if(sekme==="tavankombi")return"🎯 Tavan Kombi";
   if(sekme==="temel")return"📋 Temel Analiz";
   if(sekme==="yardim")return"❓ Rozetler ve Sekmeler";
   if(sekme==="alarm")return"🔔 Anlık Alarm";
@@ -4809,7 +4980,7 @@ function ekranAdi(){
    (backtest/yesil/panel/hata/sag) yönetici değilse listeden çıkar. */
 function sekmeSirasi(){
   var l=["potansiyel","fibo","uzunvade","kama","malboga","temel","aday","alarm","rot"];
-  if(D&&D.yon)l.push("backtest");
+  if(D&&D.yon)l.push("backtest","tavankombi");
   l.push("fav","portfoy","preset","abs","ortaklik","fonlar");
   if(D&&D.yon)l.push("yesil","panel","hata","sag");
   return l;
@@ -5038,6 +5209,7 @@ function sekCiz(){
   ]);
   if(D&&D.yon)s+=grup("⚙️ Yönetim",[
     b("backtest","nötr",'📊 Backtest 🔐'),
+    b("tavankombi","nötr",'🎯 Tavan Kombi 🔐'),
     b("yesil","nötr",'📐 Fibo Aralığı Ölçüm İstasyonu 🔐'),
     b("panel","nötr",'🛠 Panel'),
     b("hata","nötr",'🩺 Hatalar'),
@@ -5114,6 +5286,7 @@ function ciz(){
   if(sekme==="portfoy")return portfoyCiz();
   if(sekme==="preset")return presetCiz();
   if(sekme==="backtest")return backtestCiz();
+  if(sekme==="tavankombi")return tavanKombiCiz();
   if(sekme==="temel")return temelCiz();
   if(sekme==="yardim")return yardimCiz();
   if(sekme==="aday")return adayCiz();
@@ -6110,6 +6283,50 @@ function mesafeManuelBagla(){
   kutu.onkeydown=function(e){if(e.key==="Enter")uygula()};
   var t=el("mesafeManuelTemizle");
   if(t)t.onclick=function(){tit();fMesafeManuel=null;kamaGoster()};
+}
+/* 🎯 TAVAN KOMBİ — DİP/AYI-BOĞA/SEVİYE BÖLGESİ/ENERJİ KIRILIMI/PİVOT KIRILIM
+   modüllerinin 1SA/4SA kombinasyonlarından hangisi tavan (≥%7 kapanış)
+   yapan hisseyi en iyi yakalıyor. Veri bugünden itibaren gün gün birikir —
+   bkz. sunucudaki tvkGunSonuIsle. Yalnız yönetici görür. */
+var tkD=null;
+function tavanKombiCiz(){
+  if(tkD){tavanKombiGoster(tkD);return}
+  el("govde").innerHTML='<div class="yukleniyor">birikim okunuyor…</div>';
+  post("/api/tavankombi",{}).then(function(v){tkD=v;tavanKombiGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Okunamadı.</div>'});
+}
+function tavanKombiGoster(v){
+  if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Henüz veri yok.</div>';return}
+  var h='';
+  h+='<div class="kutu"><h3>🎯 Tavan Kombi Backtest</h3>'+
+     '<div class="btAc">DİP · AYI/BOĞA · SEVİYE BÖLGESİ · ENERJİ KIRILIMI · PİVOT KIRILIM — '+
+     '1SA/4SA açık-kapalı '+v.kombiSayisi+' kombinasyon. Tavan = gün kapanışı ≥%'+v.esik+
+     '. Veri '+v.gun+' gündür (bugünden itibaren) birikiyor; '+v.asgari+
+     ' örnekten az olan satırlar "az örnek" işaretli, güvenilmez sayılmalı.</div>'+
+     '<div class="ozIki">'+
+       '<div class="ozKart"><div class="ozBuyuk">'+v.taban.toFixed(1)+'%</div>'+
+         '<div class="ozAlt">genel taban (filtresiz tavan oranı)</div></div>'+
+       '<div class="ozKart"><div class="ozBuyuk">'+v.tavanToplam+'</div>'+
+         '<div class="ozAlt">toplam tavan gözlemi</div></div>'+
+     '</div></div>';
+  if(!v.satirlar||!v.satirlar.length){
+    h+='<div class="bos">Henüz sayaç birikmedi — yarın tekrar bak.</div>';
+    el("govde").innerHTML=h;return;
+  }
+  h+='<div class="kutu"><h3>🏆 En iyi kombinasyonlar</h3>';
+  v.satirlar.slice(0,40).forEach(function(r,i){
+    var ustu=r.oran>=v.taban;
+    h+='<div class="btGun">'+
+       '<div class="btUst"><b style="font-family:inherit">'+(i+1)+'. '+E(r.id||"(hiçbiri)")+'</b>'+
+       '<span class="btN">'+r.n+' gözlem</span>'+
+       '<span class="'+(ustu?"ye":"kr")+'"><b>%'+r.oran.toFixed(1)+'</b></span></div>'+
+       '<div class="btBar"><div class="btDolgu '+(ustu?"btYe":"btKr")+'" style="width:'+
+         Math.max(2,Math.min(100,r.oran))+'%"></div></div>'+
+       (r.azOrnek?'<div class="btAlt">⚠️ az örnek — henüz güvenilir değil</div>':'')+
+       '</div>';
+  });
+  h+='</div>';
+  el("govde").innerHTML=h;
 }
 /* Dilim / tip / durum / mesafe / sıralama süzgeçleri: veri zaten yüklü,
    filtreleme tamamen tarayıcıda — yeni istek atılmaz. */
@@ -11264,6 +11481,7 @@ await caches.default.put(new Request(l),new Response(JSON.stringify(t),{headers:
    ikinci kez başlamaz. Kilit alınamazsa o tur sessizce atlanır ve
    🛡 Sistem sekmesinde "atlanan tur" olarak sayılır. */
 q.waitUntil(kilitli(A,"gecmisKaydi",60,()=>k(A,t)).catch(()=>{})),
+q.waitUntil(kilitli(A,"tavanKombiGunSonu",60,()=>tvkGunSonuIsle(A,t)).catch(()=>{})),
 q.waitUntil(kilitli(A,"gecmisiDoldur",180,()=>gecmisiDoldur(A,t)).catch(()=>{})),
 q.waitUntil(kilitli(A,"alarm",60,()=>alarmGonder(A,eskiListe,t)).catch(()=>{})),
 /* Yeni alarm olmasa bile bekleyen kuyruk her turda bir parca ilerler:
@@ -12599,6 +12817,10 @@ guncelleme:G2.guncelleme||null,dipbacktestUrl:YON?(n+"/dipbacktest?key="+encodeU
    Eklenen gerçek ölçüler: beklenti, kâr faktörü, ortalama kazanç/kayıp,
    medyan, getiri dağılımı, en kötü seri (drawdown yerine sinyal bazlı),
    zirveden geri veriş, dilim tablosu. */
+if("/api/tavankombi"===$.pathname){
+  const arsiv3=await tvkArsivOku(A);
+  return new Response(JSON.stringify(tvkRaporUret(arsiv3)),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
+}
 if("/api/backtest"===$.pathname){
 const G3=await y(A),GD3=G3.gunler||{};
 const bugun3=new Date(Date.now()+108e5).toISOString().slice(0,10);
