@@ -1180,7 +1180,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-09-03-a · 🕰 Tavan Kombi geçmiş tarama: /tavankombi/gecmis/adim isteği hız sınırına (SINIR_PANEL) takılınca sayfa tamamen duruyordu ('hata — sayfayı yenile', elle yenilemeden ilerlemiyordu) — artık otomatik ve artan aralıkla (2sn→15sn) kendiliğinden yeniden deniyor, durmuyor. Ayrıca artık sonuçlar iş %100 bitmeden de kalıcı arşive her adımda işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (eskiden yalnız iş tamamlanınca yazılıyordu) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -4438,6 +4438,33 @@ async function tvkGecmisBirlestir(A,yerel,gunYeniSayisi){
   arsiv.tavanToplam=(arsiv.tavanToplam||0)+(yerel.tavanToplam||0);
   arsiv.karsilastirmaToplam=(arsiv.karsilastirmaToplam||0)+(yerel.karsilastirmaToplam||0);
   await tvkArsivYaz(A,arsiv);
+}
+/* Tek adımı gerçekleştirir (5 hisse) — HEM istemcinin /adim isteğinden
+   HEM DE scheduled() cron'undan çağrılır (üst seviyede, ki ikisi de
+   erişebilsin). "tvkGecmisAdim" kilidiyle sarmalanır ki ikisi aynı anda
+   tetiklenirse (biri sayfayı açık tutan kullanıcı, biri her dakika vuran
+   cron) job.kuyruk üzerinde çakışıp birbirinin ilerlemesini ezmesinler. */
+async function tvkGecmisAdimYap(A){
+  const job=await tvkGecmisIsOku(A);
+  if(!job||job.tamamlandi||!job.kuyruk.length)return job;
+  const grup=job.kuyruk.splice(0,TVK_GECMIS_ADIM);
+  const gp=await y(A);
+  for(const kod of grup){
+    try{await tvkGecmisHisseTara(A,kod,gp,job.yerel)}catch(_){}
+  }
+  job.tamam+=grup.length;
+  job.guncelleme=Date.now();
+  job.tumGunSet=job.tumGunSet||{};
+  let gunYeni=0;
+  for(const gg of Object.keys(job.yerel.gunSet||{})){
+    if(!job.tumGunSet[gg]){job.tumGunSet[gg]=1;gunYeni++}
+  }
+  await tvkGecmisBirlestir(A,job.yerel,gunYeni);
+  job.gunToplam=Object.keys(job.tumGunSet).length;
+  job.yerel=tvkGecmisSayacYeni();
+  if(!job.kuyruk.length)job.tamamlandi=!0;
+  await tvkGecmisIsYaz(A,job);
+  return job;
 }
 function tvkGecmisIlerlemeHTML(anahtar){
   return '<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tavan Kombi — Geçmiş Tarama</title>'+DBT_STIL+'</head><body>'+
@@ -11729,32 +11756,11 @@ if("/tavankombi/gecmis"===$.pathname){
 if("/tavankombi/gecmis/adim"===$.pathname){
   const kk=await kapiKontrol(A,$,p,!0);
   if(!kk.ok)return new Response(JSON.stringify({ok:!1,mesaj:kk.mesaj||"yetkisiz"}),{status:kk.kod||401,headers:{"content-type":"application/json"}});
-  const job=await tvkGecmisIsOku(A);
+  let job=await tvkGecmisIsOku(A);
   if(!job)return new Response(JSON.stringify({ok:!1,mesaj:"aktif tarama yok"}),{headers:{"content-type":"application/json"}});
   if(!job.tamamlandi&&job.kuyruk.length){
-    const grup=job.kuyruk.splice(0,TVK_GECMIS_ADIM);
-    const gp=await y(A);
-    for(const kod of grup){
-      try{await tvkGecmisHisseTara(A,kod,gp,job.yerel)}catch(_){}
-    }
-    job.tamam+=grup.length;
-    job.guncelleme=Date.now();
-    /* 🔴 Canlı sonuç: her adımda o adımın verisi kalıcı tvkArsiv'e
-       eklenir ve yerel sayaç sıfırlanır — böylece iş %100 bitmeden de
-       uygulamadaki Tavan Kombi sekmesi o ana kadar taranmış olan
-       kısımla güncel görünür. "gun" sayısının şişmemesi için job
-       üzerinde hiç sıfırlanmayan tumGunSet'te daha önce görülmemiş
-       günler ayrıca sayılıp öyle eklenir. */
-    job.tumGunSet=job.tumGunSet||{};
-    let gunYeni=0;
-    for(const gg of Object.keys(job.yerel.gunSet||{})){
-      if(!job.tumGunSet[gg]){job.tumGunSet[gg]=1;gunYeni++}
-    }
-    await tvkGecmisBirlestir(A,job.yerel,gunYeni);
-    job.gunToplam=Object.keys(job.tumGunSet).length;
-    job.yerel=tvkGecmisSayacYeni();
-    if(!job.kuyruk.length)job.tamamlandi=!0;
-    await tvkGecmisIsYaz(A,job);
+    job=await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A))||job;
+    if(job==="kilitli")job=await tvkGecmisIsOku(A);
   }
   return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:job.tamamlandi,gunToplam:job.gunToplam}),{headers:{"content-type":"application/json"}})
 }
@@ -13560,6 +13566,14 @@ async scheduled(ev,A,ctx){
       await kilitli(A,"mbDilim",50,()=>mbAlarmOncelikliTara(A)).catch(()=>{});
       /* Taze ölçümü hemen süz ve kurulu her alarma yeni girenleri gönder. */
       await kilitli(A,"mbAlarm",50,()=>mbAlarmTara(A)).catch(()=>{});
+      /* 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı
+         değil — sekme kapansa/telefon kilitlense/hız sınırına takılsa
+         bile burada, her cron tetiklemesinde (dakikada bir) birkaç
+         adım kendiliğinden ilerler. Sayfa açıksa oradaki polling de
+         aynı işi paylaşır (kilit sayesinde çakışmazlar), sayfa kapalıysa
+         bile iş durmaz. */
+      await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A)).catch(()=>{});
+      await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A)).catch(()=>{});
     }catch(err){
       try{await hataYaz(A,"scheduled",err,null)}catch(e){}
     }
