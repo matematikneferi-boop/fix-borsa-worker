@@ -4440,14 +4440,19 @@ function tvkGecmisIlerlemeHTML(anahtar){
   '<div id="ilerBar" style="background:#388bfd;height:100%;width:0%"></div></div></div>'+
   '<div class="a" style="margin-top:10px">Bu sayfayı açık bırak — bitince uygulamadaki 🎯 Tavan Kombi sekmesi geçmiş verilerle dolu görünecek. Sekmeyi kapatırsan iş KV üzerinde kalır, sayfayı yeniden açınca kaldığı yerden devam eder.</div>'+
   '<script>'+
-  'var key='+JSON.stringify(anahtar||'')+';'+
-  'function adim(){fetch("/tavankombi/gecmis/adim?key="+encodeURIComponent(key)).then(function(r){return r.json()}).then(function(v){'+
-  'if(!v||!v.ok){document.getElementById("ilerYazi").textContent="hata — sayfayı yenile";return}'+
+  'var key='+JSON.stringify(anahtar||'')+';var hata=0;'+
+  'function adim(){fetch("/tavankombi/gecmis/adim?key="+encodeURIComponent(key)).then(function(r){return r.json().then(function(v){return{s:r.status,v:v}})}).then(function(res){'+
+  'var v=res.v;'+
+  'if(!v||!v.ok){'+
+  'hata++;'+
+  'document.getElementById("ilerYazi").textContent=(res.s===429?"çok sık istek — yavaşlatılıyor":"geçici hata")+" ("+hata+"), yeniden deneniyor…";'+
+  'setTimeout(adim,Math.min(15000,2000*hata));return}'+
+  'hata=0;'+
   'var pct=v.toplam?Math.round(100*v.tamam/v.toplam):0;'+
   'document.getElementById("ilerBar").style.width=pct+"%";'+
   'document.getElementById("ilerYazi").textContent=v.tamam+" / "+v.toplam+" hisse tarandı ("+pct+"%)"+(v.gunToplam?" · "+v.gunToplam+" gün-gözlem":"");'+
-  'if(v.tamamlandi){document.getElementById("ilerYazi").textContent+=" — tamamlandı! 🎯 Tavan Kombi sekmesine dönebilirsin.";}else{setTimeout(adim,300)}'+
-  '}).catch(function(){setTimeout(adim,2000)})}'+
+  'if(v.tamamlandi){document.getElementById("ilerYazi").textContent+=" — tamamlandı! 🎯 Tavan Kombi sekmesine dönebilirsin.";}else{setTimeout(adim,1500)}'+
+  '}).catch(function(){hata++;setTimeout(adim,Math.min(15000,2000*hata))})}'+
   'adim();'+
   '</script></body></html>';
 }
