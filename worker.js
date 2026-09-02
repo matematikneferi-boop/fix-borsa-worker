@@ -13154,12 +13154,11 @@ if("/api/tavankombi"===$.pathname){
    haritayı istenen kombinasyonla süzüyoruz. */
 if("/api/tavankombi/tara"===$.pathname){
   if("POST"!==p.method)return new Response(JSON.stringify({ok:!1,mesaj:"POST bekleniyor"}),{status:405,headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
-  const gov5=await p.json().catch(()=>null);
-  const kombo=tvkComboFromId(gov5&&gov5.id);
+  const kombo=tvkComboFromId(gov&&gov.id);
   if(!kombo)return new Response(JSON.stringify({ok:!1,mesaj:"geçersiz kombinasyon"}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
   const snap5=await tvkGunSnapUret(A);
   const kodlar5=Object.keys(snap5).filter(kod=>tvkComboGecti(kombo,snap5[kod])).sort();
-  return new Response(JSON.stringify({ok:!0,id:gov5.id,kodlar:kodlar5,sayi:kodlar5.length,taranan:Object.keys(snap5).length}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
+  return new Response(JSON.stringify({ok:!0,id:gov.id,kodlar:kodlar5,sayi:kodlar5.length,taranan:Object.keys(snap5).length}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
 }
 if("/api/backtest"===$.pathname){
 const G3=await y(A),GD3=G3.gunler||{};
