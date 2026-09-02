@@ -4429,9 +4429,19 @@ function tvkGecmisSayacYeni(){return{sayac:{},tavanToplam:0,karsilastirmaToplam:
    sonuna kadar olan son ~700 barlık pencere mbMotor'a verilir (canlı
    taramanın MB_PENCERE=700 penceresiyle birebir aynı mantık). */
 async function tvkGecmisHisseTara(A,kod,gp,yerel){
-  const m60r=await yfMumlar(kod,"60m","2y");
+  /* 🔧 2026-09-03: "2y" yerine "1y" — 700 barlık pencere ~87 işlem günü +
+     TVK_GECMIS_GUN (95) test günü ~182 işlem günü (~8.5 ay) gerektiriyor,
+     2 yıllık veri gereğinden büyüktü (daha ağır Yahoo isteği, daha yüksek
+     zaman aşımı/429 riski, daha uzun JSON ayrıştırma). "1y" aynı pencereyi
+     rahat karşılıyor, isteği hafifletiyor. */
+  const m60r=await yfMumlar(kod,"60m","1y");
   const m60=(m60r&&m60r.veri)||[];
-  if(m60.length<50)return;
+  /* 🔧 2026-09-03: eskiden burada sessizce return ediliyordu — Yahoo
+     429/zaman aşımı/başka bir sebeple veri gelmeyince hisse hiç iz
+     bırakmadan atlanıyordu, "neden ilerlemiyor" sorusu hiç cevaplanamazdı.
+     Artık hata FIRLATILIYOR — çağıran taraf (tvkGecmisAdimYap) bunu
+     job.sonHatalar'a ve kalıcı hata kaydına (hataYaz) yazıyor. */
+  if(m60.length<50)throw new Error("60dk veri yetersiz ("+m60.length+" bar)"+((m60r&&m60r.hatalar&&m60r.hatalar.length)?": "+m60r.hatalar.join("; ").slice(0,150):""));
   const m4=mbGrupla(m60,4);
   const g1r=await yfMumlar(kod,"1d","6mo");
   let g1=mbHayaletAt((g1r&&g1r.veri)||[]);
@@ -4508,8 +4518,18 @@ async function tvkGecmisAdimYap(A){
   if(!job||job.tamamlandi||!job.kuyruk.length)return job;
   const grup=job.kuyruk.splice(0,TVK_GECMIS_ADIM);
   const gp=await y(A);
+  /* 🔧 2026-09-03: hisse başarısız olursa artık job.sonHatalar'a (son 10,
+     ekranda görünür) VE kalıcı hata kaydına (hataYaz → panelden okunabilir)
+     düşüyor — eskiden catch(_){} ile tamamen sessiz yutuluyordu, "240/434'te
+     takılı kaldı" gibi durumlarda SEBEP hiç görünmüyordu. */
+  job.sonHatalar=job.sonHatalar||[];
   for(const kod of grup){
-    try{await tvkGecmisHisseTara(A,kod,gp,job.yerel)}catch(_){}
+    try{await tvkGecmisHisseTara(A,kod,gp,job.yerel)}
+    catch(e){
+      job.sonHatalar.push({kod:kod,hata:String((e&&e.message)||e).slice(0,150),zaman:Date.now()});
+      if(job.sonHatalar.length>10)job.sonHatalar=job.sonHatalar.slice(-10);
+      await hataYaz(A,"tvkGecmisHisseTara",e,null).catch(()=>{});
+    }
   }
   job.tamam+=grup.length;
   job.guncelleme=Date.now();
@@ -4530,7 +4550,8 @@ function tvkGecmisIlerlemeHTML(anahtar){
   '<h1>🕰 Tavan Kombi — geçmiş barlar taranıyor</h1>'+
   '<div class="kur" style="border-color:#272e37;background:#161b22"><div id="ilerYazi" class="a">başlıyor…</div>'+
   '<div style="background:#0d1117;border:1px solid #272e37;border-radius:8px;height:14px;margin-top:8px;overflow:hidden">'+
-  '<div id="ilerBar" style="background:#388bfd;height:100%;width:0%"></div></div></div>'+
+  '<div id="ilerBar" style="background:#388bfd;height:100%;width:0%"></div></div>'+
+  '<div id="hataYazi" class="a" style="margin-top:8px;color:#f0883e;display:none"></div></div>'+
   '<div class="a" style="margin-top:10px">Bu sayfayı açık bırak — bitince uygulamadaki 🎯 Tavan Kombi sekmesi geçmiş verilerle dolu görünecek. Sekmeyi kapatırsan iş KV üzerinde kalır, sayfayı yeniden açınca kaldığı yerden devam eder.</div>'+
   '<script>'+
   'var key='+JSON.stringify(anahtar||'')+';var hata=0;'+
@@ -4544,6 +4565,11 @@ function tvkGecmisIlerlemeHTML(anahtar){
   'var pct=v.toplam?Math.round(100*v.tamam/v.toplam):0;'+
   'document.getElementById("ilerBar").style.width=pct+"%";'+
   'document.getElementById("ilerYazi").textContent=v.tamam+" / "+v.toplam+" hisse tarandı ("+pct+"%)"+(v.gunToplam?" · "+v.gunToplam+" gün-gözlem":"");'+
+  /* 🔧 2026-09-03: son hisse hatası artık ekranda görünür — ilerleme
+     yavaşlarsa/duruyor gibi görünürse SEBEP burada okunabilir. */
+  'var he=document.getElementById("hataYazi");'+
+  'if(v.sonHata){he.style.display="block";he.textContent="⚠️ "+v.sonHata.kod+": "+v.sonHata.hata+(v.hataSayisi>1?" (son "+v.hataSayisi+" hata arasından)":"");}'+
+  'else{he.style.display="none"}'+
   'if(v.tamamlandi){document.getElementById("ilerYazi").textContent+=" — tamamlandı! 🎯 Tavan Kombi sekmesine dönebilirsin.";}else{setTimeout(adim,1500)}'+
   '}).catch(function(){hata++;setTimeout(adim,Math.min(15000,2000*hata))})}'+
   'adim();'+
@@ -11823,7 +11849,9 @@ if("/tavankombi/gecmis/adim"===$.pathname){
     job=await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A))||job;
     if(job==="kilitli")job=await tvkGecmisIsOku(A);
   }
-  return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:job.tamamlandi,gunToplam:job.gunToplam}),{headers:{"content-type":"application/json"}})
+  return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:job.tamamlandi,gunToplam:job.gunToplam,
+    sonHata:(job.sonHatalar&&job.sonHatalar.length)?job.sonHatalar[job.sonHatalar.length-1]:null,
+    hataSayisi:(job.sonHatalar||[]).length}),{headers:{"content-type":"application/json"}})
 }
 if("/yesil"===$.pathname){
   const kk=await kapiKontrol(A,$,p,!0);
@@ -13633,8 +13661,8 @@ async scheduled(ev,A,ctx){
          adım kendiliğinden ilerler. Sayfa açıksa oradaki polling de
          aynı işi paylaşır (kilit sayesinde çakışmazlar), sayfa kapalıysa
          bile iş durmaz. */
-      await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A)).catch(()=>{});
-      await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A)).catch(()=>{});
+      await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A)).catch(err=>hataYaz(A,"tvkGecmisAdim-cron",err,null).catch(()=>{}));
+      await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A)).catch(err=>hataYaz(A,"tvkGecmisAdim-cron",err,null).catch(()=>{}));
     }catch(err){
       try{await hataYaz(A,"scheduled",err,null)}catch(e){}
     }
