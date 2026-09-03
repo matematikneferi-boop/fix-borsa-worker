@@ -4316,15 +4316,17 @@ async function tvkPivotBugunSeti(A){
 async function mbTfTeshisUret(A){
   const out=[];
   for(const t of TVK_TF){
-    const b=await mbTfOku(A,t,!0);
+    const b=await mbTfOku(A,t);
     const n=Object.keys((b&&b.sonuc)||{}).length;
-    out.push({tf:t,n:n,yasDk:(b&&b.ts)?Math.round((Date.now()-b.ts)/6e4):null,parca:(b&&b.parca)||0});
+    let parcaSayisi=0;
+    try{if(A&&A.VERI){const l=await A.VERI.list({prefix:"mbP:"+t+":",limit:5});parcaSayisi=l&&l.keys?l.keys.length:0}}catch(_){}
+    out.push({tf:t,n:n,yasDk:(b&&b.ts)?Math.round((Date.now()-b.ts)/6e4):null,parca:parcaSayisi});
   }
   return out;
 }
 async function tvkGunSnapUret(A){
   const tfVeri={};
-  for(const t of TVK_TF)tfVeri[t]=((await mbTfOku(A,t,!0))||{}).sonuc||{};
+  for(const t of TVK_TF)tfVeri[t]=((await mbTfOku(A,t))||{}).sonuc||{};
   const pivotBugun=await tvkPivotBugunSeti(A);
   const kodlar=new Set();
   TVK_TF.forEach(t=>Object.keys(tfVeri[t]).forEach(k=>kodlar.add(k)));
