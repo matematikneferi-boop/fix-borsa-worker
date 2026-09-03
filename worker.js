@@ -6672,24 +6672,35 @@ function tvkTumunuTaraBagla(){
     var idler=satirlar.map(function(b){return b.dataset.tvkid});
     var ustSonuc=el("tvkTumSonuc");
     ustBtn.disabled=true;ustBtn.textContent="hepsi taranıyor…";
-    satirlar.forEach(function(b){b.disabled=true;b.textContent="taranıyor…"});
+    satirlar.forEach(function(b){b.disabled=true;b.textContent="taranıyor…";b.parentElement.style.display=""});
     if(ustSonuc)ustSonuc.textContent="";
     post("/api/tavankombi/taraTumu",{ids:idler}).then(function(v){
       ustBtn.disabled=false;ustBtn.textContent="🔍🔍 Tümünü (ilk "+idler.length+") şimdi tara";
       if(!v||!v.ok){if(ustSonuc)ustSonuc.textContent=(v&&v.mesaj)||"taranamadı";
         satirlar.forEach(function(b){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara"});return}
-      var eslesenSayisi=0;
+      var eslesenSayisi=0,gizlenen=0;
       satirlar.forEach(function(b){
         b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara";
-        var kutu=b.nextElementSibling,sonuc=v.sonuclar&&v.sonuclar[b.dataset.tvkid];
-        if(!sonuc){kutu.textContent="taranamadı";return}
-        if(!sonuc.ok){kutu.textContent=sonuc.mesaj||"geçersiz kombinasyon";return}
-        if(!sonuc.kodlar.length){kutu.textContent="şu anda bu kombinasyonu karşılayan hisse yok ("+v.taranan+" hisse tarandı)";return}
+        var kutu=b.nextElementSibling,satirDiv=b.parentElement,sonuc=v.sonuclar&&v.sonuclar[b.dataset.tvkid];
+        if(!sonuc||!sonuc.ok||!sonuc.kodlar.length){
+          satirDiv.style.display="none";gizlenen++;
+          if(!sonuc)kutu.textContent="taranamadı";
+          else if(!sonuc.ok)kutu.textContent=sonuc.mesaj||"geçersiz kombinasyon";
+          else kutu.innerHTML="şu anda bu kombinasyonu karşılayan hisse yok ("+v.taranan+" hisse tarandı)";
+          return;
+        }
         eslesenSayisi++;
         kutu.innerHTML='<b style="color:#e6edf3">'+sonuc.kodlar.length+' hisse</b> şu anda bu kombinasyonu karşılıyor ('+v.taranan+' hisse tarandı):<br>'+
           sonuc.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3">'+E(k)+'</span>'}).join("");
       });
-      if(ustSonuc)ustSonuc.innerHTML=eslesenSayisi+"/"+idler.length+" kombinasyonda eşleşen hisse bulundu ("+v.taranan+" hisse tarandı)."+(v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");
+      if(ustSonuc)ustSonuc.innerHTML=eslesenSayisi+"/"+idler.length+" kombinasyonda eşleşen hisse bulundu ("+v.taranan+" hisse tarandı). "+
+        (gizlenen?gizlenen+" eşleşmeyen kombinasyon gizlendi — <a href=\\"#\\" id=\\"tvkHepsiniGoster\\" style=\\"color:#58a6ff\\">tümünü göster</a>":"")+
+        (v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");
+      var gostBtn=el("tvkHepsiniGoster");
+      if(gostBtn)gostBtn.onclick=function(ev){ev.preventDefault();
+        Array.prototype.forEach.call(document.querySelectorAll(".btGun"),function(d){d.style.display=""});
+        if(ustSonuc)ustSonuc.innerHTML=eslesenSayisi+"/"+idler.length+" kombinasyonda eşleşen hisse bulundu ("+v.taranan+" hisse tarandı)."+(v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");
+      };
     }).catch(function(){
       ustBtn.disabled=false;ustBtn.textContent="🔍🔍 Tümünü (ilk "+idler.length+") şimdi tara";
       satirlar.forEach(function(b){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara"});
