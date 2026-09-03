@@ -4348,6 +4348,18 @@ async function tvkPivotBugunSeti(A){
    kurulu değil / kapalı (bkz. scheduled() üstündeki kurulum notu). */
 async function mbTfTeshisUret(A){
   const out=[];
+  /* 🔧 2026-09-03-i · TEŞHİSİ GENİŞLET — eskiden yalnız "0 hisse ölçülü,
+     hiç yazılmamış" diyordu ama NEDEN diye asıl cevabı vermiyordu (durdurulmuş
+     mu, evren boş mu, yoksa gerçekten hiç tetiklenmedi mi ayırt edilemiyordu).
+     Artık evren büyüklüğü ve çalışma durumu da teşhise ekleniyor; ayrıca
+     tvkCanliDoldur/mbDilimTara'daki evren-boş durumu artık sessizce
+     yutulmuyor, 🩺 Hatalar'a da düşüyor (bkz. aşağıdaki tvkCanliDoldur). */
+  let calisiyor=!0,evrenN=null,evrenKaynak="";
+  try{
+    calisiyor=await mbCalisiyorMu(A);
+    const ev=await mbEvren(A);
+    evrenN=ev.length;evrenKaynak=ev.kaynak||"";
+  }catch(err){try{await hataYaz(A,"mbTfTeshisUret-evren",err,null)}catch(_){}}
   for(const t of TVK_TF){
     const b=await mbTfOku(A,t);
     const n=Object.keys((b&&b.sonuc)||{}).length;
@@ -4370,7 +4382,8 @@ async function mbTfTeshisUret(A){
         parcaSayisi=keys.length;
       }}catch(_){}
     }
-    out.push({tf:t,n:n,yasDk:(b&&b.ts)?Math.round((Date.now()-b.ts)/6e4):null,parca:parcaSayisi});
+    out.push({tf:t,n:n,yasDk:(b&&b.ts)?Math.round((Date.now()-b.ts)/6e4):null,parca:parcaSayisi,
+      calisiyor:calisiyor,evren:evrenN,evrenKaynak:evrenKaynak});
   }
   return out;
 }
@@ -4425,7 +4438,7 @@ async function tvkGunSnapUret(A){
    havuz dolar). */
 async function tvkCanliDoldur(A){
   try{
-    if(!(await mbCalisiyorMu(A)))return;
+    if(!(await mbCalisiyorMu(A))){await hataYaz(A,"tvkCanliDoldur-durduruldu","mbCalisiyorMu=false — tarama admin tarafından duraklatılmış (mbDurduruldu=1)",null).catch(()=>{});return}
     let hedef=null,enKotu=-1;
     for(const tf of TVK_TF){
       const b=await mbTfOku(A,tf);
@@ -4433,8 +4446,14 @@ async function tvkCanliDoldur(A){
       const oran=bos?1e9:(Date.now()-(b.ts||0))/(MB_TAZELIK[tf]||36e5);
       if(oran>1&&oran>enKotu){enKotu=oran;hedef=tf}
     }
-    if(hedef)await mbDilimTara(A,hedef,MB_ANLIK_AZAMI).catch(()=>{});
-  }catch(_){}
+    if(hedef){
+      const sonuc=await mbDilimTara(A,hedef,MB_ANLIK_AZAMI).catch(async err=>{await hataYaz(A,"tvkCanliDoldur-mbDilimTara",err,null).catch(()=>{});return null});
+      if(!sonuc){
+        const ev=await mbEvren(A).catch(()=>({length:0}));
+        if(!ev.length)await hataYaz(A,"tvkCanliDoldur-evrenBos","mbDilimTara null döndü — evren (hisse listesi) boş, kaynak: "+(ev.kaynak||"yok"),null).catch(()=>{});
+      }
+    }
+  }catch(err){await hataYaz(A,"tvkCanliDoldur",err,null).catch(()=>{})}
 }
 /* Bir kombinasyonun GERÇEKTEN kullandığı dilimler arasından en TAZE mumu
    (en büyük zaman damgası) seçer — "bu eşleşme hangi fiyata/mumluktan
@@ -6716,7 +6735,18 @@ function tvkTeshisMetni(liste){
     return d.tf+": "+d.n+" hisse ölçülü (son yazım: "+yas+")";
   });
   var bosVarMi=liste.some(function(d){return d.n===0||d.yasDk==null||d.yasDk>20});
-  var not=bosVarMi?" ⚠️ Havuz boş/bayat görünüyor — en olası sebep arka plan taramasının (Cloudflare Cron Trigger) çalışmıyor olması. Cloudflare panelinde Settings → Triggers → Cron Triggers altında yıldız-boşluk-yıldız-boşluk-yıldız-boşluk-yıldız kurulu mu kontrol et; sistem sekmesindeki 🩺 Hatalar da bir ipucu verebilir.":"";
+  var ilk=liste[0]||{};
+  var not="";
+  if(bosVarMi){
+    if(ilk.calisiyor===false)
+      not=" ⚠️ Tarama DURDURULMUŞ (admin tarafından duraklatılmış). 🪜Bölge/⬇️Dip ekranındaki tarama durdur/devam düğmesine bas.";
+    else if(ilk.evren!=null&&ilk.evren===0)
+      not=" ⚠️ Hisse listesi (evren) BOŞ — kaynak: "+(ilk.evrenKaynak||"yok")+". 🪜Bölge/⬇️Dip ekranında \"🌍 Evreni yenile\" butonuna bas.";
+    else if(ilk.evren!=null)
+      not=" ⚠️ Havuz boş/bayat ama tarama çalışıyor ve evren "+ilk.evren+" hisse (kaynak: "+(ilk.evrenKaynak||"?")+") — birkaç dakika içinde dolmalı, dolmuyorsa 🩺 Hatalar sekmesine bak (yeni: tvkCanliDoldur-* etiketli kayıtlar).";
+    else
+      not=" ⚠️ Havuz boş/bayat görünüyor — sistem sekmesindeki 🩺 Hatalar'a bak (yeni: tvkCanliDoldur-* etiketli kayıtlar orada neden başarısız olduğunu gösterir).";
+  }
   return parcalar.join(" · ")+"."+not;
 }
 /* Taramadan dönen {kod,fiyat,zaman,tf} nesnesini "KOD  45.02 TL · 03.09 14:00"
