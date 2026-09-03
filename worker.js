@@ -6616,7 +6616,7 @@ function tavanKombiGoster(v){
     h+='<div class="bos">Henüz sayaç birikmedi — yarın tekrar bak.</div>';
     el("govde").innerHTML=h;return;
   }
-  var GOSTERILEN=100;
+  var GOSTERILEN=250;
   h+='<div class="kutu"><h3>🏆 En iyi kombinasyonlar</h3>'+
      '<button id="tvkTumBtn" style="margin:4px 0 10px;background:#238636;border:1px solid #2ea043;color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;width:100%">🔍🔍 Tümünü (ilk '+Math.min(GOSTERILEN,v.satirlar.length)+') şimdi tara</button>'+
      '<div id="tvkTumSonuc" style="margin:0 0 10px;font-size:12px;color:#8b949e"></div>';
@@ -13244,7 +13244,7 @@ if("/api/tavankombi/tara"===$.pathname){
    edilir (kötüye kullanım / aşırı büyük gövde koruması). */
 if("/api/tavankombi/taraTumu"===$.pathname){
   if("POST"!==p.method)return new Response(JSON.stringify({ok:!1,mesaj:"POST bekleniyor"}),{status:405,headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
-  const idler=Array.isArray(gov&&gov.ids)?gov.ids.slice(0,200):[];
+  const idler=Array.isArray(gov&&gov.ids)?gov.ids.slice(0,300):[];
   if(!idler.length)return new Response(JSON.stringify({ok:!1,mesaj:"id listesi boş"}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
   const snap6=await tvkGunSnapUret(A);
   const kodTum6=Object.keys(snap6);
