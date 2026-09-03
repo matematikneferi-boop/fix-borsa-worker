@@ -4309,7 +4309,7 @@ async function tvkPivotBugunSeti(A){
    true olur. */
 async function tvkGunSnapUret(A){
   const tfVeri={};
-  for(const t of TVK_TF)tfVeri[t]=((await mbTfOku(A,t))||{}).sonuc||{};
+  for(const t of TVK_TF)tfVeri[t]=((await mbTfOku(A,t,!0))||{}).sonuc||{};
   const pivotBugun=await tvkPivotBugunSeti(A);
   const kodlar=new Set();
   TVK_TF.forEach(t=>Object.keys(tfVeri[t]).forEach(k=>kodlar.add(k)));
@@ -6586,8 +6586,11 @@ function tavanKombiGoster(v){
     h+='<div class="bos">Henüz sayaç birikmedi — yarın tekrar bak.</div>';
     el("govde").innerHTML=h;return;
   }
-  h+='<div class="kutu"><h3>🏆 En iyi kombinasyonlar</h3>';
-  v.satirlar.slice(0,40).forEach(function(r,i){
+  var GOSTERILEN=100;
+  h+='<div class="kutu"><h3>🏆 En iyi kombinasyonlar</h3>'+
+     '<button id="tvkTumBtn" style="margin:4px 0 10px;background:#238636;border:1px solid #2ea043;color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;width:100%">🔍🔍 Tümünü (ilk '+Math.min(GOSTERILEN,v.satirlar.length)+') şimdi tara</button>'+
+     '<div id="tvkTumSonuc" style="margin:0 0 10px;font-size:12px;color:#8b949e"></div>';
+  v.satirlar.slice(0,GOSTERILEN).forEach(function(r,i){
     var ustu=r.oran>=v.taban;
     h+='<div class="btGun">'+
        '<div class="btUst"><b style="font-family:inherit">'+(i+1)+'. '+E(r.id||"(hiçbiri)")+'</b>'+
@@ -6603,6 +6606,7 @@ function tavanKombiGoster(v){
   h+='</div>';
   el("govde").innerHTML=h;
   tvkTaraBagla();
+  tvkTumunuTaraBagla();
 }
 /* 🔍 Bu kombinasyonla şimdi tara — bkz. /api/tavankombi/tara notu. Her
    satırın kendi sonuç kutusuna (tvkTaraSonuc) yazar, sayfa yeniden
@@ -6622,6 +6626,44 @@ function tvkTaraBagla(){
       }).catch(function(){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara";kutu.textContent="hata — tekrar dene"});
     };
   });
+}
+/* 🔍🔍 Tümünü tek tuşla tara — ekrandaki her satırın id'sini toplayıp TEK
+   istekte /api/tavankombi/taraTumu'ya gönderir, dönen sonuçları her satırın
+   KENDİ kutusuna (tvkTaraSonuc) dağıtır. Tek tek "Bu kombinasyonla tara"ya
+   basmaya gerek kalmaz. */
+function tvkTumunuTaraBagla(){
+  var ustBtn=el("tvkTumBtn");if(!ustBtn)return;
+  ustBtn.onclick=function(){
+    tit();
+    var satirlar=Array.prototype.slice.call(document.querySelectorAll(".tvkTaraBtn"));
+    if(!satirlar.length)return;
+    var idler=satirlar.map(function(b){return b.dataset.tvkid});
+    var ustSonuc=el("tvkTumSonuc");
+    ustBtn.disabled=true;ustBtn.textContent="hepsi taranıyor…";
+    satirlar.forEach(function(b){b.disabled=true;b.textContent="taranıyor…"});
+    if(ustSonuc)ustSonuc.textContent="";
+    post("/api/tavankombi/taraTumu",{ids:idler}).then(function(v){
+      ustBtn.disabled=false;ustBtn.textContent="🔍🔍 Tümünü (ilk "+idler.length+") şimdi tara";
+      if(!v||!v.ok){if(ustSonuc)ustSonuc.textContent=(v&&v.mesaj)||"taranamadı";
+        satirlar.forEach(function(b){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara"});return}
+      var eslesenSayisi=0;
+      satirlar.forEach(function(b){
+        b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara";
+        var kutu=b.nextElementSibling,sonuc=v.sonuclar&&v.sonuclar[b.dataset.tvkid];
+        if(!sonuc){kutu.textContent="taranamadı";return}
+        if(!sonuc.ok){kutu.textContent=sonuc.mesaj||"geçersiz kombinasyon";return}
+        if(!sonuc.kodlar.length){kutu.textContent="şu anda bu kombinasyonu karşılayan hisse yok ("+v.taranan+" hisse tarandı)";return}
+        eslesenSayisi++;
+        kutu.innerHTML='<b style="color:#e6edf3">'+sonuc.kodlar.length+' hisse</b> şu anda bu kombinasyonu karşılıyor ('+v.taranan+' hisse tarandı):<br>'+
+          sonuc.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3">'+E(k)+'</span>'}).join("");
+      });
+      if(ustSonuc)ustSonuc.textContent=eslesenSayisi+"/"+idler.length+" kombinasyonda eşleşen hisse bulundu ("+v.taranan+" hisse tarandı).";
+    }).catch(function(){
+      ustBtn.disabled=false;ustBtn.textContent="🔍🔍 Tümünü (ilk "+idler.length+") şimdi tara";
+      satirlar.forEach(function(b){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara"});
+      if(ustSonuc)ustSonuc.textContent="hata — tekrar dene";
+    });
+  };
 }
 /* Dilim / tip / durum / mesafe / sıralama süzgeçleri: veri zaten yüklü,
    filtreleme tamamen tarayıcıda — yeni istek atılmaz. */
@@ -13159,6 +13201,25 @@ if("/api/tavankombi/tara"===$.pathname){
   const snap5=await tvkGunSnapUret(A);
   const kodlar5=Object.keys(snap5).filter(kod=>tvkComboGecti(kombo,snap5[kod])).sort();
   return new Response(JSON.stringify({ok:!0,id:gov.id,kodlar:kodlar5,sayi:kodlar5.length,taranan:Object.keys(snap5).length}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
+}
+/* 🔍🔍 TÜMÜNÜ BİRDEN tara — tek tuşla ekrandaki bütün kombinasyonları aynı
+   anda süzer. tvkGunSnapUret (Yahoo'ya gitmeyen, bellekteki anlık harita)
+   yalnız BİR KEZ üretilir; her kombinasyon o TEK snapshot üzerinden
+   süzülür. 100 ayrı /api/tavankombi/tara isteği atmak yerine tek istek —
+   hem daha hızlı hem sunucuya 100 kat daha az yük. En fazla 200 id kabul
+   edilir (kötüye kullanım / aşırı büyük gövde koruması). */
+if("/api/tavankombi/taraTumu"===$.pathname){
+  if("POST"!==p.method)return new Response(JSON.stringify({ok:!1,mesaj:"POST bekleniyor"}),{status:405,headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
+  const idler=Array.isArray(gov&&gov.ids)?gov.ids.slice(0,200):[];
+  if(!idler.length)return new Response(JSON.stringify({ok:!1,mesaj:"id listesi boş"}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
+  const snap6=await tvkGunSnapUret(A);
+  const kodTum6=Object.keys(snap6);
+  const sonuclar6={};
+  for(const id6 of idler){
+    const kombo6=tvkComboFromId(id6);
+    sonuclar6[id6]=kombo6?{ok:!0,kodlar:kodTum6.filter(kod=>tvkComboGecti(kombo6,snap6[kod])).sort()}:{ok:!1,mesaj:"geçersiz kombinasyon"};
+  }
+  return new Response(JSON.stringify({ok:!0,sonuclar:sonuclar6,taranan:kodTum6.length}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
 }
 if("/api/backtest"===$.pathname){
 const G3=await y(A),GD3=G3.gunler||{};
