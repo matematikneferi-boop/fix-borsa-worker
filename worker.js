@@ -1180,7 +1180,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-09-03-j · 🩺 Teşhise ÜÇÜNCÜ ve gerçek bir ihtimal eklendi: Cloudflare Workers KV ücretsiz planında YAZMA (put) günde yalnız 1000 kez yapılabilir — list() kotasından ayrı ve çok daha kolay dolan bir sınır (cron dakikada bir yazıyor + her kullanıcı taraması da yazıyor). Kota dolunca A.VERI.put(...) sessizce reddediliyordu, bellekte \"az önce yazıldı\" görünse bile KV'ye hiçbir şey inmiyordu — sonraki her istek sıfırdan başlıyor, ekranda sürekli \"hiç yazılmamış\" görünüyordu (\"tarama açık, evren dolu\" olduğu halde havuz hiç dolmuyordu). Artık teşhis gerçek bir deneme yazması yapıp sonucu doğrudan gösteriyor: kota doluysa \"KV YAZMA BAŞARISIZ\" diye açıkça söylüyor (kota TR saatiyle ~03:00'te sıfırlanır; kalıcı çözüm Workers Paid plan, $5/ay) · 2026-09-03-i · 🩺 Tavan Kombi'de \"Tümünü şimdi tara\" hâlâ \"0 hisse tarandı / hiç yazılmamış\" veriyorsa artık sebebi NET söyleniyor: teşhis artık botun DURDURULMUŞ olup olmadığını ve hisse listesinin (evren) boş olup olmadığını da okuyup mesaja ekliyor — \"tarama durdurulmuş, yeniden başlat\" ya da \"hisse listesi boş\" diyorsa sorun Cron Trigger değil budur; Cron Trigger önerisi artık yalnız ikisi de normalken (tarama açık, evren dolu) hâlâ boşsa gösteriliyor · 2026-09-03-h · 🚨 KÖKTEN DÜZELTME — tamamlanmış bir Tavan Kombi geçmiş taraması sayfası her yeniden açıldığında sessizce YENİ bir tam tur başlıyor, ama önceki turda zaten sayılmış aynı (gün,hisse) çiftleri tvkArsiv2'nin sayaçlarına TEKRAR ekleniyordu (birleştirme tekilleştirme yapmıyor, yalnız topluyor) — sayfa her açılışta toplam gözlem/oran sayıları katbekat şişiyordu. Artık yeni bir TAM tur başlarken (önceki iş tamamlanmış ya da hiç yoksa) tvkArsiv2 de sıfırlanıyor: her tam tur kendi başına tek ve tekrarsız bir ölçüm, üst üste birikmiyor. Yarım kalmış bir işe (sayfa kapanıp tekrar açılması) dokunulmadı, o kaldığı yerden aynı job ile devam ediyor · 2026-09-03-g · 🚨 KÖKTEN DÜZELTME — Tavan Kombi canlı tarama hep \"0 hisse tarandı\" / \"1SA: 0 hisse ölçülü (son yazım: hiç yazılmamış)\" veriyordu. SEBEP: tvkGunSnapUret, TVK_TF (1SA/4SA) havuzunu yalnız OKUYORDU, kendisi hiçbir zaman tarama BAŞLATMIYORDU — bu iki dilim başka hiçbir ekrandan (alarm modülü/KISA-ORTA görünümü) aktif istenmiyorsa ve Cron Trigger tetiklenmiyorsa havuz sonsuza dek boş kalıyordu. Artık Tavan Kombi'nin üç canlı ucu (/api/tavankombi, /tara, /taraTumu) her çağrıldığında kendi kendine en boş/bayat dilimi bir adım ilerletiyor (tvkCanliDoldur) — özellik artık Cron Trigger kurulu olsun olmasın, sekmeyi her açan kullanıcıyla kendini doldurur. Cloudflare panelinde Settings → Triggers → Cron Triggers altında * * * * * kurulu olup olmadığını yine de kontrol etmekte fayda var — kurulu değilse yalnız Tavan Kombi değil, KISA/ORTA/UZUN canlı alarm motoru da beklenenden yavaş tazelenir · 2026-09-03-f · 🚨 KÖKTEN DÜZELTME — \"KV list() limit exceeded for the day\": mbParcalariKat (parça verilerini birleştiren fonksiyon) HER kullanıcı isteğinde gerçek bir KV list() çağrısı yapıyordu; free plan günde yalnız 1000 list() işleminе izin verdiğinden kullanıcı arttıkça kota gün ortasında tükenip panel/mini app'i tamamen çökertiyordu. Artık dilim başına gerçek list() en fazla 3 dakikada bir yapılıyor, arada gelen istekler önbellekteki sonucu kullanıyor; mbParcalariBirlestir'in silme adımı da AYRI bir list() çağırmıyor, aynı önbelleği yeniden kullanıyor (parçalar zaten 6 saatlik TTL ile yazıldığı için veri kaybı yok). Kalıcı çözüm için Workers Paid plana ($5/ay, list() kotası ayda 1M'e çıkıyor) geçiş önerilir. Ayrıca: ISATR gibi çok seyrek işlem gören hisselerin \"60dk veri yetersiz\" mesajı (Yahoo'da gerçekten intraday bar yok, hisse günlerce 0 lot işlem görüyor) artık kalıcı Hatalar kaydını kirletmiyor — taramanın ilerleme ekranında görünmeye devam ediyor ama gerçek sistem hatası değil, aksiyon gerekmiyor · 2026-09-03-e · 🐂 Tavan Kombi KRİTİK DÜZELTME: DİP (dip/dip382/dip236) ve PİVOT KIRILIM elemanlarında BOĞA şartı hiç YOKTU — yalnız SEVİYE BÖLGESİ (b1..b6) bantlarında vardı, yani bu elemanlar hissenin ayı olduğu durumlarda da 'geçti' sayılıyordu. Artık 10 elemanın HEPSİNDE (dip/dip382/dip236/b1..b6/pivot) boğa şartı zorunlu — hem canlı anlık taramada (tvkGunSnapUret / 🔍 Bu kombinasyonla şimdi tara) hem geçmiş taramasında (tvkGecmisHisseTara) aynı düzeltme. Eski sayaçlar bu yüzden GEÇERSİZDİ: tvkArsiv→tvkArsiv2 ve tvkGecmisIs→tvkGecmisIs2 anahtarlarına geçildi, böylece /tavankombi/gecmis'e bir sonraki girişte otomatik olarak SIFIRDAN, düzeltilmiş kurallarla tam yeniden tarama başlar (evrendeki tüm hisseler baştan işlenir) · 2026-09-03-d · 🔍 Tavan Kombi'ye canlı tarama eklendi: her satırın altında artık \"🔍 Bu kombinasyonla şimdi tara\" butonu var — eskiden 🪜 Bölge/⬇️ Dip filtreleri her elemanda TEK ortak dilim dayattığı için \"1SA'de b3 VE 4SA'de b6\" gibi eleman-başına-farklı-dilim kombinasyonları canlı taramada kurulamıyordu; artık backtest raporundaki HERHANGİ bir satıra tıklayınca o kombinasyonu ŞU AN karşılayan hisseler listeleniyor (yeni /api/tavankombi/tara, mevcut tvkGunSnapUret'i kullanıyor — ek Yahoo isteği yok) · 2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-09-03-e · 🐂 Tavan Kombi KRİTİK DÜZELTME: DİP (dip/dip382/dip236) ve PİVOT KIRILIM elemanlarında BOĞA şartı hiç YOKTU — yalnız SEVİYE BÖLGESİ (b1..b6) bantlarında vardı, yani bu elemanlar hissenin ayı olduğu durumlarda da 'geçti' sayılıyordu. Artık 10 elemanın HEPSİNDE (dip/dip382/dip236/b1..b6/pivot) boğa şartı zorunlu — hem canlı anlık taramada (tvkGunSnapUret / 🔍 Bu kombinasyonla şimdi tara) hem geçmiş taramasında (tvkGecmisHisseTara) aynı düzeltme. Eski sayaçlar bu yüzden GEÇERSİZDİ: tvkArsiv→tvkArsiv2 ve tvkGecmisIs→tvkGecmisIs2 anahtarlarına geçildi, böylece /tavankombi/gecmis'e bir sonraki girişte otomatik olarak SIFIRDAN, düzeltilmiş kurallarla tam yeniden tarama başlar (evrendeki tüm hisseler baştan işlenir) · 2026-09-03-d · 🔍 Tavan Kombi'ye canlı tarama eklendi: her satırın altında artık \"🔍 Bu kombinasyonla şimdi tara\" butonu var — eskiden 🪜 Bölge/⬇️ Dip filtreleri her elemanda TEK ortak dilim dayattığı için \"1SA'de b3 VE 4SA'de b6\" gibi eleman-başına-farklı-dilim kombinasyonları canlı taramada kurulamıyordu; artık backtest raporundaki HERHANGİ bir satıra tıklayınca o kombinasyonu ŞU AN karşılayan hisseler listeleniyor (yeni /api/tavankombi/tara, mevcut tvkGunSnapUret'i kullanıyor — ek Yahoo isteği yok) · 2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -3150,55 +3150,22 @@ async function mbParcaYaz(A,tf,no,yeni){
   if(!A||!A.VERI||!yeni||!Object.keys(yeni).length)return;
   try{await A.VERI.put("mbP:"+tf+":"+no,JSON.stringify(yeni),{expirationTtl:MB_BIRIKIM_TTL})}catch(_){}
 }
-/* 🚨 2026-09-03-f · KÖKTEN DÜZELTME — "KV list() limit exceeded for the day".
-   SEBEP: Cloudflare Workers KV free planında list() işlemi GÜNDE SADECE 1000
-   kez çağrılabilir (read/get 100.000/gün ile KARIŞTIRILMASIN — list() çok
-   daha dar bir kota). mbParcalariKat eskiden HER çağrıda gerçek bir
-   A.VERI.list() yapıyordu; bu fonksiyon ise mbModulTara üzerinden mini app'e
-   gelen HER TEK istekte (kullanıcı ekranı her açtığında/yenilediğinde) her
-   seçili zaman dilimi için ayrı ayrı çalışıyordu — mbParcalariBirlestir de
-   üstüne "tamamsa" ayrıca 2 kez daha (birleştirirken + silerken) list()
-   çağırıyordu. Kullanıcı sayısı arttıkça bu istek hacmi günlük 1000 kotayı
-   öğleden önce tüketiyor, sonrasında panel/mini app tamamen patlıyordu.
-   ÇÖZÜM: gerçek list() çağrısı dilim başına en fazla MB_PARCA_LISTE_ARALIK
-   (varsayılan 3 dakika) sıklığında yapılır; arada gelen tüm istekler bellekte
-   tutulan SON sonucu (ve son anahtar listesini) yeniden kullanır. Parçalar
-   zaten expirationTtl:MB_BIRIKIM_TTL (6 saat) ile yazıldığından, silme
-   turunun de aynı önbellekten atlanması veri kaybı yaratmaz — kendiliğinden
-   düşerler. Kalıcı ve tam çözüm: Cloudflare Workers Paid plana ($5/ay)
-   geçmek — bu planda list() kotası ayda 1.000.000'a çıkıyor ve bu sınır
-   pratikte hiç görülmüyor; aşağıdaki önbellek geçici/free-plan tedbiridir. */
-const MB_PARCA_LISTE_ARALIK=18e4; /* 3 dakika — tf başına en fazla bu sıklıkta gerçek list() */
-let _mbParcaOnbellek={};          /* tf → {ts, keys:[{name,...},...]} */
 async function mbParcalariKat(A,tf,bir){
   if(!A||!A.VERI)return bir;
-  const simdi=Date.now(),onb=_mbParcaOnbellek[tf];
-  if(onb&&simdi-onb.ts<MB_PARCA_LISTE_ARALIK){
-    /* Kota koruması: bu dilim yakın zamanda zaten listelendi, tekrar etme.
-       En son bilinen parça sayısını göster, birleştirmeyi (bir.sonuc zaten
-       önceki turlarda katılmıştı) tekrar yapmaya gerek yok. */
-    bir.parca=onb.keys.length;
-    return bir;
-  }
   try{
     const l=await A.VERI.list({prefix:"mbP:"+tf+":"});
-    const keys=(l&&l.keys)||[];
-    _mbParcaOnbellek[tf]={ts:simdi,keys:keys};
-    if(!keys.length)return bir;
-    for(const k of keys){
+    if(!l||!l.keys||!l.keys.length)return bir;
+    for(const k of l.keys){
       try{const h=await A.VERI.get(k.name);if(!h)continue;
         const v=JSON.parse(h);
         for(const kod in v)if(!bir.sonuc[kod]||(v[kod].ts||0)>(bir.sonuc[kod].ts||0))bir.sonuc[kod]=v[kod];
       }catch(_){}
     }
-    bir.parca=keys.length;
+    bir.parca=l.keys.length;
   }catch(_){}
   return bir;
 }
-/* Parçaları ana birikime kalıcı olarak katar ve siler. Silme için AYRI bir
-   list() çağrısı YAPMIYOR — az önce mbParcalariKat içinde alınmış (veya
-   onbellekten gelen) anahtar listesi yeniden kullanılıyor; bu da günlük
-   list() kotasını üçüncü kez tüketmeyi önlüyor (bkz. yukarıdaki not). */
+/* Parçaları ana birikime kalıcı olarak katar ve siler. */
 async function mbParcalariBirlestir(A,tf){
   const bir=await mbTfOku(A,tf);
   await mbParcalariKat(A,tf,bir);
@@ -3206,8 +3173,8 @@ async function mbParcalariBirlestir(A,tf){
   _mbBellek[tf]=bir;
   await mbTfYaz(A,tf);
   try{
-    const onb=_mbParcaOnbellek[tf];
-    for(const k of (onb&&onb.keys)||[])await A.VERI.delete(k.name).catch(()=>{});
+    const l=await A.VERI.list({prefix:"mbP:"+tf+":"});
+    for(const k of (l&&l.keys)||[])await A.VERI.delete(k.name).catch(()=>{});
   }catch(_){}
   return bir;
 }
@@ -4348,61 +4315,11 @@ async function tvkPivotBugunSeti(A){
    kurulu değil / kapalı (bkz. scheduled() üstündeki kurulum notu). */
 async function mbTfTeshisUret(A){
   const out=[];
-  /* 🔧 2026-09-03-i: teşhis eskiden yalnız "n hisse ölçülü / son yazım"
-     rakamlarını gösterip her boş/bayat durumda TEK bir olası sebep
-     (Cron Trigger) öneriyordu — tvkCanliDoldur zaten /tavankombi,
-     /tara, /taraTumu her çağrıldığında kendi kendine dolduruyor olsa
-     bile mesaj hâlâ eski öneriyi veriyordu, gerçek sebep başka bir şey
-     olsa da (bot DURDURULMUŞ veya evren/hisse listesi BOŞ) kullanıcı
-     yanlış yere bakıyordu. Artık buradan gerçek durum da okunup mesaja
-     ekleniyor: calisiyor=false ise doğrudan "tarama durdurulmuş" denir,
-     evren=0 ise doğrudan "hisse listesi boş" denir — Cron Trigger önerisi
-     yalnızca ikisi de normalse (yani tvkCanliDoldur çalışmasına rağmen
-     hâlâ boşsa) gösterilir. */
-  let calisiyor=!0,evrenSayisi=0,yazmaHata=null;
-  try{calisiyor=await mbCalisiyorMu(A)}catch(_){}
-  try{evrenSayisi=(await mbEvren(A)).length}catch(_){}
-  /* 🔧 2026-09-03-j: "tarama açık, evren dolu, ama havuz hâlâ hep boş" —
-     üçüncü ihtimal hiç ölçülmüyordu: Cloudflare Workers KV ücretsiz planda
-     YAZMA (put) GÜNDE SADECE 1000 kez yapılabilir (list() kotasından AYRI,
-     ayrıca çok daha kolay dolar — her scheduled() cron turu ve her kullanıcı
-     taraması en az bir yazım yapıyor). Kota dolunca A.VERI.put(...) sessizce
-     reddediliyor (mevcut kod bunu zaten yutuyordu — bkz. mbTfYaz), bellekte
-     ts güncel görünse bile KV'ye hiçbir şey inmiyor, isolate yenilenince
-     (Cloudflare her istekte garanti AYNI isolate'i kullanmaz) her şey sıfıra
-     dönüyor — "hiç yazılmamış" tam olarak bunu gösterir. Burada küçük bir
-     GERÇEK yazma denemesi yapılıp sonucu doğrudan raporlanıyor; tahmin
-     yerine kesin teşhis. Kota Cloudflare'de gün ortasında (UTC 00:00'da,
-     TR saatiyle 03:00) sıfırlanır; kalıcı çözüm Workers Paid plana
-     ($5/ay, kota 1000→ günlük sınır kalkar) geçmektir. */
-  try{
-    await A.VERI.put("mbTeshisYazTest",String(Date.now()),{expirationTtl:60});
-  }catch(e){yazmaHata=(e&&e.message)||String(e)}
-  out.calisiyor=calisiyor;
-  out.evrenSayisi=evrenSayisi;
-  out.yazmaHata=yazmaHata;
   for(const t of TVK_TF){
     const b=await mbTfOku(A,t);
     const n=Object.keys((b&&b.sonuc)||{}).length;
-    /* 🔧 2026-09-03-f: bu teşhis eskiden KENDİ list() çağrısını yapıyordu —
-       mbParcalariKat'ın az önce (veya birazdan) aynı dilim için yapacağı
-       list() çağrısından BAĞIMSIZ, yani aynı bilgi için ikinci kez günlük
-       KV list() kotasını (1000/gün) tüketiyordu. Artık aynı paylaşılan
-       önbelleği (bkz. mbParcalariKat üstündeki kota notu) kullanıyor —
-       tazeyse hiç list() çağırmıyor, bayatsa çağırıp önbelleği güncelliyor
-       ki diğer çağıranlar da bundan faydalansın. */
     let parcaSayisi=0;
-    const onb=_mbParcaOnbellek[t];
-    if(onb&&Date.now()-onb.ts<MB_PARCA_LISTE_ARALIK){
-      parcaSayisi=onb.keys.length;
-    }else{
-      try{if(A&&A.VERI){
-        const l=await A.VERI.list({prefix:"mbP:"+t+":"});
-        const keys=(l&&l.keys)||[];
-        _mbParcaOnbellek[t]={ts:Date.now(),keys:keys};
-        parcaSayisi=keys.length;
-      }}catch(_){}
-    }
+    try{if(A&&A.VERI){const l=await A.VERI.list({prefix:"mbP:"+t+":",limit:5});parcaSayisi=l&&l.keys?l.keys.length:0}}catch(_){}
     out.push({tf:t,n:n,yasDk:(b&&b.ts)?Math.round((Date.now()-b.ts)/6e4):null,parca:parcaSayisi});
   }
   return out;
@@ -4438,36 +4355,6 @@ async function tvkGunSnapUret(A){
     sonuc[kod]=s;
   });
   return sonuc;
-}
-/* 🚨 2026-09-03-g · KÖKTEN DÜZELTME — "1SA: 0 hisse ölçülü (son yazım: hiç
-   yazılmamış)" / Tavan Kombi canlı tarama hep "0 hisse tarandı" veriyordu.
-   SEBEP: tvkGunSnapUret (yukarıda) TVK_TF (1SA/4SA) havuzunu YALNIZ OKUYOR,
-   kendisi HİÇBİR ZAMAN bir tarama BAŞLATMIYORDU. Bu iki dilim başka hiçbir
-   ekranda (MAL/DİP/AB/Bölge/Enerji alarm modülü ya da KISA/ORTA görünümü)
-   o anda aktif olarak istenmiyorsa, havuzu doldurmanın TEK yolu ya
-   Cloudflare Cron Trigger'ın (Settings → Triggers → Cron Triggers,
-   scheduled() üstündeki kuruluma bak) çalışıyor olmasıydı ya da tesadüfen
-   birinin o iki dilimi başka bir ekrandan tetiklemesiydi — hiçbiri
-   olmayınca havuz SONSUZA DEK boş kalıyordu (teşhis mesajındaki "hiç
-   yazılmamış" tam olarak bunu gösteriyor). ÇÖZÜM: Tavan Kombi'nin canlı
-   uçları artık mbModulTara'daki "en bayat/en boş dilimi bul, bir adım
-   ilerlet" mantığının TVK_TF'e daraltılmış halini KENDİLERİ çalıştırıyor —
-   böylece özellik Cron Trigger kurulu olsun olmasın, sekmeyi her açan/
-   "tara" diyen kullanıcıyla birlikte kendi kendini doldurur (MB_ANLIK_AZAMI
-   ile sınırlı — tek istekte aşırı Yahoo çağrısı yapılmaz, birkaç açılışta
-   havuz dolar). */
-async function tvkCanliDoldur(A){
-  try{
-    if(!(await mbCalisiyorMu(A)))return;
-    let hedef=null,enKotu=-1;
-    for(const tf of TVK_TF){
-      const b=await mbTfOku(A,tf);
-      const bos=!b.sonuc||!Object.keys(b.sonuc).length;
-      const oran=bos?1e9:(Date.now()-(b.ts||0))/(MB_TAZELIK[tf]||36e5);
-      if(oran>1&&oran>enKotu){enKotu=oran;hedef=tf}
-    }
-    if(hedef)await mbDilimTara(A,hedef,MB_ANLIK_AZAMI).catch(()=>{});
-  }catch(_){}
 }
 /* Bir kombinasyonun GERÇEKTEN kullandığı dilimler arasından en TAZE mumu
    (en büyük zaman damgası) seçer — "bu eşleşme hangi fiyata/mumluktan
@@ -4709,19 +4596,9 @@ async function tvkGecmisAdimYap(A){
   for(const kod of grup){
     try{await tvkGecmisHisseTara(A,kod,gp,job.yerel)}
     catch(e){
-      const mesaj=String((e&&e.message)||e);
-      job.sonHatalar.push({kod:kod,hata:mesaj.slice(0,150),zaman:Date.now()});
+      job.sonHatalar.push({kod:kod,hata:String((e&&e.message)||e).slice(0,150),zaman:Date.now()});
       if(job.sonHatalar.length>10)job.sonHatalar=job.sonHatalar.slice(-10);
-      /* 🔧 2026-09-03-f · "60dk veri yetersiz" GERÇEK bir sistem hatası değil —
-         ISATR gibi çok seyrek işlem gören (bazı günler 0 lot) hisselerde Yahoo
-         zaten intraday bar ÜRETMİYOR, bu YAPISAL/beklenen bir durum. Yukarıdaki
-         job.sonHatalar'da (taramanın ilerleme ekranında) görünmeye devam eder
-         ama kalıcı hata kaydına (hataYaz → Hatalar sekmesi) artık YAZILMIYOR;
-         orası gerçekten aksiyon gerektiren (429/zaman aşımı/kod hatası gibi)
-         durumlar için ayrılıyor, sürekli aynı birkaç düşük-likiditeli koddan
-         gelen beklenen "veri yok" mesajıyla kirlenmesin. */
-      if(mesaj.indexOf("60dk veri yetersiz")!==0)
-        await hataYaz(A,"tvkGecmisHisseTara",e,null).catch(()=>{});
+      await hataYaz(A,"tvkGecmisHisseTara",e,null).catch(()=>{});
     }
   }
   job.tamam+=grup.length;
@@ -6749,18 +6626,7 @@ function tvkTeshisMetni(liste){
     return d.tf+": "+d.n+" hisse ölçülü (son yazım: "+yas+")";
   });
   var bosVarMi=liste.some(function(d){return d.n===0||d.yasDk==null||d.yasDk>20});
-  var not="";
-  if(bosVarMi){
-    if(liste.yazmaHata){
-      not=" ⚠️ KV YAZMA BAŞARISIZ: "+liste.yazmaHata+" — en olası sebep Cloudflare Workers KV ücretsiz plandaki günlük 1000 yazma kotasının dolmuş olması (cron her dakika yazıyor, gün içinde kolay dolar). Kota Türkiye saatiyle 03:00 civarı sıfırlanır, o zaman kendiliğinden düzelir. Kalıcı çözüm: Cloudflare Workers Paid plana ($5/ay) geçmek.";
-    }else if(liste.calisiyor===!1){
-      not=" ⚠️ Tarama DURDURULMUŞ — bu yüzden havuz dolmuyor (durdurulmuşken 'şimdi tara' butonları da kendi kendine dolduramaz). Yönetici panelinden taramayı tekrar başlat.";
-    }else if(liste.evrenSayisi===0){
-      not=" ⚠️ Hisse listesi (evren) BOŞ görünüyor — taranacak hiçbir kod yok, bu yüzden 0 hisse ölçülüyor. Evren kaynağının (borsa listesi) doğru yüklendiğini kontrol et.";
-    }else{
-      not=" ⚠️ Havuz boş/bayat görünüyor. Tarama açık ve hisse listesi dolu olduğu halde bu görünüyorsa, en olası sebep arka plan taramasının (Cloudflare Cron Trigger) hiç çalışmamış olması ya da her denemede zaman/veri kaynağı hatasına takılması. Cloudflare panelinde Settings → Triggers → Cron Triggers altında yıldız-boşluk-yıldız-boşluk-yıldız-boşluk-yıldız kurulu mu kontrol et; sistem sekmesindeki 🩺 Hatalar da bir ipucu verebilir.";
-    }
-  }
+  var not=bosVarMi?" ⚠️ Havuz boş/bayat görünüyor — en olası sebep arka plan taramasının (Cloudflare Cron Trigger) çalışmıyor olması. Cloudflare panelinde Settings → Triggers → Cron Triggers altında yıldız-boşluk-yıldız-boşluk-yıldız-boşluk-yıldız kurulu mu kontrol et; sistem sekmesindeki 🩺 Hatalar da bir ipucu verebilir.":"";
   return parcalar.join(" · ")+"."+not;
 }
 /* Taramadan dönen {kod,fiyat,zaman,tf} nesnesini "KOD  45.02 TL · 03.09 14:00"
@@ -12244,25 +12110,6 @@ if("/tavankombi/gecmis"===$.pathname){
   const mevcutIs=await tvkGecmisIsOku(A);
   if(mevcutIs&&!mevcutIs.tamamlandi)
     return new Response(tvkGecmisIlerlemeHTML(anahtar),{headers:{"content-type":"text/html; charset=utf-8"}});
-  /* 🚨 2026-09-03-h · KÖKTEN DÜZELTME — "her sayfa yeniden açılışta ilerleme
-     sıfırlanıyor ama toplam gözlem sayısı GARİP ŞEKİLDE İKİ KATINA ÇIKIYOR"
-     tarzı sessiz ÇİFT SAYIM hatası. SEBEP: iş (job) tamamlanınca (tamamlandi:
-     true) bu sayfa TEKRAR açıldığında yukarıdaki "if" atlanıp aşağıda HER
-     ZAMAN yepyeni bir job kuruluyordu — bu haliyle tek başına sorun değil
-     (yeni bir tam-tur taraması makul). Asıl hata: yeni job'ın kendi
-     job.tumGunSet'i BOŞ başladığı için, ÖNCEKİ turda zaten sayılmış olan
-     AYNI (gün,hisse) çiftleri "yeni gün" sanılıp tvkGecmisBirlestir'de
-     tvkArsiv2'nin sayaçlarına TEKRAR EKLENİYORDU (birleştirme SADECE
-     toplama yapar, tekilleştirme yapmaz) — sayfayı her yeniden açışta
-     "toplam tavan gözlemi" ve altındaki kombinasyon sayaçları katbekat
-     şişiyordu. ÇÖZÜM: yeni bir TAM tur (tüm 434 hisse sıfırdan kuyruğa
-     alınıyor) başlarken tvkArsiv2 de SIFIRLANIYOR — yani her tam tur kendi
-     başına tek ve tekrarsız bir ölçüm olur, üst üste BİRİKMEZ ("üzerine
-     ekleme yapmaz, sıfırdan başlar"). Kısmi ilerleme (mevcutIs varken sayfa
-     kapanıp tekrar açılması) YUKARIDAKİ if'te zaten yakalanıp AYNI job'a
-     devam ediyor, oraya dokunulmadı — yalnız TAMAMLANMIŞ/hiç olmayan bir
-     işin ÜZERİNE yeni tam tur başlarken sıfırlama eklendi. */
-  await tvkArsivYaz(A,{gun:0,sayac:{},tavanToplam:0,karsilastirmaToplam:0});
   const evren=await mbEvren(A,[]);
   const job={anahtar:anahtar,kuyruk:evren.slice(),toplam:evren.length,tamam:0,gunToplam:0,
     yerel:tvkGecmisSayacYeni(),baslangic:Date.now(),guncelleme:Date.now(),tamamlandi:!1};
@@ -13527,7 +13374,6 @@ tavanKombiGecmisUrl:YON?(n+"/tavankombi/gecmis?key="+encodeURIComponent(i)):null
    medyan, getiri dağılımı, en kötü seri (drawdown yerine sinyal bazlı),
    zirveden geri veriş, dilim tablosu. */
 if("/api/tavankombi"===$.pathname){
-  await tvkCanliDoldur(A);
   const arsiv3=await tvkArsivOku(A);
   const rapor3=tvkRaporUret(arsiv3);
   rapor3.canliDurum=await mbTfTeshisUret(A);
@@ -13545,7 +13391,6 @@ if("/api/tavankombi/tara"===$.pathname){
   if("POST"!==p.method)return new Response(JSON.stringify({ok:!1,mesaj:"POST bekleniyor"}),{status:405,headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
   const kombo=tvkComboFromId(gov&&gov.id);
   if(!kombo)return new Response(JSON.stringify({ok:!1,mesaj:"geçersiz kombinasyon"}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
-  await tvkCanliDoldur(A);
   const snap5=await tvkGunSnapUret(A);
   const kodlar5=Object.keys(snap5).filter(kod=>tvkComboGecti(kombo,snap5[kod])).sort()
     .map(kod=>Object.assign({kod:kod},tvkFiyatSec(kombo,snap5[kod])));
@@ -13563,7 +13408,6 @@ if("/api/tavankombi/taraTumu"===$.pathname){
   if("POST"!==p.method)return new Response(JSON.stringify({ok:!1,mesaj:"POST bekleniyor"}),{status:405,headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
   const idler=Array.isArray(gov&&gov.ids)?gov.ids.slice(0,300):[];
   if(!idler.length)return new Response(JSON.stringify({ok:!1,mesaj:"id listesi boş"}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
-  await tvkCanliDoldur(A);
   const snap6=await tvkGunSnapUret(A);
   const kodTum6=Object.keys(snap6);
   const sonuclar6={};
