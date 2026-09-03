@@ -6681,7 +6681,8 @@ function tavanKombiGoster(v){
   var GOSTERILEN=250;
   h+='<div class="kutu"><h3>🏆 En iyi kombinasyonlar</h3>'+
      '<button id="tvkTumBtn" style="margin:4px 0 10px;background:#238636;border:1px solid #2ea043;color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;width:100%">🔍🔍 Tümünü (ilk '+Math.min(GOSTERILEN,v.satirlar.length)+') şimdi tara</button>'+
-     '<div id="tvkTumSonuc" style="margin:0 0 10px;font-size:12px;color:#8b949e"></div>';
+     '<div id="tvkTumSonuc" style="margin:0 0 10px;font-size:12px;color:#8b949e"></div>'+
+     '<div id="tvkTop10"></div>';
   v.satirlar.slice(0,GOSTERILEN).forEach(function(r,i){
     var ustu=r.oran>=v.taban;
     h+='<div class="btGun">'+
@@ -6735,6 +6736,7 @@ function tvkTumunuTaraBagla(){
     ustBtn.disabled=true;ustBtn.textContent="hepsi taranıyor…";
     satirlar.forEach(function(b){b.disabled=true;b.textContent="taranıyor…";b.parentElement.style.display=""});
     if(ustSonuc)ustSonuc.textContent="";
+    var top10Kutu=el("tvkTop10");if(top10Kutu)top10Kutu.innerHTML="";
     post("/api/tavankombi/taraTumu",{ids:idler}).then(function(v){
       ustBtn.disabled=false;ustBtn.textContent="🔍🔍 Tümünü (ilk "+idler.length+") şimdi tara";
       if(!v||!v.ok){if(ustSonuc)ustSonuc.textContent=(v&&v.mesaj)||"taranamadı";
@@ -6757,6 +6759,7 @@ function tvkTumunuTaraBagla(){
       if(ustSonuc)ustSonuc.innerHTML=eslesenSayisi+"/"+idler.length+" kombinasyonda eşleşen hisse bulundu ("+v.taranan+" hisse tarandı). "+
         (gizlenen?gizlenen+" eşleşmeyen kombinasyon gizlendi — <a href=\\"#\\" id=\\"tvkHepsiniGoster\\" style=\\"color:#58a6ff\\">tümünü göster</a>":"")+
         (v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");
+      tvkTop10Ciz(v);
       var gostBtn=el("tvkHepsiniGoster");
       if(gostBtn)gostBtn.onclick=function(ev){ev.preventDefault();
         Array.prototype.forEach.call(document.querySelectorAll(".btGun"),function(d){d.style.display=""});
@@ -6768,6 +6771,31 @@ function tvkTumunuTaraBagla(){
       if(ustSonuc)ustSonuc.textContent="hata — tekrar dene";
     });
   };
+}
+/* 🏆 En fazla tekrar eden 10 hisse — "Tümünü şimdi tara" zaten her
+   kombinasyon için eşleşen hisse listesini (v.sonuclar[id].kodlar)
+   getiriyor; ek sunucu isteği atmadan bu listeleri tek havuzda sayıp
+   en çok kombinasyonda birden geçen 10 hisseyi gösteriyoruz. */
+function tvkTop10Ciz(v){
+  var kutu=el("tvkTop10");if(!kutu)return;
+  if(!v||!v.sonuclar){kutu.innerHTML="";return}
+  var sayac={};
+  Object.keys(v.sonuclar).forEach(function(id){
+    var s=v.sonuclar[id];
+    if(!s||!s.ok||!s.kodlar)return;
+    s.kodlar.forEach(function(k){var kod=k.kod||k;sayac[kod]=(sayac[kod]||0)+1});
+  });
+  var siralı=Object.keys(sayac).map(function(kod){return{kod:kod,adet:sayac[kod]}})
+    .sort(function(a,b){return b.adet-a.adet||a.kod.localeCompare(b.kod)}).slice(0,10);
+  if(!siralı.length){kutu.innerHTML="";return}
+  kutu.innerHTML='<div class="kutu" style="margin-top:10px"><h3>🏆 En fazla tekrar eden 10 hisse</h3>'+
+    '<div class="btAc">Az önceki taramada, kaç ayrı kombinasyonda birden eşleşti — en yüksek sayı en üstte.</div>'+
+    siralı.map(function(x,i){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d">'+
+        '<span style="font-family:inherit">'+(i+1)+'. <b style="color:#e6edf3">'+E(x.kod)+'</b></span>'+
+        '<span class="btN">'+x.adet+' kombinasyonda</span></div>';
+    }).join("")+
+    '</div>';
 }
 /* 🧩 Kendi kombinasyonunu kur — 10 modülün her biri için AYRI dilim (kapalı/
    1SA/4SA) seçtirir, tvkComboFromId'nin beklediği "el:tf+el:tf" biçiminde
