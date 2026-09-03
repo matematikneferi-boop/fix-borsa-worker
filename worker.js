@@ -6596,6 +6596,7 @@ function tvkTeshisMetni(liste){
   var not=bosVarMi?" ⚠️ Havuz boş/bayat görünüyor — en olası sebep arka plan taramasının (Cloudflare Cron Trigger) çalışmıyor olması. Cloudflare panelinde Settings → Triggers → Cron Triggers altında yıldız-boşluk-yıldız-boşluk-yıldız-boşluk-yıldız kurulu mu kontrol et; sistem sekmesindeki 🩺 Hatalar da bir ipucu verebilir.":"";
   return parcalar.join(" · ")+"."+not;
 }
+var TVK_KURUCU_ELEMAN=[["dip","Dip (genel)"],["dip382","Dip %38.2"],["dip236","Dip %23.6"],["b1","Bölge 1"],["b2","Bölge 2"],["b3","Bölge 3"],["b4","Bölge 4"],["b5","Bölge 5"],["b6","Bölge 6"],["pivot","Pivot Kırılım"]];
 function tavanKombiGoster(v){
   if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Henüz veri yok.</div>';return}
   var h='';
@@ -6614,9 +6615,23 @@ function tavanKombiGoster(v){
      '</div>'+
      (v.canliDurum?'<div class="btAc" style="margin-top:8px">🩺 <b>Canlı havuz durumu</b> ("Şimdi tara" bu veriyi kullanır): '+E(tvkTeshisMetni(v.canliDurum))+'</div>':'')+
      '</div>';
+  h+='<div class="kutu"><h3>🧩 Kendi kombinasyonunu kur</h3>'+
+     '<div class="btAc">Her modül için istersen ayrı bir zaman dilimi seç — normal 🪜Bölge/⬇️Dip ekranlarının aksine burada her modül KENDİ diliminde bağımsız çalışır (örn. Bölge 2 → 4 Saatlik, Bölge 4 → 1 Saatlik aynı anda).</div>'+
+     '<div id="tvkKurucuAlan">'+
+       TVK_KURUCU_ELEMAN.map(function(e){
+         return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d">'+
+           '<span style="font-size:13px">'+e[1]+'</span>'+
+           '<select class="tvkKurucuSec" data-el="'+e[0]+'" style="background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:4px 6px;font-size:13px">'+
+             '<option value="">kapalı</option><option value="1SA">1 Saatlik</option><option value="4SA">4 Saatlik</option>'+
+           '</select></div>';
+       }).join("")+
+     '</div>'+
+     '<button id="tvkKurucuBtn" style="margin-top:10px;background:#238636;border:1px solid #2ea043;color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;width:100%">🔍 Bu kombinasyonla tara</button>'+
+     '<div id="tvkKurucuSonuc" style="margin-top:8px;font-size:12px;color:#8b949e"></div>'+
+     '</div>';
   if(!v.satirlar||!v.satirlar.length){
     h+='<div class="bos">Henüz sayaç birikmedi — yarın tekrar bak.</div>';
-    el("govde").innerHTML=h;return;
+    el("govde").innerHTML=h;tvkKurucuBagla();return;
   }
   var GOSTERILEN=250;
   h+='<div class="kutu"><h3>🏆 En iyi kombinasyonlar</h3>'+
@@ -6639,6 +6654,7 @@ function tavanKombiGoster(v){
   el("govde").innerHTML=h;
   tvkTaraBagla();
   tvkTumunuTaraBagla();
+  tvkKurucuBagla();
 }
 /* 🔍 Bu kombinasyonla şimdi tara — bkz. /api/tavankombi/tara notu. Her
    satırın kendi sonuç kutusuna (tvkTaraSonuc) yazar, sayfa yeniden
@@ -6706,6 +6722,33 @@ function tvkTumunuTaraBagla(){
       satirlar.forEach(function(b){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara"});
       if(ustSonuc)ustSonuc.textContent="hata — tekrar dene";
     });
+  };
+}
+/* 🧩 Kendi kombinasyonunu kur — 10 modülün her biri için AYRI dilim (kapalı/
+   1SA/4SA) seçtirir, tvkComboFromId'nin beklediği "el:tf+el:tf" biçiminde
+   bir id kurup MEVCUT /api/tavankombi/tara uç noktasına gönderir. Yeni bir
+   sunucu ucu gerekmiyor — normal 🪜Bölge/⬇️Dip ekranlarının yapamadığı
+   "her modülde farklı dilim" seçimini burada elle kurabiliyorsun. */
+function tvkKurucuBagla(){
+  var btn=el("tvkKurucuBtn");if(!btn)return;
+  btn.onclick=function(){
+    tit();
+    var parcalar=[];
+    Array.prototype.forEach.call(document.querySelectorAll(".tvkKurucuSec"),function(s){
+      if(s.value)parcalar.push(s.dataset.el+":"+s.value);
+    });
+    var sonuc=el("tvkKurucuSonuc");
+    if(!parcalar.length){if(sonuc)sonuc.textContent="en az bir modül seç";return}
+    var id=parcalar.join("+");
+    btn.disabled=true;btn.textContent="taranıyor…";
+    if(sonuc)sonuc.textContent="";
+    post("/api/tavankombi/tara",{id:id}).then(function(v){
+      btn.disabled=false;btn.textContent="🔍 Bu kombinasyonla tara";
+      if(!v||!v.ok){if(sonuc)sonuc.textContent=(v&&v.mesaj)||"taranamadı";return}
+      if(!v.sayi){if(sonuc)sonuc.innerHTML="şu anda bu kombinasyonu karşılayan hisse yok ("+v.taranan+" hisse tarandı)"+(v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");return}
+      if(sonuc)sonuc.innerHTML='<b style="color:#e6edf3">'+v.sayi+' hisse</b> şu anda bu kombinasyonu karşılıyor ('+v.taranan+' hisse tarandı):<br>'+
+        v.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3">'+E(k)+'</span>'}).join("");
+    }).catch(function(){btn.disabled=false;btn.textContent="🔍 Bu kombinasyonla tara";if(sonuc)sonuc.textContent="hata — tekrar dene"});
   };
 }
 /* Dilim / tip / durum / mesafe / sıralama süzgeçleri: veri zaten yüklü,
