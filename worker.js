@@ -6735,7 +6735,7 @@ function tvkTeshisMetni(liste){
   var not="";
   if(bosVarMi){
     if(liste.calisiyor===!1){
-      not=" ⚠️ Tarama DURDURULMUŞ — bu yüzden havuz dolmuyor (durdurulmuşken \"şimdi tara\" butonları da kendi kendine dolduramaz). Yönetici panelinden taramayı tekrar başlat.";
+      not=" ⚠️ Tarama DURDURULMUŞ — bu yüzden havuz dolmuyor (durdurulmuşken 'şimdi tara' butonları da kendi kendine dolduramaz). Yönetici panelinden taramayı tekrar başlat.";
     }else if(liste.evrenSayisi===0){
       not=" ⚠️ Hisse listesi (evren) BOŞ görünüyor — taranacak hiçbir kod yok, bu yüzden 0 hisse ölçülüyor. Evren kaynağının (borsa listesi) doğru yüklendiğini kontrol et.";
     }else{
