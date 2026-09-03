@@ -4332,7 +4332,7 @@ async function tvkGunSnapUret(A){
   TVK_TF.forEach(t=>Object.keys(tfVeri[t]).forEach(k=>kodlar.add(k)));
   const sonuc={};
   kodlar.forEach(kod=>{
-    const s={dip:{},dip382:{},dip236:{},b1:{},b2:{},b3:{},b4:{},b5:{},b6:{}};
+    const s={dip:{},dip382:{},dip236:{},b1:{},b2:{},b3:{},b4:{},b5:{},b6:{},fiyat:{},zaman:{}};
     for(const t of TVK_TF){
       const x=tfVeri[t][kod];
       s.dip[t]=!!(x&&x.dip);
@@ -4343,11 +4343,29 @@ async function tvkGunSnapUret(A){
         const b=MB_BOLGE_S[bid];
         s[bid][t]=!!(boga&&isFinite(oran)&&oran>=b[0]&&oran<b[1]);
       }
+      /* fiyat=son kapanış (TL), zaman=o kapanışın ait olduğu mumun Yahoo
+         zaman damgası (epoch SANİYE). "Şimdi tara" sonucundaki her hisseye
+         eklenip güncellik kontrolü için tarayıcıda tarihe çevrilecek. */
+      s.fiyat[t]=(x&&isFinite(x.fiyat))?x.fiyat:null;
+      s.zaman[t]=(x&&x.zaman)?x.zaman:null;
     }
     s.pivot=pivotBugun[kod]||{"1SA":!1,"4SA":!1};
     sonuc[kod]=s;
   });
   return sonuc;
+}
+/* Bir kombinasyonun GERÇEKTEN kullandığı dilimler arasından en TAZE mumu
+   (en büyük zaman damgası) seçer — "bu eşleşme hangi fiyata/mumluktan
+   geldi, ne kadar güncel" sorusunun cevabı budur. Kombinasyonda hiç
+   kullanılmayan dilimlere (kombo[i]===null) bakılmaz. */
+function tvkFiyatSec(kombo,s){
+  let en=null;
+  for(let i=0;i<TVK_ELEMAN.length;i++){
+    const tf=kombo[i];if(tf===null)continue;
+    const z=s.zaman&&s.zaman[tf];
+    if(z&&(!en||z>en.zaman))en={fiyat:s.fiyat[tf],zaman:z,tf:tf};
+  }
+  return en;
 }
 
 async function tvkArsivOku(A){
@@ -6596,6 +6614,19 @@ function tvkTeshisMetni(liste){
   var not=bosVarMi?" ⚠️ Havuz boş/bayat görünüyor — en olası sebep arka plan taramasının (Cloudflare Cron Trigger) çalışmıyor olması. Cloudflare panelinde Settings → Triggers → Cron Triggers altında yıldız-boşluk-yıldız-boşluk-yıldız-boşluk-yıldız kurulu mu kontrol et; sistem sekmesindeki 🩺 Hatalar da bir ipucu verebilir.":"";
   return parcalar.join(" · ")+"."+not;
 }
+/* Taramadan dönen {kod,fiyat,zaman,tf} nesnesini "KOD  45.02 TL · 03.09 14:00"
+   biçiminde okunabilir bir etikete çevirir. zaman = Yahoo mumunun epoch
+   SANİYE damgası; tarayıcının kendi saatine göre biçimlendirilir, böylece
+   fiyatın güncel mi bayat mı olduğu tek bakışta görülür. */
+function tvkFiyatEtiket(o){
+  var kod=E(o.kod);
+  if(!o||!o.zaman)return kod;
+  var d=new Date(o.zaman*1000);
+  var gg=("0"+d.getDate()).slice(-2),aa=("0"+(d.getMonth()+1)).slice(-2);
+  var ss=("0"+d.getHours()).slice(-2),dd=("0"+d.getMinutes()).slice(-2);
+  return kod+'<br><span style="color:#8b949e;font-weight:normal;font-size:11px">'+
+    (o.fiyat!=null?o.fiyat.toFixed(2)+' TL · ':'')+gg+'.'+aa+' '+ss+':'+dd+'</span>';
+}
 var TVK_KURUCU_ELEMAN=[["dip","Dip (genel)"],["dip382","Dip %38.2"],["dip236","Dip %23.6"],["b1","Bölge 1"],["b2","Bölge 2"],["b3","Bölge 3"],["b4","Bölge 4"],["b5","Bölge 5"],["b6","Bölge 6"],["pivot","Pivot Kırılım"]];
 function tavanKombiGoster(v){
   if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Henüz veri yok.</div>';return}
@@ -6670,7 +6701,7 @@ function tvkTaraBagla(){
         if(!v||!v.ok){kutu.textContent=(v&&v.mesaj)||"taranamadı";return}
         if(!v.sayi){kutu.innerHTML="şu anda bu kombinasyonu karşılayan hisse yok ("+v.taranan+" hisse tarandı)"+(v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");return}
         kutu.innerHTML='<b style="color:#e6edf3">'+v.sayi+' hisse</b> şu anda bu kombinasyonu karşılıyor ('+v.taranan+' hisse tarandı):<br>'+
-          v.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3">'+E(k)+'</span>'}).join("");
+          v.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3;text-align:center">'+tvkFiyatEtiket(k)+'</span>'}).join("");
       }).catch(function(){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara";kutu.textContent="hata — tekrar dene"});
     };
   });
@@ -6707,7 +6738,7 @@ function tvkTumunuTaraBagla(){
         }
         eslesenSayisi++;
         kutu.innerHTML='<b style="color:#e6edf3">'+sonuc.kodlar.length+' hisse</b> şu anda bu kombinasyonu karşılıyor ('+v.taranan+' hisse tarandı):<br>'+
-          sonuc.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3">'+E(k)+'</span>'}).join("");
+          sonuc.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3;text-align:center">'+tvkFiyatEtiket(k)+'</span>'}).join("");
       });
       if(ustSonuc)ustSonuc.innerHTML=eslesenSayisi+"/"+idler.length+" kombinasyonda eşleşen hisse bulundu ("+v.taranan+" hisse tarandı). "+
         (gizlenen?gizlenen+" eşleşmeyen kombinasyon gizlendi — <a href=\\"#\\" id=\\"tvkHepsiniGoster\\" style=\\"color:#58a6ff\\">tümünü göster</a>":"")+
@@ -6747,7 +6778,7 @@ function tvkKurucuBagla(){
       if(!v||!v.ok){if(sonuc)sonuc.textContent=(v&&v.mesaj)||"taranamadı";return}
       if(!v.sayi){if(sonuc)sonuc.innerHTML="şu anda bu kombinasyonu karşılayan hisse yok ("+v.taranan+" hisse tarandı)"+(v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");return}
       if(sonuc)sonuc.innerHTML='<b style="color:#e6edf3">'+v.sayi+' hisse</b> şu anda bu kombinasyonu karşılıyor ('+v.taranan+' hisse tarandı):<br>'+
-        v.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3">'+E(k)+'</span>'}).join("");
+        v.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3;text-align:center">'+tvkFiyatEtiket(k)+'</span>'}).join("");
     }).catch(function(){btn.disabled=false;btn.textContent="🔍 Bu kombinasyonla tara";if(sonuc)sonuc.textContent="hata — tekrar dene"});
   };
 }
@@ -13287,7 +13318,8 @@ if("/api/tavankombi/tara"===$.pathname){
   const kombo=tvkComboFromId(gov&&gov.id);
   if(!kombo)return new Response(JSON.stringify({ok:!1,mesaj:"geçersiz kombinasyon"}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
   const snap5=await tvkGunSnapUret(A);
-  const kodlar5=Object.keys(snap5).filter(kod=>tvkComboGecti(kombo,snap5[kod])).sort();
+  const kodlar5=Object.keys(snap5).filter(kod=>tvkComboGecti(kombo,snap5[kod])).sort()
+    .map(kod=>Object.assign({kod:kod},tvkFiyatSec(kombo,snap5[kod])));
   const taranan5=Object.keys(snap5).length;
   return new Response(JSON.stringify({ok:!0,id:gov.id,kodlar:kodlar5,sayi:kodlar5.length,taranan:taranan5,
     teshis:taranan5?void 0:await mbTfTeshisUret(A)}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
@@ -13307,7 +13339,8 @@ if("/api/tavankombi/taraTumu"===$.pathname){
   const sonuclar6={};
   for(const id6 of idler){
     const kombo6=tvkComboFromId(id6);
-    sonuclar6[id6]=kombo6?{ok:!0,kodlar:kodTum6.filter(kod=>tvkComboGecti(kombo6,snap6[kod])).sort()}:{ok:!1,mesaj:"geçersiz kombinasyon"};
+    sonuclar6[id6]=kombo6?{ok:!0,kodlar:kodTum6.filter(kod=>tvkComboGecti(kombo6,snap6[kod])).sort()
+      .map(kod=>Object.assign({kod:kod},tvkFiyatSec(kombo6,snap6[kod])))}:{ok:!1,mesaj:"geçersiz kombinasyon"};
   }
   return new Response(JSON.stringify({ok:!0,sonuclar:sonuclar6,taranan:kodTum6.length,
     teshis:kodTum6.length?void 0:await mbTfTeshisUret(A)}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
