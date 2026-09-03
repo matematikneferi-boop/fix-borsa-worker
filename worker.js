@@ -1180,7 +1180,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-09-03-d · 🔍 Tavan Kombi'ye canlı tarama eklendi: her satırın altında artık \"🔍 Bu kombinasyonla şimdi tara\" butonu var — eskiden 🪜 Bölge/⬇️ Dip filtreleri her elemanda TEK ortak dilim dayattığı için \"1SA'de b3 VE 4SA'de b6\" gibi eleman-başına-farklı-dilim kombinasyonları canlı taramada kurulamıyordu; artık backtest raporundaki HERHANGİ bir satıra tıklayınca o kombinasyonu ŞU AN karşılayan hisseler listeleniyor (yeni /api/tavankombi/tara, mevcut tvkGunSnapUret'i kullanıyor — ek Yahoo isteği yok) · 2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-09-03-e · 🐂 Tavan Kombi KRİTİK DÜZELTME: DİP (dip/dip382/dip236) ve PİVOT KIRILIM elemanlarında BOĞA şartı hiç YOKTU — yalnız SEVİYE BÖLGESİ (b1..b6) bantlarında vardı, yani bu elemanlar hissenin ayı olduğu durumlarda da 'geçti' sayılıyordu. Artık 10 elemanın HEPSİNDE (dip/dip382/dip236/b1..b6/pivot) boğa şartı zorunlu — hem canlı anlık taramada (tvkGunSnapUret / 🔍 Bu kombinasyonla şimdi tara) hem geçmiş taramasında (tvkGecmisHisseTara) aynı düzeltme. Eski sayaçlar bu yüzden GEÇERSİZDİ: tvkArsiv→tvkArsiv2 ve tvkGecmisIs→tvkGecmisIs2 anahtarlarına geçildi, böylece /tavankombi/gecmis'e bir sonraki girişte otomatik olarak SIFIRDAN, düzeltilmiş kurallarla tam yeniden tarama başlar (evrendeki tüm hisseler baştan işlenir) · 2026-09-03-d · 🔍 Tavan Kombi'ye canlı tarama eklendi: her satırın altında artık \"🔍 Bu kombinasyonla şimdi tara\" butonu var — eskiden 🪜 Bölge/⬇️ Dip filtreleri her elemanda TEK ortak dilim dayattığı için \"1SA'de b3 VE 4SA'de b6\" gibi eleman-başına-farklı-dilim kombinasyonları canlı taramada kurulamıyordu; artık backtest raporundaki HERHANGİ bir satıra tıklayınca o kombinasyonu ŞU AN karşılayan hisseler listeleniyor (yeni /api/tavankombi/tara, mevcut tvkGunSnapUret'i kullanıyor — ek Yahoo isteği yok) · 2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -4335,10 +4335,10 @@ async function tvkGunSnapUret(A){
     const s={dip:{},dip382:{},dip236:{},b1:{},b2:{},b3:{},b4:{},b5:{},b6:{},fiyat:{},zaman:{}};
     for(const t of TVK_TF){
       const x=tfVeri[t][kod];
-      s.dip[t]=!!(x&&x.dip);
-      s.dip382[t]=!!(x&&x.dip382);
-      s.dip236[t]=!!(x&&x.dip236);
       const boga=!!(x&&x.boga),oran=x&&x.oran;
+      s.dip[t]=!!(x&&x.dip&&boga);
+      s.dip382[t]=!!(x&&x.dip382&&boga);
+      s.dip236[t]=!!(x&&x.dip236&&boga);
       for(const bid in MB_BOLGE_S){
         const b=MB_BOLGE_S[bid];
         s[bid][t]=!!(boga&&isFinite(oran)&&oran>=b[0]&&oran<b[1]);
@@ -4349,7 +4349,9 @@ async function tvkGunSnapUret(A){
       s.fiyat[t]=(x&&isFinite(x.fiyat))?x.fiyat:null;
       s.zaman[t]=(x&&x.zaman)?x.zaman:null;
     }
-    s.pivot=pivotBugun[kod]||{"1SA":!1,"4SA":!1};
+    const pv=pivotBugun[kod]||{"1SA":!1,"4SA":!1};
+    s.pivot={"1SA":!!(pv["1SA"]&&tfVeri["1SA"][kod]&&tfVeri["1SA"][kod].boga),
+             "4SA":!!(pv["4SA"]&&tfVeri["4SA"][kod]&&tfVeri["4SA"][kod].boga)};
     sonuc[kod]=s;
   });
   return sonuc;
@@ -4368,12 +4370,19 @@ function tvkFiyatSec(kombo,s){
   return en;
 }
 
+/* 🔧 2026-09-03-e: KV anahtarı "tvkArsiv" → "tvkArsiv2" olarak DEĞİŞTİRİLDİ.
+   Sebep: dip/dip382/dip236/pivot elemanlarında BOĞA şartı unutulmuştu (yalnız
+   b1..b6 bölge bantlarında vardı) — eski "tvkArsiv" altındaki tüm sayaçlar bu
+   yüzden GEÇERSİZ. Anahtarı değiştirmek, eski (yanlış) veriyi sessizce bir
+   kenara bırakıp sıfırdan doğru sayaçla başlamanın en basit yolu — silme
+   işlemi gerekmiyor, tvkArsivOku zaten yeni anahtar boşken {gun:0,sayac:{}}
+   döner. */
 async function tvkArsivOku(A){
   if(!A.VERI)return{gun:0,sayac:{}};
-  try{const j=await A.VERI.get("tvkArsiv");if(j)return JSON.parse(j)}catch(_){}
+  try{const j=await A.VERI.get("tvkArsiv2");if(j)return JSON.parse(j)}catch(_){}
   return{gun:0,sayac:{}};
 }
-async function tvkArsivYaz(A,v){if(A.VERI)try{await A.VERI.put("tvkArsiv",JSON.stringify(v))}catch(_){}}
+async function tvkArsivYaz(A,v){if(A.VERI)try{await A.VERI.put("tvkArsiv2",JSON.stringify(v))}catch(_){}}
 async function tvkOncekiFiyatOku(A){
   if(!A.VERI)return{};
   try{const j=await A.VERI.get("tvkOncekiFiyat");if(j)return JSON.parse(j)}catch(_){}
@@ -4452,13 +4461,18 @@ function tvkRaporUret(arsiv){
 const TVK_GECMIS_ADIM=5;     /* bir adımda kaç hisse (her hisse 2 Yahoo isteği: 60dk + 1g) */
 const TVK_GECMIS_GUN=95;     /* geriye en fazla kaç günlük kapanış denenir */
 
+/* 🔧 2026-09-03-e: aynı sebeple "tvkGecmisIs" → "tvkGecmisIs2" — eski işin
+   (tamamlanmış olsa bile) bir kısmı düzeltmeden ÖNCEKİ yanlış mantıkla
+   işlenmişti; anahtarı değiştirince eski iş "yok" sayılır ve /tavankombi/gecmis
+   sayfası ilk ziyarette otomatik olarak SIFIRDAN, düzeltilmiş boğa şartıyla
+   yeni bir tarama işi kurar (kuyruk=tüm evren). */
 async function tvkGecmisIsOku(A){
   if(!A.VERI)return null;
-  try{const j=await A.VERI.get("tvkGecmisIs");return j?JSON.parse(j):null}catch(_){return null}
+  try{const j=await A.VERI.get("tvkGecmisIs2");return j?JSON.parse(j):null}catch(_){return null}
 }
 async function tvkGecmisIsYaz(A,job){
   if(!A.VERI)return;
-  try{await A.VERI.put("tvkGecmisIs",JSON.stringify(job),{expirationTtl:86400})}catch(_){}
+  try{await A.VERI.put("tvkGecmisIs2",JSON.stringify(job),{expirationTtl:86400})}catch(_){}
 }
 /* tvkPivotBugunSeti'nin GENEL hâli — "bugün" yerine herhangi bir TR
    takvim günü (YYYY-MM-DD) için kod→{1SA,4SA} pivot kırılım haritası. */
@@ -4521,10 +4535,10 @@ async function tvkGecmisHisseTara(A,kod,gp,yerel){
        tvkGunSnapUret'teki live hesapla AYNI kural (boğa VE oran o bandın
        [alt,ust) aralığında). */
     const snap={
-      dip:{"1SA":!!x1.dip,"4SA":!!x4.dip},
-      dip382:{"1SA":!!x1.dip382,"4SA":!!x4.dip382},
-      dip236:{"1SA":!!x1.dip236,"4SA":!!x4.dip236},
-      pivot:pv
+      dip:{"1SA":!!(x1.dip&&x1.boga),"4SA":!!(x4.dip&&x4.boga)},
+      dip382:{"1SA":!!(x1.dip382&&x1.boga),"4SA":!!(x4.dip382&&x4.boga)},
+      dip236:{"1SA":!!(x1.dip236&&x1.boga),"4SA":!!(x4.dip236&&x4.boga)},
+      pivot:{"1SA":!!(pv["1SA"]&&x1.boga),"4SA":!!(pv["4SA"]&&x4.boga)}
     };
     for(const bid in MB_BOLGE_S){
       const b=MB_BOLGE_S[bid];
