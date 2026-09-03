@@ -4307,21 +4307,6 @@ async function tvkPivotBugunSeti(A){
    ile AYNI kural (boğa VE oran o bandın [alt,ust) aralığında) — kendi ayrı
    elemanı. Bantlar birbirini dışladığı için bir tf'te en fazla bir bant
    true olur. */
-/* 🩺 CANLI HAVUZ TEŞHİSİ — "0 hisse tarandı" çıktığında SEBEBİNİ görmek için.
-   mbBirikim'i ölçmez, YALNIZ mevcut durumunu raporlar (ek Yahoo isteği yok).
-   yasDk=null → o dilim hiç yazılmamış (arka plan hiç çalışmamış demektir).
-   yasDk büyükse (örn. >20) arka plan taraması bir süredir durmuş demektir —
-   en olası sebep: Cloudflare panelinde Settings → Triggers → Cron Trigger
-   kurulu değil / kapalı (bkz. scheduled() üstündeki kurulum notu). */
-async function mbTfTeshisUret(A){
-  const out=[];
-  for(const t of TVK_TF){
-    const b=await mbTfOku(A,t,!0);
-    const n=Object.keys((b&&b.sonuc)||{}).length;
-    out.push({tf:t,n:n,yasDk:(b&&b.ts)?Math.round((Date.now()-b.ts)/6e4):null,parca:(b&&b.parca)||0});
-  }
-  return out;
-}
 async function tvkGunSnapUret(A){
   const tfVeri={};
   for(const t of TVK_TF)tfVeri[t]=((await mbTfOku(A,t,!0))||{}).sonuc||{};
@@ -6581,19 +6566,6 @@ function tavanKombiCiz(){
   post("/api/tavankombi",{}).then(function(v){tkD=v;tavanKombiGoster(v)})
     .catch(function(){el("govde").innerHTML='<div class="bos">Okunamadı.</div>'});
 }
-/* 🩺 canliDurum/teshis dizisini ("1SA: 0 kod, son yazım: hiç" gibi) okunabilir
-   tek satıra çevirir. Havuz boşsa/bayatsa en olası sebebi de ekliyor —
-   bu artık sessizce "0 hisse tarandı" demiyor, NEDEN 0 olduğunu söylüyor. */
-function tvkTeshisMetni(liste){
-  if(!liste||!liste.length)return"";
-  var parcalar=liste.map(function(d){
-    var yas=d.yasDk==null?"hiç yazılmamış":(d.yasDk+" dk önce");
-    return d.tf+": "+d.n+" hisse ölçülü (son yazım: "+yas+")";
-  });
-  var bosVarMi=liste.some(function(d){return d.n===0||d.yasDk==null||d.yasDk>20});
-  var not=bosVarMi?" ⚠️ Havuz boş/bayat görünüyor — en olası sebep arka plan taramasının (Cloudflare Cron Trigger) çalışmıyor olması. Cloudflare panelinde Settings → Triggers → Cron Triggers altında \"* * * * *\" kurulu mu kontrol et; sistem sekmesindeki 🩺 Hatalar da bir ipucu verebilir.":"";
-  return parcalar.join(" · ")+"."+not;
-}
 function tavanKombiGoster(v){
   if(!v||!v.ok){el("govde").innerHTML='<div class="bos">Henüz veri yok.</div>';return}
   var h='';
@@ -6609,9 +6581,7 @@ function tavanKombiGoster(v){
          '<div class="ozAlt">genel taban (filtresiz tavan oranı)</div></div>'+
        '<div class="ozKart"><div class="ozBuyuk">'+v.tavanToplam+'</div>'+
          '<div class="ozAlt">toplam tavan gözlemi</div></div>'+
-     '</div>'+
-     (v.canliDurum?'<div class="btAc" style="margin-top:8px">🩺 <b>Canlı havuz durumu</b> ("Şimdi tara" bu veriyi kullanır): '+E(tvkTeshisMetni(v.canliDurum))+'</div>':'')+
-     '</div>';
+     '</div></div>';
   if(!v.satirlar||!v.satirlar.length){
     h+='<div class="bos">Henüz sayaç birikmedi — yarın tekrar bak.</div>';
     el("govde").innerHTML=h;return;
@@ -6650,7 +6620,7 @@ function tvkTaraBagla(){
       post("/api/tavankombi/tara",{id:b.dataset.tvkid}).then(function(v){
         b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara";
         if(!v||!v.ok){kutu.textContent=(v&&v.mesaj)||"taranamadı";return}
-        if(!v.sayi){kutu.innerHTML="şu anda bu kombinasyonu karşılayan hisse yok ("+v.taranan+" hisse tarandı)"+(v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");return}
+        if(!v.sayi){kutu.textContent="şu anda bu kombinasyonu karşılayan hisse yok ("+v.taranan+" hisse tarandı)";return}
         kutu.innerHTML='<b style="color:#e6edf3">'+v.sayi+' hisse</b> şu anda bu kombinasyonu karşılıyor ('+v.taranan+' hisse tarandı):<br>'+
           v.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3">'+E(k)+'</span>'}).join("");
       }).catch(function(){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara";kutu.textContent="hata — tekrar dene"});
@@ -6687,7 +6657,7 @@ function tvkTumunuTaraBagla(){
         kutu.innerHTML='<b style="color:#e6edf3">'+sonuc.kodlar.length+' hisse</b> şu anda bu kombinasyonu karşılıyor ('+v.taranan+' hisse tarandı):<br>'+
           sonuc.kodlar.map(function(k){return '<span style="display:inline-block;background:#161b22;border:1px solid #272e37;border-radius:6px;padding:2px 7px;margin:3px 4px 0 0;font-family:inherit;color:#e6edf3">'+E(k)+'</span>'}).join("");
       });
-      if(ustSonuc)ustSonuc.innerHTML=eslesenSayisi+"/"+idler.length+" kombinasyonda eşleşen hisse bulundu ("+v.taranan+" hisse tarandı)."+(v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");
+      if(ustSonuc)ustSonuc.textContent=eslesenSayisi+"/"+idler.length+" kombinasyonda eşleşen hisse bulundu ("+v.taranan+" hisse tarandı).";
     }).catch(function(){
       ustBtn.disabled=false;ustBtn.textContent="🔍🔍 Tümünü (ilk "+idler.length+") şimdi tara";
       satirlar.forEach(function(b){b.disabled=false;b.textContent="🔍 Bu kombinasyonla şimdi tara"});
@@ -13214,9 +13184,7 @@ tavanKombiGecmisUrl:YON?(n+"/tavankombi/gecmis?key="+encodeURIComponent(i)):null
    zirveden geri veriş, dilim tablosu. */
 if("/api/tavankombi"===$.pathname){
   const arsiv3=await tvkArsivOku(A);
-  const rapor3=tvkRaporUret(arsiv3);
-  rapor3.canliDurum=await mbTfTeshisUret(A);
-  return new Response(JSON.stringify(rapor3),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
+  return new Response(JSON.stringify(tvkRaporUret(arsiv3)),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
 }
 /* 🔍 Bu kombinasyonla ŞİMDİ tara — Tavan Kombi raporundaki bir satırı
    (örn. "b3:1SA+b6:4SA") canlı bir hisse taramasına çevirir. Backtest
@@ -13232,9 +13200,7 @@ if("/api/tavankombi/tara"===$.pathname){
   if(!kombo)return new Response(JSON.stringify({ok:!1,mesaj:"geçersiz kombinasyon"}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
   const snap5=await tvkGunSnapUret(A);
   const kodlar5=Object.keys(snap5).filter(kod=>tvkComboGecti(kombo,snap5[kod])).sort();
-  const taranan5=Object.keys(snap5).length;
-  return new Response(JSON.stringify({ok:!0,id:gov.id,kodlar:kodlar5,sayi:kodlar5.length,taranan:taranan5,
-    teshis:taranan5?void 0:await mbTfTeshisUret(A)}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
+  return new Response(JSON.stringify({ok:!0,id:gov.id,kodlar:kodlar5,sayi:kodlar5.length,taranan:Object.keys(snap5).length}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
 }
 /* 🔍🔍 TÜMÜNÜ BİRDEN tara — tek tuşla ekrandaki bütün kombinasyonları aynı
    anda süzer. tvkGunSnapUret (Yahoo'ya gitmeyen, bellekteki anlık harita)
@@ -13253,8 +13219,7 @@ if("/api/tavankombi/taraTumu"===$.pathname){
     const kombo6=tvkComboFromId(id6);
     sonuclar6[id6]=kombo6?{ok:!0,kodlar:kodTum6.filter(kod=>tvkComboGecti(kombo6,snap6[kod])).sort()}:{ok:!1,mesaj:"geçersiz kombinasyon"};
   }
-  return new Response(JSON.stringify({ok:!0,sonuclar:sonuclar6,taranan:kodTum6.length,
-    teshis:kodTum6.length?void 0:await mbTfTeshisUret(A)}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
+  return new Response(JSON.stringify({ok:!0,sonuclar:sonuclar6,taranan:kodTum6.length}),{headers:Object.assign({"content-type":"application/json; charset=utf-8"},ee)});
 }
 if("/api/backtest"===$.pathname){
 const G3=await y(A),GD3=G3.gunler||{};
