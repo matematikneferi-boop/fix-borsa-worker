@@ -6609,7 +6609,6 @@ function mesafeManuelBagla(){
    yakalıyor. Veri bugünden itibaren gün gün birikir — bkz. sunucudaki
    tvkGunSonuIsle. Yalnız yönetici görür. */
 var tkD=null;
-var tvkSonTaraTumu=null;   /* son "Tümünü tara" yanıtı — eşik değiştiğinde yeniden istek atmadan buradan filtrelenir */
 function tavanKombiCiz(){
   if(tkD){tavanKombiGoster(tkD);return}
   el("govde").innerHTML='<div class="yukleniyor">birikim okunuyor…</div>';
@@ -6681,10 +6680,6 @@ function tavanKombiGoster(v){
   }
   var GOSTERILEN=250;
   h+='<div class="kutu"><h3>🏆 En iyi kombinasyonlar</h3>'+
-     '<div style="margin:0 0 10px">'+
-       '<label style="display:block;font-size:12px;color:#8b949e;margin-bottom:4px">🎚 En fazla tekrar eden 10 hisse sayımına yalnız BU oranın (%) üstündeki kombinasyonlar dahil edilsin — boş bırakırsan hepsi (taban altındakiler dahil) sayılır, genel taban %'+v.taban.toFixed(1)+':</label>'+
-       '<input id="tvkEsikGirdi" type="number" min="0" max="100" step="0.1" placeholder="örn. '+v.taban.toFixed(1)+'" style="width:100%;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:6px 8px;font-size:13px;box-sizing:border-box">'+
-     '</div>'+
      '<button id="tvkTumBtn" style="margin:4px 0 10px;background:#238636;border:1px solid #2ea043;color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;width:100%">🔍🔍 Tümünü (ilk '+Math.min(GOSTERILEN,v.satirlar.length)+') şimdi tara</button>'+
      '<div id="tvkTumSonuc" style="margin:0 0 10px;font-size:12px;color:#8b949e"></div>'+
      '<div id="tvkTop10"></div>';
@@ -6706,14 +6701,6 @@ function tavanKombiGoster(v){
   tvkTaraBagla();
   tvkTumunuTaraBagla();
   tvkKurucuBagla();
-  tvkEsikBagla();
-}
-/* 🎚 Eşik kutusuna yazınca — yeniden sunucuya gitmeden, elde zaten duran
-   son "Tümünü tara" sonucunu (tvkSonTaraTumu) yeni eşiğe göre süzüp
-   top-10'u tekrar çizer. Henüz tarama yapılmadıysa hiçbir şey olmaz. */
-function tvkEsikBagla(){
-  var girdi=el("tvkEsikGirdi");if(!girdi)return;
-  girdi.oninput=function(){if(tvkSonTaraTumu)tvkTop10Ciz(tvkSonTaraTumu)};
 }
 /* 🔍 Bu kombinasyonla şimdi tara — bkz. /api/tavankombi/tara notu. Her
    satırın kendi sonuç kutusuna (tvkTaraSonuc) yazar, sayfa yeniden
@@ -6772,7 +6759,6 @@ function tvkTumunuTaraBagla(){
       if(ustSonuc)ustSonuc.innerHTML=eslesenSayisi+"/"+idler.length+" kombinasyonda eşleşen hisse bulundu ("+v.taranan+" hisse tarandı). "+
         (gizlenen?gizlenen+" eşleşmeyen kombinasyon gizlendi — <a href=\\"#\\" id=\\"tvkHepsiniGoster\\" style=\\"color:#58a6ff\\">tümünü göster</a>":"")+
         (v.teshis?'<div style="margin-top:4px">'+E(tvkTeshisMetni(v.teshis))+'</div>':"");
-      tvkSonTaraTumu=v;
       tvkTop10Ciz(v);
       var gostBtn=el("tvkHepsiniGoster");
       if(gostBtn)gostBtn.onclick=function(ev){ev.preventDefault();
@@ -6789,39 +6775,21 @@ function tvkTumunuTaraBagla(){
 /* 🏆 En fazla tekrar eden 10 hisse — "Tümünü şimdi tara" zaten her
    kombinasyon için eşleşen hisse listesini (v.sonuclar[id].kodlar)
    getiriyor; ek sunucu isteği atmadan bu listeleri tek havuzda sayıp
-   en çok kombinasyonda birden geçen 10 hisseyi gösteriyoruz.
-   🎚 EŞİK: #tvkEsikGirdi'ye bir sayı girilmişse, yalnız backtest başarı
-   oranı (tkD.satirlar[].oran) o sayının ÜSTÜNDE olan kombinasyonlar
-   sayıma dahil edilir — boş bırakılırsa (eski davranış) taban altındaki
-   zayıf/az-örnekli kombinasyonlar da dahil olur, bu da havuzda zaten en
-   sık geçen hisselerin (ADGYO/BIENY gibi) her seferinde tepede çıkmasına
-   sebep olur; eşik bu "genel taban gürültüsünü" eler. */
+   en çok kombinasyonda birden geçen 10 hisseyi gösteriyoruz. */
 function tvkTop10Ciz(v){
   var kutu=el("tvkTop10");if(!kutu)return;
   if(!v||!v.sonuclar){kutu.innerHTML="";return}
-  var girdi=el("tvkEsikGirdi"),esikStr=girdi?girdi.value.trim():"",
-    esik=esikStr===""?null:Number(esikStr);
-  if(esik!==null&&isNaN(esik))esik=null;
-  var oranMap={};
-  if(tkD&&tkD.satirlar)tkD.satirlar.forEach(function(r){if(r.id)oranMap[r.id]=r.oran});
-  var sayac={},kombinDahil=0;
+  var sayac={};
   Object.keys(v.sonuclar).forEach(function(id){
     var s=v.sonuclar[id];
     if(!s||!s.ok||!s.kodlar)return;
-    if(esik!==null&&!(oranMap[id]>=esik))return;
-    kombinDahil++;
     s.kodlar.forEach(function(k){var kod=k.kod||k;sayac[kod]=(sayac[kod]||0)+1});
   });
   var siralı=Object.keys(sayac).map(function(kod){return{kod:kod,adet:sayac[kod]}})
     .sort(function(a,b){return b.adet-a.adet||a.kod.localeCompare(b.kod)}).slice(0,10);
-  if(!siralı.length){
-    kutu.innerHTML='<div class="kutu" style="margin-top:10px"><h3>🏆 En fazla tekrar eden 10 hisse</h3>'+
-      '<div class="btAc">'+(esik!==null?'%'+esik+' ve üstü oranlı hiçbir kombinasyon eşleşmedi.':'eşleşen hisse yok.')+'</div></div>';
-    return;
-  }
+  if(!siralı.length){kutu.innerHTML="";return}
   kutu.innerHTML='<div class="kutu" style="margin-top:10px"><h3>🏆 En fazla tekrar eden 10 hisse</h3>'+
-    '<div class="btAc">'+(esik!==null?('yalnız %'+esik+' ve üstü oranlı '+kombinDahil+' kombinasyon sayıldı — '):('taban altındakiler dahil tüm '+kombinDahil+' kombinasyon sayıldı — '))+
-    'kaç ayrı kombinasyonda birden eşleşti, en yüksek sayı en üstte.</div>'+
+    '<div class="btAc">Az önceki taramada, kaç ayrı kombinasyonda birden eşleşti — en yüksek sayı en üstte.</div>'+
     siralı.map(function(x,i){
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d">'+
         '<span style="font-family:inherit">'+(i+1)+'. <b style="color:#e6edf3">'+E(x.kod)+'</b></span>'+
