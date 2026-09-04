@@ -8788,7 +8788,7 @@ function hacimSatir(x){
     '<div class="altbilgi">fiyat <b>'+E(String(x.fiyat))+'</b> · bar değişimi <b style="color:'+degRenk+'">'+deg+'</b>'+
     ' · hacim <b>'+E(Number(x.hacim||0).toLocaleString("tr-TR"))+'</b></div>'+
     '<div class="altbilgi" style="opacity:.75">önceki bara göre <b>'+(x.oncekiKat!=null?"x"+x.oncekiKat.toFixed(2):"—")+
-    '</b> · son 8 bar ort.\'una göre <b>'+(x.ort8Kat!=null?"x"+x.ort8Kat.toFixed(2):"—")+'</b></div></div>'+
+    '</b> · son 8 bar ortalamasına göre <b>'+(x.ort8Kat!=null?"x"+x.ort8Kat.toFixed(2):"—")+'</b></div></div>'+
     '<div class="sag"><div class="yuzde" style="color:'+renk+'">x'+(kat||0).toFixed(2)+'</div>'+
     '<div class="altbilgi">kat</div></div></div>';
 }
@@ -8807,7 +8807,7 @@ function hacimGoster(v){
   }).join("")+'</div>';
   h+='<div class="sirala">'+
      '<button class="sir'+(hacimSekme==="onceki"?" on":"")+'" data-alt="onceki">⏱ Önceki bara göre</button>'+
-     '<button class="sir'+(hacimSekme==="ort8"?" on":"")+'" data-alt="ort8">📊 Son 8 bar ort.\'una göre</button>'+
+     '<button class="sir'+(hacimSekme==="ort8"?" on":"")+'" data-alt="ort8">📊 Son 8 bar ortalaması</button>'+
      '</div>';
   h+='<div class="kutu" style="margin:8px 0"><div class="sat"><span class="et">En az kaç kat hacim artışı</span>'+
      '<input id="hacimEsik" type="number" step="0.1" min="1" max="20" value="'+
