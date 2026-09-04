@@ -2235,6 +2235,15 @@ const HACIM_ES=6;
 const HACIM_BIRIKIM_TTL=7200;
 const HACIM_YAZMA_ARALIK=6e5;
 const HACIM_CACHE_MS=18e5;
+/* DÜZELTME (2026-09-04): onbellek bug'ı yalnız BUNDAN SONRA hesaplanacak
+   veriyi düzeltiyordu — KV'deki (hacimBirikim) ESKİ, zehirlenmiş sonuçlar
+   hiçbir kontrolden geçmeden servis edilmeye devam ediyordu, çünkü kod
+   "bu veri hangi mantıkla üretildi" diye hiç bakmıyordu. HACIM_SURUM ile
+   bir sürüm damgası eklendi: KV'den okunan birikim bu sürümle uyuşmuyorsa
+   (eski koddan kalmışsa) tamamen atılır ve sıfırdan tarama başlar. Bundan
+   sonra mantıkta değişiklik yapılırsa bu sayıyı artırmak yeterli — manuel
+   KV silmeye gerek kalmaz. */
+const HACIM_SURUM=2;
 let _hacimBirikimBellek=null,_hacimBirikimYazma=0,_hacimTfSira=0;
 async function hacimDilimOku(A){
   const sabit=Number(A&&A.HACIM_DILIM);
@@ -2259,6 +2268,8 @@ async function hacimDilimTara(A,ekKodlar){
   if(!evren.length)return;
   let bir=_hacimBirikimBellek||{ts:0,imlec:{},sonuc:{}};
   if(!_hacimBirikimBellek){try{const h=await A.VERI.get("hacimBirikim");if(h)bir=JSON.parse(h)||bir}catch(_){}}
+  if(bir.surum!==HACIM_SURUM){bir={ts:0,imlec:{},sonuc:{},gorulen:{},olculen:{}}}
+  bir.surum=HACIM_SURUM;
   if(!bir.sonuc||typeof bir.sonuc!=="object")bir.sonuc={};
   if(!bir.imlec||typeof bir.imlec!=="object")bir.imlec={};
   _hacimTfSira=((_hacimTfSira||0)+1)%HACIM_TF_LISTE.length;
@@ -2315,7 +2326,7 @@ async function hacimTara(A,tfKod,ekKodlar){
   const tf=HACIM_TF_LISTE.indexOf(tfKod)>=0?tfKod:"1SA";
   let bir=_hacimBirikimBellek;
   if(!bir){try{const h=await A.VERI.get("hacimBirikim");if(h)bir=JSON.parse(h)}catch(_){}}
-  if((!bir||!bir.sonuc||!bir.sonuc[tf]||!Object.keys(bir.sonuc[tf]).length)&&await hacimCalisiyorMu(A)){
+  if((!bir||bir.surum!==HACIM_SURUM||!bir.sonuc||!bir.sonuc[tf]||!Object.keys(bir.sonuc[tf]).length)&&await hacimCalisiyorMu(A)){
     await hacimDilimTara(A,ekKodlar).catch(()=>{});
     bir=_hacimBirikimBellek;
     if(!bir){try{const h=await A.VERI.get("hacimBirikim");if(h)bir=JSON.parse(h)}catch(_){}}
