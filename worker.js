@@ -2202,15 +2202,20 @@ function hacimHesapla(mumlar){
       zaman:son.time};
   }catch(e){return null}
 }
-async function hacimTekOlc(kod,tfKod,onbellek){
+async function hacimTekOlc(kod,tfKod){
   const tf=MB_TF[mbTfNormal(tfKod)];
-  const ck=tf.interval+"|"+tf.range;
-  let ham=onbellek&&onbellek[ck];
-  if(!ham){
-    const r=await yfMumlar(kod,tf.interval,tf.range);
-    ham=(r&&r.veri)||[];
-    if(onbellek)onbellek[ck]=ham;
-  }
+  /* DÜZELTME (2026-09-04): eskiden onbellek anahtarı yalnız
+     tf.interval+"|"+tf.range idi — hisse kodu YOKTU. hacimDilimTara tek
+     turda 28 farklı hisseyi ayrı ayrı işlerken hepsi aynı anahtarı
+     paylaşıyordu; ilk çekilen hissenin mum verisi cache'e yazılınca
+     sonraki bütün hisseler kendi verisini hiç çekmeden o hissenin
+     verisini kullanıyordu (ekranda A1CAP'in fiyat/hacim/%'si onlarca
+     başka hissede aynen tekrar ediyordu). Bu fonksiyon her çağrıda
+     yalnızca TEK bir tf işlediği için cache zaten bir Yahoo isteği
+     tasarrufu sağlamıyordu — sadece veriyi karıştırıyordu. Cache tamamen
+     kaldırıldı, her hisse kendi verisini çeker. */
+  const r=await yfMumlar(kod,tf.interval,tf.range);
+  const ham=(r&&r.veri)||[];
   if(!ham.length)return null;
   const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
   const m=tf.grupSaat?mbGrupla(temiz,tf.grupSaat):temiz;
@@ -2265,13 +2270,12 @@ async function hacimDilimTara(A,ekKodlar){
   for(let i=0;i<dilim;i++)kodlar.push(evren[(bas+i)%evren.length]);
   const t0=Date.now();
   let sira=0,islenen=0,hata=false;
-  const onbellek={};
   const isci=async()=>{
     while(sira<kodlar.length){
       if(Date.now()-t0>HACIM_SURE_TAVAN_MS)return;
       const kod=kodlar[sira++];
       try{
-        const h=await hacimTekOlc(kod,tf,onbellek);
+        const h=await hacimTekOlc(kod,tf);
         if(h)bir.sonuc[tf][kod]=Object.assign({kod:kod,tf:tf,ts:Date.now()},h);
         else delete bir.sonuc[tf][kod];
         islenen++;
