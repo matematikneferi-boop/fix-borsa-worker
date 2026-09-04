@@ -2169,6 +2169,165 @@ async function mbTekHisse(kod){
   return{kod:kod,ts:Date.now(),satir:satir};
 }
 
+/* ---------- H) 📊 HACİM ARTIŞI TARAMASI ----------
+   Ne yapar: seçilen zaman diliminde (15DK/1SA/4SA/1G) SON barın hacmini
+   iki farklı referansla karşılaştırır:
+     1) ÖNCEKİ BARA GÖRE  — son bar hacmi / bir önceki bar hacmi
+     2) SON 8 BAR ORTALAMASINA GÖRE — son bar hacmi / (son bar hariç
+        önceki 8 barın ortalaması)
+   Süzgeç yok — ham katsayılar her zaman hesaplanır ve iki ayrı listede
+   büyükten küçüğe sıralanır; eşik arayüzde (istemci tarafında) anlık
+   uygulanır — absorpsiyondaki "ölçüm ile süzgeç ayrı" ilkesiyle aynı.
+   Aynı 4 zaman dilimi MB_TF sözlüğünü kullanır (interval/range/gruplama
+   için ayrı bir Yahoo şablonu icat edilmedi). Evren absorpsiyon ve
+   MAL+BOĞA ile birebir aynı kaynaktan gelir (tamEvren). */
+const HACIM_TF_LISTE=["15DK","1SA","4SA","1G"];
+function hacimHesapla(mumlar){
+  try{
+    if(!mumlar||mumlar.length<10)return null;
+    const son=mumlar[mumlar.length-1];
+    if(!son||!(son.hacim>0)||!(son.close>0))return null;
+    const onceki=mumlar[mumlar.length-2];
+    const oncekiKat=(onceki&&onceki.hacim>0)?son.hacim/onceki.hacim:null;
+    const son8=mumlar.slice(-9,-1);              /* son bar HARİÇ önceki 8 bar */
+    const hacimler8=son8.map(x=>x.hacim||0).filter(x=>x>0);
+    const ort8=hacimler8.length>=5?hacimler8.reduce((a,b)=>a+b,0)/hacimler8.length:0;
+    const ort8Kat=(ort8>0)?son.hacim/ort8:null;
+    if(oncekiKat===null&&ort8Kat===null)return null;
+    const degisim=onceki&&onceki.close?(son.close-onceki.close)/onceki.close*100:null;
+    return{oncekiKat:oncekiKat!==null?Math.round(oncekiKat*100)/100:null,
+      ort8Kat:ort8Kat!==null?Math.round(ort8Kat*100)/100:null,
+      hacim:Math.round(son.hacim),fiyat:son.close,
+      degisim:degisim!==null?Math.round(degisim*100)/100:null,
+      zaman:son.time};
+  }catch(e){return null}
+}
+async function hacimTekOlc(kod,tfKod,onbellek){
+  const tf=MB_TF[mbTfNormal(tfKod)];
+  const ck=tf.interval+"|"+tf.range;
+  let ham=onbellek&&onbellek[ck];
+  if(!ham){
+    const r=await yfMumlar(kod,tf.interval,tf.range);
+    ham=(r&&r.veri)||[];
+    if(onbellek)onbellek[ck]=ham;
+  }
+  if(!ham.length)return null;
+  const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
+  const m=tf.grupSaat?mbGrupla(temiz,tf.grupSaat):temiz;
+  return hacimHesapla(m);
+}
+/* DUR/DEVAM — absorpsiyondakiyle aynı desen, ayrı KV anahtarı. */
+async function hacimCalisiyorMu(A){
+  try{return (await A.VERI.get("hacimDurduruldu"))!=="1"}catch(_){return true}
+}
+async function hacimDurdurAyarla(A,dur){
+  try{ if(dur)await A.VERI.put("hacimDurduruldu","1");
+       else await A.VERI.delete("hacimDurduruldu"); }catch(_){}
+}
+const HACIM_DILIM_TABAN=8, HACIM_DILIM_TAVAN=100;
+const HACIM_SURE_TAVAN_MS=1e4;
+const HACIM_ES=6;
+const HACIM_BIRIKIM_TTL=7200;
+const HACIM_YAZMA_ARALIK=6e5;
+const HACIM_CACHE_MS=18e5;
+let _hacimBirikimBellek=null,_hacimBirikimYazma=0,_hacimTfSira=0;
+async function hacimDilimOku(A){
+  const sabit=Number(A&&A.HACIM_DILIM);
+  if(isFinite(sabit)&&sabit>0)return Math.max(HACIM_DILIM_TABAN,Math.min(HACIM_DILIM_TAVAN,sabit));
+  try{const v=Number(await A.VERI.get("hacimDilimOgrenilen"));
+    if(isFinite(v)&&v>=HACIM_DILIM_TABAN)return Math.min(HACIM_DILIM_TAVAN,v)}catch(_){}
+  return 28;
+}
+let _hacimDilimBellek=null;
+async function hacimDilimYaz(A,v){
+  const y=Math.max(HACIM_DILIM_TABAN,Math.min(HACIM_DILIM_TAVAN,Math.floor(v)));
+  if(_hacimDilimBellek===y)return;
+  _hacimDilimBellek=y;
+  try{await A.VERI.put("hacimDilimOgrenilen",String(y))}catch(_){}
+}
+/* Bir DİLİM tarar — her turda 4 zaman diliminden SIRAYLA biri ilerler
+   (round-robin), böylece dördü de eşit hızla tazelenir. */
+async function hacimDilimTara(A,ekKodlar){
+  if(!A||!A.VERI)return;
+  if(!(await hacimCalisiyorMu(A)))return;
+  const evren=await tamEvren(A,ekKodlar);
+  if(!evren.length)return;
+  let bir=_hacimBirikimBellek||{ts:0,imlec:{},sonuc:{}};
+  if(!_hacimBirikimBellek){try{const h=await A.VERI.get("hacimBirikim");if(h)bir=JSON.parse(h)||bir}catch(_){}}
+  if(!bir.sonuc||typeof bir.sonuc!=="object")bir.sonuc={};
+  if(!bir.imlec||typeof bir.imlec!=="object")bir.imlec={};
+  _hacimTfSira=((_hacimTfSira||0)+1)%HACIM_TF_LISTE.length;
+  const tf=HACIM_TF_LISTE[_hacimTfSira];
+  if(!bir.sonuc[tf])bir.sonuc[tf]={};
+  const dilim=await hacimDilimOku(A);
+  const bas=(Number(bir.imlec[tf])||0)%evren.length;
+  const kodlar=[];
+  for(let i=0;i<dilim;i++)kodlar.push(evren[(bas+i)%evren.length]);
+  const t0=Date.now();
+  let sira=0,islenen=0,hata=false;
+  const onbellek={};
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      if(Date.now()-t0>HACIM_SURE_TAVAN_MS)return;
+      const kod=kodlar[sira++];
+      try{
+        const h=await hacimTekOlc(kod,tf,onbellek);
+        if(h)bir.sonuc[tf][kod]=Object.assign({kod:kod,tf:tf,ts:Date.now()},h);
+        else delete bir.sonuc[tf][kod];
+        islenen++;
+      }catch(_){hata=true}
+    }
+  };
+  try{await Promise.all(Array.from({length:Math.min(HACIM_ES,kodlar.length)},isci))}
+  catch(_){hata=true}
+  if(hata)await hacimDilimYaz(A,Math.max(HACIM_DILIM_TABAN,islenen*0.8));
+  else if(islenen>=dilim)await hacimDilimYaz(A,dilim*1.25);
+  bir.imlec[tf]=(bas+islenen)%evren.length;
+  bir.ts=Date.now();
+  bir.evren=evren.length;
+  bir.kaynak=evren.kaynak||"";
+  if(!bir.gorulen)bir.gorulen={};
+  if(!Array.isArray(bir.gorulen[tf]))bir.gorulen[tf]=[];
+  const gs=new Set(bir.gorulen[tf]); for(const k of kodlar)gs.add(k);
+  bir.gorulen[tf]=[...gs].slice(-1200);
+  if(!bir.olculen)bir.olculen={};
+  bir.olculen[tf]=bir.gorulen[tf].length;
+  const kes=Date.now()-2*HACIM_CACHE_MS;
+  for(const t of HACIM_TF_LISTE){
+    if(!bir.sonuc[t])continue;
+    for(const k of Object.keys(bir.sonuc[t]))if(Number(bir.sonuc[t][k].ts||0)<kes)delete bir.sonuc[t][k];
+  }
+  _hacimBirikimBellek=bir;
+  const simdiMs=Date.now();
+  if(simdiMs-_hacimBirikimYazma>=HACIM_YAZMA_ARALIK){
+    _hacimBirikimYazma=simdiMs;
+    await A.VERI.put("hacimBirikim",JSON.stringify(bir),{expirationTtl:HACIM_BIRIKIM_TTL}).catch(()=>{});
+  }
+  saglikArtir("hacimTarama");
+}
+/* Mini App'in çağırdığı paket — seçili TEK zaman dilimi için iki liste
+   (önceki bara göre / son 8 bar ortalamasına göre) döner. */
+async function hacimTara(A,tfKod,ekKodlar){
+  const tf=HACIM_TF_LISTE.indexOf(tfKod)>=0?tfKod:"1SA";
+  let bir=_hacimBirikimBellek;
+  if(!bir){try{const h=await A.VERI.get("hacimBirikim");if(h)bir=JSON.parse(h)}catch(_){}}
+  if((!bir||!bir.sonuc||!bir.sonuc[tf]||!Object.keys(bir.sonuc[tf]).length)&&await hacimCalisiyorMu(A)){
+    await hacimDilimTara(A,ekKodlar).catch(()=>{});
+    bir=_hacimBirikimBellek;
+    if(!bir){try{const h=await A.VERI.get("hacimBirikim");if(h)bir=JSON.parse(h)}catch(_){}}
+  }
+  const sonuc=(bir&&bir.sonuc&&bir.sonuc[tf])||{};
+  const tumu=Object.keys(sonuc).map(k=>sonuc[k]);
+  const onceki=tumu.filter(x=>x.oncekiKat!=null).slice().sort((a,b)=>b.oncekiKat-a.oncekiKat);
+  const ort8=tumu.filter(x=>x.ort8Kat!=null).slice().sort((a,b)=>b.ort8Kat-a.ort8Kat);
+  const evrenN=(bir&&bir.evren)||tumu.length;
+  const olculenN=(bir&&bir.olculen&&bir.olculen[tf])||0;
+  return{ts:(bir&&bir.ts)||Date.now(),tf:tf,
+    evren:evrenN,olculen:olculenN,kalan:Math.max(0,evrenN-olculenN),
+    calisiyor:await hacimCalisiyorMu(A),kaynak:(bir&&bir.kaynak)||"",
+    onceki:onceki.slice(0,120),ort8:ort8.slice(0,120)};
+}
+
 /* Mal+Ayı/Boğa da absorpsiyonla AYNI tam evreni kullanır — tek kaynak
    (bkz. tamEvren). Böylece 121 sınırı iki tarafta birden kalktı. */
 async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
@@ -5397,6 +5556,7 @@ function ekranAdi(){
   if(sekme==="hata")return"🩺 Hatalar";
   if(sekme==="sag")return"🛡 Sistem";
   if(sekme==="abs")return"🌊 Absorpsiyon";
+  if(sekme==="hacim")return"📊 Hacim Artışı";
   if(sekme==="malboga")return"🔎 Hisse Taraması";
   if(sekme==="yesil")return"📐 Fibo Aralığı Ölçüm İstasyonu";
   if(sekme==="rot")return"🔄 Sektör Rotasyonu";
@@ -5424,7 +5584,7 @@ function ekranAdi(){
 function sekmeSirasi(){
   var l=["potansiyel","fibo","uzunvade","kama","malboga","temel","aday","alarm","rot"];
   if(D&&D.yon)l.push("backtest","tavankombi");
-  l.push("fav","portfoy","preset","abs","ortaklik","fonlar");
+  l.push("fav","portfoy","preset","abs","hacim","ortaklik","fonlar");
   if(D&&D.yon)l.push("yesil","panel","hata","sag");
   return l;
 }
@@ -5642,6 +5802,7 @@ function sekCiz(){
     b("temel","nötr",'📋 Temel'),
     b("rot","nötr",'🔄 Rotasyon'),
     b("abs","nötr",'🌊 Absorpsiyon'),
+    b("hacim","nötr",'📊 Hacim Artışı'),
     b("ortaklik","nötr",'🔗 Ortaklık Haritası'),
     b("fonlar","nötr",'🐣 Fonlar')
   ]);
@@ -5715,6 +5876,7 @@ function ciz(){
   if(sekme==="hata")return hataCiz();
   if(sekme==="sag")return saglikCiz();
   if(sekme==="abs")return absCiz();
+  if(sekme==="hacim")return hacimCiz();
   if(sekme==="ortaklik")return ortaklikCiz();
   if(sekme==="fonlar")return fonlarCiz();
   if(sekme==="malboga")return mbCiz();
@@ -8596,6 +8758,102 @@ function absGoster(v){
       }
     }).catch(function(){k.disabled=false;k.textContent="💾 Kaydet ve yeniden tara";
       el("absAyarDurum").textContent="⚠️ bağlantı hatası"});
+  };
+}
+/* ================== 📊 HACİM ARTIŞI SEKMESİ ==================
+   Seçili zaman diliminde (15DK/1SA/4SA/1G) SON barın hacmini iki ayrı
+   referansla karşılaştırır: (1) bir önceki bara göre — ani patlama,
+   (2) son 8 barın ortalamasına göre — kalıcı ilgi artışı.
+   Süzgeç YOK — sunucu ham katsayıyı büyükten küçüğe sıralı döner, eşik
+   burada (istemcide) anında uygulanır; eşik değiştirmek yeniden tarama
+   gerektirmez. */
+var HACIM_TF_ARAYUZ=[{k:"15DK",ad:"15 Dakika",ik:"⏱"},{k:"1SA",ad:"1 Saat",ik:"🕐"},
+  {k:"4SA",ad:"4 Saat",ik:"🕓"},{k:"1G",ad:"Günlük",ik:"🗓"}];
+var HACIM_TF_ADI={"15DK":"15 Dakika","1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
+var hacimD=null, hacimTf="1SA", hacimMinOnceki=1.5, hacimMinOrt8=1.5, hacimSekme="onceki";
+function hacimCiz(){
+  if(hacimD&&hacimD.tf===hacimTf){hacimGoster(hacimD);return}
+  el("govde").innerHTML='<div class="yukleniyor">hacim ölçülüyor… (ilk açılış 10-20 sn sürebilir)</div>';
+  post("/api/hacim",{tf:hacimTf}).then(function(v){hacimGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Ölçüm alınamadı. Birazdan tekrar dene.</div>'});
+}
+function hacimSatir(x){
+  var kat=hacimSekme==="onceki"?x.oncekiKat:x.ort8Kat;
+  var renk=(kat||0)>=2?"var(--yes)":"var(--sar)";
+  var deg=x.degisim!=null?(x.degisim>=0?"+":"")+x.degisim.toFixed(2)+"%":"—";
+  var degRenk=x.degisim>0?"var(--yes)":(x.degisim<0?"var(--kir)":"var(--soluk)");
+  return '<div class="satir" style="border-left-color:'+renk+'">'+
+    '<div class="sol"><div class="kod">'+E(x.kod)+
+    (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
+    '<div class="altbilgi">fiyat <b>'+E(String(x.fiyat))+'</b> · bar değişimi <b style="color:'+degRenk+'">'+deg+'</b>'+
+    ' · hacim <b>'+E(Number(x.hacim||0).toLocaleString("tr-TR"))+'</b></div>'+
+    '<div class="altbilgi" style="opacity:.75">önceki bara göre <b>'+(x.oncekiKat!=null?"x"+x.oncekiKat.toFixed(2):"—")+
+    '</b> · son 8 bar ort.\'una göre <b>'+(x.ort8Kat!=null?"x"+x.ort8Kat.toFixed(2):"—")+'</b></div></div>'+
+    '<div class="sag"><div class="yuzde" style="color:'+renk+'">x'+(kat||0).toFixed(2)+'</div>'+
+    '<div class="altbilgi">kat</div></div></div>';
+}
+function hacimGoster(v){
+  hacimD=v;
+  var calisiyor=!v||v.calisiyor!==false;
+  var h='<div class="sirala"><button class="sir" id="hacimYenile">🔄 Yenile</button>'+
+        (D.yon?'<button class="sir" id="hacimDur">'+(calisiyor?"⏸ Taramayı durdur":"▶️ Taramayı sürdür")+'</button>':"")+
+        '</div>';
+  h+='<div class="uyari" style="margin-top:0"><b>📊 Hacim Artışı nedir?</b><br>'+
+     'Seçtiğin zaman diliminde SON barın hacmi iki farklı şekilde karşılaştırılır: '+
+     '<b>bir önceki bara göre</b> (ani patlama) ve <b>son 8 barın ortalamasına göre</b> (kalıcı ilgi artışı). '+
+     'x2 = normalin 2 katı hacim demektir. Tek başına al/sat sinyali değildir, fiyat teyidiyle birlikte okunmalı.</div>';
+  h+='<div class="sirala" style="flex-wrap:wrap">'+HACIM_TF_ARAYUZ.map(function(t){
+    return '<button class="sir'+(hacimTf===t.k?" on":"")+'" data-tf="'+t.k+'">'+t.ik+' '+t.ad+'</button>';
+  }).join("")+'</div>';
+  h+='<div class="sirala">'+
+     '<button class="sir'+(hacimSekme==="onceki"?" on":"")+'" data-alt="onceki">⏱ Önceki bara göre</button>'+
+     '<button class="sir'+(hacimSekme==="ort8"?" on":"")+'" data-alt="ort8">📊 Son 8 bar ort.\'una göre</button>'+
+     '</div>';
+  h+='<div class="kutu" style="margin:8px 0"><div class="sat"><span class="et">En az kaç kat hacim artışı</span>'+
+     '<input id="hacimEsik" type="number" step="0.1" min="1" max="20" value="'+
+     E(String(hacimSekme==="onceki"?hacimMinOnceki:hacimMinOrt8))+
+     '" style="width:70px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>'+
+     '<div class="altbilgi" style="margin-top:4px;opacity:.6">Ölçüm sabit — eşiği değiştirmek yeniden tarama gerektirmez, liste anında süzülür.</div></div>';
+  var evren=(v&&v.evren)||0, olculen=(v&&v.olculen)||0;
+  var yuzde=evren?Math.min(100,Math.round(olculen/evren*100)):0;
+  h+='<div class="kutu" style="margin:0 0 8px;padding:9px 11px">'+
+     '<div class="altbilgi" style="opacity:.85">'+
+     (calisiyor?"🔄 Arka planda taranıyor":"⏸ Tarama durduruldu")+
+     ' · son ölçüm '+((v&&v.yas)||0)+' dk önce · dilim: '+(HACIM_TF_ADI[hacimTf]||hacimTf)+'</div>'+
+     '<div class="altbilgi" style="margin-top:4px">ölçülen <b>'+olculen+'</b> / '+evren+'  ·  kalan <b>'+((v&&v.kalan)||0)+'</b></div>'+
+     ((v&&v.kaynak)?'<div class="altbilgi" style="margin-top:3px;opacity:.55">evren kaynağı: '+E(v.kaynak)+'</div>':"")+
+     '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
+     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
+     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Dört zaman dilimi sırayla arka planda tazelenir; sekmeyi kapatsan da tarama devam eder.</div>'+
+     '</div>';
+  var esik=hacimSekme==="onceki"?hacimMinOnceki:hacimMinOrt8;
+  var kaynakListe=((hacimSekme==="onceki"?v.onceki:v.ort8)||[]);
+  var l=kaynakListe.filter(function(x){var kat=hacimSekme==="onceki"?x.oncekiKat:x.ort8Kat;return kat!=null&&kat>=esik});
+  h+='<div class="altbilgi" style="margin:4px 0 8px">eşiği geçen <b style="color:var(--yes)">'+l.length+'</b> / listelenen '+kaynakListe.length+'</div>';
+  if(!l.length){
+    h+='<div class="bos"><b>Bu eşikte hisse yok</b><br><br>Eşiği düşür ya da başka bir zaman dilimi/ölçüt dene.</div>';
+  }else{
+    h+=l.map(hacimSatir).join("");
+  }
+  el("govde").innerHTML=h;
+  [].forEach.call(el("govde").querySelectorAll("[data-tf]"),function(bt){
+    bt.onclick=function(){tit();hacimTf=bt.dataset.tf;
+      el("govde").innerHTML='<div class="yukleniyor">'+(HACIM_TF_ADI[hacimTf]||hacimTf)+' ölçülüyor…</div>';
+      post("/api/hacim",{tf:hacimTf}).then(function(v2){hacimGoster(v2)})};
+  });
+  [].forEach.call(el("govde").querySelectorAll("[data-alt]"),function(bt){
+    bt.onclick=function(){tit();hacimSekme=bt.dataset.alt;hacimGoster(hacimD)};
+  });
+  var y=el("hacimYenile");if(y)y.onclick=function(){tit();
+    el("govde").innerHTML='<div class="yukleniyor">yeniden ölçülüyor…</div>';
+    post("/api/hacim",{tf:hacimTf}).then(function(v2){hacimGoster(v2)})};
+  var dd=el("hacimDur");if(dd)dd.onclick=function(){tit();dd.disabled=true;
+    post("/api/hacim",{tf:hacimTf,dur:calisiyor?1:0}).then(function(v2){hacimGoster(v2)})
+      .catch(function(){dd.disabled=false})};
+  var es=el("hacimEsik");if(es)es.onchange=function(){
+    var val=Number(es.value)||1;
+    if(hacimSekme==="onceki")hacimMinOnceki=val;else hacimMinOrt8=val;
+    hacimGoster(hacimD);
   };
 }
 /* ================== 🔗 ORTAKLIK HARİTASI SEKMESİ ==================
@@ -12156,6 +12414,9 @@ q.waitUntil(kilitli(A,"yayinKuyruk",50,()=>yayinKuyrukBosalt(A)).catch(()=>{})),
 /* Absorpsiyon havuzu her turda bir dilim ilerler; birkac dakikada
    tum evren taranmis ve surekli tazelenir olur. */
 q.waitUntil(kilitli(A,"absDilim",50,()=>absDilimTara(A,[])).catch(()=>{})),
+/* 📊 Hacim Artışı havuzu her turda 4 zaman diliminden birini bir dilim
+   ilerletir (round-robin); birkaç dakikada dördü de tazelenmiş olur. */
+q.waitUntil(kilitli(A,"hacimDilim",50,()=>hacimDilimTara(A,[])).catch(()=>{})),
 /* 🐂🐻 MAL+AYI/BOĞA: her turda bir zaman diliminden bir dilim hisse
    ilerler; havuz bitince sıradaki zaman dilimine geçilir. Böylece yedi
    dilimin tamamı sırayla ve sürekli tazelenir. */
@@ -12812,6 +13073,24 @@ calisiyor:paket.calisiyor!==!1,
 yas:Math.round((Date.now()-(paket.ts||0))/6e4),
 liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenen.has(x.kod)},x)),
 ayar:YON?(paket.ayar||await absAyarAl(A)):null})}
+/* 📊 HACİM ARTIŞI — seçili zaman diliminde son barın hacmini önceki bara
+   ve son 8 bar ortalamasına göre karşılaştırır. Süzgeç yok, ham katsayı
+   sıralı döner; eşik istemci tarafında (kaydırıcı/filtre) uygulanır. */
+if("/api/hacim"===$.pathname){
+const fav=await X(A,uid),pf=await XP(A,uid);
+if(gov&&(gov.dur===1||gov.dur===0)){
+  if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+  await hacimDurdurAyarla(A,gov.dur===1);
+}
+const tfIstek=HACIM_TF_LISTE.indexOf(gov&&gov.tf)>=0?gov.tf:"1SA";
+const paket=await hacimTara(A,tfIstek,[...fav,...Object.keys(pf)]).catch(()=>null);
+if(!paket)return JS({ok:!0,tf:tfIstek,onceki:[],ort8:[],evren:0,olculen:0,kalan:0,yas:0,calisiyor:!0});
+const izlenenH=new Set([...fav,...Object.keys(pf)]);
+const isaretle=x=>Object.assign({takipte:izlenenH.has(x.kod)},x);
+return JS({ok:!0,tf:paket.tf,evren:paket.evren||0,olculen:paket.olculen||0,
+kalan:paket.kalan||0,kaynak:paket.kaynak||"",calisiyor:paket.calisiyor!==!1,
+yas:Math.round((Date.now()-(paket.ts||0))/6e4),
+onceki:(paket.onceki||[]).map(isaretle),ort8:(paket.ort8||[]).map(isaretle)})}
 /* 🔗 ORTAKLIK HARİTASI — KV'de önceden hesaplanmış veriyi servis eder.
    Canlı hesaplama YAPMAZ (KAP taraması dakikalar sürer); kap_ortaklik_scraper.py
    periyodik çalışıp KV'yi güncelliyor. Veri yoksa dürüstçe ok:false döner. */
