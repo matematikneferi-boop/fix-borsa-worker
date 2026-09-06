@@ -14248,7 +14248,7 @@ try{
   const yas=ts?Math.round((Date.now()-ts.getTime())/6e4):null;
   m+="🖥 <b>Tarayıcı</b> (yumatu.html)\n<code>"+
      E(String((L&&L.tarayiciSurum)||"— damga yok, ESKİ DOSYA —"))+"</code>\n\n";
-  m+="🕐 Son tarama: "+(ts?tgTarihSaat(Math.floor(ts.getTime()/1e3)):"—")+
+  m+="🕐 Son tarama: "+(ts?ts.toLocaleString("tr-TR",{timeZone:"Europe/Istanbul"}):"—")+
      (yas!=null?" ("+yas+" dk önce)":"")+"\n";
   m+="📦 Beklenen: <code>"+E(BEKLENEN_TARAYICI_SURUM)+"</code>\n\n";
   const uygun=String((L&&L.tarayiciSurum)||"").indexOf(BEKLENEN_TARAYICI_SURUM)===0;
