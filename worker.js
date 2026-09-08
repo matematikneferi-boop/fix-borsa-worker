@@ -4728,6 +4728,7 @@ async function tvkGunSonuIsle(A,e){
   const snap=await tvkGunSnapUret(A);
   const arsiv=await tvkArsivOku(A);
   arsiv.sayac=arsiv.sayac||{};
+  arsiv.sembolSayac=arsiv.sembolSayac||{};   /* 🆕 hissenin KENDİ tavan alışkanlığı — hangi kombinasyonda geçtiğinden bağımsız, sırf o hissenin gün be gün ≥%TVK_ESIK kapanış sıklığı */
   let tavanSayisi=0,karsilastirma=0;
   for(const kod of Object.keys(yeniFiyat)){
     const eski=oncekiFiyat[kod];
@@ -4736,6 +4737,8 @@ async function tvkGunSonuIsle(A,e){
     const degisim=100*(yeniFiyat[kod]/eski-1);
     const tavan=degisim>=TVK_ESIK;
     if(tavan)tavanSayisi++;
+    const ss=arsiv.sembolSayac[kod]=arsiv.sembolSayac[kod]||{n:0,isabet:0};
+    ss.n++;if(tavan)ss.isabet++;
     const s=snap[kod];if(!s)continue;
     for(const id of tvkGecenIdleriUret(s)){
       const say=arsiv.sayac[id]=arsiv.sayac[id]||{n:0,isabet:0};
@@ -4758,9 +4761,20 @@ function tvkRaporUret(arsiv){
       oran:s.n?100*s.isabet/s.n:0,azOrnek:s.n<TVK_ASGARI};
   }).sort((a,b)=>b.oran-a.oran||b.n-a.n);
   const taban=arsiv.karsilastirmaToplam?100*(arsiv.tavanToplam||0)/arsiv.karsilastirmaToplam:0;
+  /* 🆕 sembolOranlari: her hissenin KENDİ tarihsel tavan sıklığı — hangi
+     kombinasyonda kaç kere geçtiğinden tamamen bağımsız. Amaç: "THYAO gibi
+     kombinasyonlarda sık görünen ama gerçekte binde bir tavan yapan" hisseleri
+     "BIOEN gibi gerçekten tavan alışkanlığı olan" hisselerden ayırt edebilmek —
+     bkz. tvkTop10Ciz'deki "kendi oranı" filtresi. */
+  const sembolOranlari={};
+  for(const kod in (arsiv.sembolSayac||{})){
+    const s=arsiv.sembolSayac[kod];
+    sembolOranlari[kod]={n:s.n,isabet:s.isabet,oran:s.n?100*s.isabet/s.n:0,azOrnek:s.n<TVK_ASGARI};
+  }
   return{ok:!0,gun:arsiv.gun||0,sonGun:arsiv.sonGun||null,taban:taban,
     tavanToplam:arsiv.tavanToplam||0,karsilastirmaToplam:arsiv.karsilastirmaToplam||0,
-    satirlar:satirlar,esik:TVK_ESIK,asgari:TVK_ASGARI,kombiSayisi:TVK_KOMBI.length};
+    satirlar:satirlar,esik:TVK_ESIK,asgari:TVK_ASGARI,kombiSayisi:TVK_KOMBI.length,
+    sembolOranlari:sembolOranlari};
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -4839,7 +4853,7 @@ function tvkGunStrTR(saniyeUnix){
   return new Date(saniyeUnix*1000+108e5).toISOString().slice(0,10);
 }
 /* Boş yerel sayaç kabı — tvkArsiv ile AYNI şekil, iş bitince birleştirilir. */
-function tvkGecmisSayacYeni(){return{sayac:{},tavanToplam:0,karsilastirmaToplam:0,gunSet:{}}}
+function tvkGecmisSayacYeni(){return{sayac:{},sembolSayac:{},tavanToplam:0,karsilastirmaToplam:0,gunSet:{}}}
 
 /* Tek hissenin geçmişini tarar. m60/m4 üzerinde iki imleç (p1,p4) ile
    ilerlenir — her gün için baştan filtrelemek yerine yalnız o günün
@@ -4901,6 +4915,8 @@ async function tvkGecmisHisseTara(A,kod,gp,yerel,ciftTakip){
     yerel.karsilastirmaToplam+=1;
     yerel.gunSet[gunStr]=1;
     if(ciftTakip)ciftTakip[ciftId]=1;
+    const ss=yerel.sembolSayac[kod]=yerel.sembolSayac[kod]||{n:0,isabet:0};   /* 🆕 hissenin kendi tavan oranı — bkz. tvkGunSonuIsle'deki aynı not */
+    ss.n++;if(tavan)ss.isabet++;
     for(const id of tvkGecenIdleriUret(snap)){
       const say=yerel.sayac[id]=yerel.sayac[id]||{n:0,isabet:0};
       say.n++;if(tavan)say.isabet++;
@@ -4919,8 +4935,13 @@ async function tvkGecmisHisseTara(A,kod,gp,yerel,ciftTakip){
 async function tvkGecmisBirlestir(A,yerel,gunYeniSayisi){
   const arsiv=await tvkArsivOku(A);
   arsiv.sayac=arsiv.sayac||{};
+  arsiv.sembolSayac=arsiv.sembolSayac||{};
   for(const id in yerel.sayac){
     const s=yerel.sayac[id],hedef=arsiv.sayac[id]=arsiv.sayac[id]||{n:0,isabet:0};
+    hedef.n+=s.n;hedef.isabet+=s.isabet;
+  }
+  for(const kod in (yerel.sembolSayac||{})){
+    const s=yerel.sembolSayac[kod],hedef=arsiv.sembolSayac[kod]=arsiv.sembolSayac[kod]||{n:0,isabet:0};
     hedef.n+=s.n;hedef.isabet+=s.isabet;
   }
   arsiv.gun=(arsiv.gun||0)+(gunYeniSayisi==null?Object.keys(yerel.gunSet||{}).length:gunYeniSayisi);
@@ -7098,6 +7119,10 @@ function tavanKombiGoster(v){
        '<label style="display:block;font-size:12px;color:#8b949e;margin-bottom:4px">🎚 En fazla tekrar eden 10 hisse sayımına yalnız BU oranın (%) üstündeki kombinasyonlar dahil edilsin — boş bırakırsan hepsi (taban altındakiler dahil) sayılır, genel taban %'+v.taban.toFixed(1)+':</label>'+
        '<input id="tvkEsikGirdi" type="number" min="0" max="100" step="0.1" placeholder="örn. '+v.taban.toFixed(1)+'" style="width:100%;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:6px 8px;font-size:13px;box-sizing:border-box">'+
      '</div>'+
+     '<div style="margin:0 0 10px">'+
+       '<label style="display:block;font-size:12px;color:#8b949e;margin-bottom:4px">🧬 Hissenin KENDİ tavan geçmişi en az BU oranın (%) üstünde olsun — kombinasyonda sık görünse bile hissenin kendisi seyrek tavan yapıyorsa (ör. THYAO) elenir. Boş bırakırsan hisse geçmişine bakılmaz:</label>'+
+       '<input id="tvkKendiEsikGirdi" type="number" min="0" max="100" step="0.1" placeholder="örn. '+v.taban.toFixed(1)+'" style="width:100%;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:6px 8px;font-size:13px;box-sizing:border-box">'+
+     '</div>'+
      '<button id="tvkTumBtn" style="margin:4px 0 10px;background:#238636;border:1px solid #2ea043;color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;width:100%">🔍🔍 Tümünü (ilk '+Math.min(GOSTERILEN,v.satirlar.length)+') şimdi tara</button>'+
      '<div id="tvkTumSonuc" style="margin:0 0 10px;font-size:12px;color:#8b949e"></div>'+
      '<div id="tvkTop10"></div>';
@@ -7125,8 +7150,10 @@ function tavanKombiGoster(v){
    son "Tümünü tara" sonucunu (tvkSonTaraTumu) yeni eşiğe göre süzüp
    top-10'u tekrar çizer. Henüz tarama yapılmadıysa hiçbir şey olmaz. */
 function tvkEsikBagla(){
-  var girdi=el("tvkEsikGirdi");if(!girdi)return;
-  girdi.oninput=function(){if(tvkSonTaraTumu)tvkTop10Ciz(tvkSonTaraTumu)};
+  var girdi=el("tvkEsikGirdi");
+  if(girdi)girdi.oninput=function(){if(tvkSonTaraTumu)tvkTop10Ciz(tvkSonTaraTumu)};
+  var kGirdi=el("tvkKendiEsikGirdi");
+  if(kGirdi)kGirdi.oninput=function(){if(tvkSonTaraTumu)tvkTop10Ciz(tvkSonTaraTumu)};
 }
 /* 🔍 Bu kombinasyonla şimdi tara — bkz. /api/tavankombi/tara notu. Her
    satırın kendi sonuç kutusuna (tvkTaraSonuc) yazar, sayfa yeniden
@@ -7215,15 +7242,32 @@ function tvkTop10Ciz(v){
   var girdi=el("tvkEsikGirdi"),esikStr=girdi?girdi.value.trim():"",
     esik=esikStr===""?null:Number(esikStr);
   if(esik!==null&&isNaN(esik))esik=null;
+  /* 🆕 kendiEsik: hissenin KENDİ tarihsel tavan oranı (tkD.sembolOranlari)
+     bu değerin altındaysa, kombinasyonlarda ne kadar sık geçerse geçsin
+     top-10 sayımına HİÇ dahil edilmez — "THYAO kombinasyonda 40 kere geçti
+     ama kendisi binde bir tavan yapıyor" durumunu böyle eleriz. Hakkında
+     hiç geçmiş verisi olmayan (yeni/az işlem gören) hisseler, filtre
+     açıkken temkinli olmak adına dahil edilmez. */
+  var kGirdi=el("tvkKendiEsikGirdi"),kEsikStr=kGirdi?kGirdi.value.trim():"",
+    kEsik=kEsikStr===""?null:Number(kEsikStr);
+  if(kEsik!==null&&isNaN(kEsik))kEsik=null;
   var oranMap={};
   if(tkD&&tkD.satirlar)tkD.satirlar.forEach(function(r){if(r.id)oranMap[r.id]=r.oran});
+  var sembolOranMap=(tkD&&tkD.sembolOranlari)||{};
   var sayac={},kombinDahil=0;
   Object.keys(v.sonuclar).forEach(function(id){
     var s=v.sonuclar[id];
     if(!s||!s.ok||!s.kodlar)return;
     if(esik!==null&&!(oranMap[id]>=esik))return;
     kombinDahil++;
-    s.kodlar.forEach(function(k){var kod=k.kod||k;sayac[kod]=(sayac[kod]||0)+1});
+    s.kodlar.forEach(function(k){
+      var kod=k.kod||k;
+      if(kEsik!==null){
+        var so=sembolOranMap[kod];
+        if(!so||!(so.oran>=kEsik))return;   /* kendi geçmişi zayıf/bilinmiyor — say(a)ma */
+      }
+      sayac[kod]=(sayac[kod]||0)+1;
+    });
   });
   var siralı=Object.keys(sayac).map(function(kod){return{kod:kod,adet:sayac[kod]}})
     .sort(function(a,b){return b.adet-a.adet||a.kod.localeCompare(b.kod)}).slice(0,10);
@@ -7234,11 +7278,19 @@ function tvkTop10Ciz(v){
   }
   kutu.innerHTML='<div class="kutu" style="margin-top:10px"><h3>🏆 En fazla tekrar eden 10 hisse</h3>'+
     '<div class="btAc">'+(esik!==null?('yalnız %'+esik+' ve üstü oranlı '+kombinDahil+' kombinasyon sayıldı — '):('taban altındakiler dahil tüm '+kombinDahil+' kombinasyon sayıldı — '))+
-    'kaç ayrı kombinasyonda birden eşleşti, en yüksek sayı en üstte.</div>'+
+    'kaç ayrı kombinasyonda birden eşleşti, en yüksek sayı en üstte.'+
+    (kEsik!==null?' Yalnız kendi tavan oranı %'+kEsik+' ve üstü olan hisseler sayıldı.':'')+'</div>'+
     siralı.map(function(x,i){
-      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d">'+
+      var so=sembolOranMap[x.kod],
+        kendiHTML=so
+          ?('kendi oranı %'+so.oran.toFixed(1)+(so.azOrnek?' ⚠️ az örnek':''))
+          :'kendi geçmişi yok';
+      return '<div style="padding:6px 0;border-bottom:1px solid #21262d">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between">'+
         '<span style="font-family:inherit">'+(i+1)+'. <b style="color:#e6edf3">'+E(x.kod)+'</b></span>'+
-        '<span class="btN">'+x.adet+' kombinasyonda</span></div>';
+        '<span class="btN">'+x.adet+' kombinasyonda</span></div>'+
+        '<div style="font-size:12px;color:#8b949e;margin-top:2px">🧬 '+kendiHTML+'</div>'+
+        '</div>';
     }).join("")+
     '</div>';
 }
