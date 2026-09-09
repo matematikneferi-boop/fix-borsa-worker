@@ -4736,12 +4736,23 @@ const TVK_VOLATILITE_ESIK=2.7;
    sayım). Anahtarı v3'e taşımak bunu önleyen, kod tabanında zaten yerleşik
    olan tek seferlik temiz başlangıç yöntemi — v3'ten sonra artık hiç
    sıfırlanmayacak. */
+/* 🔧 2026-09-10: "tvkArsiv3"→"tvkArsiv4", "tvkGecmisIs3"→"tvkGecmisIs4",
+   "tvkCiftTakip"→"tvkCiftTakip2", "tvkHisseCiftTakip"→"tvkHisseCiftTakip2" —
+   TVK_ELEMAN'a 11. eleman (dunTavan) eklenince eski sayaçlar bu elemanı
+   HİÇ İÇERMİYORDU (2026-09-03-d'deki boğa-şartı geçişiyle AYNI sebep).
+   Dört anahtar BİRLİKTE bump edildi: yalnız arşiv (sayac) değil, dedup
+   haritaları (ciftTakip/hisseCiftTakip) da bump edilmezse eski "zaten
+   sayıldı" işaretleri yeni boş arşivi hiç doldurmadan taramayı atlatır.
+   Sonuç: bir sonraki /tavankombi/gecmis veya cron tetiklemesinde otomatik
+   SIFIRDAN, 11 elemanlı GERÇEK bir tam geçmiş tarama başlar — bekleme
+   yok, mevcut backfill altyapısı (tvkGecmisAdimYap, zaten dakikada bir
+   adım ilerletiyor) işi kendiliğinden yürütür. */
 async function tvkArsivOku(A){
   if(!A.VERI)return{gun:0,sayac:{}};
-  try{const j=await A.VERI.get("tvkArsiv3");if(j)return JSON.parse(j)}catch(_){}
+  try{const j=await A.VERI.get("tvkArsiv4");if(j)return JSON.parse(j)}catch(_){}
   return{gun:0,sayac:{}};
 }
-async function tvkArsivYaz(A,v){if(A.VERI)try{await A.VERI.put("tvkArsiv3",JSON.stringify(v))}catch(_){}}
+async function tvkArsivYaz(A,v){if(A.VERI)try{await A.VERI.put("tvkArsiv4",JSON.stringify(v))}catch(_){}}
 async function tvkOncekiFiyatOku(A){
   if(!A.VERI)return{};
   try{const j=await A.VERI.get("tvkOncekiFiyat");if(j)return JSON.parse(j)}catch(_){}
@@ -4871,7 +4882,7 @@ const TVK_GECMIS_GUN=95;     /* geriye en fazla kaç günlük kapanış denenir 
    yeni bir tarama işi kurar (kuyruk=tüm evren). */
 async function tvkGecmisIsOku(A){
   if(!A.VERI)return null;
-  try{const j=await A.VERI.get("tvkGecmisIs3");return j?JSON.parse(j):null}catch(_){return null}
+  try{const j=await A.VERI.get("tvkGecmisIs4");return j?JSON.parse(j):null}catch(_){return null}
 }
 async function tvkGecmisIsYaz(A,job){
   if(!A.VERI)return;
@@ -4883,7 +4894,7 @@ async function tvkGecmisIsYaz(A,job){
      zaten tamamlanınca kendi koduyla "bitti" işaretleniyor — süresiz
      kalması veri kaybına değil, yalnızca KV'de kalıcı küçük bir kayda
      mal olur. TTL tamamen kaldırıldı. */
-  try{await A.VERI.put("tvkGecmisIs3",JSON.stringify(job))}catch(_){}
+  try{await A.VERI.put("tvkGecmisIs4",JSON.stringify(job))}catch(_){}
 }
 /* 🔁 2026-09-08: KALICI, HİÇ SIFIRLANMAYAN (gün,hisse) çift takibi.
    Eskiden her yeni TAM TUR başlarken tvkArsiv2 baştan sıfırlanıp aynı
@@ -4898,11 +4909,11 @@ async function tvkGecmisIsYaz(A,job){
    vadede (yıllar sonra) sıkışırsa ayrı bir konuya taşınması gerekebilir. */
 async function tvkCiftTakipOku(A){
   if(!A.VERI)return{};
-  try{const j=await A.VERI.get("tvkCiftTakip");return j?JSON.parse(j):{}}catch(_){return{}}
+  try{const j=await A.VERI.get("tvkCiftTakip2");return j?JSON.parse(j):{}}catch(_){return{}}
 }
 async function tvkCiftTakipYaz(A,ct){
   if(!A.VERI)return;
-  try{await A.VERI.put("tvkCiftTakip",JSON.stringify(ct))}catch(_){}
+  try{await A.VERI.put("tvkCiftTakip2",JSON.stringify(ct))}catch(_){}
 }
 /* 🔧 2026-09-08-g: hisseSayac için AYRI bir (gün|kod) takibi — bkz.
    tvkGecmisHisseTara içindeki comboSayildi/hisseSayildi notu. Bilerek
@@ -4910,11 +4921,11 @@ async function tvkCiftTakipYaz(A,ct){
    TAMAMEN bağımsız. */
 async function tvkHisseCiftTakipOku(A){
   if(!A.VERI)return{};
-  try{const j=await A.VERI.get("tvkHisseCiftTakip");return j?JSON.parse(j):{}}catch(_){return{}}
+  try{const j=await A.VERI.get("tvkHisseCiftTakip2");return j?JSON.parse(j):{}}catch(_){return{}}
 }
 async function tvkHisseCiftTakipYaz(A,ct){
   if(!A.VERI)return;
-  try{await A.VERI.put("tvkHisseCiftTakip",JSON.stringify(ct))}catch(_){}
+  try{await A.VERI.put("tvkHisseCiftTakip2",JSON.stringify(ct))}catch(_){}
 }
 /* tvkPivotBugunSeti'nin GENEL hâli — "bugün" yerine herhangi bir TR
    takvim günü (YYYY-MM-DD) için kod→{1SA,4SA} pivot kırılım haritası. */
@@ -5005,6 +5016,13 @@ async function tvkGecmisHisseTara(A,kod,gp,yerel,ciftTakip,hisseCiftTakip){
       dip236:{"1SA":!!(x1.dip236&&x1.boga),"4SA":!!(x4.dip236&&x4.boga)},
       pivot:{"1SA":!!(pv["1SA"]&&x1.boga),"4SA":!!(pv["4SA"]&&x4.boga)}
     };
+    /* 🌹 2026-09-10: "dünkü tavan" — GÜN g'nin KENDİSİ (i), bir önceki güne
+       (i-1) göre tavan mıydı? Yalnız GEÇMİŞ veri (g1[i-1] ve g) kullanılır,
+       "yarin" (label, i+1) hiç karışmaz — ileriye sızıntı (look-ahead) yok. */
+    const dunOnceki=g1[i-1];
+    const dunTavan=!!(i>=1&&dunOnceki&&dunOnceki.close>0&&g.close>0&&
+      100*(g.close/dunOnceki.close-1)>=TVK_ESIK);
+    snap.dunTavan={"1SA":dunTavan,"4SA":dunTavan};
     for(const bid in MB_BOLGE_S){
       const b=MB_BOLGE_S[bid];
       snap[bid]={
