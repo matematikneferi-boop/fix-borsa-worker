@@ -14527,6 +14527,26 @@ text:(s2.ok?"✅ ":"⚠️ ")+E2(s2.mesaj),parse_mode:"HTML",reply_markup:u(t.fr
   if(!gosterilenT)mT+="Şu an hiçbir güvenilir kombinasyonu karşılayan hisse yok.";
   if(mT.length>3900)mT=mT.slice(0,3900)+"\n\n… (devamı uygulamada — 🎯 Tavan Kombi sekmesi)";
   await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:mT,parse_mode:"HTML",reply_markup:u(t.from.id)})})()),new Response("ok")
+;if(i&&n.startsWith("/tavaneleman"))return q.waitUntil((async()=>{
+  /* 🔬 2026-09-10: TEK bir elemanın (örn. dunTavan) ham n/isabet/oran'ını
+     doğrudan gösterir — /tavankombi az-örnek (n<20) satırları HİÇ
+     göstermediği için nadir sinyaller (dunTavan gibi) eşiği geçene kadar
+     orada görünmez. Bu komut eşiğe bakmadan HAM sayıyı verir, "hâlâ mı
+     az veri var yoksa hesaplama mı yanlış" sorusuna anında cevap. */
+  if(!d(t.from.id)){await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
+    text:"Bu komut yalnızca yöneticiye açık."});return}
+  const adE=n.replace("/tavaneleman","").trim();
+  if(!adE||TVK_ELEMAN.indexOf(adE)<0){
+    await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
+      text:"Kullanım: <code>/tavaneleman dunTavan</code>\nGeçerli elemanlar: "+TVK_ELEMAN.join(", "),parse_mode:"HTML",reply_markup:u(t.from.id)});return}
+  const arsivE=await tvkArsivOku(A);
+  const sayacE=arsivE.sayac||{};
+  let mE="🔬 <b>"+E2(adE)+"</b> — ham sayaçlar (eşiğe bakılmadan)\n\n";
+  for(const tf of TVK_TF){
+    const id=adE+":"+tf,s=sayacE[id];
+    mE+="<b>"+tf+"</b>: "+(s?("%"+(Math.round(100*s.isabet/(s.n||1)*10)/10)+" ("+s.isabet+"/"+s.n+" gözlem)"+(s.n<TVK_ASGARI?" ⚠️ az örnek":"")):"hiç gözlem yok (0)")+"\n";
+  }
+  await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:mE,parse_mode:"HTML",reply_markup:u(t.from.id)})})()),new Response("ok")
 ;if(i&&n.startsWith("/tavanuzunluk"))return q.waitUntil((async()=>{
   /* 🔬 2026-09-10: kombinasyon uzunluğu (kaç eleman true) büyüdükçe isabet
      oranı düşüyor mu? — mevcut tvkArsiv3'ten, YENİ tarama TETİKLEMEDEN. */
