@@ -14535,8 +14535,9 @@ text:(s2.ok?"✅ ":"⚠️ ")+E2(s2.mesaj),parse_mode:"HTML",reply_markup:u(t.fr
      az veri var yoksa hesaplama mı yanlış" sorusuna anında cevap. */
   if(!d(t.from.id)){await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
     text:"Bu komut yalnızca yöneticiye açık."});return}
-  const adE=n.replace("/tavaneleman","").trim();
-  if(!adE||TVK_ELEMAN.indexOf(adE)<0){
+  const adERaw=n.replace(/^\/tavaneleman/i,"").trim();
+  const adE=TVK_ELEMAN.find(e=>e.toLowerCase()===adERaw.toLowerCase());
+  if(!adERaw||!adE){
     await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
       text:"Kullanım: <code>/tavaneleman dunTavan</code>\nGeçerli elemanlar: "+TVK_ELEMAN.join(", "),parse_mode:"HTML",reply_markup:u(t.from.id)});return}
   const arsivE=await tvkArsivOku(A);
