@@ -555,7 +555,23 @@ async function yfMumCek(host,kod,interval,range){interval=interval||"1d";range=r
 ;if(canliF>0&&canliZ>0&&out.length){const son=out[out.length-1]
 ;const gunSon=Math.floor((son.time+108e5)/864e5),gunCanli=Math.floor((canliZ+108e5)/864e5)
 ;if(gunCanli===gunSon){son.close=canliF;son.high=Math.max(son.high,canliF);son.low=Math.min(son.low,canliF)}
-else if(gunCanli>gunSon)out.push({time:canliZ,open:son.close,high:Math.max(son.close,canliF),low:Math.min(son.close,canliF),close:canliF})}}
+else if(gunCanli>gunSon){
+  /* 🚨 KÖKTEN DÜZELTME (2026-09-11): Yahoo'nun günlük mumu henüz
+     yayınlanmadığı saatlerde buraya eklenen "sentetik" bar, açılışını
+     YANLIŞLIKLA dünün kapanışına eşitliyordu (open:son.close). Yutan
+     mum (engulfing) TAM OLARAK gerçek gap-açılışına bakan bir formasyon
+     olduğu için, açılış dünün kapanışına yapıştırılınca gap'li her
+     gerçek sinyal kayboluyordu — "hiç bulamıyor" şikayetinin kök nedeni
+     buydu. Artık Yahoo meta'sındaki regularMarketOpen (gerçek açılış
+     fiyatı) varsa onu kullanıyoruz; yoksa (çok nadir) eski davranışa
+     (son.close) geri dönüyoruz — regresyon riski yok. */
+  const gercekAcilis=Number(rz.meta&&rz.meta.regularMarketOpen);
+  const acilis=(gercekAcilis>0)?gercekAcilis:son.close;
+  out.push({time:canliZ,open:acilis,
+    high:Math.max(acilis,son.close,canliF),
+    low:Math.min(acilis,son.close,canliF),
+    close:canliF})
+}}}
 ;if(!out.length)return{hata:"0 bar döndü ("+host+")"}
 ;return{veri:out}}
 async function yfMumlar(kod,interval,range){const hatalar=[]
