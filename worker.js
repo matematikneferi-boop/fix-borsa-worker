@@ -2071,7 +2071,26 @@ function mbMotor(mumlar){
   }
   const volatilite60=vSayisi?Math.round((vToplam/vSayisi)*100)/100:null;
   const ez=mbEnerjiTara(m);
+  /* 🕯️ YUTAN MUM (ENGULFING) — son iki barın GÖVDESİ (açılış/kapanış)
+     karşılaştırılır, fitiller (high/low) hiç kullanılmaz — standart
+     formasyon tanımı budur.
+       BOĞA (bullish): önceki bar kırmızı (close<open) VE bu bar yeşil
+       (close>open) VE bu barın gövdesi öncekini TAMAMEN yutuyor:
+       bu.open <= önceki.close  VE  bu.close >= önceki.open.
+       AYI (bearish): tam ayna — önceki yeşil, bu kırmızı, bu.open >=
+       önceki.close VE bu.close <= önceki.open.
+     Yalnız SON BARA bakılır — her yeni bar kapandığında tazelenir,
+     diğer modüllerin "0B/1B" yaş kavramına gerek yok. */
+  const eB=m[son],eO=son>0?m[son-1]:null;
+  let engulfBoga=false,engulfAyi=false;
+  if(eO&&isFinite(eB.open)&&isFinite(eB.close)&&isFinite(eO.open)&&isFinite(eO.close)){
+    const oKirmizi=eO.close<eO.open, oYesil=eO.close>eO.open;
+    const bKirmizi=eB.close<eB.open, bYesil=eB.close>eB.open;
+    engulfBoga=!!(oKirmizi&&bYesil&&eB.open<=eO.close&&eB.close>=eO.open);
+    engulfAyi =!!(oYesil&&bKirmizi&&eB.open>=eO.close&&eB.close<=eO.open);
+  }
   return{bar:m.length,mt:mt,md:md,dip382:dip382,dip236:dip236,oran:oran,volatilite60:volatilite60,
+    engulfBoga:engulfBoga,engulfAyi:engulfAyi,
     ezAct:ez.ezAct,ezIns:ez.ezIns,ezAge:ez.ezAge,ezTop:ez.ezTop,ezBot:ez.ezBot,
     ezEn:ez.ezEn,ezBq:ez.ezBq,ezInst:ez.ezInst,ezUst:ez.ezUst,
     ezDir:ez.ezDir,ezMes:ez.ezMes,ezTp1:ez.ezTp1,ezEvre:ez.ezEvre,
@@ -3777,7 +3796,7 @@ function mbIstekNorm(gov){
   let tfler=(Array.isArray(gov.tfler)?gov.tfler:[]).filter(t=>MB_TF[t]);
   if(!tfler.length)tfler=["1G"];
   tfler=MB_TF_LISTE.filter(t=>tfler.indexOf(t)>=0);        /* sabit sıra */
-  const m=gov.mal||{},d=gov.dip||{},a=gov.ab||{},ez=gov.enerji||{},bo=gov.bolge||{},pv=gov.pivot||{};
+  const m=gov.mal||{},d=gov.dip||{},a=gov.ab||{},ez=gov.enerji||{},bo=gov.bolge||{},pv=gov.pivot||{},eg=gov.engulf||{};
   /* Alan YOKSA varsayılan, VARSA doğruluk değeri. (m.top!==false yazılsaydı
      istemciden gelen 0 "tikli" sayılırdı — JSON'da tip garantisi yok.) */
   const bl=(v,vars)=>v===undefined||v===null?vars:!!v;
@@ -3821,7 +3840,10 @@ function mbIstekNorm(gov){
     pivot:{acik:bl(pv.acik,!1),
            dilimler:(Array.isArray(pv.dilimler)?pv.dilimler:[]).filter(v=>MB_PIVOT_S[v]),
            kirdi:bl(pv.kirdi,!0),yakin:bl(pv.yakin,!1),uzerinde:bl(pv.uzerinde,!1),
-           yuzde:mbSayiNorm(pv.yuzde,3,0.1,50)}
+           yuzde:mbSayiNorm(pv.yuzde,3,0.1,50)},
+    /* 🕯️ Yutan Mum (Engulfing) */
+    engulf:{acik:bl(eg.acik,!1),boga:bl(eg.boga,!0),ayi:bl(eg.ayi,!1),
+            tfler:modTfNorm(eg.tfler)}
   };
   if(!ist.bolge.secili.length)ist.bolge.acik=!1;
   if(!ist.pivot.dilimler.length)ist.pivot.dilimler=["KISA","ORTA","UZUN"];
@@ -3829,6 +3851,7 @@ function mbIstekNorm(gov){
   /* Bir modülde hiç yön tikli değilse o modül anlamsız kalır — kapat. */
   if(!ist.mal.top&&!ist.mal.dag)ist.mal.acik=!1;
   if(!ist.ab.boga&&!ist.ab.ayi)ist.ab.acik=!1;
+  if(!ist.engulf.boga&&!ist.engulf.ayi)ist.engulf.acik=!1;
   return ist;
 }
 const MB_DIP_KADEME={dip:1,dip382:1,dip236:1};
@@ -3950,18 +3973,38 @@ function mbCondAbS(x,ist){
   if(a.ayi) ok=ok||(!!x.ayi &&x.rejYas<=N);
   return ok;
 }
+/* 🕯️ Yutan Mum (Engulfing) — istemcideki mbCondEngulf ile birebir aynı. */
+function mbCondEngulfS(x,ist){
+  const e=ist.engulf;
+  if(!e||!e.acik)return!0;
+  let ok=!1;
+  if(e.boga)ok=ok||!!x.engulfBoga;
+  if(e.ayi) ok=ok||!!x.engulfAyi;
+  return ok;
+}
 function mbModulGecti(x,ist){
   if(!mbCondMalS(x,ist))return!1;
   if(!mbCondDipS(x,ist))return!1;
   if(!mbBolgeGectiS(x,ist))return!1;
   if(!mbEnerjiGectiS(x,ist))return!1;
   if(!mbCondAbS(x,ist))return!1;
+  if(!mbCondEngulfS(x,ist))return!1;
   return!0;
 }
 /* Bir modülün kendi özel dilimi mi var, yoksa genel listeyi mi kullanıyor —
    istemcideki mbModTf/mbModOzelMi ile birebir aynı kural. */
 function mbModOzelMiS(mod){return!!(mod&&Array.isArray(mod.tfler)&&mod.tfler.length)}
 function mbModTfS(mod,ist){return mbModOzelMiS(mod)?mod.tfler:ist.tfler}
+/* 🚨 KÖKTEN DÜZELTME — bu fonksiyon mbAlarmEslesme() içinde ÇAĞRILIYORDU
+   ama hiçbir yerde TANIMLI değildi: "piv-only" dışındaki HER alarm
+   kontrolünde ReferenceError fırlatıp mbAlarmEslesme'yi baştan sona
+   çökertiyordu (yani mal/dip/bölge/enerji/ab/engulf içeren hiçbir alarm
+   hiç tetiklenmiyordu). İstemcideki mbHerhangiOzelTf ile birebir aynı
+   mantıkla tanımlandı — artık engulf de dahil. */
+function mbHerhangiOzelTfS(ist){
+  return mbModOzelMiS(ist.mal)||mbModOzelMiS(ist.dip)||mbModOzelMiS(ist.bolge)||
+         mbModOzelMiS(ist.enerji)||mbModOzelMiS(ist.ab)||mbModOzelMiS(ist.engulf);
+}
 /* En taze olay kaç bar önce oldu — sıralama anahtarı. */
 const mbTazelik=x=>Math.min(Number(x.topHam),Number(x.dagHam),Number(x.rejYas));
 
@@ -4216,6 +4259,10 @@ function mbFiltreOzet(ist){
     if(ist.pivot.uzerinde)y.push("üzerinde");
     p.push("📈 "+ist.pivot.dilimler.join("/")+" "+y.join("/"));
   }
+  if(ist.engulf&&ist.engulf.acik){
+    const y=[];if(ist.engulf.boga)y.push("🟢 boğa");if(ist.engulf.ayi)y.push("🔴 ayı");
+    p.push("🕯️ yutan mum "+y.join("/")+ozelEk(ist.engulf));
+  }
   return p.join(" · ")||"(koşul yok)";
 }
 /* Filtrenin ŞU ANKİ eşleşmeleri — birikimden, ek çekim yok.
@@ -4236,7 +4283,7 @@ async function mbAlarmEslesme(A,ist,yuvaId){
      pivot filtresi doğrudan pivot haritasından okunur, malboğa turunu
      beklemez. */
   const digerAktif=ist.mal.acik||ist.dip.acik||ist.ab.acik||
-    (ist.bolge&&ist.bolge.acik)||(ist.enerji&&ist.enerji.acik);
+    (ist.bolge&&ist.bolge.acik)||(ist.enerji&&ist.enerji.acik)||(ist.engulf&&ist.engulf.acik);
   if(pivotAktif&&!digerAktif){
     let K={};
     try{const v=await g(A);K=(v&&v.kartlar)||{}}catch(_){K={}}
@@ -4272,7 +4319,8 @@ async function mbAlarmEslesme(A,ist,yuvaId){
       anahtarlar.push(on+kod+"|"+tf);
       satirlar.push({kod:kod,tf:tf,fiyat:x.fiyat,topHam:x.topHam,dagHam:x.dagHam,
         boga:x.boga,ayi:x.ayi,rejYas:x.rejYas,dip:x.dip,taze:mbTazelik(x),
-        ezAge:x.ezAge,ezMes:x.ezMes,oran:x.oran});
+        ezAge:x.ezAge,ezMes:x.ezMes,oran:x.oran,
+        engulfBoga:!!x.engulfBoga,engulfAyi:!!x.engulfAyi});
     }
   }
   if(ist.kapsam==="hepsi"&&ist.tfler.length>1){
@@ -4295,7 +4343,8 @@ async function mbAlarmEslesmeOzelS(A,ist,yuvaId){
     {k:"dip",ist:ist.dip,cond:mbCondDipS},
     {k:"bolge",ist:ist.bolge,cond:mbBolgeGectiS},
     {k:"enerji",ist:ist.enerji,cond:mbEnerjiGectiS},
-    {k:"ab",ist:ist.ab,cond:mbCondAbS}
+    {k:"ab",ist:ist.ab,cond:mbCondAbS},
+    {k:"engulf",ist:ist.engulf,cond:mbCondEngulfS}
   ];
   const aktifler=MOD_LISTE.filter(m=>m.ist&&m.ist.acik);
   if(!aktifler.length)return{anahtarlar:[],satirlar:[]};
@@ -4345,7 +4394,8 @@ async function mbAlarmEslesmeOzelS(A,ist,yuvaId){
       anahtarlar.push(on+kod+"|"+tf);
       satirlar.push({kod:kod,tf:tf,fiyat:x.fiyat,topHam:x.topHam,dagHam:x.dagHam,
         boga:x.boga,ayi:x.ayi,rejYas:x.rejYas,dip:x.dip,taze:mbTazelik(x),
-        ezAge:x.ezAge,ezMes:x.ezMes,oran:x.oran});
+        ezAge:x.ezAge,ezMes:x.ezMes,oran:x.oran,
+        engulfBoga:!!x.engulfBoga,engulfAyi:!!x.engulfAyi});
     }
   }
   return{anahtarlar:anahtarlar,satirlar:satirlar};
@@ -4420,7 +4470,9 @@ async function mbAlarmTara(A){
           m+="• <b>"+sx.kod+"</b>  "+sx.fiyat+"  ·  "+mal+"  ·  "+
             (sx.boga?"🐂":sx.ayi?"🐻":"?")+sx.rejYas+"B"+(sx.dip?"  ⬇️":"")+
             (ist.enerji.acik&&sx.ezMes!==null&&sx.ezMes!==undefined?
-              "  ·  ⚛"+(sx.ezAge===0?"0B↑":sx.ezAge===1?"1B↑":"%"+sx.ezMes):"")+"\n";
+              "  ·  ⚛"+(sx.ezAge===0?"0B↑":sx.ezAge===1?"1B↑":"%"+sx.ezMes):"")+
+            (ist.engulf&&ist.engulf.acik&&(sx.engulfBoga||sx.engulfAyi)?
+              "  ·  🕯️"+(sx.engulfBoga?"BOĞA":"AYI"):"")+"\n";
         }
       }
       while(m.slice(-1)==="\n")m=m.slice(0,-1);
@@ -4455,7 +4507,8 @@ async function mbAlarmOncelikliTara(A){
          malboğa dilimine ihtiyaç duymuyor artık — öncelik listesine
          boşuna dilim eklenip tarama kaynağı çarçur edilmesin. */
       const digerAktif=ynorm.mal.acik||ynorm.dip.acik||ynorm.ab.acik||
-        (ynorm.bolge&&ynorm.bolge.acik)||(ynorm.enerji&&ynorm.enerji.acik);
+        (ynorm.bolge&&ynorm.bolge.acik)||(ynorm.enerji&&ynorm.enerji.acik)||
+        (ynorm.engulf&&ynorm.engulf.acik);
       if(ynorm.pivot&&ynorm.pivot.acik&&!digerAktif)continue;
       for(const t of ynorm.tfler)if(gerekli.indexOf(t)<0)gerekli.push(t);
     }
@@ -9922,7 +9975,9 @@ var mbIst={
   pivot:{acik:false,dilimler:["KISA","ORTA","UZUN"],kirdi:true,yakin:false,uzerinde:false,yuzde:3},
   bolge:{acik:false,secili:["b2"], tfler:null},
   enerji:{acik:false,olustu:true,icinde:true,b0:true,b1:false,mesafeAcik:true,mesafe:5, tfler:null},
-  ab :{acik:false,boga:true, ayi:false, sinirsiz:false, n:5, tfler:null}
+  ab :{acik:false,boga:true, ayi:false, sinirsiz:false, n:5, tfler:null},
+  /* 🕯️ Yutan Mum (Engulfing) — yalnız son bara bakar, yaş/mesafe kavramı yok */
+  engulf:{acik:false,boga:true,ayi:false, tfler:null}
 };
 /* ═══ 🕒 MODÜL BAZLI ZAMAN DİLİMİ ═══════════════════════════════════════
    Her modül (mal/dip/bölge/enerji/ayı-boğa) isterse kendi zaman dilimini
@@ -9933,7 +9988,7 @@ function mbModOzelMi(mod){return !!(mod&&Array.isArray(mod.tfler)&&mod.tfler.len
 function mbModTf(mod){return mbModOzelMi(mod)?mod.tfler:mbIst.tfler}
 function mbHerhangiOzelTf(){
   return mbModOzelMi(mbIst.mal)||mbModOzelMi(mbIst.dip)||mbModOzelMi(mbIst.bolge)||
-         mbModOzelMi(mbIst.enerji)||mbModOzelMi(mbIst.ab);
+         mbModOzelMi(mbIst.enerji)||mbModOzelMi(mbIst.ab)||mbModOzelMi(mbIst.engulf);
 }
 /* Ölçüm/ilerleme/tazeleme fonksiyonlarının kullandığı GERÇEK dilim kümesi:
    genel seçim ∪ her modülün kendi özel seçimi. Kimse özel seçim yapmazsa bu
@@ -9941,7 +9996,7 @@ function mbHerhangiOzelTf(){
 function mbEfektifTfler(){
   if(!mbHerhangiOzelTf())return mbIst.tfler;
   var out=mbIst.tfler.slice();
-  [mbIst.mal,mbIst.dip,mbIst.bolge,mbIst.enerji,mbIst.ab].forEach(function(mod){
+  [mbIst.mal,mbIst.dip,mbIst.bolge,mbIst.enerji,mbIst.ab,mbIst.engulf].forEach(function(mod){
     mbModTf(mod).forEach(function(t){if(out.indexOf(t)<0)out.push(t)});
   });
   return MB_TF_SIRA.filter(function(t){return out.indexOf(t)>=0});
@@ -10182,6 +10237,21 @@ function mbEnerjiRozet(x,ist){
   if(x.ezTp1!=null)par+=' · GFH '+Number(x.ezTp1).toFixed(2);
   return '<div style="font-size:10px;margin:3px 0 2px;opacity:.95">'+par+'</div>';
 }
+/* Satırdaki 🕯️ hücresi — engulf modülü kapalıyken de (ör. başka bir modül
+   yüzünden listeye giren bir hissede) son bar gerçekten yutan mumsa
+   bilgi amaçlı gösterilir; modül AÇIKKEN yalnız seçili yön(ler) yazılır. */
+function mbEngulfRozet(x,ist){
+  var e=ist.engulf;
+  var acik=!!(e&&e.acik);
+  /* Modül açıkken yalnız kullanıcının seçtiği yön(ler) gösterilir; kapalıyken
+     (hisse başka bir modül yüzünden listedeyken) ikisi de bilgi amaçlı yazılır. */
+  var boga=!!x.engulfBoga&&(!acik||!!e.boga);
+  var ayi =!!x.engulfAyi &&(!acik||!!e.ayi);
+  if(!boga&&!ayi)return "";
+  var par=boga?'<span style="color:#00e676;font-weight:800">🕯️ Yutan mum (BOĞA)</span>':
+               '<span style="color:#f85149;font-weight:800">🕯️ Yutan mum (AYI)</span>';
+  return '<div style="font-size:10px;margin:3px 0 2px;opacity:.95">'+par+'</div>';
+}
 var MB_PIVOT_DILIM=[["KISA","potansiyel","adayOrta","1 saat","📊"],
                     ["ORTA","fibo","adayOrtaVade","4 saat","📐"],
                     ["UZUN","uzunvade","adayUzun","1 gün","🗓"]];
@@ -10384,6 +10454,17 @@ function mbCondAb(x,ist){
   if(a.ayi) ok=ok||(!!x.ayi &&x.rejYas<=M);
   return ok;
 }
+/* 🕯️ Yutan Mum (Engulfing) — mbMotor'un ürettiği engulfBoga/engulfAyi
+   alanlarını süzer. Diğer modüllerle BİREBİR aynı desen: kapalıysa
+   herkes geçer, açıksa seçili yön(ler)den biri tutmalı. */
+function mbCondEngulf(x,ist){
+  var e=ist.engulf;
+  if(!e||!e.acik)return true;
+  var ok=false;
+  if(e.boga)ok=ok||!!x.engulfBoga;
+  if(e.ayi) ok=ok||!!x.engulfAyi;
+  return ok;
+}
 function mbGectiMi(x,ist,kod){
   if(!x)return false;
   if(ist.pivot&&ist.pivot.acik&&kod&&!mbPivotGecti(kod,ist))return false;
@@ -10392,6 +10473,7 @@ function mbGectiMi(x,ist,kod){
   if(!mbCondBolge(x,ist))return false;
   if(!mbEnerjiGecti(x,ist))return false;
   if(!mbCondAb(x,ist))return false;
+  if(!mbCondEngulf(x,ist))return false;
   return true;
 }
 function mbTazelikSay(x){return Math.min(Number(x.topHam),Number(x.dagHam),Number(x.rejYas))}
@@ -10496,7 +10578,8 @@ function mbPaketUretOzel(){
     {k:"dip",   ist:mbIst.dip,   cond:mbCondDip},
     {k:"bolge", ist:mbIst.bolge, cond:mbCondBolge},
     {k:"enerji",ist:mbIst.enerji,cond:mbEnerjiGecti},
-    {k:"ab",    ist:mbIst.ab,    cond:mbCondAb}
+    {k:"ab",    ist:mbIst.ab,    cond:mbCondAb},
+    {k:"engulf",ist:mbIst.engulf,cond:mbCondEngulf}
   ];
   var aktifler=MOD_LISTE.filter(function(m){return m.ist&&m.ist.acik});
   var pivotAktif=!!(mbIst.pivot&&mbIst.pivot.acik);
@@ -10893,7 +10976,8 @@ function mbGoster(v,yerel){
      çünkü bu ayar her iki durumda da o modülün kesişim/birleşim kuralını
      belirler) */
   var mbCoklu=mbIst.tfler.length>1||mbModTf(mbIst.mal).length>1||mbModTf(mbIst.dip).length>1||
-    mbModTf(mbIst.bolge).length>1||mbModTf(mbIst.enerji).length>1||mbModTf(mbIst.ab).length>1;
+    mbModTf(mbIst.bolge).length>1||mbModTf(mbIst.enerji).length>1||mbModTf(mbIst.ab).length>1||
+    mbModTf(mbIst.engulf).length>1;
   if(mbCoklu){
     h+='<div class="altbilgi" style="margin:10px 0 5px;opacity:.85">Seçili '+mbIst.tfler.length+' dilimde şart nasıl aransın?</div>'+
        '<div class="sirala" style="flex-wrap:wrap">'+
@@ -10984,6 +11068,18 @@ function mbGoster(v,yerel){
     h+=mbModulTfSatir("enerji",dilimler);
   }
   h+='</div>';
+  /* ── 4d) 🕯️ YUTAN MUM (ENGULFING) ── */
+  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("engulf","🕯️","YUTAN MUM (ENGULFING)",mbIst.engulf.acik);
+  if(mbIst.engulf.acik){
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
+       'Son barın gövdesi bir önceki barın gövdesini tamamen yutuyor mu? Fitiller (üst/alt gölge) '+
+       'hesaba katılmaz — yalnız açılış/kapanış. Her yeni bar kapandığında tazelenir.</div>';
+    h+='<div class="sirala" style="flex-wrap:wrap">'+
+       mbCip('data-mbengulfyon="boga"',"🟢 Boğa (alım) — yeşil yutar",mbIst.engulf.boga)+
+       mbCip('data-mbengulfyon="ayi"',"🔴 Ayı (satış) — kırmızı yutar",mbIst.engulf.ayi)+'</div>';
+    h+=mbModulTfSatir("engulf",dilimler);
+  }
+  h+='</div>';
   /* ── 4b) PİVOT KIRILIM ── */
   h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("pivot","📈","PİVOT KIRILIM",mbIst.pivot.acik);
   if(mbIst.pivot.acik){
@@ -11051,11 +11147,11 @@ function mbGoster(v,yerel){
      '<button class="dg" id="mbKodBtn" style="width:auto;padding:7px 14px">🔎 Bak</button></div></div>';
   /* ── 7) HİÇ MODÜL AÇIK DEĞİLSE ── */
   var acikSayi=(mbIst.mal.acik?1:0)+(mbIst.dip.acik?1:0)+(mbIst.ab.acik?1:0)+
-    (mbIst.bolge.acik?1:0)+(mbIst.pivot.acik?1:0)+(mbIst.enerji.acik?1:0);
+    (mbIst.bolge.acik?1:0)+(mbIst.pivot.acik?1:0)+(mbIst.enerji.acik?1:0)+(mbIst.engulf.acik?1:0);
   if(!acikSayi){
     h+='<div class="bos"><b>Hiç modül açık değil</b><br><br>'+
-       'Yukarıdaki altı modülden (📦 mal · ⬇️ dip · 🐂🐻 ayı/boğa · 🪜 seviye bölgesi · '+
-       '⚛ enerji · 📈 pivot) en az birinin sağındaki <b>○</b> tikine dokun.</div>';
+       'Yukarıdaki yedi modülden (📦 mal · ⬇️ dip · 🐂🐻 ayı/boğa · 🪜 seviye bölgesi · '+
+       '⚛ enerji · 🕯️ yutan mum · 📈 pivot) en az birinin sağındaki <b>○</b> tikine dokun.</div>';
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
   if(!mbEfektifTfler().length){
@@ -11119,6 +11215,7 @@ function mbGoster(v,yerel){
         (olay?' <span class="rozet" style="background:var(--yes);color:#04140a">☀</span>':"")+
         (dip?' <span class="rozet">'+dip+'</span>':"")+'</div>'+
         mbEnerjiRozet(x,mbIst)+
+        mbEngulfRozet(x,mbIst)+
         (function(){var bl=mbBolgeBul(x.oran);
           return bl?'<div style="margin:4px 0 2px"><span style="font-size:10px;padding:2px 5px;'+
             'border-radius:4px;background:rgba(124,77,255,.15);color:#b39dff;font-weight:700">'+
@@ -11299,6 +11396,10 @@ function mbBagla(v,dilimler){
   T("[data-mbabyon]",function(b){
     var y=b.dataset.mbabyon;mbIst.ab[y]=!mbIst.ab[y];
     if(!mbIst.ab.boga&&!mbIst.ab.ayi)mbIst.ab[y]=true;
+    mbUygula()});
+  T("[data-mbengulfyon]",function(b){
+    var y=b.dataset.mbengulfyon;mbIst.engulf[y]=!mbIst.engulf[y];
+    if(!mbIst.engulf.boga&&!mbIst.engulf.ayi)mbIst.engulf[y]=true;   /* en az biri kalsın */
     mbUygula()});
   T("[data-mbyas]",function(b){
     var p=b.dataset.mbyas.split(":");
