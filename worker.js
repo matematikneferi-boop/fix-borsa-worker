@@ -2359,6 +2359,192 @@ async function hacimTara(A,tfKod,ekKodlar){
     onceki:onceki.slice(0,120),ort8:ort8.slice(0,120)};
 }
 
+/* ══════════ 📦 KÜME / BİRİKİM TARAMASI ══════════
+   Ekran görüntüsündeki gibi ard arda gelen mumların dar bir yatay bantta
+   sıkışması (fiyat haftalarca/aylarca aynı aralıkta kümelenmesi) —
+   absorpsiyon TEK bara bakarken küme ARDIŞIK BİRDEN ÇOK BARA bakar.
+   ÖLÇÜM: pencere (kaç bar geriye gidildiği) büyüdükçe bant genişliği
+   (pencredeki en yüksek high − en düşük low) hiçbir zaman küçülmez,
+   yalnız büyür ya da aynı kalır. Bu yüzden "kaç bar üst üste dar bantta
+   kaldı" sorusu TEK GEÇİŞLİ artan pencere taramasıyla bulunur: pencere
+   KUME_MIN_BAR'dan başlayıp genişletilir, bant/medyan-kapanış oranı
+   eşiği aştığı an durulur — bir önceki pencere "küme uzunluğu"dur.
+   Absorpsiyon/Hacim'deki gibi ÖLÇÜM ile SÜZGEÇ ayrı tutulmaya çalışılır;
+   eşik (darlıkEsik) yönetici panelinden değiştirilebilir, KV'de saklanır. */
+const KUME_TF_LISTE=["15DK","1SA","4SA","1G"];
+const KUME_MIN_BAR=6, KUME_MAX_BAR=30;
+const KUME_VARSAYILAN_ESIK=0.12;     /* bant yüksekliği / pencere medyan kapanışı */
+const KUME_AYAR_VARSAYILAN={darlikEsik:KUME_VARSAYILAN_ESIK};
+async function kumeAyarAl(A){
+  if(!A.VERI)return KUME_AYAR_VARSAYILAN;
+  try{
+    const c=await A.VERI.get("kumeAyar");
+    if(c){
+      const j=JSON.parse(c);
+      const d=Number(j.darlikEsik);
+      return{darlikEsik:(d>0&&d<1)?d:KUME_AYAR_VARSAYILAN.darlikEsik}
+    }
+  }catch(e){}
+  return KUME_AYAR_VARSAYILAN;
+}
+async function kumeAyarKaydet(A,darlikEsik){
+  const d=Number(darlikEsik);
+  if(!(d>0&&d<1))return null;
+  const ayar={darlikEsik:d};
+  if(A.VERI)await A.VERI.put("kumeAyar",JSON.stringify(ayar)).catch(()=>{});
+  return ayar;
+}
+function kumeHesapla(mumlar,darlikEsik){
+  try{
+    if(!mumlar||mumlar.length<KUME_MIN_BAR+2)return null;
+    const esik=(darlikEsik>0&&darlikEsik<1)?darlikEsik:KUME_VARSAYILAN_ESIK;
+    const veri=mumlar.filter(x=>x&&x.high>0&&x.low>0&&x.close>0);
+    if(veri.length<KUME_MIN_BAR+2)return null;
+    const sinir=Math.min(KUME_MAX_BAR,veri.length-1);
+    let uzunluk=0,oran=null,ustDeger=null,altDeger=null;
+    const sonKapanis=veri[veri.length-1].close;
+    for(let n=KUME_MIN_BAR;n<=sinir;n++){
+      const pencere=veri.slice(veri.length-n);
+      const ust=Math.max.apply(null,pencere.map(x=>x.high));
+      const alt=Math.min.apply(null,pencere.map(x=>x.low));
+      const kapanislar=pencere.map(x=>x.close).sort((a,b)=>a-b);
+      const medyan=kapanislar[Math.floor(kapanislar.length/2)];
+      if(!(medyan>0))break;
+      const oranN=(ust-alt)/medyan;
+      if(oranN<=esik){uzunluk=n;oran=oranN;ustDeger=ust;altDeger=alt}
+      else break;                       /* pencere büyüdükçe bant hiç daralmaz — durabiliriz */
+    }
+    if(uzunluk<KUME_MIN_BAR)return null;
+    const genislikYuzde=Math.round(oran*1000)/10;      /* % olarak, 1 ondalık */
+    const konum=(ustDeger>altDeger)?(sonKapanis-altDeger)/(ustDeger-altDeger):0.5;
+    return{uzunluk:uzunluk,genislikYuzde:genislikYuzde,
+      ust:Math.round(ustDeger*100)/100,alt:Math.round(altDeger*100)/100,
+      fiyat:sonKapanis,konum:Math.round(konum*100),
+      zaman:veri[veri.length-1].time};
+  }catch(e){return null}
+}
+async function kumeTekOlc(kod,tfKod,darlikEsik){
+  const tf=MB_TF[mbTfNormal(tfKod)];
+  const r=await yfMumlar(kod,tf.interval,tf.range);
+  const ham=(r&&r.veri)||[];
+  if(!ham.length)return null;
+  const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
+  const m=tf.grupSaat?mbGrupla(temiz,tf.grupSaat):temiz;
+  return kumeHesapla(m,darlikEsik);
+}
+async function kumeCalisiyorMu(A){
+  try{return (await A.VERI.get("kumeDurduruldu"))!=="1"}catch(_){return true}
+}
+async function kumeDurdurAyarla(A,dur){
+  try{ if(dur)await A.VERI.put("kumeDurduruldu","1");
+       else await A.VERI.delete("kumeDurduruldu"); }catch(_){}
+}
+const KUME_DILIM_TABAN=8, KUME_DILIM_TAVAN=100;
+const KUME_SURE_TAVAN_MS=1e4;
+const KUME_ES=6;
+const KUME_BIRIKIM_TTL=7200;
+const KUME_YAZMA_ARALIK=6e5;
+const KUME_CACHE_MS=18e5;
+const KUME_SURUM=1;
+let _kumeBirikimBellek=null,_kumeBirikimYazma=0,_kumeTfSira=0;
+async function kumeDilimOku(A){
+  const sabit=Number(A&&A.KUME_DILIM);
+  if(isFinite(sabit)&&sabit>0)return Math.max(KUME_DILIM_TABAN,Math.min(KUME_DILIM_TAVAN,sabit));
+  try{const v=Number(await A.VERI.get("kumeDilimOgrenilen"));
+    if(isFinite(v)&&v>=KUME_DILIM_TABAN)return Math.min(KUME_DILIM_TAVAN,v)}catch(_){}
+  return 28;
+}
+let _kumeDilimBellek=null;
+async function kumeDilimYaz(A,v){
+  const y=Math.max(KUME_DILIM_TABAN,Math.min(KUME_DILIM_TAVAN,Math.floor(v)));
+  if(_kumeDilimBellek===y)return;
+  _kumeDilimBellek=y;
+  try{await A.VERI.put("kumeDilimOgrenilen",String(y))}catch(_){}
+}
+/* Bir DİLİM tarar — her turda 4 zaman diliminden SIRAYLA biri ilerler
+   (round-robin), hacim/absorpsiyon ile birebir aynı desen. */
+async function kumeDilimTara(A,ekKodlar){
+  if(!A||!A.VERI)return;
+  if(!(await kumeCalisiyorMu(A)))return;
+  const evren=await tamEvren(A,ekKodlar);
+  if(!evren.length)return;
+  const ayar=await kumeAyarAl(A);
+  let bir=_kumeBirikimBellek||{ts:0,imlec:{},sonuc:{}};
+  if(!_kumeBirikimBellek){try{const h=await A.VERI.get("kumeBirikim");if(h)bir=JSON.parse(h)||bir}catch(_){}}
+  if(bir.surum!==KUME_SURUM){bir={ts:0,imlec:{},sonuc:{},gorulen:{},olculen:{}}}
+  bir.surum=KUME_SURUM;
+  if(!bir.sonuc||typeof bir.sonuc!=="object")bir.sonuc={};
+  if(!bir.imlec||typeof bir.imlec!=="object")bir.imlec={};
+  _kumeTfSira=((_kumeTfSira||0)+1)%KUME_TF_LISTE.length;
+  const tf=KUME_TF_LISTE[_kumeTfSira];
+  if(!bir.sonuc[tf])bir.sonuc[tf]={};
+  const dilim=await kumeDilimOku(A);
+  const bas=(Number(bir.imlec[tf])||0)%evren.length;
+  const kodlar=[];
+  for(let i=0;i<dilim;i++)kodlar.push(evren[(bas+i)%evren.length]);
+  const t0=Date.now();
+  let sira=0,islenen=0,hata=false;
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      if(Date.now()-t0>KUME_SURE_TAVAN_MS)return;
+      const kod=kodlar[sira++];
+      try{
+        const k=await kumeTekOlc(kod,tf,ayar.darlikEsik);
+        if(k)bir.sonuc[tf][kod]=Object.assign({kod:kod,tf:tf,ts:Date.now()},k);
+        else delete bir.sonuc[tf][kod];
+        islenen++;
+      }catch(_){hata=true}
+    }
+  };
+  try{await Promise.all(Array.from({length:Math.min(KUME_ES,kodlar.length)},isci))}
+  catch(_){hata=true}
+  if(hata)await kumeDilimYaz(A,Math.max(KUME_DILIM_TABAN,islenen*0.8));
+  else if(islenen>=dilim)await kumeDilimYaz(A,dilim*1.25);
+  bir.imlec[tf]=(bas+islenen)%evren.length;
+  bir.ts=Date.now();
+  bir.evren=evren.length;
+  bir.kaynak=evren.kaynak||"";
+  if(!bir.gorulen)bir.gorulen={};
+  if(!Array.isArray(bir.gorulen[tf]))bir.gorulen[tf]=[];
+  const gs=new Set(bir.gorulen[tf]); for(const k of kodlar)gs.add(k);
+  bir.gorulen[tf]=[...gs].slice(-1200);
+  if(!bir.olculen)bir.olculen={};
+  bir.olculen[tf]=bir.gorulen[tf].length;
+  const kes=Date.now()-2*KUME_CACHE_MS;
+  for(const t of KUME_TF_LISTE){
+    if(!bir.sonuc[t])continue;
+    for(const k of Object.keys(bir.sonuc[t]))if(Number(bir.sonuc[t][k].ts||0)<kes)delete bir.sonuc[t][k];
+  }
+  _kumeBirikimBellek=bir;
+  const simdiMs=Date.now();
+  if(simdiMs-_kumeBirikimYazma>=KUME_YAZMA_ARALIK){
+    _kumeBirikimYazma=simdiMs;
+    await A.VERI.put("kumeBirikim",JSON.stringify(bir),{expirationTtl:KUME_BIRIKIM_TTL}).catch(()=>{});
+  }
+  saglikArtir("kumeTarama");
+}
+/* Mini App'in çağırdığı paket — seçili TEK zaman dilimi için, en uzun
+   kümeden en kısaya sıralı liste döner. */
+async function kumeTara(A,tfKod,ekKodlar){
+  const tf=KUME_TF_LISTE.indexOf(tfKod)>=0?tfKod:"1G";
+  let bir=_kumeBirikimBellek;
+  if(!bir){try{const h=await A.VERI.get("kumeBirikim");if(h)bir=JSON.parse(h)}catch(_){}}
+  if((!bir||bir.surum!==KUME_SURUM||!bir.sonuc||!bir.sonuc[tf]||!Object.keys(bir.sonuc[tf]).length)&&await kumeCalisiyorMu(A)){
+    await kumeDilimTara(A,ekKodlar).catch(()=>{});
+    bir=_kumeBirikimBellek;
+    if(!bir){try{const h=await A.VERI.get("kumeBirikim");if(h)bir=JSON.parse(h)}catch(_){}}
+  }
+  const ayar=await kumeAyarAl(A);
+  const sonuc=(bir&&bir.sonuc&&bir.sonuc[tf])||{};
+  const tumu=Object.keys(sonuc).map(k=>sonuc[k])
+    .sort((a,b)=>(b.uzunluk-a.uzunluk)||(a.genislikYuzde-b.genislikYuzde));
+  const evrenN=(bir&&bir.evren)||tumu.length;
+  const olculenN=(bir&&bir.olculen&&bir.olculen[tf])||0;
+  return{ts:(bir&&bir.ts)||Date.now(),tf:tf,ayar:ayar,
+    evren:evrenN,olculen:olculenN,kalan:Math.max(0,evrenN-olculenN),
+    calisiyor:await kumeCalisiyorMu(A),kaynak:(bir&&bir.kaynak)||"",
+    liste:tumu.slice(0,150)};
+}
 /* Mal+Ayı/Boğa da absorpsiyonla AYNI tam evreni kullanır — tek kaynak
    (bkz. tamEvren). Böylece 121 sınırı iki tarafta birden kalktı. */
 async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
@@ -5829,6 +6015,7 @@ function ekranAdi(){
   if(sekme==="sag")return"🛡 Sistem";
   if(sekme==="abs")return"🌊 Absorpsiyon";
   if(sekme==="hacim")return"📊 Hacim Artışı";
+  if(sekme==="kume")return"📦 Küme/Birikim";
   if(sekme==="malboga")return"🔎 Hisse Taraması";
   if(sekme==="yesil")return"📐 Fibo Aralığı Ölçüm İstasyonu";
   if(sekme==="rot")return"🔄 Sektör Rotasyonu";
@@ -5856,7 +6043,7 @@ function ekranAdi(){
 function sekmeSirasi(){
   var l=["potansiyel","fibo","uzunvade","kama","malboga","temel","aday","alarm","rot"];
   if(D&&D.yon)l.push("backtest","tavankombi");
-  l.push("fav","portfoy","preset","abs","hacim","ortaklik","fonlar");
+  l.push("fav","portfoy","preset","abs","hacim","kume","ortaklik","fonlar");
   if(D&&D.yon)l.push("yesil","panel","hata","sag");
   return l;
 }
@@ -6075,6 +6262,7 @@ function sekCiz(){
     b("rot","nötr",'🔄 Rotasyon'),
     b("abs","nötr",'🌊 Absorpsiyon'),
     b("hacim","nötr",'📊 Hacim Artışı'),
+    b("kume","nötr",'📦 Küme/Birikim'),
     b("ortaklik","nötr",'🔗 Ortaklık Haritası'),
     b("fonlar","nötr",'🐣 Fonlar')
   ]);
@@ -6149,6 +6337,7 @@ function ciz(){
   if(sekme==="sag")return saglikCiz();
   if(sekme==="abs")return absCiz();
   if(sekme==="hacim")return hacimCiz();
+  if(sekme==="kume")return kumeCiz();
   if(sekme==="ortaklik")return ortaklikCiz();
   if(sekme==="fonlar")return fonlarCiz();
   if(sekme==="malboga")return mbCiz();
@@ -9162,6 +9351,100 @@ function hacimGoster(v){
     if(hacimSekme==="onceki")hacimMinOnceki=val;else hacimMinOrt8=val;
     hacimGoster(hacimD);
   };
+}
+/* ================== 📦 KÜME/BİRİKİM SEKMESİ ==================
+   Hacim Artışı ile birebir aynı iskelet: 4 zaman dilimi arka planda
+   sırayla taranır, kullanıcı hangi dilimi göreceğini kendi seçer.
+   Ölçüm sabittir (kaç bar, ne genişlikte); "en az kaç bar" filtresi
+   istemci tarafında anında uygulanır, yeniden tarama gerekmez. */
+var KUME_TF_ARAYUZ=[{k:"15DK",ad:"15 Dakika",ik:"⏱"},{k:"1SA",ad:"1 Saat",ik:"🕐"},
+  {k:"4SA",ad:"4 Saat",ik:"🕓"},{k:"1G",ad:"Günlük",ik:"📅"}];
+var KUME_TF_ADI={"15DK":"15 Dakika","1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
+var kumeD=null, kumeTf="1G", kumeMinUzunluk=8;
+function kumeCiz(){
+  if(kumeD&&kumeD.tf===kumeTf){kumeGoster(kumeD);return}
+  el("govde").innerHTML='<div class="yukleniyor">küme aranıyor… (ilk açılış 10-20 sn sürebilir)</div>';
+  post("/api/kume",{tf:kumeTf}).then(function(v){kumeGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Ölçüm alınamadı. Birazdan tekrar dene.</div>'});
+}
+function kumeSatir(x){
+  var renk=x.uzunluk>=14?"var(--yes)":"var(--sar)";
+  return '<div class="satir" style="border-left-color:'+renk+'">'+
+    '<div class="sol"><div class="kod">'+E(x.kod)+
+    (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
+    '<div class="altbilgi">fiyat <b>'+E(String(x.fiyat))+'</b> · bant <b>'+E(String(x.alt))+' – '+E(String(x.ust))+'</b></div>'+
+    '<div class="altbilgi" style="opacity:.75">bant genişliği <b>%'+x.genislikYuzde.toFixed(1)+'</b> · '+
+    'fiyat bantta <b>%'+x.konum+'</b> konumda</div></div>'+
+    '<div class="sag"><div class="yuzde" style="color:'+renk+'">'+x.uzunluk+'</div>'+
+    '<div class="altbilgi">bar</div></div></div>';
+}
+function kumeGoster(v){
+  kumeD=v;
+  var calisiyor=!v||v.calisiyor!==false;
+  var h='<div class="sirala"><button class="sir" id="kumeYenile">🔄 Yenile</button>'+
+        (D.yon?'<button class="sir" id="kumeDur">'+(calisiyor?"⏸ Taramayı durdur":"▶️ Taramayı sürdür")+'</button>':"")+
+        '</div>';
+  h+='<div class="uyari" style="margin-top:0"><b>📦 Küme/Birikim nedir?</b><br>'+
+     'Seçtiğin zaman diliminde ardışık barların dar bir yatay bantta ('+
+     '<b>en yüksek high − en düşük low</b>) sıkışıp sıkışmadığı taranır — '+
+     'ekrandaki gibi haftalarca/aylarca aynı aralıkta kümelenen hisseleri yakalamak için. '+
+     'Sayı ne kadar büyükse hisse o kadar çok bar üst üste aynı bantta kalmış demektir. '+
+     'Kırılım yönüyle ilgilenmez, sadece kümeyi bulur.</div>';
+  h+='<div class="sirala" style="flex-wrap:wrap">'+KUME_TF_ARAYUZ.map(function(t){
+    return '<button class="sir'+(kumeTf===t.k?" on":"")+'" data-tf="'+t.k+'">'+t.ik+' '+t.ad+'</button>';
+  }).join("")+'</div>';
+  h+='<div class="kutu" style="margin:8px 0"><div class="sat"><span class="et">En az kaç bar kümelensin</span>'+
+     '<input id="kumeUzunlukEsik" type="number" step="1" min="6" max="30" value="'+
+     E(String(kumeMinUzunluk))+
+     '" style="width:70px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>'+
+     '<div class="altbilgi" style="margin-top:4px;opacity:.6">Ölçüm sabit — bu değeri değiştirmek yeniden tarama gerektirmez, liste anında süzülür.</div></div>';
+  if(D.yon){
+    var esikYuzde=Math.round(((v&&v.ayar&&v.ayar.darlikEsik)||0.12)*1000)/10;
+    h+='<div class="kutu" style="margin:0 0 8px"><div class="sat"><span class="et">🔐 Tarama bant genişliği eşiği (%)</span>'+
+       '<input id="kumeDarlikEsik" type="number" step="0.5" min="1" max="90" value="'+E(String(esikYuzde))+
+       '" style="width:70px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:5px 7px;font-size:13px;text-align:right"></div>'+
+       '<div class="altbilgi" style="margin-top:4px;opacity:.6">Bunu değiştirmek YENİDEN TARAMA gerektirir — sunucu tarafı süzgeç, tüm kullanıcıları etkiler.</div></div>';
+  }
+  var evren=(v&&v.evren)||0, olculen=(v&&v.olculen)||0;
+  var yuzde=evren?Math.min(100,Math.round(olculen/evren*100)):0;
+  h+='<div class="kutu" style="margin:0 0 8px;padding:9px 11px">'+
+     '<div class="altbilgi" style="opacity:.85">'+
+     (calisiyor?"🔄 Arka planda taranıyor":"⏸ Tarama durduruldu")+
+     ' · son ölçüm '+((v&&v.yas)||0)+' dk önce · dilim: '+(KUME_TF_ADI[kumeTf]||kumeTf)+'</div>'+
+     '<div class="altbilgi" style="margin-top:4px">ölçülen <b>'+olculen+'</b> / '+evren+'  ·  kalan <b>'+((v&&v.kalan)||0)+'</b></div>'+
+     ((v&&v.kaynak)?'<div class="altbilgi" style="margin-top:3px;opacity:.55">evren kaynağı: '+E(v.kaynak)+'</div>':"")+
+     '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
+     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
+     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Dört zaman dilimi sırayla arka planda tazelenir; sekmeyi kapatsan da tarama devam eder.</div>'+
+     '</div>';
+  var kaynakListe=(v&&v.liste)||[];
+  var l=kaynakListe.filter(function(x){return x.uzunluk>=kumeMinUzunluk});
+  h+='<div class="altbilgi" style="margin:4px 0 8px">eşiği geçen <b style="color:var(--yes)">'+l.length+'</b> / listelenen '+kaynakListe.length+'</div>';
+  if(!l.length){
+    h+='<div class="bos"><b>Bu eşikte hisse yok</b><br><br>Bar sayısını düşür ya da başka bir zaman dilimi dene.</div>';
+  }else{
+    h+=l.map(kumeSatir).join("");
+  }
+  el("govde").innerHTML=h;
+  [].forEach.call(el("govde").querySelectorAll("[data-tf]"),function(bt){
+    bt.onclick=function(){tit();kumeTf=bt.dataset.tf;
+      el("govde").innerHTML='<div class="yukleniyor">'+(KUME_TF_ADI[kumeTf]||kumeTf)+' aranıyor…</div>';
+      post("/api/kume",{tf:kumeTf}).then(function(v2){kumeGoster(v2)})};
+  });
+  var y=el("kumeYenile");if(y)y.onclick=function(){tit();
+    el("govde").innerHTML='<div class="yukleniyor">yeniden aranıyor…</div>';
+    post("/api/kume",{tf:kumeTf}).then(function(v2){kumeGoster(v2)})};
+  var dd=el("kumeDur");if(dd)dd.onclick=function(){tit();dd.disabled=true;
+    post("/api/kume",{tf:kumeTf,dur:calisiyor?1:0}).then(function(v2){kumeGoster(v2)})
+      .catch(function(){dd.disabled=false})};
+  var es=el("kumeUzunlukEsik");if(es)es.onchange=function(){
+    kumeMinUzunluk=Math.max(6,Number(es.value)||6);
+    kumeGoster(kumeD);
+  };
+  var de=el("kumeDarlikEsik");if(de)de.onchange=function(){tit();de.disabled=true;
+    var oran=Math.max(0.01,Math.min(0.9,(Number(de.value)||12)/100));
+    post("/api/kume",{tf:kumeTf,darlikEsik:oran}).then(function(v2){de.disabled=false;kumeGoster(v2)})
+      .catch(function(){de.disabled=false})};
 }
 /* ================== 🔗 ORTAKLIK HARİTASI SEKMESİ ==================
    Şirket kartındaki her ortak/yönetici tıklanabilir: o isme basınca
@@ -12724,6 +13007,9 @@ q.waitUntil(kilitli(A,"absDilim",50,()=>absDilimTara(A,[])).catch(()=>{})),
 /* 📊 Hacim Artışı havuzu her turda 4 zaman diliminden birini bir dilim
    ilerletir (round-robin); birkaç dakikada dördü de tazelenmiş olur. */
 q.waitUntil(kilitli(A,"hacimDilim",50,()=>hacimDilimTara(A,[])).catch(()=>{})),
+/* 📦 Küme/Birikim havuzu da aynı round-robin desenle her turda bir
+   zaman diliminden bir dilim ilerler. */
+q.waitUntil(kilitli(A,"kumeDilim",50,()=>kumeDilimTara(A,[])).catch(()=>{})),
 /* 🐂🐻 MAL+AYI/BOĞA: her turda bir zaman diliminden bir dilim hisse
    ilerler; havuz bitince sıradaki zaman dilimine geçilir. Böylece yedi
    dilimin tamamı sırayla ve sürekli tazelenir. */
@@ -13391,6 +13677,28 @@ return JS({ok:!0,tf:paket.tf,evren:paket.evren||0,olculen:paket.olculen||0,
 kalan:paket.kalan||0,kaynak:paket.kaynak||"",calisiyor:paket.calisiyor!==!1,
 yas:Math.round((Date.now()-(paket.ts||0))/6e4),
 onceki:(paket.onceki||[]).map(isaretle),ort8:(paket.ort8||[]).map(isaretle)})}
+/* 📦 KÜME/BİRİKİM — seçili zaman diliminde ardışık barların dar bir
+   yatay bantta sıkışıp sıkışmadığını tarar. Süzgeç değil ÖLÇÜM döner
+   (kaç bar, ne genişlikte); eşik istemci tarafında anında uygulanır. */
+if("/api/kume"===$.pathname){
+const fav=await X(A,uid),pf=await XP(A,uid);
+if(gov&&(gov.dur===1||gov.dur===0)){
+  if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+  await kumeDurdurAyarla(A,gov.dur===1);
+}
+if(gov&&gov.darlikEsik!=null){
+  if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+  await kumeAyarKaydet(A,gov.darlikEsik);
+}
+const tfIstek=KUME_TF_LISTE.indexOf(gov&&gov.tf)>=0?gov.tf:"1G";
+const paket=await kumeTara(A,tfIstek,[...fav,...Object.keys(pf)]).catch(()=>null);
+if(!paket)return JS({ok:!0,tf:tfIstek,liste:[],evren:0,olculen:0,kalan:0,yas:0,calisiyor:!0});
+const izlenenK=new Set([...fav,...Object.keys(pf)]);
+return JS({ok:!0,tf:paket.tf,evren:paket.evren||0,olculen:paket.olculen||0,
+kalan:paket.kalan||0,kaynak:paket.kaynak||"",calisiyor:paket.calisiyor!==!1,
+yas:Math.round((Date.now()-(paket.ts||0))/6e4),
+ayar:YON?(paket.ayar||await kumeAyarAl(A)):null,
+liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenenK.has(x.kod)},x))})}
 /* 🔗 ORTAKLIK HARİTASI — KV'de önceden hesaplanmış veriyi servis eder.
    Canlı hesaplama YAPMAZ (KAP taraması dakikalar sürer); kap_ortaklik_scraper.py
    periyodik çalışıp KV'yi güncelliyor. Veri yoksa dürüstçe ok:false döner. */
