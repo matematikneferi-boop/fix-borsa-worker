@@ -12708,7 +12708,7 @@ await caches.default.put(new Request(l),new Response(JSON.stringify(t),{headers:
    ikinci kez başlamaz. Kilit alınamazsa o tur sessizce atlanır ve
    🛡 Sistem sekmesinde "atlanan tur" olarak sayılır. */
 q.waitUntil(kilitli(A,"gecmisKaydi",60,()=>k(A,t)).catch(()=>{})),
-q.waitUntil(kilitli(A,"tavanKombiGunSonu",60,()=>tvkGunSonuIsle(A,t)).catch(()=>{})),
+q.waitUntil(kilitli(A,"tavanKombiGunSonu",60,()=>tvkGunSonuIsle(A,t),!0).catch(()=>{})),
 q.waitUntil(kilitli(A,"gecmisiDoldur",180,()=>gecmisiDoldur(A,t)).catch(()=>{})),
 q.waitUntil(kilitli(A,"alarm",60,()=>alarmGonder(A,eskiListe,t)).catch(()=>{})),
 /* Yeni alarm olmasa bile bekleyen kuyruk her turda bir parca ilerler:
@@ -12828,7 +12828,15 @@ if("/tavankombi/gecmis/adim"===$.pathname){
   let job=await tvkGecmisIsOku(A);
   if(!job)return new Response(JSON.stringify({ok:!1,mesaj:"aktif tarama yok"}),{headers:{"content-type":"application/json"}});
   if(!job.tamamlandi&&job.kuyruk.length){
-    job=await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A))||job;
+    /* 🚨 2026-09-10: kvDe=!0 eklendi — bu kilit eskiden yalnız BELLEK-İÇİ
+       (aynı isolate) idi. Panel sayfası açıkken (bu uç) ve Cron Trigger
+       (scheduled()) AYNI ANDA farklı isolate'lerde çalışınca ikisi de
+       tvkArsiv4'ü aynı eski hâliyle okuyup üstüne yazıyordu — sonuncusu
+       kazanıyor, öbürünün eklediği gözlemler SESSİZCE kayboluyordu
+       (gerçek belirti: "2 saat önce 1826, şimdi 92" — sıfırlama değil,
+       kayıp güncelleme/lost-update). kvDe=!0, KV'de gerçek bir kilit
+       kaydı (kvKilitAl/kvKilitBirak) tutarak isolate sınırını aşıyor. */
+    job=await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A),!0)||job;
     if(job==="kilitli")job=await tvkGecmisIsOku(A);
   }
   return new Response(JSON.stringify({ok:!0,tamam:job.tamam,toplam:job.toplam,tamamlandi:job.tamamlandi,gunToplam:job.gunToplam,
@@ -14535,8 +14543,8 @@ text:(s2.ok?"✅ ":"⚠️ ")+E2(s2.mesaj),parse_mode:"HTML",reply_markup:u(t.fr
      az veri var yoksa hesaplama mı yanlış" sorusuna anında cevap. */
   if(!d(t.from.id)){await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
     text:"Bu komut yalnızca yöneticiye açık."});return}
-  const adERaw=n.replace(/^\/tavaneleman/i,"").trim();
-  const adE=TVK_ELEMAN.find(e=>e.toLowerCase()===adERaw.toLowerCase());
+  const adERaw=n.replace(/^\/tavaneleman/i,"").replace(/\s+/g,"").toLowerCase();
+  const adE=TVK_ELEMAN.find(e=>e.toLowerCase()===adERaw);
   if(!adERaw||!adE){
     await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
       text:"Kullanım: <code>/tavaneleman dunTavan</code>\nGeçerli elemanlar: "+TVK_ELEMAN.join(", "),parse_mode:"HTML",reply_markup:u(t.from.id)});return}
@@ -14849,11 +14857,11 @@ async scheduled(ev,A,ctx){
          geçtiyse çalıştırılıyor. Bu hem daha güvenilir hem daha basit. */
       const gecmisJob=await tvkGecmisIsOku(A);
       if(!gecmisJob||Date.now()-(gecmisJob.guncelleme||0)>=9*6e4)
-        await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A)).catch(err=>hataYaz(A,"tvkGecmisAdim-cron",err,null).catch(()=>{}));
+        await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A),!0).catch(err=>hataYaz(A,"tvkGecmisAdim-cron",err,null).catch(()=>{}));
       const canliJob1=await mbTfOku(A,"1SA"),canliJob4=await mbTfOku(A,"4SA");
       const canliSonYazim=Math.max((canliJob1&&canliJob1.ts)||0,(canliJob4&&canliJob4.ts)||0);
       if(Date.now()-canliSonYazim>=2*6e4)
-        await kilitli(A,"tvkCanli",50,()=>tvkCanliDoldur(A)).catch(err=>hataYaz(A,"tvkCanli-cron",err,null).catch(()=>{}));
+        await kilitli(A,"tvkCanli",50,()=>tvkCanliDoldur(A),!0).catch(err=>hataYaz(A,"tvkCanli-cron",err,null).catch(()=>{}));
     }catch(err){
       try{await hataYaz(A,"scheduled",err,null)}catch(e){}
     }
