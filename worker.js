@@ -2416,7 +2416,12 @@ async function hacimTara(A,tfKod,ekKodlar){
    eşiği aştığı an durulur — bir önceki pencere "küme uzunluğu"dur.
    Absorpsiyon/Hacim'deki gibi ÖLÇÜM ile SÜZGEÇ ayrı tutulmaya çalışılır;
    eşik (darlıkEsik) yönetici panelinden değiştirilebilir, KV'de saklanır. */
-const KUME_TF_LISTE=["15DK","1SA","4SA","1G"];
+const KUME_TF_LISTE=["1SA","4SA","1G"];
+/* 🔻 2026-09-11: 15DK, Küme'nin kendi round-robin'inden de çıkarıldı.
+   Hisse Tarama artık yalnız 1SA/4SA/1G'yi kullanıyor, ama kumeDilimTara
+   HER cron turunda 4 dilimden SIRAYLA birini ilerletiyordu (15DK dahil) —
+   yani turların 1/4'ü, artık hiç kullanılmayan bir dilime harcanıyordu.
+   3'e indirilince kalan 3 dilim %33 daha hızlı dolar. */
 const KUME_MIN_BAR=6, KUME_MAX_BAR=30;
 const KUME_VARSAYILAN_ESIK=0.12;     /* bant yüksekliği / pencere medyan kapanışı */
 const KUME_AYAR_VARSAYILAN={darlikEsik:KUME_VARSAYILAN_ESIK};
@@ -4428,7 +4433,8 @@ async function mbAlarmEslesmeOzelS(A,ist,yuvaId){
        o kullanılır, yoksa desteklediği tüm dilimler (15DK hariç, çünkü
        Hisse Tarama genel dilim listesinden zaten çıkarıldı) kullanılır. */
     const kbir=await kumeBirikimOkuHafif(A);
-    const kTfl=(ist.kume.tfler&&ist.kume.tfler.length)?ist.kume.tfler:KUME_TF_LISTE.filter(t=>t!=="15DK");
+    const kTflHam=(ist.kume.tfler||[]).filter(t=>KUME_TF_LISTE.indexOf(t)>=0);
+    const kTfl=kTflHam.length?kTflHam:KUME_TF_LISTE;
     const birlesimK=ist.kapsam!=="hepsi";     /* herhangi=birleşim, hepsi=kesişim */
     let kumeGecen=null;
     kTfl.forEach(tf=>{
@@ -9467,7 +9473,7 @@ function hacimGoster(v){
    sırayla taranır, kullanıcı hangi dilimi göreceğini kendi seçer.
    Ölçüm sabittir (kaç bar, ne genişlikte); "en az kaç bar" filtresi
    istemci tarafında anında uygulanır, yeniden tarama gerekmez. */
-var KUME_TF_ARAYUZ=[{k:"15DK",ad:"15 Dakika",ik:"⏱"},{k:"1SA",ad:"1 Saat",ik:"🕐"},
+var KUME_TF_ARAYUZ=[{k:"1SA",ad:"1 Saat",ik:"🕐"},
   {k:"4SA",ad:"4 Saat",ik:"🕓"},{k:"1G",ad:"Günlük",ik:"📅"}];
 var KUME_TF_ADI={"15DK":"15 Dakika","1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
 var kumeD=null, kumeTf="1G", kumeMinUzunluk=8;
@@ -10044,8 +10050,22 @@ var mbIst={
    seçebilir; seçmezse (tfler null/boşsa) en üstteki GENEL dilim seçimini
    kullanır. Pivot zaten kendi "dilimler" alanına sahip, buna dahil değil. */
 var MB_TF_SIRA=["1SA","4SA","1G","1HAF","1AY"];    /* 5DK/15DK havuzdan çıkarıldı (2026-09-11) */
+var MB_KUME_TF=["1SA","4SA","1G"];    /* Küme'nin desteklediği TEK dilim kümesi (15DK dahil değil) */
 function mbModOzelMi(mod){return !!(mod&&Array.isArray(mod.tfler)&&mod.tfler.length)}
-function mbModTf(mod){return mbModOzelMi(mod)?mod.tfler:mbIst.tfler}
+function mbModTf(mod){
+  var t=mbModOzelMi(mod)?mod.tfler:mbIst.tfler;
+  /* 🚨 KÖKTEN DÜZELTME (2026-09-11): Küme yalnız 1SA/4SA/1G'yi destekliyor.
+     Artık diğer modüller gibi "Genel" seçeneğine dönebildiği (ya da genel
+     dilimde 1HAF/1AY gibi desteklenmeyen bir şey seçili olduğu) için,
+     Küme'ye gelen tf listesi HER ZAMAN burada kelepçeleniyor — desteklenmeyen
+     bir dilim asla mbOlcum/kumeBirikim'e sorulmuyor (sorulsa zaten hep boş
+     dönerdi, "hiç hisse bulamıyor" hissi böyle veriyordu). */
+  if(mod===mbIst.kume){
+    var c=t.filter(function(x){return MB_KUME_TF.indexOf(x)>=0});
+    return c.length?c:MB_KUME_TF;
+  }
+  return t;
+}
 function mbHerhangiOzelTf(){
   return mbModOzelMi(mbIst.mal)||mbModOzelMi(mbIst.dip)||mbModOzelMi(mbIst.bolge)||
          mbModOzelMi(mbIst.enerji)||mbModOzelMi(mbIst.ab)||mbModOzelMi(mbIst.engulf)||
@@ -10060,7 +10080,7 @@ function mbEfektifTfler(){
   [mbIst.mal,mbIst.dip,mbIst.bolge,mbIst.enerji,mbIst.ab,mbIst.engulf].forEach(function(mod){
     mbModTf(mod).forEach(function(t){if(out.indexOf(t)<0)out.push(t)});
   });
-  if(mbIst.kume&&mbIst.kume.acik)mbIst.kume.tfler.forEach(function(t){if(out.indexOf(t)<0)out.push(t)});
+  if(mbIst.kume&&mbIst.kume.acik)mbModTf(mbIst.kume).forEach(function(t){if(out.indexOf(t)<0)out.push(t)});
   return MB_TF_SIRA.filter(function(t){return out.indexOf(t)>=0});
 }
 var MB_BAR=[0,1,2,3,4];
@@ -11154,8 +11174,13 @@ function mbGoster(v,yerel){
   if(mbIst.kume.acik){
     h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
        'Fiyatın son barlarda dar bir aralıkta sıkıştığı (kümelendiği) hisseleri bulur — yön veya '+
-       'kırılımla ilgilenmez, yalnızca kümeyi bulur. Kendi ayrı arka plan havuzundan (1 saat/4 saat/'+
-       '1 gün, cron ile sürekli dolar) beslenir; diğer modüllerin dilim seçimini kullanmaz.</div>';
+       'kırılımla ilgilenmez, yalnızca kümeyi bulur. Kendi ayrı arka plan havuzundan beslenir, '+
+       'cron ile sürekli dolar.</div>';
+    /* Küme yalnız 1SA/4SA/1G'yi destekliyor (1HAF/1AY yok) — o yüzden
+       diğer modüllerin kullandığı GENEL dilim listesi değil, yalnızca bu
+       3 dilim gösteriliyor. "Genel" seçilirse de mbModTf zaten bu 3'e
+       kelepçeliyor, o yüzden burada tehlikesi yok. */
+    h+=mbModulTfSatir("kume",dilimler.filter(function(d){return MB_KUME_TF.indexOf(d.tf)>=0}));
   }
   h+='</div>';
   /* ── 4b) PİVOT KIRILIM ── */
