@@ -2137,7 +2137,17 @@ const MB_TF={
   "1HAF":{ad:"1 hafta",  ik:"📅", interval:"1wk", range:"max", hayaletAt:!0},
   "1AY" :{ad:"1 ay",     ik:"🗂",  interval:"1mo", range:"max", hayaletAt:!0}
 };
-const MB_TF_LISTE=["5DK","15DK","1SA","4SA","1G","1HAF","1AY"];
+const MB_TF_LISTE=["1SA","4SA","1G","1HAF","1AY"];
+/* 🔻 2026-09-11: 5DK ve 15DK, Hisse Tarama'nın cron-beslemeli havuzundan
+   (mbDilimTara/mbTfOku) TAMAMEN çıkarıldı — KV yazma yükünü azaltmak için.
+   Bu iki dilim en sık tazelenen (en kısa TAZE süreli) dilimlerdi, cron'un
+   dakikada 2 tur atmasıyla KV put() sayısını en çok onlar şişiriyordu.
+   MB_TF sözlüğündeki 5DK/15DK tanımları BİLEREK silinmedi (Dip Backtest,
+   HACİM ve KÜME gibi tamamen ayrı/bağımsız özellikler kendi yollarından
+   bu dilimleri kullanmaya devam edebiliyor) — yalnız BU havuzun taradığı
+   liste küçüldü. Eski kayıtlı bir Hisse Tarama/Filtre Alarmı ayarında
+   hâlâ 5DK/15DK seçiliyse aşağıdaki mbIstekNorm filtresi (MB_TF_LISTE'e
+   göre) bunu otomatik temizler. */
 /* ── HAYALET BAR ── Yahoo, borsanın KAPALI olduğu günler için de bar
    üretiyor: hacim 0 ve O=H=L=C (fiyat kıpırdamamış, çünkü işlem yok).
    TradingView'de böyle bir bar YOKTUR — tatil günü grafikte atlanır.
@@ -9999,7 +10009,7 @@ var mbIst={
    Her modül (mal/dip/bölge/enerji/ayı-boğa) isterse kendi zaman dilimini
    seçebilir; seçmezse (tfler null/boşsa) en üstteki GENEL dilim seçimini
    kullanır. Pivot zaten kendi "dilimler" alanına sahip, buna dahil değil. */
-var MB_TF_SIRA=["5DK","15DK","1SA","4SA","1G","1HAF","1AY"];
+var MB_TF_SIRA=["1SA","4SA","1G","1HAF","1AY"];    /* 5DK/15DK havuzdan çıkarıldı (2026-09-11) */
 function mbModOzelMi(mod){return !!(mod&&Array.isArray(mod.tfler)&&mod.tfler.length)}
 function mbModTf(mod){return mbModOzelMi(mod)?mod.tfler:mbIst.tfler}
 function mbHerhangiOzelTf(){
@@ -10502,9 +10512,9 @@ function mbPaketUret(){
   return mbHerhangiOzelTf()?mbPaketUretOzel():mbPaketUretGenel();
 }
 function mbPaketUretGenel(){
-  var TFAD={"5DK":["5 dakika","⚡"],"15DK":["15 dakika","⏱"],"1SA":["1 saat","🕐"],
+  var TFAD={"1SA":["1 saat","🕐"],
     "4SA":["4 saat","🕓"],"1G":["1 gün","🗓"],"1HAF":["1 hafta","📅"],"1AY":["1 ay","🗂"]};
-  var SIRA=["5DK","15DK","1SA","4SA","1G","1HAF","1AY"];
+  var SIRA=MB_TF_SIRA;    /* 5DK/15DK havuzdan çıkarıldı (2026-09-11) */
   var evren=mbEvrenKod?mbEvrenKod.length:0;
   var dilimler=SIRA.map(function(t){return{tf:t,ad:TFAD[t][0],ik:TFAD[t][1],
     olculen:mbOlcumSay(t),evren:evren,yas:null}});
@@ -10579,7 +10589,7 @@ function mbPaketUretGenel(){
    kullanılır. Paketin ŞEKLİ (alan adları) GENEL yolla birebir aynı
    tutuldu ki ekran/kart çizim kodu hiç değişmesin. */
 function mbPaketUretOzel(){
-  var TFAD={"5DK":["5 dakika","⚡"],"15DK":["15 dakika","⏱"],"1SA":["1 saat","🕐"],
+  var TFAD={"1SA":["1 saat","🕐"],
     "4SA":["4 saat","🕓"],"1G":["1 gün","🗓"],"1HAF":["1 hafta","📅"],"1AY":["1 ay","🗂"]};
   var SIRA=MB_TF_SIRA;
   var evren=mbEvrenKod?mbEvrenKod.length:0;
