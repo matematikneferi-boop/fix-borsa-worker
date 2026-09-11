@@ -2492,6 +2492,11 @@ const KUME_YAZMA_ARALIK=6e5;
 const KUME_CACHE_MS=18e5;
 const KUME_SURUM=1;
 let _kumeBirikimBellek=null,_kumeBirikimYazma=0,_kumeTfSira=0;
+async function kumeBirikimOkuHafif(A){
+  if(_kumeBirikimBellek)return _kumeBirikimBellek;
+  try{const h=await A.VERI.get("kumeBirikim");if(h)return _kumeBirikimBellek=JSON.parse(h)}catch(_){}
+  return {sonuc:{}};
+}
 async function kumeDilimOku(A){
   const sabit=Number(A&&A.KUME_DILIM);
   if(isFinite(sabit)&&sabit>0)return Math.max(KUME_DILIM_TABAN,Math.min(KUME_DILIM_TAVAN,sabit));
@@ -3822,7 +3827,7 @@ function mbIstekNorm(gov){
   let tfler=(Array.isArray(gov.tfler)?gov.tfler:[]).filter(t=>MB_TF[t]);
   if(!tfler.length)tfler=["1G"];
   tfler=MB_TF_LISTE.filter(t=>tfler.indexOf(t)>=0);        /* sabit sıra */
-  const m=gov.mal||{},d=gov.dip||{},a=gov.ab||{},ez=gov.enerji||{},bo=gov.bolge||{},pv=gov.pivot||{},eg=gov.engulf||{};
+  const m=gov.mal||{},d=gov.dip||{},a=gov.ab||{},ez=gov.enerji||{},bo=gov.bolge||{},pv=gov.pivot||{},eg=gov.engulf||{},ku=gov.kume||{};
   /* Alan YOKSA varsayılan, VARSA doğruluk değeri. (m.top!==false yazılsaydı
      istemciden gelen 0 "tikli" sayılırdı — JSON'da tip garantisi yok.) */
   const bl=(v,vars)=>v===undefined||v===null?vars:!!v;
@@ -3869,7 +3874,11 @@ function mbIstekNorm(gov){
            yuzde:mbSayiNorm(pv.yuzde,3,0.1,50)},
     /* 🕯️ Yutan Mum (Engulfing) */
     engulf:{acik:bl(eg.acik,!1),boga:bl(eg.boga,!0),ayi:bl(eg.ayi,!1),
-            tfler:modTfNorm(eg.tfler)}
+            tfler:modTfNorm(eg.tfler)},
+    /* 📦 Küme/Birikim — ayrı bir havuzdan (kumeBirikim) beslenir, kendi
+       dilim kümesi yoksa 15DK/1SA/4SA/1G'nin genel havuzda kalanları
+       (1SA/4SA/1G) kullanılır; bkz. mbAlarmEslesmeOzelS'teki kumeAktif. */
+    kume:{acik:bl(ku.acik,!1),tfler:modTfNorm(ku.tfler)}
   };
   if(!ist.bolge.secili.length)ist.bolge.acik=!1;
   if(!ist.pivot.dilimler.length)ist.pivot.dilimler=["KISA","ORTA","UZUN"];
@@ -4363,6 +4372,7 @@ async function mbAlarmEslesme(A,ist,yuvaId){
 async function mbAlarmEslesmeOzelS(A,ist,yuvaId){
   const on=yuvaId?(yuvaId+"|"):"";
   const pivotAktif=!!(ist.pivot&&ist.pivot.acik);
+  const kumeAktif=!!(ist.kume&&ist.kume.acik);
   const har=pivotAktif?await mbPivotHaritasiS(A).catch(()=>({})):null;
   const MOD_LISTE=[
     {k:"mal",ist:ist.mal,cond:mbCondMalS},
@@ -4373,7 +4383,7 @@ async function mbAlarmEslesmeOzelS(A,ist,yuvaId){
     {k:"engulf",ist:ist.engulf,cond:mbCondEngulfS}
   ];
   const aktifler=MOD_LISTE.filter(m=>m.ist&&m.ist.acik);
-  if(!aktifler.length)return{anahtarlar:[],satirlar:[]};
+  if(!aktifler.length&&!pivotAktif&&!kumeAktif)return{anahtarlar:[],satirlar:[]};
   const tfIhtiyac=new Set();
   aktifler.forEach(m=>mbModTfS(m.ist,ist).forEach(t=>tfIhtiyac.add(t)));
   const harTf={};
@@ -4409,6 +4419,27 @@ async function mbAlarmEslesmeOzelS(A,ist,yuvaId){
     for(const kod of Object.keys(har||{}))if(mbPivotGectiS(kod,ist,har))pivotGecen[kod]=!0;
     if(ortak===null){ortak=pivotGecen}
     else{const y={};for(const k in ortak)if(pivotGecen[k])y[k]=!0;ortak=y}
+  }
+  if(kumeAktif){
+    /* 📦 Küme/Birikim — mal/dip/bölge/enerji/ab/engulf'ün paylaştığı
+       mbTfOku havuzundan TAMAMEN ayrı bir kaynağı (kumeBirikim) okur,
+       bu yüzden PİVOT ile birebir aynı 'ayrı parça, sonra ortakla kesiştir'
+       deseni izleniyor. Küme'nin kendi dilim kümesi (module tfler) varsa
+       o kullanılır, yoksa desteklediği tüm dilimler (15DK hariç, çünkü
+       Hisse Tarama genel dilim listesinden zaten çıkarıldı) kullanılır. */
+    const kbir=await kumeBirikimOkuHafif(A);
+    const kTfl=(ist.kume.tfler&&ist.kume.tfler.length)?ist.kume.tfler:KUME_TF_LISTE.filter(t=>t!=="15DK");
+    const birlesimK=ist.kapsam!=="hepsi";     /* herhangi=birleşim, hepsi=kesişim */
+    let kumeGecen=null;
+    kTfl.forEach(tf=>{
+      const s=(kbir&&kbir.sonuc&&kbir.sonuc[tf])||{};
+      if(kumeGecen===null){kumeGecen={};for(const k in s)kumeGecen[k]=!0}
+      else if(birlesimK){for(const k in s)kumeGecen[k]=!0}
+      else{const y={};for(const k in kumeGecen)if(s[k])y[k]=!0;kumeGecen=y}
+    });
+    kumeGecen=kumeGecen||{};
+    if(ortak===null){ortak=kumeGecen}
+    else{const y={};for(const k in ortak)if(kumeGecen[k])y[k]=!0;ortak=y}
   }
   const anahtarlar=[],satirlar=[];
   for(const kod of Object.keys(ortak||{})){
@@ -10003,7 +10034,10 @@ var mbIst={
   enerji:{acik:false,olustu:true,icinde:true,b0:true,b1:false,mesafeAcik:true,mesafe:5, tfler:null},
   ab :{acik:false,boga:true, ayi:false, sinirsiz:false, n:5, tfler:null},
   /* 🕯️ Yutan Mum (Engulfing) — yalnız son bara bakar, yaş/mesafe kavramı yok */
-  engulf:{acik:false,boga:true,ayi:false, tfler:null}
+  engulf:{acik:false,boga:true,ayi:false, tfler:null},
+  /* 📦 Küme/Birikim — ayrı bir havuzdan (kumeBirikim) beslenir, bu yüzden
+     tfler HER ZAMAN kendi desteklediği 3 dilime sabit (1HAF/1AY yok). */
+  kume:{acik:false, tfler:["1SA","4SA","1G"]}
 };
 /* ═══ 🕒 MODÜL BAZLI ZAMAN DİLİMİ ═══════════════════════════════════════
    Her modül (mal/dip/bölge/enerji/ayı-boğa) isterse kendi zaman dilimini
@@ -10014,7 +10048,8 @@ function mbModOzelMi(mod){return !!(mod&&Array.isArray(mod.tfler)&&mod.tfler.len
 function mbModTf(mod){return mbModOzelMi(mod)?mod.tfler:mbIst.tfler}
 function mbHerhangiOzelTf(){
   return mbModOzelMi(mbIst.mal)||mbModOzelMi(mbIst.dip)||mbModOzelMi(mbIst.bolge)||
-         mbModOzelMi(mbIst.enerji)||mbModOzelMi(mbIst.ab)||mbModOzelMi(mbIst.engulf);
+         mbModOzelMi(mbIst.enerji)||mbModOzelMi(mbIst.ab)||mbModOzelMi(mbIst.engulf)||
+         !!(mbIst.kume&&mbIst.kume.acik);   /* kume'nin tfler'i hep dolu, o yüzden acik şartı ayrı */
 }
 /* Ölçüm/ilerleme/tazeleme fonksiyonlarının kullandığı GERÇEK dilim kümesi:
    genel seçim ∪ her modülün kendi özel seçimi. Kimse özel seçim yapmazsa bu
@@ -10025,6 +10060,7 @@ function mbEfektifTfler(){
   [mbIst.mal,mbIst.dip,mbIst.bolge,mbIst.enerji,mbIst.ab,mbIst.engulf].forEach(function(mod){
     mbModTf(mod).forEach(function(t){if(out.indexOf(t)<0)out.push(t)});
   });
+  if(mbIst.kume&&mbIst.kume.acik)mbIst.kume.tfler.forEach(function(t){if(out.indexOf(t)<0)out.push(t)});
   return MB_TF_SIRA.filter(function(t){return out.indexOf(t)>=0});
 }
 var MB_BAR=[0,1,2,3,4];
@@ -10491,6 +10527,11 @@ function mbCondEngulf(x,ist){
   if(e.ayi) ok=ok||!!x.engulfAyi;
   return ok;
 }
+function mbCondKume(x,ist){
+  var e=ist.kume;
+  if(!e||!e.acik)return true;
+  return !!(x&&x.kumeVar);
+}
 function mbGectiMi(x,ist,kod){
   if(!x)return false;
   if(ist.pivot&&ist.pivot.acik&&kod&&!mbPivotGecti(kod,ist))return false;
@@ -10500,6 +10541,7 @@ function mbGectiMi(x,ist,kod){
   if(!mbEnerjiGecti(x,ist))return false;
   if(!mbCondAb(x,ist))return false;
   if(!mbCondEngulf(x,ist))return false;
+  if(!mbCondKume(x,ist))return false;
   return true;
 }
 function mbTazelikSay(x){return Math.min(Number(x.topHam),Number(x.dagHam),Number(x.rejYas))}
@@ -10605,7 +10647,8 @@ function mbPaketUretOzel(){
     {k:"bolge", ist:mbIst.bolge, cond:mbCondBolge},
     {k:"enerji",ist:mbIst.enerji,cond:mbEnerjiGecti},
     {k:"ab",    ist:mbIst.ab,    cond:mbCondAb},
-    {k:"engulf",ist:mbIst.engulf,cond:mbCondEngulf}
+    {k:"engulf",ist:mbIst.engulf,cond:mbCondEngulf},
+    {k:"kume",  ist:mbIst.kume,  cond:mbCondKume}
   ];
   var aktifler=MOD_LISTE.filter(function(m){return m.ist&&m.ist.acik});
   var pivotAktif=!!(mbIst.pivot&&mbIst.pivot.acik);
@@ -11104,6 +11147,15 @@ function mbGoster(v,yerel){
        mbCip('data-mbengulfyon="boga"',"🟢 Boğa (alım) — yeşil yutar",mbIst.engulf.boga)+
        mbCip('data-mbengulfyon="ayi"',"🔴 Ayı (satış) — kırmızı yutar",mbIst.engulf.ayi)+'</div>';
     h+=mbModulTfSatir("engulf",dilimler);
+  }
+  h+='</div>';
+  /* ── 4e) 📦 KÜME/BİRİKİM ── */
+  h+='<div class="kutu" style="margin:8px 0">'+mbModulBas("kume","📦","KÜME/BİRİKİM",mbIst.kume.acik);
+  if(mbIst.kume.acik){
+    h+='<div class="altbilgi" style="margin-bottom:7px;white-space:normal;opacity:.75">'+
+       'Fiyatın son barlarda dar bir aralıkta sıkıştığı (kümelendiği) hisseleri bulur — yön veya '+
+       'kırılımla ilgilenmez, yalnızca kümeyi bulur. Kendi ayrı arka plan havuzundan (1 saat/4 saat/'+
+       '1 gün, cron ile sürekli dolar) beslenir; diğer modüllerin dilim seçimini kullanmaz.</div>';
   }
   h+='</div>';
   /* ── 4b) PİVOT KIRILIM ── */
@@ -14156,6 +14208,21 @@ if("/api/malboga"===$.pathname){
       }
     };
     await Promise.all(Array.from({length:Math.min(MB_ES,kalan.length)},isci));
+    /* 📦 2026-09-11: KÜME/BİRİKİM artık Hisse Tarama'nın bir modülü.
+       Küme'nin kendi havuzu (kumeBirikim) tamamen ayrı bir sistem olduğu
+       için mbOlc/mbOnbellek'in ürettiği asıl 'r' nesnesine hiç girmiyor —
+       burada TEK bir KV okumasıyla (istek başına bir kez, hisse başına
+       değil) her hisseye kumeVar bayrağını üstten iliştiriyoruz. Cache'te
+       gelen sonuçlar da (onbellekten) dahil — bu yüzden döngü SONRADA,
+       tüm cikti üzerinde tek seferde yapılıyor; bayat kumeVar biriktirme
+       riski yok. Küme yalnız 15DK/1SA/4SA/1G'yi desteklediği için başka
+       dilimlerde (1HAF/1AY) her zaman false döner — modül zaten kendi
+       dilimlerine sabitli, oralarda hiç sorulmayacak. */
+    if(KUME_TF_LISTE.indexOf(tf)>=0){
+      const kbir=await kumeBirikimOkuHafif(A);
+      const kSonuc=(kbir&&kbir.sonuc&&kbir.sonuc[tf])||{};
+      for(const kod of Object.keys(cikti))cikti[kod].kumeVar=!!kSonuc[kod];
+    }
     return JS({ok:!0,tf:tf,olcum:cikti,istenen:kodlar.length,onbellekten:onbellekten});
   }
   /* ⏩ ELLE DOLDUR — arka plan taraması havuzu saatler içinde doldurur;
