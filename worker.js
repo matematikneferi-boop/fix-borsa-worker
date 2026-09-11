@@ -15297,6 +15297,13 @@ async scheduled(ev,A,ctx){
       const canliSonYazim=Math.max((canliJob1&&canliJob1.ts)||0,(canliJob4&&canliJob4.ts)||0);
       if(Date.now()-canliSonYazim>=2*6e4)
         await kilitli(A,"tvkCanli",50,()=>tvkCanliDoldur(A),!0).catch(err=>hataYaz(A,"tvkCanli-cron",err,null).catch(()=>{}));
+      /* 📦 2026-09-11: Küme/Birikim artık TVK/malboğa gibi cron'a bağlı —
+         eskiden yalnız birisi Küme sekmesini açtığında (ya da herhangi bir
+         isteğin waitUntil'ında, bkz. fetch() içindeki kumeDilim kilidi)
+         ilerliyordu; kimse bakmıyorsa havuz donuk kalıyordu. Aynı "kilitli"
+         mekanizması (aynı kilit adı: "kumeDilim") kullanıldığı için
+         fetch()'teki waitUntil çağrısıyla ÇAKIŞMAZ, ikisi birbirini bekler. */
+      await kilitli(A,"kumeDilim",50,()=>kumeDilimTara(A,[])).catch(err=>hataYaz(A,"kumeDilim-cron",err,null).catch(()=>{}));
     }catch(err){
       try{await hataYaz(A,"scheduled",err,null)}catch(e){}
     }
