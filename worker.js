@@ -3883,7 +3883,13 @@ function mbIstekNorm(gov){
     /* 📦 Küme/Birikim — ayrı bir havuzdan (kumeBirikim) beslenir, kendi
        dilim kümesi yoksa 15DK/1SA/4SA/1G'nin genel havuzda kalanları
        (1SA/4SA/1G) kullanılır; bkz. mbAlarmEslesmeOzelS'teki kumeAktif. */
-    kume:{acik:bl(ku.acik,!1),tfler:modTfNorm(ku.tfler)}
+    kume:{acik:bl(ku.acik,!1),tfler:modTfNorm(ku.tfler),
+      /* 🆕 2026-09-11-b: eski Küme sekmesindeki eşik mantığının Hisse
+         Tarama'ya taşınmış hâli. 0 = kapalı/sınırsız (varsayılan, eski
+         davranışla birebir aynı — yalnız "küme var mı" sorulur). */
+      maxBar:(Number(ku.maxBar)>0)?Math.min(KUME_MAX_BAR,Math.max(KUME_MIN_BAR,Math.round(Number(ku.maxBar)))):0,
+      maxGenislik:(Number(ku.maxGenislik)>0)?Math.min(100,Math.max(0.1,Number(ku.maxGenislik))):0,
+      yakinlikYuzde:(Number(ku.yakinlikYuzde)>0)?Math.min(50,Math.max(1,Number(ku.yakinlikYuzde))):0}
   };
   if(!ist.bolge.secili.length)ist.bolge.acik=!1;
   if(!ist.pivot.dilimler.length)ist.pivot.dilimler=["KISA","ORTA","UZUN"];
@@ -4430,15 +4436,29 @@ async function mbAlarmEslesmeOzelS(A,ist,yuvaId){
        mbTfOku havuzundan TAMAMEN ayrı bir kaynağı (kumeBirikim) okur,
        bu yüzden PİVOT ile birebir aynı 'ayrı parça, sonra ortakla kesiştir'
        deseni izleniyor. Küme'nin kendi dilim kümesi (module tfler) varsa
-       o kullanılır, yoksa desteklediği tüm dilimler (15DK hariç, çünkü
-       Hisse Tarama genel dilim listesinden zaten çıkarıldı) kullanılır. */
+       o kullanılır, yoksa desteklediği tüm dilimler kullanılır. */
     const kbir=await kumeBirikimOkuHafif(A);
     const kTflHam=(ist.kume.tfler||[]).filter(t=>KUME_TF_LISTE.indexOf(t)>=0);
     const kTfl=kTflHam.length?kTflHam:KUME_TF_LISTE;
     const birlesimK=ist.kapsam!=="hepsi";     /* herhangi=birleşim, hepsi=kesişim */
+    /* 🆕 2026-09-11-b: eşik filtreleri — canlı ekrandaki mbCondKume ile
+       BİREBİR AYNI kurallar (bkz. istemci tarafı), Filtre Alarmı da aynı
+       eşiklere uysun diye. */
+    const kGecerMi=rec=>{
+      if(!rec)return false;
+      if(ist.kume.maxBar>0&&!(rec.uzunluk<=ist.kume.maxBar))return false;
+      if(ist.kume.maxGenislik>0&&!(rec.genislikYuzde<=ist.kume.maxGenislik))return false;
+      if(ist.kume.yakinlikYuzde>0){
+        const k=rec.konum;
+        if(k===undefined||k===null)return false;
+        if(!(k>=(100-ist.kume.yakinlikYuzde)||k<=ist.kume.yakinlikYuzde))return false;
+      }
+      return true;
+    };
     let kumeGecen=null;
     kTfl.forEach(tf=>{
-      const s=(kbir&&kbir.sonuc&&kbir.sonuc[tf])||{};
+      const ham=(kbir&&kbir.sonuc&&kbir.sonuc[tf])||{};
+      const s={};for(const k in ham)if(kGecerMi(ham[k]))s[k]=!0;
       if(kumeGecen===null){kumeGecen={};for(const k in s)kumeGecen[k]=!0}
       else if(birlesimK){for(const k in s)kumeGecen[k]=!0}
       else{const y={};for(const k in kumeGecen)if(s[k])y[k]=!0;kumeGecen=y}
@@ -10043,7 +10063,7 @@ var mbIst={
   engulf:{acik:false,boga:true,ayi:false, tfler:null},
   /* 📦 Küme/Birikim — ayrı bir havuzdan (kumeBirikim) beslenir, bu yüzden
      tfler HER ZAMAN kendi desteklediği 3 dilime sabit (1HAF/1AY yok). */
-  kume:{acik:false, tfler:["1SA","4SA","1G"]}
+  kume:{acik:false, tfler:["1SA","4SA","1G"], maxBar:0, maxGenislik:0, yakinlikYuzde:0}
 };
 /* ═══ 🕒 MODÜL BAZLI ZAMAN DİLİMİ ═══════════════════════════════════════
    Her modül (mal/dip/bölge/enerji/ayı-boğa) isterse kendi zaman dilimini
@@ -10051,6 +10071,7 @@ var mbIst={
    kullanır. Pivot zaten kendi "dilimler" alanına sahip, buna dahil değil. */
 var MB_TF_SIRA=["1SA","4SA","1G","1HAF","1AY"];    /* 5DK/15DK havuzdan çıkarıldı (2026-09-11) */
 var MB_KUME_TF=["1SA","4SA","1G"];    /* Küme'nin desteklediği TEK dilim kümesi (15DK dahil değil) */
+var MB_KUME_MIN_BAR=6, MB_KUME_MAX_BAR=30;   /* sunucudaki KUME_MIN_BAR/KUME_MAX_BAR ile birebir aynı — tarayıcı bu sabitlere erişemez, kendi kopyası gerekir */
 function mbModOzelMi(mod){return !!(mod&&Array.isArray(mod.tfler)&&mod.tfler.length)}
 function mbModTf(mod){
   var t=mbModOzelMi(mod)?mod.tfler:mbIst.tfler;
@@ -10550,7 +10571,15 @@ function mbCondEngulf(x,ist){
 function mbCondKume(x,ist){
   var e=ist.kume;
   if(!e||!e.acik)return true;
-  return !!(x&&x.kumeVar);
+  if(!x||!x.kumeVar)return false;
+  if(e.maxBar>0&&!(x.kumeUzunluk<=e.maxBar))return false;
+  if(e.maxGenislik>0&&!(x.kumeGenislik<=e.maxGenislik))return false;
+  if(e.yakinlikYuzde>0){
+    var k=x.kumeKonum;
+    if(k===undefined||k===null)return false;
+    if(!(k>=(100-e.yakinlikYuzde)||k<=e.yakinlikYuzde))return false;
+  }
+  return true;
 }
 function mbGectiMi(x,ist,kod){
   if(!x)return false;
@@ -11181,6 +11210,29 @@ function mbGoster(v,yerel){
        3 dilim gösteriliyor. "Genel" seçilirse de mbModTf zaten bu 3'e
        kelepçeliyor, o yüzden burada tehlikesi yok. */
     h+=mbModulTfSatir("kume",dilimler.filter(function(d){return MB_KUME_TF.indexOf(d.tf)>=0}));
+    /* 🆕 2026-09-11-b: eski Küme sekmesindeki eşikler — hepsi 0/boş
+       bırakılırsa kapalı sayılır (yalnız "küme var mı" bakılır, eskisi
+       gibi). Bir değer girilince o alanda sınır uygulanır. */
+    h+='<div class="altbilgi" style="margin:9px 0 5px;opacity:.8">Eşik değerleri (boş = sınırsız)</div>'+
+       '<div class="sirala" style="flex-wrap:wrap;gap:8px;align-items:center">'+
+       '<span style="font-size:12px;opacity:.75">En fazla bar</span>'+
+       '<input id="mbKumeMaxBar" type="number" min="'+MB_KUME_MIN_BAR+'" max="'+MB_KUME_MAX_BAR+'" step="1" placeholder="ör. 15" '+
+       'value="'+(mbIst.kume.maxBar>0?E(String(mbIst.kume.maxBar)):"")+'" '+
+       'style="width:64px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);'+
+       'border-radius:7px;padding:5px 7px;font-size:13px;text-align:right">'+
+       '<span style="font-size:12px;opacity:.75;margin-left:6px">En fazla genişlik %</span>'+
+       '<input id="mbKumeMaxGenislik" type="number" min="0.1" max="100" step="0.5" placeholder="ör. 8" '+
+       'value="'+(mbIst.kume.maxGenislik>0?E(String(mbIst.kume.maxGenislik)):"")+'" '+
+       'style="width:64px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);'+
+       'border-radius:7px;padding:5px 7px;font-size:13px;text-align:right">'+
+       '</div>'+
+       '<div class="sirala" style="flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px">'+
+       '<span style="font-size:12px;opacity:.75">Kırılmaya yakınlık % (üst veya alt sınıra)</span>'+
+       '<input id="mbKumeYakinlik" type="number" min="1" max="50" step="1" placeholder="ör. 10" '+
+       'value="'+(mbIst.kume.yakinlikYuzde>0?E(String(mbIst.kume.yakinlikYuzde)):"")+'" '+
+       'style="width:64px;background:var(--kart);border:1px solid var(--ciz);color:var(--yazi);'+
+       'border-radius:7px;padding:5px 7px;font-size:13px;text-align:right">'+
+       '</div>';
   }
   h+='</div>';
   /* ── 4b) PİVOT KIRILIM ── */
@@ -11250,11 +11302,12 @@ function mbGoster(v,yerel){
      '<button class="dg" id="mbKodBtn" style="width:auto;padding:7px 14px">🔎 Bak</button></div></div>';
   /* ── 7) HİÇ MODÜL AÇIK DEĞİLSE ── */
   var acikSayi=(mbIst.mal.acik?1:0)+(mbIst.dip.acik?1:0)+(mbIst.ab.acik?1:0)+
-    (mbIst.bolge.acik?1:0)+(mbIst.pivot.acik?1:0)+(mbIst.enerji.acik?1:0)+(mbIst.engulf.acik?1:0);
+    (mbIst.bolge.acik?1:0)+(mbIst.pivot.acik?1:0)+(mbIst.enerji.acik?1:0)+(mbIst.engulf.acik?1:0)+
+    (mbIst.kume.acik?1:0);
   if(!acikSayi){
     h+='<div class="bos"><b>Hiç modül açık değil</b><br><br>'+
-       'Yukarıdaki yedi modülden (📦 mal · ⬇️ dip · 🐂🐻 ayı/boğa · 🪜 seviye bölgesi · '+
-       '⚛ enerji · 🕯️ yutan mum · 📈 pivot) en az birinin sağındaki <b>○</b> tikine dokun.</div>';
+       'Yukarıdaki sekiz modülden (📦 mal · ⬇️ dip · 🐂🐻 ayı/boğa · 🪜 seviye bölgesi · '+
+       '⚛ enerji · 🕯️ yutan mum · 📦 küme · 📈 pivot) en az birinin sağındaki <b>○</b> tikine dokun.</div>';
     el("govde").innerHTML=h;mbBagla(v,dilimler);return;
   }
   if(!mbEfektifTfler().length){
@@ -11472,6 +11525,23 @@ function mbBagla(v,dilimler){
       var n=Number(ez.value);
       if(isFinite(n)&&n>=0.1&&n<=30){mbIst.enerji.mesafe=n;mbUygula()}
     };
+  })();
+  (function(){
+    var b1=el("mbKumeMaxBar");
+    if(b1)b1.onchange=function(){
+      var n=Number(b1.value);
+      mbIst.kume.maxBar=(isFinite(n)&&n>=MB_KUME_MIN_BAR&&n<=MB_KUME_MAX_BAR)?Math.round(n):0;
+      mbUygula();mbOtoTara()};
+    var b2=el("mbKumeMaxGenislik");
+    if(b2)b2.onchange=function(){
+      var n=Number(b2.value);
+      mbIst.kume.maxGenislik=(isFinite(n)&&n>=0.1&&n<=100)?n:0;
+      mbUygula();mbOtoTara()};
+    var b3=el("mbKumeYakinlik");
+    if(b3)b3.onchange=function(){
+      var n=Number(b3.value);
+      mbIst.kume.yakinlikYuzde=(isFinite(n)&&n>=1&&n<=50)?n:0;
+      mbUygula();mbOtoTara()};
   })();
   T("[data-mbbolge]",function(b){
     var id=b.dataset.mbbolge,i=mbIst.bolge.secili.indexOf(id);
@@ -14237,16 +14307,27 @@ if("/api/malboga"===$.pathname){
        Küme'nin kendi havuzu (kumeBirikim) tamamen ayrı bir sistem olduğu
        için mbOlc/mbOnbellek'in ürettiği asıl 'r' nesnesine hiç girmiyor —
        burada TEK bir KV okumasıyla (istek başına bir kez, hisse başına
-       değil) her hisseye kumeVar bayrağını üstten iliştiriyoruz. Cache'te
+       değil) her hisseye kume alanlarını üstten iliştiriyoruz. Cache'te
        gelen sonuçlar da (onbellekten) dahil — bu yüzden döngü SONRADA,
-       tüm cikti üzerinde tek seferde yapılıyor; bayat kumeVar biriktirme
-       riski yok. Küme yalnız 15DK/1SA/4SA/1G'yi desteklediği için başka
-       dilimlerde (1HAF/1AY) her zaman false döner — modül zaten kendi
-       dilimlerine sabitli, oralarda hiç sorulmayacak. */
+       tüm cikti üzerinde tek seferde yapılıyor; bayat veri biriktirme
+       riski yok. Küme yalnız 1SA/4SA/1G'yi desteklediği için başka
+       dilimlerde her zaman boş döner — modül zaten kendi dilimlerine
+       sabitli, oralarda hiç sorulmayacak.
+       🆕 2026-09-11-b: Yalnız var/yok (kumeVar) değil, eşik filtreleri için
+       gereken uzunluk (kaç bar), genişlik% ve konum (0-100, kırılmaya
+       yakınlık) alanları da taşınıyor — eskiden Küme sekmesinde olan
+       "en fazla kaç bar / genişlik / kırılmaya yüzde kaç kaldı" süzgeçleri
+       artık burada da kullanılabiliyor. */
     if(KUME_TF_LISTE.indexOf(tf)>=0){
       const kbir=await kumeBirikimOkuHafif(A);
       const kSonuc=(kbir&&kbir.sonuc&&kbir.sonuc[tf])||{};
-      for(const kod of Object.keys(cikti))cikti[kod].kumeVar=!!kSonuc[kod];
+      for(const kod of Object.keys(cikti)){
+        const rec=kSonuc[kod];
+        cikti[kod].kumeVar=!!rec;
+        cikti[kod].kumeUzunluk=rec?rec.uzunluk:null;
+        cikti[kod].kumeGenislik=rec?rec.genislikYuzde:null;
+        cikti[kod].kumeKonum=rec?rec.konum:null;
+      }
     }
     return JS({ok:!0,tf:tf,olcum:cikti,istenen:kodlar.length,onbellekten:onbellekten});
   }
