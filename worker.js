@@ -2429,6 +2429,17 @@ const KUME_TF_LISTE=["15DK","1SA","4SA","1G"];
    yalnız 1SA/4SA/1G'ye sabit — o kısıtlama doğruydu, dokunulmadı. */
 const KUME_MIN_BAR=6, KUME_MAX_BAR=30;
 const KUME_VARSAYILAN_ESIK=0.12;     /* bant yüksekliği / pencere medyan kapanışı */
+/* 🎯 KÖK SEBEP DÜZELTMESİ (2026-09-12): darlikEsik tek bir global yüzde
+   olarak TÜM dilimlere (15DK...1G) aynen uygulanıyordu. Ama "(üst-alt)/
+   medyan ≤ %12" şartı 15 dakikalık barlarda makul bir sıkışma iken, aynı
+   yüzde 6-30 GÜNLÜK bir pencerede (1G) fiyatın haftalarca aynı dar bantta
+   kalmasını istiyor — BIST gibi oynak bir piyasada bu neredeyse hiç
+   olmuyor. "Hisse Tarama'da kume(1G) her zaman 0 buluyor" şikayetinin
+   gerçek sebebi buydu (bug değil, kalibrasyon). Her dilime, o dilimin
+   doğal fiyat salınım ölçeğine uygun bir çarpan uygulanıyor — böylece
+   1G'de de gerçekçi sayıda eşleşme çıkar. Sayılar başlangıç tahminidir;
+   sonuçlar çok fazla/az gelirse buradan ince ayar yapılabilir. */
+const KUME_TF_OLCEK={"15DK":1,"1SA":1.6,"4SA":2.6,"1G":4.2};
 const KUME_AYAR_VARSAYILAN={darlikEsik:KUME_VARSAYILAN_ESIK};
 async function kumeAyarAl(A){
   if(!A.VERI)return KUME_AYAR_VARSAYILAN;
@@ -2549,7 +2560,8 @@ async function kumeDilimTara(A,ekKodlar){
       if(Date.now()-t0>KUME_SURE_TAVAN_MS)return;
       const kod=kodlar[sira++];
       try{
-        const k=await kumeTekOlc(kod,tf,ayar.darlikEsik);
+        const esikOlcekli=ayar.darlikEsik*(KUME_TF_OLCEK[tf]||1);
+        const k=await kumeTekOlc(kod,tf,esikOlcekli);
         if(k)bir.sonuc[tf][kod]=Object.assign({kod:kod,tf:tf,ts:Date.now()},k);
         else delete bir.sonuc[tf][kod];
         islenen++;
