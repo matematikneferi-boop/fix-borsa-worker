@@ -2416,12 +2416,17 @@ async function hacimTara(A,tfKod,ekKodlar){
    eşiği aştığı an durulur — bir önceki pencere "küme uzunluğu"dur.
    Absorpsiyon/Hacim'deki gibi ÖLÇÜM ile SÜZGEÇ ayrı tutulmaya çalışılır;
    eşik (darlıkEsik) yönetici panelinden değiştirilebilir, KV'de saklanır. */
-const KUME_TF_LISTE=["1SA","4SA","1G"];
-/* 🔻 2026-09-11: 15DK, Küme'nin kendi round-robin'inden de çıkarıldı.
-   Hisse Tarama artık yalnız 1SA/4SA/1G'yi kullanıyor, ama kumeDilimTara
-   HER cron turunda 4 dilimden SIRAYLA birini ilerletiyordu (15DK dahil) —
-   yani turların 1/4'ü, artık hiç kullanılmayan bir dilime harcanıyordu.
-   3'e indirilince kalan 3 dilim %33 daha hızlı dolar. */
+const KUME_TF_LISTE=["15DK","1SA","4SA","1G"];
+/* 🚨 DÜZELTME (2026-09-11-c): 15DK GERİ EKLENDİ. Bir önceki değişiklikte
+   "Hisse Tarama artık 15DK kullanmıyor" mantığıyla bunu Küme'nin KENDİ
+   round-robin'inden de çıkarmıştım — ama standalone 📦 Küme sekmesi hâlâ
+   15DK'ya dayanıyordu ve muhtemelen en çok KULLANILAN dilimdi (günlük
+   barlarda "dar küme" doğası gereği çok daha nadir — aynı sıkılık eşiği
+   15DK'da sık, 1G'de neredeyse hiç tutmuyor). Bu yüzden "Hisse Tarama'ya
+   taşınmadan önce buluyordu" şikayeti ortaya çıktı: aslında kullanıcı
+   15DK ile buluyordu, ben o dilimi feature'ın TAMAMINDAN silmiştim.
+   Hisse Tarama'nın kendi modülü (MB_KUME_TF, client tarafında) hâlâ
+   yalnız 1SA/4SA/1G'ye sabit — o kısıtlama doğruydu, dokunulmadı. */
 const KUME_MIN_BAR=6, KUME_MAX_BAR=30;
 const KUME_VARSAYILAN_ESIK=0.12;     /* bant yüksekliği / pencere medyan kapanışı */
 const KUME_AYAR_VARSAYILAN={darlikEsik:KUME_VARSAYILAN_ESIK};
@@ -4439,7 +4444,7 @@ async function mbAlarmEslesmeOzelS(A,ist,yuvaId){
        o kullanılır, yoksa desteklediği tüm dilimler kullanılır. */
     const kbir=await kumeBirikimOkuHafif(A);
     const kTflHam=(ist.kume.tfler||[]).filter(t=>KUME_TF_LISTE.indexOf(t)>=0);
-    const kTfl=kTflHam.length?kTflHam:KUME_TF_LISTE;
+    const kTfl=kTflHam.length?kTflHam:KUME_TF_LISTE.filter(t=>t!=="15DK");
     const birlesimK=ist.kapsam!=="hepsi";     /* herhangi=birleşim, hepsi=kesişim */
     /* 🆕 2026-09-11-b: eşik filtreleri — canlı ekrandaki mbCondKume ile
        BİREBİR AYNI kurallar (bkz. istemci tarafı), Filtre Alarmı da aynı
@@ -9493,7 +9498,7 @@ function hacimGoster(v){
    sırayla taranır, kullanıcı hangi dilimi göreceğini kendi seçer.
    Ölçüm sabittir (kaç bar, ne genişlikte); "en az kaç bar" filtresi
    istemci tarafında anında uygulanır, yeniden tarama gerekmez. */
-var KUME_TF_ARAYUZ=[{k:"1SA",ad:"1 Saat",ik:"🕐"},
+var KUME_TF_ARAYUZ=[{k:"15DK",ad:"15 Dakika",ik:"⏱"},{k:"1SA",ad:"1 Saat",ik:"🕐"},
   {k:"4SA",ad:"4 Saat",ik:"🕓"},{k:"1G",ad:"Günlük",ik:"📅"}];
 var KUME_TF_ADI={"15DK":"15 Dakika","1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
 var kumeD=null, kumeTf="1G", kumeMinUzunluk=8;
