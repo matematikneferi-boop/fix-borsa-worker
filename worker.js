@@ -10803,8 +10803,12 @@ function mbPaketUretOzel(){
   }).sort(function(a,b){return (mbTazelikSay(a)-mbTazelikSay(b))||(a.kod<b.kod?-1:1)});
 
   var olculen=tumTf.length?Math.min.apply(null,tumTf.map(function(t){return mbOlcumSay(t)})):0;
-  var aciklama=aktifler.map(function(m){return m.k+"("+mbModTf(m.ist).join("+")+")"}).join(", ")+
-    (pivotAktif?", pivot("+mbIst.pivot.dilimler.join("+")+")":"");
+  var aciklama=aktifler.map(function(m){
+    var tek=liste.length===0?" ["+Object.keys(modGecen[m.k]||{}).length+" tek başına]":"";
+    return m.k+"("+mbModTf(m.ist).join("+")+")"+tek;
+  }).join(", ")+
+    (pivotAktif?", pivot("+mbIst.pivot.dilimler.join("+")+")"+
+      (liste.length===0?" ["+Object.keys(pivotGecen||{}).length+" tek başına]":""):"");
   v.kapsam="hepsi";
   v.kaynakTf=enBuyuk;
   v.ozelDilim=true;      /* çizim tarafına "her modül kendi dilimini kullanıyor" bilgisini taşır */
