@@ -14324,31 +14324,37 @@ if("/api/malboga"===$.pathname){
       }
     };
     await Promise.all(Array.from({length:Math.min(MB_ES,kalan.length)},isci));
-    /* 📦 2026-09-11: KÜME/BİRİKİM artık Hisse Tarama'nın bir modülü.
-       Küme'nin kendi havuzu (kumeBirikim) tamamen ayrı bir sistem olduğu
-       için mbOlc/mbOnbellek'in ürettiği asıl 'r' nesnesine hiç girmiyor —
-       burada TEK bir KV okumasıyla (istek başına bir kez, hisse başına
-       değil) her hisseye kume alanlarını üstten iliştiriyoruz. Cache'te
-       gelen sonuçlar da (onbellekten) dahil — bu yüzden döngü SONRADA,
-       tüm cikti üzerinde tek seferde yapılıyor; bayat veri biriktirme
-       riski yok. Küme yalnız 1SA/4SA/1G'yi desteklediği için başka
-       dilimlerde her zaman boş döner — modül zaten kendi dilimlerine
-       sabitli, oralarda hiç sorulmayacak.
-       🆕 2026-09-11-b: Yalnız var/yok (kumeVar) değil, eşik filtreleri için
-       gereken uzunluk (kaç bar), genişlik% ve konum (0-100, kırılmaya
-       yakınlık) alanları da taşınıyor — eskiden Küme sekmesinde olan
-       "en fazla kaç bar / genişlik / kırılmaya yüzde kaç kaldı" süzgeçleri
-       artık burada da kullanılabiliyor. */
+    /* 🎯 KÖKTEN DEĞİŞİKLİK (2026-09-12): Artık arka plan havuzuna
+       (kumeBirikim) HİÇ bağımlı değil — diğer 7 modül (mal/dip/ab/bölge/
+       enerji/engulf) nasıl her taramada ANLIK hesaplanıyorsa, Küme de
+       öyle. Eski tasarım (kumeBirikim'den okuma) yanlıştı: o havuz
+       dakikada birkaç yüz hisse ilerleyen bir cron'a bağlıydı, tam
+       kapsamaya ulaşması saatler sürüyordu — kullanıcı "hep 0" görüyordu
+       çünkü aslında henüz sırası gelmemiş hisseler için veri YOKTU, eşik
+       meselesi ikincil bir etkendi. Şimdi mbOlc'un zaten her hisse için
+       yaptığı canlı ölçümle AYNI anda, kumeTekOlc de canlı çağrılıyor —
+       sonuç anında ve TAM kapsamalı. Maliyet: MB_OLC_AZAMI(16) kadar ek
+       Yahoo isteği daha (toplam ~32/istek) — Cloudflare'in 50 alt-istek
+       sınırının hâlâ oldukça altında, güvenli. kumeBirikim/kumeDilimTara
+       ve cron bağlantısı, standalone 📦 Küme sekmesi için olduğu gibi
+       KALDI — o ekran hâlâ havuzu kullanıyor, dokunulmadı. */
     if(KUME_TF_LISTE.indexOf(tf)>=0){
-      const kbir=await kumeBirikimOkuHafif(A);
-      const kSonuc=(kbir&&kbir.sonuc&&kbir.sonuc[tf])||{};
-      for(const kod of Object.keys(cikti)){
-        const rec=kSonuc[kod];
-        cikti[kod].kumeVar=!!rec;
-        cikti[kod].kumeUzunluk=rec?rec.uzunluk:null;
-        cikti[kod].kumeGenislik=rec?rec.genislikYuzde:null;
-        cikti[kod].kumeKonum=rec?rec.konum:null;
-      }
+      const kodlarHepsi=Object.keys(cikti);
+      const ayarK=await kumeAyarAl(A);
+      const esikOlcekli=ayarK.darlikEsik*(KUME_TF_OLCEK[tf]||1);
+      let sira2=0;
+      const isci2=async()=>{
+        while(sira2<kodlarHepsi.length){
+          const kod=kodlarHepsi[sira2++];
+          let k=null;
+          try{k=await kumeTekOlc(kod,tf,esikOlcekli)}catch(_){}
+          cikti[kod].kumeVar=!!k;
+          cikti[kod].kumeUzunluk=k?k.uzunluk:null;
+          cikti[kod].kumeGenislik=k?k.genislikYuzde:null;
+          cikti[kod].kumeKonum=k?k.konum:null;
+        }
+      };
+      await Promise.all(Array.from({length:Math.min(KUME_ES,kodlarHepsi.length)},isci2));
     }
     return JS({ok:!0,tf:tf,olcum:cikti,istenen:kodlar.length,onbellekten:onbellekten});
   }
