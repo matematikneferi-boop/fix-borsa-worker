@@ -2739,8 +2739,13 @@ async function hpDilimYaz(A,v){
   try{await A.VERI.put("hpDilimOgrenilen",String(y))}catch(_){}
 }
 /* Bir DİLİM tarar — Hacim Artışı/Küme ile birebir aynı round-robin desen:
-   her turda 3 zaman diliminden (1SA/4SA/1G) SIRAYLA biri ilerler. */
-async function hpDilimTara(A,ekKodlar){
+   her turda 3 zaman diliminden (1SA/4SA/1G) SIRAYLA biri ilerler.
+   zorunluTf verilirse (mini app "boş görünce hemen tara" çağrısı) o
+   dilim ZORLA taranır — aksi halde kullanıcı Günlük'ü açıp beklerken
+   arka planda 1SA taranıyor, Günlük hep 0/evren kalıyordu (bildirilen
+   "hiç sonuç çıkmıyor" bugu buydu). Cron çağrıları zorunluTf vermez,
+   normal round-robin sırasında devam eder. */
+async function hpDilimTara(A,ekKodlar,zorunluTf){
   if(!A||!A.VERI)return;
   if(!(await hpCalisiyorMu(A)))return;
   const evren=await tamEvren(A,ekKodlar);
@@ -2751,8 +2756,13 @@ async function hpDilimTara(A,ekKodlar){
   bir.surum=HP_SURUM;
   if(!bir.sonuc||typeof bir.sonuc!=="object")bir.sonuc={};
   if(!bir.imlec||typeof bir.imlec!=="object")bir.imlec={};
-  _hpTfSira=((_hpTfSira||0)+1)%HP_TF_LISTE.length;
-  const tf=HP_TF_LISTE[_hpTfSira];
+  let tf;
+  if(zorunluTf&&HP_TF_LISTE.indexOf(zorunluTf)>=0){
+    tf=zorunluTf;
+  }else{
+    _hpTfSira=((_hpTfSira||0)+1)%HP_TF_LISTE.length;
+    tf=HP_TF_LISTE[_hpTfSira];
+  }
   if(!bir.sonuc[tf])bir.sonuc[tf]={};
   const dilim=await hpDilimOku(A);
   const bas=(Number(bir.imlec[tf])||0)%evren.length;
@@ -2806,7 +2816,7 @@ async function hpTara(A,tfKod,ekKodlar){
   let bir=_hpBirikimBellek;
   if(!bir){try{const h=await A.VERI.get("hacimProfili");if(h)bir=JSON.parse(h)}catch(_){}}
   if((!bir||bir.surum!==HP_SURUM||!bir.sonuc||!bir.sonuc[tf]||!Object.keys(bir.sonuc[tf]).length)&&await hpCalisiyorMu(A)){
-    await hpDilimTara(A,ekKodlar).catch(()=>{});
+    await hpDilimTara(A,ekKodlar,tf).catch(()=>{});
     bir=_hpBirikimBellek;
     if(!bir){try{const h=await A.VERI.get("hacimProfili");if(h)bir=JSON.parse(h)}catch(_){}}
   }
