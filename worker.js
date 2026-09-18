@@ -2699,10 +2699,81 @@ function hpHesapla(mumlar){
     else if(sonKapanis>pocDeger)konum="poc_ustu";
     else if(sonKapanis>=valDeger)konum="poc_alti";
     else konum="taban_alti";
+    /* Kırılıma mesafe (%) — kullanıcı isteği: "POC/kırılıma yüzde X kalanlar".
+       Pozitif = fiyat hâlâ VAH'ın altında, o kadar % kalmış.
+       Negatif = fiyat VAH'ı zaten geçmiş (kirilim), o kadar % üstünde. */
+    const kirilimMesafe=Math.round(((vahDeger-sonKapanis)/sonKapanis)*1000)/10;
     return{fiyat:sonKapanis,poc:pocDeger,pocYuzde:Math.round(kova[pocI]/toplam*1000)/10,
       vah:vahDeger,val:valDeger,destekler:destekler,direncler:direncler,konum:konum,
+      kirilimMesafe:kirilimMesafe,
       barSayisi:veri.length,zaman:veri[veri.length-1].time};
   }catch(e){return null}
+}
+/* ---------- 🎯 SİNYAL TAKİBİ — POC/Kırılım'dan SONRA kâr/zarar ----------
+   Kullanıcı isteği: bir hisse "🚀 Kırılım" veya "📈 POC Üstü" olduğunda bu
+   anı unutmuyoruz — giriş fiyatı + zamanı KV'ye kaydedilir, sonraki her
+   ölçümde o giriş fiyatına göre kâr/zarar %'si hesaplanıp satıra eklenir
+   (sinyalKarYuzde). Sinyal zayıf tarafa (📉 POC Altı / ⚠️ Taban Altı)
+   döndüğünde kayıt KAPANIR ve sonucu (ne kadar kazandırdı/kaybettirdi)
+   dilim başına son 40 kayıtlık bir geçmiş listesine taşınır — "zarar
+   edenler olduysa durum nedir" sorusunun cevabı bu liste (hpGecmisAl).
+   hpTekHisse (tek kod anlık sorgu) BİLEREK buraya bağlanmadı — o yol
+   "KV'ye hiç dokunmaz" ilkesini koruyor; sinyal takibi sadece canlı
+   toplu ölçüm (is:"olc") ve arka plan taraması (hpDilimTara) üstünden
+   işler, ikisi de zaten aynı KV'yi paylaşıyor. */
+const HP_GUCLU=new Set(["kirilim","poc_ustu"]);
+const HP_SINYAL_TTL=7*86400, HP_SINYAL_GECMIS_AZAMI=40, HP_SINYAL_YAZMA_ARALIK=3e4;
+let _hpSinyalBellek=null,_hpSinyalYazma=0,_hpSinyalYukleniyor=null;
+async function hpSinyalOku(A){
+  if(_hpSinyalBellek)return _hpSinyalBellek;
+  if(_hpSinyalYukleniyor)return _hpSinyalYukleniyor;
+  _hpSinyalYukleniyor=(async()=>{
+    let v=null;
+    try{const h=await A.VERI.get("hpSinyal");if(h)v=JSON.parse(h)}catch(_){}
+    if(!v||typeof v!=="object")v={};
+    if(!v.aktif||typeof v.aktif!=="object")v.aktif={};
+    if(!v.gecmis||typeof v.gecmis!=="object")v.gecmis={};
+    _hpSinyalBellek=v;_hpSinyalYukleniyor=null;
+    return v;
+  })();
+  return _hpSinyalYukleniyor;
+}
+function hpSinyalBelkiYaz(A){
+  if(!A||!A.VERI||!_hpSinyalBellek)return;
+  const simdi=Date.now();
+  if(simdi-_hpSinyalYazma<HP_SINYAL_YAZMA_ARALIK)return;
+  _hpSinyalYazma=simdi;
+  A.VERI.put("hpSinyal",JSON.stringify(_hpSinyalBellek),{expirationTtl:HP_SINYAL_TTL}).catch(()=>{});
+}
+/* s = hpHesapla() çıktısı. Aynı nesneyi zenginleştirip (sinyalFiyat/
+   sinyalTs/sinyalKarYuzde eklenir) döner; kirilimMesafe zaten s içinde. */
+async function hpSinyalIsle(A,tf,kod,s){
+  if(!s||!A||!A.VERI)return s;
+  try{
+    const va=await hpSinyalOku(A);
+    if(!va.aktif[tf])va.aktif[tf]={};
+    if(!va.gecmis[tf])va.gecmis[tf]=[];
+    const eski=va.aktif[tf][kod];
+    const guclumu=HP_GUCLU.has(s.konum);
+    if(guclumu){
+      if(!eski)va.aktif[tf][kod]={fiyat:s.fiyat,ts:Date.now(),konum:s.konum};
+      const giris=va.aktif[tf][kod];
+      s.sinyalFiyat=giris.fiyat;s.sinyalTs=giris.ts;
+      s.sinyalKarYuzde=Math.round(((s.fiyat-giris.fiyat)/giris.fiyat)*1000)/10;
+    }else if(eski){
+      const kar=Math.round(((s.fiyat-eski.fiyat)/eski.fiyat)*1000)/10;
+      va.gecmis[tf].unshift({kod:kod,girisFiyat:eski.fiyat,cikisFiyat:s.fiyat,
+        karYuzde:kar,girisTs:eski.ts,cikisTs:Date.now(),enYuksekKonum:eski.konum});
+      va.gecmis[tf]=va.gecmis[tf].slice(0,HP_SINYAL_GECMIS_AZAMI);
+      delete va.aktif[tf][kod];
+    }
+    hpSinyalBelkiYaz(A);
+  }catch(_){}
+  return s;
+}
+/* Mini App'in "📊 Geçmiş Sinyaller" ekranı bunu çağırır. */
+async function hpGecmisAl(A,tf){
+  try{const va=await hpSinyalOku(A);return (va.gecmis&&va.gecmis[tf])||[]}catch(_){return[]}
 }
 async function hpTekOlc(kod,tfKod){
   const tf=MB_TF[mbTfNormal(tfKod)];
@@ -2789,7 +2860,8 @@ async function hpDilimTara(A,ekKodlar,zorunluTf){
       if(Date.now()-t0>HP_SURE_TAVAN_MS)return;
       const kod=kodlar[sira++];
       try{
-        const s=await hpTekOlc(kod,tf);
+        let s=await hpTekOlc(kod,tf);
+        if(s)s=await hpSinyalIsle(A,tf,kod,s);
         if(s)bir.sonuc[tf][kod]=Object.assign({kod:kod,tf:tf,ts:Date.now()},s);
         else delete bir.sonuc[tf][kod];
         islenen++;
@@ -9936,8 +10008,28 @@ var HP_KONUM_BILGI={
   poc_alti:{ad:"📉 POC Altı",renk:"var(--soluk)",ack:"Fiyat POC altında ama hâlâ yoğun bölge içinde"},
   taban_alti:{ad:"⚠️ Taban Altı",renk:"var(--kir)",ack:"Fiyat, yoğun bölgenin de altına düşmüş — zayıf"}
 };
-var HP_FILTRE_LISTE=[{k:"tumu",ad:"Tümü"},{k:"kirilim",ad:"🚀 Kırılım"},{k:"poc_ustu",ad:"📈 POC Üstü"},{k:"poc_alti",ad:"📉 POC Altı"},{k:"taban_alti",ad:"⚠️ Taban Altı"}];
+var HP_FILTRE_LISTE=[{k:"tumu",ad:"Tümü"},{k:"kirilim",ad:"🚀 Kırılım"},{k:"poc_ustu",ad:"📈 POC Üstü"},{k:"poc_alti",ad:"📉 POC Altı"},{k:"taban_alti",ad:"⚠️ Taban Altı"},{k:"yaklasan",ad:"🎯 Yaklaşanlar"}];
+/* "🎯 Yaklaşanlar" — henüz kırmamış ama POC'un üstünde/Value Area
+   içinde olup kırılıma en yakın olanlar. taban_alti (zayıf bölge)
+   dışlanır — oradan kırılıma mesafe hem büyük hem güvenilmez. */
+function hpYaklasanMi(x){return x.konum==="poc_ustu"||x.konum==="poc_alti"}
 var hpFiltre="tumu";
+function hpMesafeSatiri(x){
+  if(x.kirilimMesafe==null)return"";
+  if(x.konum==="kirilim")
+    return '<div class="altbilgi" style="margin-top:2px;opacity:.75">🚀 Kırılım seviyesinin %'+Math.abs(x.kirilimMesafe)+' üstünde</div>';
+  return '<div class="altbilgi" style="margin-top:2px;opacity:.75">🎯 Kırılıma mesafe: <b>%'+x.kirilimMesafe+'</b></div>';
+}
+function hpSinyalSatiri(x){
+  if(x.sinyalKarYuzde==null)return"";
+  var pozitif=x.sinyalKarYuzde>=0;
+  var renk=pozitif?"var(--yes)":"var(--kir)";
+  var gunFarki=x.sinyalTs?Math.max(0,Math.round((Date.now()-x.sinyalTs)/36e5)):null;
+  var sure=gunFarki==null?"":(gunFarki<24?(" · "+gunFarki+" saat önce"):(" · "+Math.round(gunFarki/24)+" gün önce"));
+  return '<div class="altbilgi" style="margin-top:2px">📌 Sinyalden sonra: '+
+    '<b style="color:'+renk+'">'+(pozitif?"+":"")+x.sinyalKarYuzde+'%</b>'+
+    ' (giriş '+x.sinyalFiyat+sure+')</div>';
+}
 function hpSatir(x){
   var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
   var destekTxt=(x.destekler&&x.destekler.length)?x.destekler.map(hpDegerYaz).join(", "):"—";
@@ -9946,6 +10038,7 @@ function hpSatir(x){
   return '<div class="satir" style="border-left-color:'+(kb?kb.renk:"var(--sar)")+';align-items:flex-start">'+
     '<div class="sol"><div class="kod">'+E(x.kod)+konumRozet+'</div>'+
     '<div class="altbilgi">fiyat <b>'+x.fiyat+'</b> · POC <b>'+x.poc+'</b> (hacim payı %'+x.pocYuzde+')</div>'+
+    hpMesafeSatiri(x)+hpSinyalSatiri(x)+
     '<div class="altbilgi" style="margin-top:3px">🔴 Direnç '+direncTxt+'</div>'+
     '<div class="altbilgi" style="margin-top:2px">🟢 Destek '+destekTxt+'</div>'+
     '<div class="altbilgi" style="opacity:.6;margin-top:2px">Value Area '+x.val+' – '+x.vah+'</div></div>'+
@@ -9961,6 +10054,7 @@ function hpGosterCanli(){
   var kalan=Math.max(0,evren-olculen);
   var h='<div class="sirala"><button class="sir" id="hpYenile">🔄 Yenile</button>'+
         '<button class="sir" id="hpDur">'+(calisiyor?"⏸ Taramayı durdur":"▶️ Taramayı sürdür")+'</button>'+
+        '<button class="sir" id="hpGecmisBtn">📊 Geçmiş sinyaller</button>'+
         '</div>';
   h+='<div class="uyari" style="margin-top:0"><b>📐 Hacim Profili nedir?</b><br>'+
      'Seçtiğin zaman diliminde son barların hacmi fiyat aralığına dağıtılıp '+
@@ -9968,8 +10062,11 @@ function hpGosterCanli(){
      'işaretlenir — en güçlü destek/direnç noktasıdır. Mevcut fiyatın altındaki '+
      've üstündeki yoğun bölgeler de destek ve direnç listesi olarak gösterilir. '+
      'Her satırda fiyatın o yoğun bölgeye göre KONUMU da (🚀 Kırılım / 📈 POC Üstü / '+
-     '📉 POC Altı / ⚠️ Taban Altı) rozet olarak işaretleniyor — aşağıdaki filtrelerle '+
-     'sadece kırılım yapanları ayıklayabilirsin.</div>';
+     '📉 POC Altı / ⚠️ Taban Altı) rozet olarak işaretleniyor — filtrelerle sadece '+
+     'kırılım yapanları ayıklayabilir, 🎯 <b>Yaklaşanlar</b> ile kırılıma en yakın '+
+     'olanları (mesafeye göre sıralı) görebilirsin. Bir hisse Kırılım/POC Üstü '+
+     'olduğunda giriş fiyatı hatırlanır — 📌 satırında o andan bu yana kâr/zarar '+
+     'yüzdesi gösterilir; sinyal bozulunca 📊 Geçmiş sinyaller ekranına taşınır.</div>';
   h+='<div class="kutu" style="margin:0 0 8px"><div class="sat"><span class="et">Tek hisse sorgula</span></div>'+
      '<div style="display:flex;gap:6px;margin-top:6px">'+
      '<input id="hpKod" type="text" placeholder="Örn: SASA" style="flex:1;background:var(--kart);'+
@@ -9995,13 +10092,22 @@ function hpGosterCanli(){
   var tumListe=Object.keys(sonuc).map(function(k){return sonuc[k]});
   var sayac={kirilim:0,poc_ustu:0,poc_alti:0,taban_alti:0};
   for(var si=0;si<tumListe.length;si++){var kk=tumListe[si].konum;if(sayac[kk]!==undefined)sayac[kk]++}
+  sayac.yaklasan=tumListe.filter(hpYaklasanMi).length;
   h+='<div class="sirala" style="flex-wrap:wrap">'+HP_FILTRE_LISTE.map(function(f){
     var sayi=f.k==="tumu"?tumListe.length:(sayac[f.k]||0);
     return '<button class="sir'+(hpFiltre===f.k?" on":"")+'" data-filtre="'+f.k+'">'+f.ad+' ('+sayi+')</button>';
   }).join("")+'</div>';
-  var kaynakListe=(hpFiltre==="tumu"?tumListe:tumListe.filter(function(x){return x.konum===hpFiltre}))
-    .sort(function(a,b){return (b.pocYuzde||0)-(a.pocYuzde||0)});
-  h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse — POC gücüne göre sıralı</div>';
+  var yaklasanMi=hpFiltre==="yaklasan";
+  var kaynakListe;
+  if(yaklasanMi){
+    kaynakListe=tumListe.filter(hpYaklasanMi)
+      .sort(function(a,b){return (a.kirilimMesafe==null?999:a.kirilimMesafe)-(b.kirilimMesafe==null?999:b.kirilimMesafe)});
+  }else{
+    kaynakListe=(hpFiltre==="tumu"?tumListe:tumListe.filter(function(x){return x.konum===hpFiltre}))
+      .sort(function(a,b){return (b.pocYuzde||0)-(a.pocYuzde||0)});
+  }
+  h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse — '+
+     (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı")+'</div>';
   if(!kaynakListe.length){
     h+='<div class="bos"><b>'+(calisiyor&&!tumListe.length?"Ölçülüyor…":"Bu filtrede hisse yok")+'</b><br><br>'+
        (calisiyor&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Farklı bir filtre dene veya tarama tamamlansın.")+'</div>';
@@ -10020,6 +10126,7 @@ function hpGosterCanli(){
     var dur=hpTaraDurum;if(!dur)return;
     if(dur.suruyor){dur.suruyor=false;hpNobetciKapat();hpGosterCanli()}
     else{dur.suruyor=true;hpNobetciKur();hpGosterCanli();hpTaraTur()}};
+  var gb=el("hpGecmisBtn");if(gb)gb.onclick=function(){tit();hpGecmisAc()};
   var kb=el("hpKodBtn"),ki=el("hpKod");
   var hpAra=function(){
     var k=String((ki&&ki.value)||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
@@ -10030,6 +10137,47 @@ function hpGosterCanli(){
       .catch(function(){hpCiz()})};
   if(kb)kb.onclick=hpAra;
   if(ki)ki.onkeydown=function(e2){if(e2.key==="Enter")hpAra()};
+}
+/* 📊 GEÇMİŞ SİNYALLER — bir hisse 🚀 Kırılım/📈 POC Üstü olduktan sonra
+   zayıf tarafa dönünce buraya düşer: ne kadar kâr/zarar ettirdi, kaç
+   saat/gün sürdü. "Zarar edenler olduysa durum nedir" cevabı burada. */
+function hpGecmisAc(){
+  el("govde").innerHTML='<div class="yukleniyor">geçmiş sinyaller yükleniyor…</div>';
+  post("/api/hacimprofil",{is:"gecmis",tf:hpTf}).then(function(r){
+    hpGecmisGoster((r&&r.ok&&r.gecmis)||[]);
+  }).catch(function(){hpGecmisGoster([])});
+}
+function hpGecmisSatir(x){
+  var pozitif=x.karYuzde>=0;
+  var renk=pozitif?"var(--yes)":"var(--kir)";
+  var kbGiris=HP_KONUM_BILGI[x.enYuksekKonum];
+  var girisRozet=kbGiris?' <span class="rozet" style="background:'+kbGiris.renk+';color:#0e1116">'+kbGiris.ad+'</span>':"";
+  var saatFarki=Math.max(0,Math.round((x.cikisTs-x.girisTs)/36e5));
+  var sureTxt=saatFarki<24?(saatFarki+" saat"):(Math.round(saatFarki/24)+" gün");
+  return '<div class="satir" style="border-left-color:'+renk+';align-items:flex-start">'+
+    '<div class="sol"><div class="kod">'+E(x.kod)+girisRozet+'</div>'+
+    '<div class="altbilgi">giriş <b>'+x.girisFiyat+'</b> → çıkış <b>'+x.cikisFiyat+'</b> · '+sureTxt+' sürdü</div></div>'+
+    '<div class="sag"><div class="yuzde" style="color:'+renk+'">'+(pozitif?"+":"")+x.karYuzde+'%</div>'+
+    '<div class="altbilgi">'+(pozitif?"kâr":"zarar")+'</div></div></div>';
+}
+function hpGecmisGoster(liste){
+  var h='<div class="sirala"><button class="sir" id="hpGecmisGeri">← Taramaya dön</button></div>';
+  h+='<div class="uyari" style="margin-top:0"><b>📊 Geçmiş sinyaller — '+(HP_TF_ADI[hpTf]||hpTf)+'</b><br>'+
+     'Bir hisse 🚀 Kırılım veya 📈 POC Üstü olduktan sonra tekrar 📉 POC Altı / ⚠️ Taban Altı\'na '+
+     'düştüğünde buraya düşer — giriş anındaki fiyata göre ne kadar kâr/zarar ettirdiği hesaplanır. '+
+     'Sinyal hâlâ sürüyorsa (henüz bozulmadıysa) burada görünmez, taramadaki 📌 satırında görünür.</div>';
+  if(!liste.length){
+    h+='<div class="bos"><b>Henüz kapanmış sinyal yok</b><br><br>Bir sinyal bozulduğunda (kırılım/POC üstü '+
+       'durumundan zayıf tarafa dönünce) burada listelenecek.</div>';
+  }else{
+    var kazanan=liste.filter(function(x){return x.karYuzde>=0}).length;
+    h+='<div class="altbilgi" style="margin:4px 0 8px">son <b style="color:var(--yes)">'+liste.length+
+       '</b> kapanmış sinyal — <b style="color:var(--yes)">'+kazanan+'</b> kâr · '+
+       '<b style="color:var(--kir)">'+(liste.length-kazanan)+'</b> zarar</div>';
+    h+=liste.map(hpGecmisSatir).join("");
+  }
+  el("govde").innerHTML=h;
+  var g=el("hpGecmisGeri");if(g)g.onclick=function(){tit();hpGosterCanli()};
 }
 function hpTekGoster(t){
   var s=t.satir||[];
@@ -14484,11 +14632,22 @@ if(gov&&gov.is==="olc"){
   const isci=async()=>{
     while(sira<kodlar.length){
       const kod=kodlar[sira++];
-      try{const s=await hpTekOlc(kod,tf);if(s)olcum[kod]=Object.assign({kod:kod,tf:tf},s)}catch(_){}
+      try{
+        let s=await hpTekOlc(kod,tf);
+        if(s)s=await hpSinyalIsle(A,tf,kod,s);
+        if(s)olcum[kod]=Object.assign({kod:kod,tf:tf},s);
+      }catch(_){}
     }
   };
   await Promise.all(Array.from({length:Math.min(HP_ES_CANLI,kodlar.length)},isci));
   return JS({ok:!0,tf:tf,olcum:olcum,istenen:kodlar.length});
+}
+/* 📊 Geçmiş Sinyaller — bir hisse 🚀 Kırılım/📈 POC Üstü'nden zayıf tarafa
+   döndüğünde kapanan kayıtlar. "Zarar edenler olduysa durum nedir" cevabı. */
+if(gov&&gov.is==="gecmis"){
+  const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
+  const liste=await hpGecmisAl(A,tf);
+  return JS({ok:!0,tf:tf,gecmis:liste});
 }
 if(gov&&(gov.dur===1||gov.dur===0)){
   if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
