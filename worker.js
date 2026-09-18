@@ -2688,8 +2688,19 @@ function hpHesapla(mumlar){
     const paketle=x=>({fiyat:x.fiyat,yuzde:Math.round(x.hacim/toplam*1000)/10,guc:gucEtiket(x.hacim)});
     const destekler=altKova.slice(0,3).map(paketle).sort((a,b)=>b.fiyat-a.fiyat);
     const direncler=ustKova.slice(0,3).map(paketle).sort((a,b)=>a.fiyat-b.fiyat);
-    return{fiyat:sonKapanis,poc:binFiyat(pocI),pocYuzde:Math.round(kova[pocI]/toplam*1000)/10,
-      vah:binFiyat(ustI),val:binFiyat(altI),destekler:destekler,direncler:direncler,
+    const vahDeger=binFiyat(ustI),valDeger=binFiyat(altI),pocDeger=binFiyat(pocI);
+    /* Fiyatın yoğun hacim bölgesine göre konumu — kullanıcı isteği:
+       400+ hisse arasından "fiyatı POC/direnci kırmış" olanları ayırt
+       edebilmek. kirilim=Value Area üstüne kırmış (en güçlü sinyal),
+       poc_ustu=POC üstünde ama VA içinde, poc_alti=POC altında ama VA
+       içinde, taban_alti=Value Area'nın da altına düşmüş (zayıf). */
+    let konum;
+    if(sonKapanis>vahDeger)konum="kirilim";
+    else if(sonKapanis>pocDeger)konum="poc_ustu";
+    else if(sonKapanis>=valDeger)konum="poc_alti";
+    else konum="taban_alti";
+    return{fiyat:sonKapanis,poc:pocDeger,pocYuzde:Math.round(kova[pocI]/toplam*1000)/10,
+      vah:vahDeger,val:valDeger,destekler:destekler,direncler:direncler,konum:konum,
       barSayisi:veri.length,zaman:veri[veri.length-1].time};
   }catch(e){return null}
 }
@@ -9919,11 +9930,21 @@ function hpDegerYaz(x){
   var renk=HP_GUC_RENK[x.guc]||"var(--soluk)";
   return '<span style="color:'+renk+'">'+x.fiyat+' <span style="opacity:.6">('+(HP_GUC_AD[x.guc]||"")+')</span></span>';
 }
+var HP_KONUM_BILGI={
+  kirilim:{ad:"🚀 Kırılım",renk:"var(--yes)",ack:"Fiyat, hacmin %70 inin toplandığı bölgenin (Value Area) ÜSTÜNE çıkmış — en güçlü sinyal"},
+  poc_ustu:{ad:"📈 POC Üstü",renk:"var(--sar)",ack:"Fiyat POC üstünde ama hâlâ yoğun bölge (Value Area) içinde"},
+  poc_alti:{ad:"📉 POC Altı",renk:"var(--soluk)",ack:"Fiyat POC altında ama hâlâ yoğun bölge içinde"},
+  taban_alti:{ad:"⚠️ Taban Altı",renk:"var(--kir)",ack:"Fiyat, yoğun bölgenin de altına düşmüş — zayıf"}
+};
+var HP_FILTRE_LISTE=[{k:"tumu",ad:"Tümü"},{k:"kirilim",ad:"🚀 Kırılım"},{k:"poc_ustu",ad:"📈 POC Üstü"},{k:"poc_alti",ad:"📉 POC Altı"},{k:"taban_alti",ad:"⚠️ Taban Altı"}];
+var hpFiltre="tumu";
 function hpSatir(x){
   var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
   var destekTxt=(x.destekler&&x.destekler.length)?x.destekler.map(hpDegerYaz).join(", "):"—";
-  return '<div class="satir" style="border-left-color:var(--sar);align-items:flex-start">'+
-    '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
+  var kb=HP_KONUM_BILGI[x.konum];
+  var konumRozet=kb?' <span class="rozet" style="background:'+kb.renk+';color:#0e1116">'+kb.ad+'</span>':"";
+  return '<div class="satir" style="border-left-color:'+(kb?kb.renk:"var(--sar)")+';align-items:flex-start">'+
+    '<div class="sol"><div class="kod">'+E(x.kod)+konumRozet+'</div>'+
     '<div class="altbilgi">fiyat <b>'+x.fiyat+'</b> · POC <b>'+x.poc+'</b> (hacim payı %'+x.pocYuzde+')</div>'+
     '<div class="altbilgi" style="margin-top:3px">🔴 Direnç '+direncTxt+'</div>'+
     '<div class="altbilgi" style="margin-top:2px">🟢 Destek '+destekTxt+'</div>'+
@@ -9945,7 +9966,10 @@ function hpGosterCanli(){
      'Seçtiğin zaman diliminde son barların hacmi fiyat aralığına dağıtılıp '+
      'yoğunluk haritası çıkarılır (Volume Profile). En yoğun bölge POC olarak '+
      'işaretlenir — en güçlü destek/direnç noktasıdır. Mevcut fiyatın altındaki '+
-     've üstündeki yoğun bölgeler de destek ve direnç listesi olarak gösterilir.</div>';
+     've üstündeki yoğun bölgeler de destek ve direnç listesi olarak gösterilir. '+
+     'Her satırda fiyatın o yoğun bölgeye göre KONUMU da (🚀 Kırılım / 📈 POC Üstü / '+
+     '📉 POC Altı / ⚠️ Taban Altı) rozet olarak işaretleniyor — aşağıdaki filtrelerle '+
+     'sadece kırılım yapanları ayıklayabilirsin.</div>';
   h+='<div class="kutu" style="margin:0 0 8px"><div class="sat"><span class="et">Tek hisse sorgula</span></div>'+
      '<div style="display:flex;gap:6px;margin-top:6px">'+
      '<input id="hpKod" type="text" placeholder="Örn: SASA" style="flex:1;background:var(--kart);'+
@@ -9968,18 +9992,28 @@ function hpGosterCanli(){
      '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":(kalan?"var(--sar)":"var(--yes)"))+'"></div></div>'+
      '<div class="altbilgi" style="margin-top:6px;opacity:.6">Paralel canlı ölçüm — sekmeden çıkmadan bekle, birkaç saniyede dolar.</div>'+
      '</div>';
-  var kaynakListe=Object.keys(sonuc).map(function(k){return sonuc[k]})
+  var tumListe=Object.keys(sonuc).map(function(k){return sonuc[k]});
+  var sayac={kirilim:0,poc_ustu:0,poc_alti:0,taban_alti:0};
+  for(var si=0;si<tumListe.length;si++){var kk=tumListe[si].konum;if(sayac[kk]!==undefined)sayac[kk]++}
+  h+='<div class="sirala" style="flex-wrap:wrap">'+HP_FILTRE_LISTE.map(function(f){
+    var sayi=f.k==="tumu"?tumListe.length:(sayac[f.k]||0);
+    return '<button class="sir'+(hpFiltre===f.k?" on":"")+'" data-filtre="'+f.k+'">'+f.ad+' ('+sayi+')</button>';
+  }).join("")+'</div>';
+  var kaynakListe=(hpFiltre==="tumu"?tumListe:tumListe.filter(function(x){return x.konum===hpFiltre}))
     .sort(function(a,b){return (b.pocYuzde||0)-(a.pocYuzde||0)});
   h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse — POC gücüne göre sıralı</div>';
   if(!kaynakListe.length){
-    h+='<div class="bos"><b>'+(calisiyor?"Ölçülüyor…":"Henüz ölçüm yok")+'</b><br><br>'+
-       (calisiyor?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Yenile ile tekrar dene.")+'</div>';
+    h+='<div class="bos"><b>'+(calisiyor&&!tumListe.length?"Ölçülüyor…":"Bu filtrede hisse yok")+'</b><br><br>'+
+       (calisiyor&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Farklı bir filtre dene veya tarama tamamlansın.")+'</div>';
   }else{
     h+=kaynakListe.map(hpSatir).join("");
   }
   el("govde").innerHTML=h;
   [].forEach.call(el("govde").querySelectorAll("[data-tf]"),function(bt){
     bt.onclick=function(){tit();hpTf=bt.dataset.tf;hpTaraBaslat()};
+  });
+  [].forEach.call(el("govde").querySelectorAll("[data-filtre]"),function(bt){
+    bt.onclick=function(){tit();hpFiltre=bt.dataset.filtre;hpGosterCanli()};
   });
   var y=el("hpYenile");if(y)y.onclick=function(){tit();hpOlcum[hpTf]={};hpTaraBaslat()};
   var dd=el("hpDur");if(dd)dd.onclick=function(){tit();
