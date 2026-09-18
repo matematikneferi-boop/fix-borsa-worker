@@ -2633,6 +2633,14 @@ async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
    round-robin tarama iskeleti (aynı desen, ayrı havuz/KV anahtarı). */
 const HP_TF_LISTE=["1SA","4SA","1G"];
 const HP_MIN_BAR=30, HP_MAX_BAR=180, HP_BIN=30;
+/* 2026-09-18: kullanıcı geri bildirimi — 4SA/1G dilimlerinde geriye
+   ~5-9 aylık bar kullanılınca (HP_MAX_BAR=180), düşüşten ÖNCEKİ uzun
+   bir konsolidasyonun toplam hacmi, düşüşten SONRAKİ taze hacmi eziyor;
+   POC/destek-direnç mevcut fiyattan çok uzakta, "absürt" görünen eski
+   bir bölgede kalıyordu. Çözüm: eski barlara üstel azalan ağırlık —
+   eski yoğun bölge tamamen silinmiyor (hâlâ görünür) ama artık mevcut
+   fiyata yakın taze hacmi gölgede bırakmıyor. */
+const HP_AGIRLIK_KATSAYI=0.985;
 function hpHesapla(mumlar){
   try{
     if(!mumlar||mumlar.length<HP_MIN_BAR)return null;
@@ -2645,10 +2653,13 @@ function hpHesapla(mumlar){
     const genislik=(ust-alt)/HP_BIN;
     if(!(genislik>0))return null;
     const kova=new Array(HP_BIN).fill(0);
-    for(const b of veri){
+    const N=veri.length;
+    for(let vi=0;vi<N;vi++){
+      const b=veri[vi];
+      const yakinlik=Math.pow(HP_AGIRLIK_KATSAYI,(N-1-vi));
       let i0=Math.floor((b.low-alt)/genislik), i1=Math.floor((b.high-alt)/genislik);
       if(i0<0)i0=0; if(i1>HP_BIN-1)i1=HP_BIN-1; if(i1<i0)i1=i0;
-      const pay=(b.hacim||0)/(i1-i0+1);
+      const pay=((b.hacim||0)*yakinlik)/(i1-i0+1);
       for(let i=i0;i<=i1;i++)kova[i]+=pay;
     }
     const toplam=kova.reduce((a,b)=>a+b,0);
@@ -9798,7 +9809,7 @@ function kumeGoster(v){
 var HP_TF_ARAYUZ=[{k:"1SA",ad:"1 Saat",ik:"🕐"},{k:"4SA",ad:"4 Saat",ik:"🕓"},{k:"1G",ad:"Günlük",ik:"📅"}];
 var HP_TF_ADI={"1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
 var HP_GUC_AD={guclu:"güçlü",orta:"orta",zayif:"zayıf"};
-var HP_GUC_RENK={guclu:"var(--yes)",orta:"var(--sar)",zayif:"var(--ciz)"};
+var HP_GUC_RENK={guclu:"var(--yes)",orta:"var(--sar)",zayif:"var(--soluk)"};
 var hpD=null, hpTf="1G", hpTek=null;
 function hpCiz(){
   if(hpTek){hpTekGoster(hpTek);return}
