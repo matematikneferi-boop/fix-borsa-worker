@@ -2621,6 +2621,194 @@ async function kumeTara(A,tfKod,ekKodlar){
    (bkz. tamEvren). Böylece 121 sınırı iki tarafta birden kalktı. */
 async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
 
+/* ---------- 📐 HACİM PROFİLİ — DESTEK/DİRENÇ (VOLUME PROFILE) ----------
+   Kullanıcı isteği: AKD (aracı kurum dağılımı) ekranından elle çıkarılan
+   destek/direnç mantığının otomatik hâli. AKD verisine ücretsiz/API
+   erişimi yok — bunun yerine Yahoo'dan zaten çekilen OHLCV'nin HACMİ
+   kullanılıyor (klasik Volume Profile / VPVR): seçilen zaman diliminde
+   (1SA/4SA/1G) son barların hacmi fiyat aralığına (high-low) dağıtılıp
+   30 dilime (bin) bölünüyor. En yoğun dilim = POC (en güçlü destek/
+   direnç); mevcut fiyatın altı/üstündeki yoğun dilimler de destek/
+   direnç listesi olarak dönüyor. Hacim Artışı/Küme ile BİREBİR AYNI
+   round-robin tarama iskeleti (aynı desen, ayrı havuz/KV anahtarı). */
+const HP_TF_LISTE=["1SA","4SA","1G"];
+const HP_MIN_BAR=30, HP_MAX_BAR=180, HP_BIN=30;
+function hpHesapla(mumlar){
+  try{
+    if(!mumlar||mumlar.length<HP_MIN_BAR)return null;
+    const veri=mumlar.filter(x=>x&&x.high>0&&x.low>0&&x.close>0&&x.hacim>=0).slice(-HP_MAX_BAR);
+    if(veri.length<HP_MIN_BAR)return null;
+    const sonKapanis=veri[veri.length-1].close;
+    let ust=-Infinity,alt=Infinity;
+    for(const b of veri){if(b.high>ust)ust=b.high;if(b.low<alt)alt=b.low}
+    if(!(ust>alt))return null;
+    const genislik=(ust-alt)/HP_BIN;
+    if(!(genislik>0))return null;
+    const kova=new Array(HP_BIN).fill(0);
+    for(const b of veri){
+      let i0=Math.floor((b.low-alt)/genislik), i1=Math.floor((b.high-alt)/genislik);
+      if(i0<0)i0=0; if(i1>HP_BIN-1)i1=HP_BIN-1; if(i1<i0)i1=i0;
+      const pay=(b.hacim||0)/(i1-i0+1);
+      for(let i=i0;i<=i1;i++)kova[i]+=pay;
+    }
+    const toplam=kova.reduce((a,b)=>a+b,0);
+    if(!(toplam>0))return null;
+    let pocI=0;for(let i=1;i<HP_BIN;i++)if(kova[i]>kova[pocI])pocI=i;
+    const binFiyat=i=>Math.round((alt+genislik*(i+0.5))*100)/100;
+    /* Value Area — POC'tan başlayıp iki yöne, hacmin %70'i toplanana dek genişler */
+    let altI=pocI,ustI=pocI,toplanan=kova[pocI];
+    while(toplanan<toplam*0.7&&(altI>0||ustI<HP_BIN-1)){
+      const a2=altI>0?kova[altI-1]:-1, u2=ustI<HP_BIN-1?kova[ustI+1]:-1;
+      if(u2>=a2){ustI++;toplanan+=kova[ustI]}else{altI--;toplanan+=kova[altI]}
+    }
+    const ortPay=toplam/HP_BIN;
+    const gucEtiket=g=>g>=ortPay*3?"guclu":(g>=ortPay*1.5?"orta":"zayif");
+    const altKova=[],ustKova=[];
+    for(let i=0;i<HP_BIN;i++){
+      if(!(kova[i]>0))continue;
+      const f=binFiyat(i);
+      if(f<sonKapanis)altKova.push({fiyat:f,hacim:kova[i]});
+      else if(f>sonKapanis)ustKova.push({fiyat:f,hacim:kova[i]});
+    }
+    altKova.sort((a,b)=>b.hacim-a.hacim);ustKova.sort((a,b)=>b.hacim-a.hacim);
+    const paketle=x=>({fiyat:x.fiyat,yuzde:Math.round(x.hacim/toplam*1000)/10,guc:gucEtiket(x.hacim)});
+    const destekler=altKova.slice(0,3).map(paketle).sort((a,b)=>b.fiyat-a.fiyat);
+    const direncler=ustKova.slice(0,3).map(paketle).sort((a,b)=>a.fiyat-b.fiyat);
+    return{fiyat:sonKapanis,poc:binFiyat(pocI),pocYuzde:Math.round(kova[pocI]/toplam*1000)/10,
+      vah:binFiyat(ustI),val:binFiyat(altI),destekler:destekler,direncler:direncler,
+      barSayisi:veri.length,zaman:veri[veri.length-1].time};
+  }catch(e){return null}
+}
+async function hpTekOlc(kod,tfKod){
+  const tf=MB_TF[mbTfNormal(tfKod)];
+  const r=await yfMumlar(kod,tf.interval,tf.range);
+  const ham=(r&&r.veri)||[];
+  if(!ham.length)return null;
+  const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
+  const m=tf.grupSaat?mbGrupla(temiz,tf.grupSaat):temiz;
+  return hpHesapla(m);
+}
+/* Tek hisse — Telegram /hp komutu ve mini app'teki "kod ara" kutusu
+   bunu kullanır. KV'ye HİÇ dokunmaz, mbTekHisse ile birebir aynı desen:
+   üç zaman dilimini anında ölçüp döner. */
+async function hpTekHisse(kod){
+  const satir=[];
+  for(const t of HP_TF_LISTE){
+    try{const s=await hpTekOlc(kod,t);satir.push(s?Object.assign({tf:t},s):{tf:t,yok:!0})}
+    catch(_){satir.push({tf:t,yok:!0})}
+  }
+  return{kod:kod,ts:Date.now(),satir:satir};
+}
+async function hpCalisiyorMu(A){
+  try{return (await A.VERI.get("hpDurduruldu"))!=="1"}catch(_){return true}
+}
+async function hpDurdurAyarla(A,dur){
+  try{ if(dur)await A.VERI.put("hpDurduruldu","1");
+       else await A.VERI.delete("hpDurduruldu"); }catch(_){}
+}
+const HP_DILIM_TABAN=8, HP_DILIM_TAVAN=100;
+const HP_SURE_TAVAN_MS=1e4;
+const HP_ES=6;
+const HP_BIRIKIM_TTL=7200;
+const HP_YAZMA_ARALIK=6e5;
+const HP_CACHE_MS=18e5;
+const HP_SURUM=1;
+let _hpBirikimBellek=null,_hpBirikimYazma=0,_hpTfSira=0,_hpDilimBellek=null;
+async function hpDilimOku(A){
+  const sabit=Number(A&&A.HP_DILIM);
+  if(isFinite(sabit)&&sabit>0)return Math.max(HP_DILIM_TABAN,Math.min(HP_DILIM_TAVAN,sabit));
+  try{const v=Number(await A.VERI.get("hpDilimOgrenilen"));
+    if(isFinite(v)&&v>=HP_DILIM_TABAN)return Math.min(HP_DILIM_TAVAN,v)}catch(_){}
+  return 28;
+}
+async function hpDilimYaz(A,v){
+  const y=Math.max(HP_DILIM_TABAN,Math.min(HP_DILIM_TAVAN,Math.floor(v)));
+  if(_hpDilimBellek===y)return;
+  _hpDilimBellek=y;
+  try{await A.VERI.put("hpDilimOgrenilen",String(y))}catch(_){}
+}
+/* Bir DİLİM tarar — Hacim Artışı/Küme ile birebir aynı round-robin desen:
+   her turda 3 zaman diliminden (1SA/4SA/1G) SIRAYLA biri ilerler. */
+async function hpDilimTara(A,ekKodlar){
+  if(!A||!A.VERI)return;
+  if(!(await hpCalisiyorMu(A)))return;
+  const evren=await tamEvren(A,ekKodlar);
+  if(!evren.length)return;
+  let bir=_hpBirikimBellek||{ts:0,imlec:{},sonuc:{}};
+  if(!_hpBirikimBellek){try{const h=await A.VERI.get("hacimProfili");if(h)bir=JSON.parse(h)||bir}catch(_){}}
+  if(bir.surum!==HP_SURUM){bir={ts:0,imlec:{},sonuc:{},gorulen:{},olculen:{}}}
+  bir.surum=HP_SURUM;
+  if(!bir.sonuc||typeof bir.sonuc!=="object")bir.sonuc={};
+  if(!bir.imlec||typeof bir.imlec!=="object")bir.imlec={};
+  _hpTfSira=((_hpTfSira||0)+1)%HP_TF_LISTE.length;
+  const tf=HP_TF_LISTE[_hpTfSira];
+  if(!bir.sonuc[tf])bir.sonuc[tf]={};
+  const dilim=await hpDilimOku(A);
+  const bas=(Number(bir.imlec[tf])||0)%evren.length;
+  const kodlar=[];
+  for(let i=0;i<dilim;i++)kodlar.push(evren[(bas+i)%evren.length]);
+  const t0=Date.now();
+  let sira=0,islenen=0,hata=false;
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      if(Date.now()-t0>HP_SURE_TAVAN_MS)return;
+      const kod=kodlar[sira++];
+      try{
+        const s=await hpTekOlc(kod,tf);
+        if(s)bir.sonuc[tf][kod]=Object.assign({kod:kod,tf:tf,ts:Date.now()},s);
+        else delete bir.sonuc[tf][kod];
+        islenen++;
+      }catch(_){hata=true}
+    }
+  };
+  try{await Promise.all(Array.from({length:Math.min(HP_ES,kodlar.length)},isci))}
+  catch(_){hata=true}
+  if(hata)await hpDilimYaz(A,Math.max(HP_DILIM_TABAN,islenen*0.8));
+  else if(islenen>=dilim)await hpDilimYaz(A,dilim*1.25);
+  bir.imlec[tf]=(bas+islenen)%evren.length;
+  bir.ts=Date.now();
+  bir.evren=evren.length;
+  bir.kaynak=evren.kaynak||"";
+  if(!bir.gorulen)bir.gorulen={};
+  if(!Array.isArray(bir.gorulen[tf]))bir.gorulen[tf]=[];
+  const gs=new Set(bir.gorulen[tf]); for(const k of kodlar)gs.add(k);
+  bir.gorulen[tf]=[...gs].slice(-1200);
+  if(!bir.olculen)bir.olculen={};
+  bir.olculen[tf]=bir.gorulen[tf].length;
+  const kes=Date.now()-2*HP_CACHE_MS;
+  for(const t of HP_TF_LISTE){
+    if(!bir.sonuc[t])continue;
+    for(const k of Object.keys(bir.sonuc[t]))if(Number(bir.sonuc[t][k].ts||0)<kes)delete bir.sonuc[t][k];
+  }
+  _hpBirikimBellek=bir;
+  const simdiMs=Date.now();
+  if(simdiMs-_hpBirikimYazma>=HP_YAZMA_ARALIK){
+    _hpBirikimYazma=simdiMs;
+    await A.VERI.put("hacimProfili",JSON.stringify(bir),{expirationTtl:HP_BIRIKIM_TTL}).catch(()=>{});
+  }
+  saglikArtir("hpTarama");
+}
+/* Mini App'in çağırdığı paket — seçili TEK zaman dilimi için, POC gücüne
+   göre büyükten küçüğe sıralı liste döner. */
+async function hpTara(A,tfKod,ekKodlar){
+  const tf=HP_TF_LISTE.indexOf(tfKod)>=0?tfKod:"1G";
+  let bir=_hpBirikimBellek;
+  if(!bir){try{const h=await A.VERI.get("hacimProfili");if(h)bir=JSON.parse(h)}catch(_){}}
+  if((!bir||bir.surum!==HP_SURUM||!bir.sonuc||!bir.sonuc[tf]||!Object.keys(bir.sonuc[tf]).length)&&await hpCalisiyorMu(A)){
+    await hpDilimTara(A,ekKodlar).catch(()=>{});
+    bir=_hpBirikimBellek;
+    if(!bir){try{const h=await A.VERI.get("hacimProfili");if(h)bir=JSON.parse(h)}catch(_){}}
+  }
+  const sonuc=(bir&&bir.sonuc&&bir.sonuc[tf])||{};
+  const tumu=Object.keys(sonuc).map(k=>sonuc[k]).sort((a,b)=>(b.pocYuzde||0)-(a.pocYuzde||0));
+  const evrenN=(bir&&bir.evren)||tumu.length;
+  const olculenN=(bir&&bir.olculen&&bir.olculen[tf])||0;
+  return{ts:(bir&&bir.ts)||Date.now(),tf:tf,
+    evren:evrenN,olculen:olculenN,kalan:Math.max(0,evrenN-olculenN),
+    calisiyor:await hpCalisiyorMu(A),kaynak:(bir&&bir.kaynak)||"",
+    liste:tumu.slice(0,150)};
+}
+
 /* ═══════════════════ 🧪 DİP BACKTEST — yalnız yönetici görür ═══════════════
    Soru: "dip / derin dip (382 altı) / en dip (236 altı)" sinyalleri fiilen
    ne kadar işe yarıyor? Ve asıl soru: BİRDEN ÇOK ZAMAN DİLİMİ AYNI ANDA
@@ -6169,6 +6357,7 @@ function ekranAdi(){
   if(sekme==="abs")return"🌊 Absorpsiyon";
   if(sekme==="hacim")return"📊 Hacim Artışı";
   if(sekme==="kume")return"📦 Küme/Birikim";
+  if(sekme==="hprofil")return"📐 Hacim Profili";
   if(sekme==="malboga")return"🔎 Hisse Taraması";
   if(sekme==="yesil")return"📐 Fibo Aralığı Ölçüm İstasyonu";
   if(sekme==="rot")return"🔄 Sektör Rotasyonu";
@@ -6196,7 +6385,7 @@ function ekranAdi(){
 function sekmeSirasi(){
   var l=["potansiyel","fibo","uzunvade","kama","malboga","temel","aday","alarm","rot"];
   if(D&&D.yon)l.push("backtest","tavankombi");
-  l.push("fav","portfoy","preset","abs","hacim","kume","ortaklik","fonlar");
+  l.push("fav","portfoy","preset","abs","hacim","kume","hprofil","ortaklik","fonlar");
   if(D&&D.yon)l.push("yesil","panel","hata","sag");
   return l;
 }
@@ -6416,6 +6605,7 @@ function sekCiz(){
     b("abs","nötr",'🌊 Absorpsiyon'),
     b("hacim","nötr",'📊 Hacim Artışı'),
     b("kume","nötr",'📦 Küme/Birikim'),
+    b("hprofil","nötr",'📐 Hacim Profili'),
     b("ortaklik","nötr",'🔗 Ortaklık Haritası'),
     b("fonlar","nötr",'🐣 Fonlar')
   ]);
@@ -6491,6 +6681,7 @@ function ciz(){
   if(sekme==="abs")return absCiz();
   if(sekme==="hacim")return hacimCiz();
   if(sekme==="kume")return kumeCiz();
+  if(sekme==="hprofil")return hpCiz();
   if(sekme==="ortaklik")return ortaklikCiz();
   if(sekme==="fonlar")return fonlarCiz();
   if(sekme==="malboga")return mbCiz();
@@ -9598,6 +9789,128 @@ function kumeGoster(v){
     var oran=Math.max(0.01,Math.min(0.9,(Number(de.value)||12)/100));
     post("/api/kume",{tf:kumeTf,darlikEsik:oran}).then(function(v2){de.disabled=false;kumeGoster(v2)})
       .catch(function(){de.disabled=false})};
+}
+/* ================== 📐 HACİM PROFİLİ SEKMESİ ==================
+   Hacim Artışı/Küme ile aynı iskelet: 3 zaman dilimi (1SA/4SA/1G) arka
+   planda sırayla taranır. Ek olarak tek hisse sorgu kutusu var — Yahoo
+   hacim verisinden anlık POC/destek/direnç hesaplar, taramayı beklemez.
+   Aynı sonuç Telegram üzerinden de /hp KODU komutuyla alınabilir. */
+var HP_TF_ARAYUZ=[{k:"1SA",ad:"1 Saat",ik:"🕐"},{k:"4SA",ad:"4 Saat",ik:"🕓"},{k:"1G",ad:"Günlük",ik:"📅"}];
+var HP_TF_ADI={"1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
+var HP_GUC_AD={guclu:"güçlü",orta:"orta",zayif:"zayıf"};
+var HP_GUC_RENK={guclu:"var(--yes)",orta:"var(--sar)",zayif:"var(--ciz)"};
+var hpD=null, hpTf="1G", hpTek=null;
+function hpCiz(){
+  if(hpTek){hpTekGoster(hpTek);return}
+  if(hpD&&hpD.tf===hpTf){hpGoster(hpD);return}
+  el("govde").innerHTML='<div class="yukleniyor">hacim profili hesaplanıyor… (ilk açılış 10-20 sn sürebilir)</div>';
+  post("/api/hacimprofil",{tf:hpTf}).then(function(v){hpGoster(v)})
+    .catch(function(){el("govde").innerHTML='<div class="bos">Ölçüm alınamadı. Birazdan tekrar dene.</div>'});
+}
+function hpDegerYaz(x){
+  var renk=HP_GUC_RENK[x.guc]||"var(--ciz)";
+  return '<span style="color:'+renk+'">'+x.fiyat+' <span style="opacity:.6">('+(HP_GUC_AD[x.guc]||"")+')</span></span>';
+}
+function hpSatir(x){
+  var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
+  var destekTxt=(x.destekler&&x.destekler.length)?x.destekler.map(hpDegerYaz).join(", "):"—";
+  return '<div class="satir" style="border-left-color:var(--sar);align-items:flex-start">'+
+    '<div class="sol"><div class="kod">'+E(x.kod)+
+    (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
+    '<div class="altbilgi">fiyat <b>'+x.fiyat+'</b> · POC <b>'+x.poc+'</b> (hacim payı %'+x.pocYuzde+')</div>'+
+    '<div class="altbilgi" style="margin-top:3px">🔴 Direnç '+direncTxt+'</div>'+
+    '<div class="altbilgi" style="margin-top:2px">🟢 Destek '+destekTxt+'</div>'+
+    '<div class="altbilgi" style="opacity:.6;margin-top:2px">Value Area '+x.val+' – '+x.vah+'</div></div>'+
+    '<div class="sag"><div class="yuzde" style="color:var(--sar)">%'+x.pocYuzde+'</div>'+
+    '<div class="altbilgi">POC gücü</div></div></div>';
+}
+function hpGoster(v){
+  hpD=v;
+  var calisiyor=!v||v.calisiyor!==false;
+  var h='<div class="sirala"><button class="sir" id="hpYenile">🔄 Yenile</button>'+
+        (D.yon?'<button class="sir" id="hpDur">'+(calisiyor?"⏸ Taramayı durdur":"▶️ Taramayı sürdür")+'</button>':"")+
+        '</div>';
+  h+='<div class="uyari" style="margin-top:0"><b>📐 Hacim Profili nedir?</b><br>'+
+     'Seçtiğin zaman diliminde son barların hacmi fiyat aralığına dağıtılıp '+
+     'yoğunluk haritası çıkarılır (Volume Profile). En yoğun bölge POC olarak '+
+     'işaretlenir — en güçlü destek/direnç noktasıdır. Mevcut fiyatın altındaki '+
+     've üstündeki yoğun bölgeler de destek ve direnç listesi olarak gösterilir.</div>';
+  h+='<div class="kutu" style="margin:0 0 8px"><div class="sat"><span class="et">Tek hisse sorgula</span></div>'+
+     '<div style="display:flex;gap:6px;margin-top:6px">'+
+     '<input id="hpKod" type="text" placeholder="Örn: SASA" style="flex:1;background:var(--kart);'+
+     'border:1px solid var(--ciz);color:var(--yazi);border-radius:7px;padding:7px 9px;font-size:14px;'+
+     'text-transform:uppercase">'+
+     '<button class="sir" id="hpKodBtn">🔎 Sorgula</button></div>'+
+     '<div class="altbilgi" style="margin-top:4px;opacity:.6">Aynı sonucu Telegram üzerinden de '+
+     '<code>/hp KODU</code> yazarak da alabilirsin.</div></div>';
+  h+='<div class="sirala" style="flex-wrap:wrap">'+HP_TF_ARAYUZ.map(function(t){
+    return '<button class="sir'+(hpTf===t.k?" on":"")+'" data-tf="'+t.k+'">'+t.ik+' '+t.ad+'</button>';
+  }).join("")+'</div>';
+  var evren=(v&&v.evren)||0, olculen=(v&&v.olculen)||0;
+  var yuzde=evren?Math.min(100,Math.round(olculen/evren*100)):0;
+  h+='<div class="kutu" style="margin:0 0 8px;padding:9px 11px">'+
+     '<div class="altbilgi" style="opacity:.85">'+
+     (calisiyor?"🔄 Arka planda taranıyor":"⏸ Tarama durduruldu")+
+     ' · son ölçüm '+((v&&v.yas)||0)+' dk önce · dilim: '+(HP_TF_ADI[hpTf]||hpTf)+'</div>'+
+     '<div class="altbilgi" style="margin-top:4px">ölçülen <b>'+olculen+'</b> / '+evren+'  ·  kalan <b>'+((v&&v.kalan)||0)+'</b></div>'+
+     ((v&&v.kaynak)?'<div class="altbilgi" style="margin-top:3px;opacity:.55">evren kaynağı: '+E(v.kaynak)+'</div>':"")+
+     '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
+     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
+     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Üç zaman dilimi sırayla arka planda tazelenir; sekmeyi kapatsan da tarama devam eder.</div>'+
+     '</div>';
+  var kaynakListe=(v&&v.liste)||[];
+  h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse — POC gücüne göre sıralı</div>';
+  if(!kaynakListe.length){
+    h+='<div class="bos"><b>Henüz ölçüm yok</b><br><br>Tarama devam ediyor, birazdan tekrar bak.</div>';
+  }else{
+    h+=kaynakListe.map(hpSatir).join("");
+  }
+  el("govde").innerHTML=h;
+  [].forEach.call(el("govde").querySelectorAll("[data-tf]"),function(bt){
+    bt.onclick=function(){tit();hpTf=bt.dataset.tf;
+      el("govde").innerHTML='<div class="yukleniyor">'+(HP_TF_ADI[hpTf]||hpTf)+' hesaplanıyor…</div>';
+      post("/api/hacimprofil",{tf:hpTf}).then(function(v2){hpGoster(v2)})};
+  });
+  var y=el("hpYenile");if(y)y.onclick=function(){tit();
+    el("govde").innerHTML='<div class="yukleniyor">yeniden hesaplanıyor…</div>';
+    post("/api/hacimprofil",{tf:hpTf}).then(function(v2){hpGoster(v2)})};
+  var dd=el("hpDur");if(dd)dd.onclick=function(){tit();dd.disabled=true;
+    post("/api/hacimprofil",{tf:hpTf,dur:calisiyor?1:0}).then(function(v2){hpGoster(v2)})
+      .catch(function(){dd.disabled=false})};
+  var kb=el("hpKodBtn"),ki=el("hpKod");
+  var hpAra=function(){
+    var k=String((ki&&ki.value)||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if(k.length<3)return;tit();
+    el("govde").innerHTML='<div class="yukleniyor">'+k+' — üç zaman dilimi hesaplanıyor…</div>';
+    post("/api/hacimprofil",{kod:k}).then(function(v2){
+      if(v2&&v2.ok&&v2.tek){hpTek=v2.tek;hpTekGoster(hpTek)}else{hpD=null;hpCiz()}})
+      .catch(function(){hpD=null;hpCiz()})};
+  if(kb)kb.onclick=hpAra;
+  if(ki)ki.onkeydown=function(e2){if(e2.key==="Enter")hpAra()};
+}
+function hpTekGoster(t){
+  var s=t.satir||[];
+  var h='<div class="sirala"><button class="sir" id="hpGeri">← Taramaya dön</button>'+
+        '<button class="sir" id="hpTekYenile">🔄 Yenile</button></div>';
+  h+='<div class="kutu" style="margin:8px 0"><h3>'+E(t.kod)+' — Hacim Profili (üç zaman dilimi)</h3></div>';
+  h+=s.map(function(x){
+    if(x.yok)return '<div class="satir" style="border-left-color:var(--ciz)"><div class="sol">'+
+      '<div class="kod">'+E(HP_TF_ADI[x.tf]||x.tf)+'</div>'+
+      '<div class="altbilgi">veri yetersiz — bu dilimde ölçüm alınamadı</div></div></div>';
+    var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
+    var destekTxt=(x.destekler&&x.destekler.length)?x.destekler.map(hpDegerYaz).join(", "):"—";
+    return '<div class="satir" style="border-left-color:var(--sar);align-items:flex-start">'+
+      '<div class="sol"><div class="kod">'+E(HP_TF_ADI[x.tf]||x.tf)+'</div>'+
+      '<div class="altbilgi">fiyat <b>'+x.fiyat+'</b> · POC <b>'+x.poc+'</b> (hacim payı %'+x.pocYuzde+')</div>'+
+      '<div class="altbilgi" style="margin-top:3px">🔴 Direnç '+direncTxt+'</div>'+
+      '<div class="altbilgi" style="margin-top:2px">🟢 Destek '+destekTxt+'</div>'+
+      '<div class="altbilgi" style="opacity:.6;margin-top:2px">Value Area '+x.val+' – '+x.vah+'</div></div></div>';
+  }).join("");
+  el("govde").innerHTML=h;
+  var g2=el("hpGeri");if(g2)g2.onclick=function(){tit();hpTek=null;hpCiz()};
+  var y2=el("hpTekYenile");if(y2)y2.onclick=function(){tit();
+    var k=t.kod;el("govde").innerHTML='<div class="yukleniyor">'+k+' yeniden hesaplanıyor…</div>';
+    post("/api/hacimprofil",{kod:k}).then(function(v2){if(v2&&v2.ok&&v2.tek){hpTek=v2.tek;hpTekGoster(hpTek)}})};
 }
 /* ================== 🔗 ORTAKLIK HARİTASI SEKMESİ ==================
    Şirket kartındaki her ortak/yönetici tıklanabilir: o isme basınca
@@ -13305,6 +13618,9 @@ q.waitUntil(kilitli(A,"hacimDilim",50,()=>hacimDilimTara(A,[])).catch(()=>{})),
 /* 📦 Küme/Birikim havuzu da aynı round-robin desenle her turda bir
    zaman diliminden bir dilim ilerler. */
 q.waitUntil(kilitli(A,"kumeDilim",50,()=>kumeDilimTara(A,[])).catch(()=>{})),
+/* 📐 Hacim Profili havuzu da aynı round-robin desenle her turda bir
+   zaman diliminden (1SA/4SA/1G) bir dilim ilerler. */
+q.waitUntil(kilitli(A,"hpDilim",50,()=>hpDilimTara(A,[])).catch(()=>{})),
 /* 🐂🐻 MAL+AYI/BOĞA: her turda bir zaman diliminden bir dilim hisse
    ilerler; havuz bitince sıradaki zaman dilimine geçilir. Böylece yedi
    dilimin tamamı sırayla ve sürekli tazelenir. */
@@ -13994,6 +14310,30 @@ kalan:paket.kalan||0,kaynak:paket.kaynak||"",calisiyor:paket.calisiyor!==!1,
 yas:Math.round((Date.now()-(paket.ts||0))/6e4),
 ayar:YON?(paket.ayar||await kumeAyarAl(A)):null,
 liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenenK.has(x.kod)},x))})}
+/* 📐 HACİM PROFİLİ — seçili zaman diliminde hacmin fiyat aralığına göre
+   dağılımından destek/direnç çıkarır (POC + Value Area + kova bazlı S/D).
+   gov.kod verilirse TEK hisse anlık ölçülür (KV'ye dokunmaz, malboga'daki
+   kod sorgusuyla birebir aynı desen); yoksa TÜM evrende tarama paketi döner. */
+if("/api/hacimprofil"===$.pathname){
+const kodTek=KOD(gov&&gov.kod||"");
+if(kodTek){
+  const rTek=await hpTekHisse(kodTek).catch(()=>null);
+  if(!rTek)return JS({ok:!1,hata:"ölçüm alınamadı"});
+  return JS({ok:!0,tek:rTek});
+}
+if(gov&&(gov.dur===1||gov.dur===0)){
+  if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
+  await hpDurdurAyarla(A,gov.dur===1);
+}
+const fav=await X(A,uid),pf=await XP(A,uid);
+const tfIstek=HP_TF_LISTE.indexOf(gov&&gov.tf)>=0?gov.tf:"1G";
+const paket=await hpTara(A,tfIstek,[...fav,...Object.keys(pf)]).catch(()=>null);
+if(!paket)return JS({ok:!0,tf:tfIstek,liste:[],evren:0,olculen:0,kalan:0,yas:0,calisiyor:!0});
+const izlenenHP=new Set([...fav,...Object.keys(pf)]);
+return JS({ok:!0,tf:paket.tf,evren:paket.evren||0,olculen:paket.olculen||0,
+kalan:paket.kalan||0,kaynak:paket.kaynak||"",calisiyor:paket.calisiyor!==!1,
+yas:Math.round((Date.now()-(paket.ts||0))/6e4),
+liste:(paket.liste||[]).map(x=>Object.assign({takipte:izlenenHP.has(x.kod)},x))})}
 /* 🔗 ORTAKLIK HARİTASI — KV'de önceden hesaplanmış veriyi servis eder.
    Canlı hesaplama YAPMAZ (KAP taraması dakikalar sürer); kap_ortaklik_scraper.py
    periyodik çalışıp KV'yi güncelliyor. Veri yoksa dürüstçe ok:false döner. */
@@ -15135,6 +15475,27 @@ text:(s2.ok?"✅ ":"⚠️ ")+E2(s2.mesaj),parse_mode:"HTML",reply_markup:u(t.fr
     text:"Bu komut yalnızca yöneticiye açık."});return}
   await mbDurdurAyarla(A,!0);
   await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"⏸ Tarama durduruldu.",reply_markup:u(t.from.id)})})()),new Response("ok")
+;if(i&&n.startsWith("/hp"))return q.waitUntil((async()=>{
+  /* 📐 /hp KODU — AKD ekran görüntüsü yerine, Yahoo hacim verisinden
+     anlık Hacim Profili (destek/direnç) hesaplayıp Telegram'a yazar.
+     KV'ye dokunmaz — mbTekHisse ile aynı desen, herkese açık (salt okunur). */
+  const parcaHp=n.trim().split(/\s+/);
+  const kodHp=KOD(parcaHp[1]||"");
+  if(!kodHp){await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",
+    text:"Kullanım: <code>/hp KODU</code> — örnek: <code>/hp SASA</code>"});return}
+  const rHp=await hpTekHisse(kodHp).catch(()=>null);
+  if(!rHp||!rHp.satir||!rHp.satir.some(s=>!s.yok)){
+    await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"⚠️ "+E2(kodHp)+" için veri alınamadı."});return}
+  const ikonHp={"1SA":"🕐","4SA":"🕓","1G":"🗓"},gucAdHp={guclu:"güçlü",orta:"orta",zayif:"zayıf"};
+  let mHp="📐 <b>"+E2(kodHp)+"</b> — Hacim Profili (Destek/Direnç)\n\n";
+  for(const s of rHp.satir){
+    if(s.yok){mHp+=(ikonHp[s.tf]||"")+" <b>"+E2(s.tf)+"</b>: veri yetersiz\n\n";continue}
+    mHp+=(ikonHp[s.tf]||"")+" <b>"+E2(s.tf)+"</b> · fiyat "+s.fiyat+"\n";
+    mHp+="🔴 Direnç: "+(s.direncler.length?s.direncler.map(x=>x.fiyat+" ("+gucAdHp[x.guc]+")").join(", "):"—")+"\n";
+    mHp+="🟢 Destek: "+(s.destekler.length?s.destekler.map(x=>x.fiyat+" ("+gucAdHp[x.guc]+")").join(", "):"—")+"\n";
+    mHp+="🎯 POC: "+s.poc+" (hacmin %"+s.pocYuzde+"'i) · VA "+s.val+"–"+s.vah+"\n\n";
+  }
+  await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,parse_mode:"HTML",text:mHp.trim()})})()),new Response("ok")
 ;if(i&&n.startsWith("/tavankombi"))return q.waitUntil((async()=>{
   /* 📋 2026-09-09: Tavan Kombi'nin "en iyi kombinasyonlar + şu an eşleşen
      hisseler" listesini Telegram mesajı olarak gönderir — mini app'i açmaya
@@ -15504,6 +15865,9 @@ async scheduled(ev,A,ctx){
          mekanizması (aynı kilit adı: "kumeDilim") kullanıldığı için
          fetch()'teki waitUntil çağrısıyla ÇAKIŞMAZ, ikisi birbirini bekler. */
       await kilitli(A,"kumeDilim",50,()=>kumeDilimTara(A,[])).catch(err=>hataYaz(A,"kumeDilim-cron",err,null).catch(()=>{}));
+      /* 📐 Hacim Profili — Küme ile aynı gerekçe: kimse sekmeyi açmasa
+         bile cron havuzu dakikada bir adım ilerletsin. */
+      await kilitli(A,"hpDilim",50,()=>hpDilimTara(A,[])).catch(err=>hataYaz(A,"hpDilim-cron",err,null).catch(()=>{}));
     }catch(err){
       try{await hataYaz(A,"scheduled",err,null)}catch(e){}
     }
