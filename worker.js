@@ -2722,72 +2722,74 @@ function hpHesapla(mumlar){
    toplu ölçüm (is:"olc") ve arka plan taraması (hpDilimTara) üstünden
    işler, ikisi de zaten aynı KV'yi paylaşıyor.
 
-   🐞 KÖK NEDEN — 2. tur düzeltme (2026-09-19): önceki sürümde state bir
-   MODÜL-GLOBAL değişkende (_hpSinyalBellek) önbelleğe alınıyor, bir kez
-   yüklendikten sonra o isolate yaşadığı sürece BİR DAHA HİÇ KV'den
-   tazelenmiyordu. Cloudflare Workers her HTTP isteği aynı isolate'a
-   yönlendirmez — canlı toplu ölçüm (is:"olc") onlarca ayrı istekle
-   çalıştığından, her istek kolayca FARKLI bir isolate'a düşebiliyordu.
-   Her isolate kendi eski/boş kopyasında donup kalıyor, başka bir
-   isolate'ın az önce yazdığı girişten haberi olmuyor, "eski kayıt yok"
-   sanıp fiyatı/saati SIFIRDAN yeniden yazıyordu — sonuç: tarama hangi
-   isolate'a düşerse düşsün sürekli "az önce girdi, %0" görünüyordu.
-   ÇÖZÜM: modül-global önbellek tamamen kaldırıldı. Artık her tarama
-   turu (her is:"olc" isteği, her hpDilimTara çağrısı) kendi başına
-   hpSinyalBaglamAc() ile KV'den TAZE bir kopya okuyor, o tur içindeki
-   TÜM hisseleri (ister sıralı ister Promise.all ile paralel) bu TEK
-   paylaşılan kopya üstünde işliyor, iş bitince hpSinyalBaglamKapat()
-   sadece bir şey değiştiyse TEK SEFERDE KV'ye yazıyor. Aynı stok için
-   tam olarak aynı milisaniyede iki AYRI isteğin çakışması hâlâ teorik
-   olarak mümkün (KV'de işlem/kilit yok) ama bu artık nadir bir uç durum;
-   önceki hâliyle sorun İSTİSNASIZ HER TARAMADA oluyordu. */
+   🐞 KÖK NEDEN — 3. tur, GERÇEK sebep (2026-09-19): 1. ve 2. turda
+   sorun "state nerede önbelleklenir"e odaklandı, ama asıl kusur ondan
+   önceydi: TÜM hisselerin/dilimlerin durumu TEK bir "hpSinyal" KV
+   anahtarında, TEK bir JSON blobda tutuluyordu. Canlı toplu ölçüm
+   evreni (400+ hisse) onlarca AYRI isteğe (chunk) bölüp her chunk'ı
+   ayrı bir HTTP isteğiyle ölçtürüyor; her chunk bu AYNI bloba kendi
+   GET+PUT'unu yapıyordu. Cloudflare KV yazmaları ANINDA/GLOBAL tutarlı
+   DEĞİLDİR — bir chunk'ın PUT'u daha yayılmadan bir sonraki chunk'ın
+   GET'i başlarsa, o chunk eksik/eski bir kopya üstünde çalışıp bunu
+   TÜM BLOBUN YERİNE geri yazıyor, bir öncekinin az önce eklediği yeni
+   girişleri SİLİYORDU. Piyasa hareketliyken onlarca hisse AYNI ANDA
+   "güçlü" durumuna geçtiğinde (çok sık rastlanan bir durum) bu neredeyse
+   HER TARAMADA oluyordu — her chunk bir öncekini eziyor, sonuç hep
+   "az önce girdi, %0".
+   ÇÖZÜM: paylaşılan TEK blob tamamen kaldırıldı. Artık HER HİSSE/DİLİM
+   çifti KENDİ KV ANAHTARINDA tutuluyor (hpAktif:{tf}:{kod}). Farklı
+   hisseler ASLA aynı anahtara yazmaz — chunk'lar birbirini artık
+   ezemez. Kapanan sinyaller dilim başına ayrı bir "hpGecmis:{tf}"
+   anahtarında toplanır; bu hâlâ paylaşılan küçük bir liste ama
+   yazması sadece bir sinyal KAPANDIĞINDA olur (her taramada değil),
+   dolayısıyla çakışma ihtimali çok düşük ve sonucu en kötü ihtimalle
+   "bir kapanış kaydı bazen listeye düşmeyebilir" — asla "her şey
+   sıfırlanır" değil. */
 const HP_GUCLU=new Set(["kirilim","poc_ustu"]);
 const HP_SINYAL_TTL=7*86400, HP_SINYAL_GECMIS_AZAMI=40;
-async function hpSinyalBaglamAc(A){
-  let v=null;
-  try{if(A&&A.VERI){const h=await A.VERI.get("hpSinyal");if(h)v=JSON.parse(h)}}catch(_){}
-  if(!v||typeof v!=="object")v={};
-  if(!v.aktif||typeof v.aktif!=="object")v.aktif={};
-  if(!v.gecmis||typeof v.gecmis!=="object")v.gecmis={};
-  return{durum:v,kirli:false};
+function hpAktifAnahtar(tf,kod){return "hpAktif:"+tf+":"+kod}
+async function hpGecmisEkle(A,tf,kayit){
+  const anahtar="hpGecmis:"+tf;
+  try{
+    let liste=[];
+    try{const h=await A.VERI.get(anahtar);if(h)liste=JSON.parse(h)||[]}catch(_){}
+    if(!Array.isArray(liste))liste=[];
+    liste.unshift(kayit);
+    liste=liste.slice(0,HP_SINYAL_GECMIS_AZAMI);
+    await A.VERI.put(anahtar,JSON.stringify(liste),{expirationTtl:HP_SINYAL_TTL});
+  }catch(_){}
 }
-async function hpSinyalBaglamKapat(A,baglam){
-  if(!baglam||!baglam.kirli||!A||!A.VERI)return;
-  try{await A.VERI.put("hpSinyal",JSON.stringify(baglam.durum),{expirationTtl:HP_SINYAL_TTL})}catch(_){}
-}
-/* baglam = hpSinyalBaglamAc() çıktısı — bir tarama turundaki TÜM hisseler
-   bu aynı paylaşılan kopya üstünde işlenir (istek başına tek KV yazması).
-   s = hpHesapla() çıktısı. Aynı nesneyi zenginleştirip (sinyalFiyat/
+/* s = hpHesapla() çıktısı. Aynı nesneyi zenginleştirip (sinyalFiyat/
    sinyalTs/sinyalKarYuzde/sinyalKonum eklenir) döner; kirilimMesafe zaten
    s içinde. sinyalKonum = giriş ANINDAKİ tetikleyici (kirilim/poc_ustu) —
    fiyat sonradan kırılıma geçse de giriş hangi türdense o sabit kalır;
    böylece "Kırılım'dan mı POC'tan mı girdi" backtest'te net ayrılabiliyor. */
-function hpSinyalIsle(baglam,tf,kod,s){
-  if(!s||!baglam)return s;
-  const va=baglam.durum;
-  if(!va.aktif[tf])va.aktif[tf]={};
-  if(!va.gecmis[tf])va.gecmis[tf]=[];
-  const eski=va.aktif[tf][kod];
-  const guclumu=HP_GUCLU.has(s.konum);
-  if(guclumu){
-    if(!eski){va.aktif[tf][kod]={fiyat:s.fiyat,ts:Date.now(),konum:s.konum};baglam.kirli=true}
-    const giris=va.aktif[tf][kod];
-    s.sinyalFiyat=giris.fiyat;s.sinyalTs=giris.ts;s.sinyalKonum=giris.konum;
-    s.sinyalKarYuzde=Math.round(((s.fiyat-giris.fiyat)/giris.fiyat)*1000)/10;
-  }else if(eski){
-    const kar=Math.round(((s.fiyat-eski.fiyat)/eski.fiyat)*1000)/10;
-    va.gecmis[tf].unshift({kod:kod,girisFiyat:eski.fiyat,cikisFiyat:s.fiyat,
-      karYuzde:kar,girisTs:eski.ts,cikisTs:Date.now(),enYuksekKonum:eski.konum});
-    va.gecmis[tf]=va.gecmis[tf].slice(0,HP_SINYAL_GECMIS_AZAMI);
-    delete va.aktif[tf][kod];
-    baglam.kirli=true;
-  }
+async function hpSinyalIsle(A,tf,kod,s){
+  if(!s||!A||!A.VERI)return s;
+  try{
+    const anahtar=hpAktifAnahtar(tf,kod);
+    let giris=null;
+    try{const h=await A.VERI.get(anahtar);if(h)giris=JSON.parse(h)}catch(_){}
+    const guclumu=HP_GUCLU.has(s.konum);
+    if(guclumu){
+      if(!giris){
+        giris={fiyat:s.fiyat,ts:Date.now(),konum:s.konum};
+        await A.VERI.put(anahtar,JSON.stringify(giris),{expirationTtl:HP_SINYAL_TTL});
+      }
+      s.sinyalFiyat=giris.fiyat;s.sinyalTs=giris.ts;s.sinyalKonum=giris.konum;
+      s.sinyalKarYuzde=Math.round(((s.fiyat-giris.fiyat)/giris.fiyat)*1000)/10;
+    }else if(giris){
+      const kar=Math.round(((s.fiyat-giris.fiyat)/giris.fiyat)*1000)/10;
+      await hpGecmisEkle(A,tf,{kod:kod,girisFiyat:giris.fiyat,cikisFiyat:s.fiyat,
+        karYuzde:kar,girisTs:giris.ts,cikisTs:Date.now(),enYuksekKonum:giris.konum});
+      await A.VERI.delete(anahtar).catch(()=>{});
+    }
+  }catch(_){}
   return s;
 }
-/* Mini App'in "📊 Geçmiş Sinyaller" ekranı bunu çağırır — her zaman KV'den
-   taze okur (modül-global önbellek yok, bkz. yukarıdaki not). */
+/* Mini App'in "📊 Geçmiş Sinyaller" ekranı bunu çağırır. */
 async function hpGecmisAl(A,tf){
-  try{const b=await hpSinyalBaglamAc(A);return (b.durum.gecmis&&b.durum.gecmis[tf])||[]}catch(_){return[]}
+  try{const h=await A.VERI.get("hpGecmis:"+tf);return h?(JSON.parse(h)||[]):[]}catch(_){return[]}
 }
 async function hpTekOlc(kod,tfKod){
 
@@ -2870,14 +2872,13 @@ async function hpDilimTara(A,ekKodlar,zorunluTf){
   for(let i=0;i<dilim;i++)kodlar.push(evren[(bas+i)%evren.length]);
   const t0=Date.now();
   let sira=0,islenen=0,hata=false;
-  const sinyalBaglam=await hpSinyalBaglamAc(A);
   const isci=async()=>{
     while(sira<kodlar.length){
       if(Date.now()-t0>HP_SURE_TAVAN_MS)return;
       const kod=kodlar[sira++];
       try{
         let s=await hpTekOlc(kod,tf);
-        if(s)s=hpSinyalIsle(sinyalBaglam,tf,kod,s);
+        if(s)s=await hpSinyalIsle(A,tf,kod,s);
         if(s)bir.sonuc[tf][kod]=Object.assign({kod:kod,tf:tf,ts:Date.now()},s);
         else delete bir.sonuc[tf][kod];
         islenen++;
@@ -2886,7 +2887,6 @@ async function hpDilimTara(A,ekKodlar,zorunluTf){
   };
   try{await Promise.all(Array.from({length:Math.min(HP_ES,kodlar.length)},isci))}
   catch(_){hata=true}
-  await hpSinyalBaglamKapat(A,sinyalBaglam);
   if(hata)await hpDilimYaz(A,Math.max(HP_DILIM_TABAN,islenen*0.8));
   else if(islenen>=dilim)await hpDilimYaz(A,dilim*1.25);
   bir.imlec[tf]=(bas+islenen)%evren.length;
@@ -14695,19 +14695,17 @@ if(gov&&gov.is==="olc"){
     .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,HP_OLC_AZAMI);
   const olcum={};
   let sira=0;
-  const sinyalBaglam=await hpSinyalBaglamAc(A);
   const isci=async()=>{
     while(sira<kodlar.length){
       const kod=kodlar[sira++];
       try{
         let s=await hpTekOlc(kod,tf);
-        if(s)s=hpSinyalIsle(sinyalBaglam,tf,kod,s);
+        if(s)s=await hpSinyalIsle(A,tf,kod,s);
         if(s)olcum[kod]=Object.assign({kod:kod,tf:tf},s);
       }catch(_){}
     }
   };
   await Promise.all(Array.from({length:Math.min(HP_ES_CANLI,kodlar.length)},isci));
-  await hpSinyalBaglamKapat(A,sinyalBaglam);
   return JS({ok:!0,tf:tf,olcum:olcum,istenen:kodlar.length});
 }
 /* 📊 Geçmiş Sinyaller — bir hisse 🚀 Kırılım/📈 POC Üstü'nden zayıf tarafa
