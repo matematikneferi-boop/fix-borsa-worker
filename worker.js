@@ -2703,9 +2703,28 @@ function hpHesapla(mumlar){
        Pozitif = fiyat hâlâ VAH'ın altında, o kadar % kalmış.
        Negatif = fiyat VAH'ı zaten geçmiş (kirilim), o kadar % üstünde. */
     const kirilimMesafe=Math.round(((vahDeger-sonKapanis)/sonKapanis)*1000)/10;
-    return{fiyat:sonKapanis,poc:pocDeger,pocYuzde:Math.round(kova[pocI]/toplam*1000)/10,
+    const pocYuzde=Math.round(kova[pocI]/toplam*1000)/10;
+    /* 🏆 SAĞLAMLIK SKORU (0-100) — kullanıcı isteği: "bu hisse daha sağlam,
+       bu hisse daha iyi" diye otomatik ayrım. Elle veri girmeye gerek
+       kalmasın diye tamamen bu fonksiyonun zaten hesapladığı değerlerden
+       (pocYuzde/konum/en yakın direnç-destek gücü) türetilir, ek bir
+       ölçüm/istek gerektirmez:
+         - POC gücü       → 0-35 puan (pocYuzde ne kadar yüksekse o kadar)
+         - Konum          → 0-25 puan (kirilim en güçlü, taban_alti en zayıf)
+         - Üstteki direnç → 0-20 puan (direnç zayıfsa/yoksa yol daha açık)
+         - Alttaki destek → 0-20 puan (destek güçlüyse taban daha sağlam) */
+    const HP_KONUM_PUAN={kirilim:25,poc_ustu:15,poc_alti:5,taban_alti:0};
+    const HP_DIRENC_PUAN={zayif:20,orta:10,guclu:0};
+    const HP_DESTEK_PUAN={zayif:5,orta:10,guclu:20};
+    const enYakinDirenc=direncler[0]?direncler[0].guc:null;
+    const enYakinDestek=destekler[0]?destekler[0].guc:null;
+    const pocGucPuani=Math.max(0,Math.min(35,(pocYuzde/100)*35));
+    const direncPuani=enYakinDirenc!=null?(HP_DIRENC_PUAN[enYakinDirenc]!=null?HP_DIRENC_PUAN[enYakinDirenc]:10):20;
+    const destekPuani=enYakinDestek!=null?(HP_DESTEK_PUAN[enYakinDestek]!=null?HP_DESTEK_PUAN[enYakinDestek]:10):0;
+    const saglamlikSkoru=Math.round((HP_KONUM_PUAN[konum]||0)+pocGucPuani+direncPuani+destekPuani);
+    return{fiyat:sonKapanis,poc:pocDeger,pocYuzde:pocYuzde,
       vah:vahDeger,val:valDeger,destekler:destekler,direncler:direncler,konum:konum,
-      kirilimMesafe:kirilimMesafe,
+      kirilimMesafe:kirilimMesafe,saglamlikSkoru:saglamlikSkoru,
       barSayisi:veri.length,zaman:veri[veri.length-1].time};
   }catch(e){return null}
 }
@@ -10031,6 +10050,10 @@ var HP_FILTRE_LISTE=[{k:"tumu",ad:"Tümü"},{k:"kirilim",ad:"🚀 Kırılım"},{
    dışlanır — oradan kırılıma mesafe hem büyük hem güvenilmez. */
 function hpYaklasanMi(x){return x.konum==="poc_ustu"||x.konum==="poc_alti"}
 var hpFiltre="tumu";
+/* 🏆 "varsayilan" = eski davranış (POC gücüne / mesafeye göre), "skor" =
+   yeni otomatik Sağlamlık Skoru sıralaması. Sunucu hesaplıyor, burada
+   sadece hangi alana göre sıralanacağı seçiliyor — elle veri girmek yok. */
+var hpSiralamaModu="varsayilan";
 function hpMesafeSatiri(x){
   if(x.kirilimMesafe==null)return"";
   if(x.konum==="kirilim")
@@ -10052,20 +10075,29 @@ function hpSinyalSatiri(x){
     '<b style="color:'+renk+'">'+(pozitif?"+":"")+x.sinyalKarYuzde+'%</b>'+
     ' (giriş '+x.sinyalFiyat+sure+')</div>';
 }
+function hpSkorRenk(s){
+  if(s==null)return"var(--soluk)";
+  return s>=70?"var(--yes)":(s>=40?"var(--sar)":"var(--kir)");
+}
 function hpSatir(x){
   var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
   var destekTxt=(x.destekler&&x.destekler.length)?x.destekler.map(hpDegerYaz).join(", "):"—";
   var kb=HP_KONUM_BILGI[x.konum];
   var konumRozet=kb?' <span class="rozet" style="background:'+kb.renk+';color:#0e1116">'+kb.ad+'</span>':"";
+  var skorRenk=hpSkorRenk(x.saglamlikSkoru);
   return '<div class="satir" style="border-left-color:'+(kb?kb.renk:"var(--sar)")+';align-items:flex-start">'+
     '<div class="sol"><div class="kod">'+E(x.kod)+konumRozet+'</div>'+
     '<div class="altbilgi">fiyat <b>'+x.fiyat+'</b> · POC <b>'+x.poc+'</b> (hacim payı %'+x.pocYuzde+')</div>'+
     hpMesafeSatiri(x)+hpSinyalSatiri(x)+
     '<div class="altbilgi" style="margin-top:3px">🔴 Direnç '+direncTxt+'</div>'+
     '<div class="altbilgi" style="margin-top:2px">🟢 Destek '+destekTxt+'</div>'+
-    '<div class="altbilgi" style="opacity:.6;margin-top:2px">Value Area '+x.val+' – '+x.vah+'</div></div>'+
+    '<div class="altbilgi" style="opacity:.6;margin-top:2px">Value Area '+x.val+' – '+x.vah+'</div>'+
+    (x.saglamlikSkoru!=null?'<div class="altbilgi" style="margin-top:3px">🏆 Sağlamlık: <b style="color:'+skorRenk+'">'+x.saglamlikSkoru+'/100</b></div>':"")+
+    '</div>'+
     '<div class="sag"><div class="yuzde" style="color:var(--sar)">%'+x.pocYuzde+'</div>'+
-    '<div class="altbilgi">POC gücü</div></div></div>';
+    '<div class="altbilgi">POC gücü</div>'+
+    (x.saglamlikSkoru!=null?'<div class="yuzde" style="color:'+skorRenk+';margin-top:6px;font-size:15px">🏆'+x.saglamlikSkoru+'</div>':"")+
+    '</div></div>';
 }
 function hpGosterCanli(){
   var d=hpTaraDurum;
@@ -10088,7 +10120,10 @@ function hpGosterCanli(){
      'kırılım yapanları ayıklayabilir, 🎯 <b>Yaklaşanlar</b> ile kırılıma en yakın '+
      'olanları (mesafeye göre sıralı) görebilirsin. Bir hisse Kırılım/POC Üstü '+
      'olduğunda giriş fiyatı hatırlanır — 📌 satırında o andan bu yana kâr/zarar '+
-     'yüzdesi gösterilir; sinyal bozulunca 📊 Geçmiş sinyaller ekranına taşınır.</div>';
+     'yüzdesi gösterilir; sinyal bozulunca 📊 Geçmiş sinyaller ekranına taşınır. '+
+     '🏆 <b>Sağlamlık Skoru</b> (0-100) her hissede otomatik hesaplanır — POC gücü, '+
+     'konum, üstteki direncin zayıflığı ve alttaki desteğin gücünü tek sayıda '+
+     'birleştirir; aşağıdaki sıralama düğmesiyle en sağlamdan en zayıfa dizebilirsin.</div>';
   h+='<div class="kutu" style="margin:0 0 8px"><div class="sat"><span class="et">Tek hisse sorgula</span></div>'+
      '<div style="display:flex;gap:6px;margin-top:6px">'+
      '<input id="hpKod" type="text" placeholder="Örn: SASA" style="flex:1;background:var(--kart);'+
@@ -10120,16 +10155,33 @@ function hpGosterCanli(){
     return '<button class="sir'+(hpFiltre===f.k?" on":"")+'" data-filtre="'+f.k+'">'+f.ad+' ('+sayi+')</button>';
   }).join("")+'</div>';
   var yaklasanMi=hpFiltre==="yaklasan";
+  /* 🏆 Sağlamlık Skoru sıralaması — kullanıcı isteği: "hangisi daha sağlam"
+     sorusuna elle veri girmeden, sunucunun zaten hesapladığı skorla cevap.
+     Filtre (Kırılım/POC Üstü/… veya Yaklaşanlar) AYNEN geçerli kalır,
+     sadece o filtrenin İÇİNDEKİ sıralama değişir. */
+  h+='<div class="sirala" style="flex-wrap:wrap">'+
+     '<button class="sir'+(hpSiralamaModu!=="skor"?" on":"")+'" data-sirala="varsayilan">'+
+       (yaklasanMi?"🎯 Mesafeye göre sırala":"📊 POC gücüne göre sırala")+'</button>'+
+     '<button class="sir'+(hpSiralamaModu==="skor"?" on":"")+'" data-sirala="skor">🏆 Sağlamlık skoruna göre sırala</button>'+
+     '</div>';
+  var skorSirali=hpSiralamaModu==="skor";
   var kaynakListe;
   if(yaklasanMi){
     kaynakListe=tumListe.filter(hpYaklasanMi)
-      .sort(function(a,b){return (a.kirilimMesafe==null?999:a.kirilimMesafe)-(b.kirilimMesafe==null?999:b.kirilimMesafe)});
+      .sort(function(a,b){
+        if(skorSirali)return (b.saglamlikSkoru||0)-(a.saglamlikSkoru||0);
+        return (a.kirilimMesafe==null?999:a.kirilimMesafe)-(b.kirilimMesafe==null?999:b.kirilimMesafe);
+      });
   }else{
     kaynakListe=(hpFiltre==="tumu"?tumListe:tumListe.filter(function(x){return x.konum===hpFiltre}))
-      .sort(function(a,b){return (b.pocYuzde||0)-(a.pocYuzde||0)});
+      .sort(function(a,b){
+        if(skorSirali)return (b.saglamlikSkoru||0)-(a.saglamlikSkoru||0);
+        return (b.pocYuzde||0)-(a.pocYuzde||0);
+      });
   }
   h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse — '+
-     (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı")+'</div>';
+     (skorSirali?"🏆 Sağlamlık skoruna göre (en sağlam önde) sıralı":
+       (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı"))+'</div>';
   if(!kaynakListe.length){
     h+='<div class="bos"><b>'+(calisiyor&&!tumListe.length?"Ölçülüyor…":"Bu filtrede hisse yok")+'</b><br><br>'+
        (calisiyor&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Farklı bir filtre dene veya tarama tamamlansın.")+'</div>';
@@ -10142,6 +10194,9 @@ function hpGosterCanli(){
   });
   [].forEach.call(el("govde").querySelectorAll("[data-filtre]"),function(bt){
     bt.onclick=function(){tit();hpFiltre=bt.dataset.filtre;hpGosterCanli()};
+  });
+  [].forEach.call(el("govde").querySelectorAll("[data-sirala]"),function(bt){
+    bt.onclick=function(){tit();hpSiralamaModu=bt.dataset.sirala;hpGosterCanli()};
   });
   var y=el("hpYenile");if(y)y.onclick=function(){tit();hpOlcum[hpTf]={};hpTaraBaslat()};
   var dd=el("hpDur");if(dd)dd.onclick=function(){tit();
@@ -10256,12 +10311,15 @@ function hpTekGoster(t){
       '<div class="altbilgi">veri yetersiz — bu dilimde ölçüm alınamadı</div></div></div>';
     var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
     var destekTxt=(x.destekler&&x.destekler.length)?x.destekler.map(hpDegerYaz).join(", "):"—";
+    var skorRenk2=hpSkorRenk(x.saglamlikSkoru);
     return '<div class="satir" style="border-left-color:var(--sar);align-items:flex-start">'+
       '<div class="sol"><div class="kod">'+E(HP_TF_ADI[x.tf]||x.tf)+'</div>'+
       '<div class="altbilgi">fiyat <b>'+x.fiyat+'</b> · POC <b>'+x.poc+'</b> (hacim payı %'+x.pocYuzde+')</div>'+
       '<div class="altbilgi" style="margin-top:3px">🔴 Direnç '+direncTxt+'</div>'+
       '<div class="altbilgi" style="margin-top:2px">🟢 Destek '+destekTxt+'</div>'+
-      '<div class="altbilgi" style="opacity:.6;margin-top:2px">Value Area '+x.val+' – '+x.vah+'</div></div></div>';
+      '<div class="altbilgi" style="opacity:.6;margin-top:2px">Value Area '+x.val+' – '+x.vah+'</div>'+
+      (x.saglamlikSkoru!=null?'<div class="altbilgi" style="margin-top:3px">🏆 Sağlamlık: <b style="color:'+skorRenk2+'">'+x.saglamlikSkoru+'/100</b></div>':"")+
+      '</div></div>';
   }).join("");
   el("govde").innerHTML=h;
   var g2=el("hpGeri");if(g2)g2.onclick=function(){tit();hpTek=null;hpCiz()};
