@@ -2703,28 +2703,44 @@ function hpHesapla(mumlar){
        Pozitif = fiyat hâlâ VAH'ın altında, o kadar % kalmış.
        Negatif = fiyat VAH'ı zaten geçmiş (kirilim), o kadar % üstünde. */
     const kirilimMesafe=Math.round(((vahDeger-sonKapanis)/sonKapanis)*1000)/10;
+    /* 📍 POC'a mesafe (%) — aynı mantık, ayrı eksen: kırılım VAH'a göre,
+       bu POC'un kendisine göre. Pozitif = fiyat POC'un altında, o kadar
+       % kalmış. Negatif = fiyat POC'u zaten geçmiş, o kadar % üstünde. */
+    const pocMesafe=Math.round(((pocDeger-sonKapanis)/sonKapanis)*1000)/10;
     const pocYuzde=Math.round(kova[pocI]/toplam*1000)/10;
-    /* 🏆 SAĞLAMLIK SKORU (0-100) — kullanıcı isteği: "bu hisse daha sağlam,
-       bu hisse daha iyi" diye otomatik ayrım. Elle veri girmeye gerek
-       kalmasın diye tamamen bu fonksiyonun zaten hesapladığı değerlerden
-       (pocYuzde/konum/en yakın direnç-destek gücü) türetilir, ek bir
-       ölçüm/istek gerektirmez:
-         - POC gücü       → 0-35 puan (pocYuzde ne kadar yüksekse o kadar)
-         - Konum          → 0-25 puan (kirilim en güçlü, taban_alti en zayıf)
-         - Üstteki direnç → 0-20 puan (direnç zayıfsa/yoksa yol daha açık)
-         - Alttaki destek → 0-20 puan (destek güçlüyse taban daha sağlam) */
-    const HP_KONUM_PUAN={kirilim:25,poc_ustu:15,poc_alti:5,taban_alti:0};
-    const HP_DIRENC_PUAN={zayif:20,orta:10,guclu:0};
+    /* 🏆 SAĞLAMLIK SKORU (0-100) — v2, kullanıcı geri bildirimi: eski
+       sürüm çoğu hissede aynı sayıya (ör. 60) düşüyordu çünkü mesafe
+       hiç puana katılmıyordu, yalnız 3 kategorili (zayıf/orta/güçlü)
+       direnç-destek etiketleri katılıyordu — az sayıda olası kombinasyon
+       yüzünden çok fazla eşitlik (tie) oluşuyordu. v2'de KIRILIMA MESAFE
+       sürekli (continuous) bir değişken olarak en büyük payı alıyor, bu
+       da her hissede farklı bir ondalık sonuç üretip sıralamayı gerçekten
+       ayırt edici hale getiriyor. Ayrıca direnç/destek artık yalnız EN
+       YAKIN seviyeye değil, üstteki/alttaki üç seviyenin ORTALAMASINA
+       bakıyor — üç güçlü destek, tek güçlü destekten daha çok puan alır.
+         - Kırılıma yakınlık → 0-35 puan (kirilim'de tavan 35; değilse
+           mesafe arttıkça 0'a doğru sürekli azalır, 15%+ mesafede ≈0)
+         - POC gücü          → 0-25 puan (pocYuzde arttıkça artar)
+         - Destek kalitesi   → 0-20 puan (alttaki 3 seviyenin ortalama gücü)
+         - Direnç açıklığı   → 0-20 puan (üstteki 3 seviye ne kadar zayıfsa/
+           azsa o kadar yüksek — yol o kadar açık) */
     const HP_DESTEK_PUAN={zayif:5,orta:10,guclu:20};
-    const enYakinDirenc=direncler[0]?direncler[0].guc:null;
-    const enYakinDestek=destekler[0]?destekler[0].guc:null;
-    const pocGucPuani=Math.max(0,Math.min(35,(pocYuzde/100)*35));
-    const direncPuani=enYakinDirenc!=null?(HP_DIRENC_PUAN[enYakinDirenc]!=null?HP_DIRENC_PUAN[enYakinDirenc]:10):20;
-    const destekPuani=enYakinDestek!=null?(HP_DESTEK_PUAN[enYakinDestek]!=null?HP_DESTEK_PUAN[enYakinDestek]:10):0;
-    const saglamlikSkoru=Math.round((HP_KONUM_PUAN[konum]||0)+pocGucPuani+direncPuani+destekPuani);
+    const HP_DIRENC_PUAN={zayif:20,orta:10,guclu:0};
+    function hpOrtalamaGuc(liste,tablo,yoksaPuan){
+      if(!liste||!liste.length)return yoksaPuan;
+      var toplam=0;
+      for(var gi=0;gi<liste.length;gi++)toplam+=(tablo[liste[gi].guc]!=null?tablo[liste[gi].guc]:yoksaPuan);
+      return toplam/liste.length;
+    }
+    const YAKINLIK_UFUK=15; // % — bu mesafenin ötesi artık "yakın" sayılmaz, puan ≈0
+    const yakinlikPuani=konum==="kirilim"?35:Math.max(0,35*(1-Math.min(kirilimMesafe,YAKINLIK_UFUK)/YAKINLIK_UFUK));
+    const pocGucPuani=Math.max(0,Math.min(25,(pocYuzde/80)*25));
+    const destekPuani=hpOrtalamaGuc(destekler,HP_DESTEK_PUAN,0);
+    const direncPuani=hpOrtalamaGuc(direncler,HP_DIRENC_PUAN,20);
+    const saglamlikSkoru=Math.round(yakinlikPuani+pocGucPuani+destekPuani+direncPuani);
     return{fiyat:sonKapanis,poc:pocDeger,pocYuzde:pocYuzde,
       vah:vahDeger,val:valDeger,destekler:destekler,direncler:direncler,konum:konum,
-      kirilimMesafe:kirilimMesafe,saglamlikSkoru:saglamlikSkoru,
+      kirilimMesafe:kirilimMesafe,pocMesafe:pocMesafe,saglamlikSkoru:saglamlikSkoru,
       barSayisi:veri.length,zaman:veri[veri.length-1].time};
   }catch(e){return null}
 }
@@ -10044,21 +10060,53 @@ var HP_KONUM_BILGI={
   poc_alti:{ad:"📉 POC Altı",renk:"var(--soluk)",ack:"Fiyat POC altında ama hâlâ yoğun bölge içinde"},
   taban_alti:{ad:"⚠️ Taban Altı",renk:"var(--kir)",ack:"Fiyat, yoğun bölgenin de altına düşmüş — zayıf"}
 };
-var HP_FILTRE_LISTE=[{k:"tumu",ad:"Tümü"},{k:"kirilim",ad:"🚀 Kırılım"},{k:"poc_ustu",ad:"📈 POC Üstü"},{k:"poc_alti",ad:"📉 POC Altı"},{k:"taban_alti",ad:"⚠️ Taban Altı"},{k:"yaklasan",ad:"🎯 Yaklaşanlar"}];
+var HP_FILTRE_LISTE=[{k:"aday",ad:"🎯 Aday Hisseler"},{k:"tumu",ad:"Tümü"},{k:"kirilim",ad:"🚀 Kırılım"},{k:"poc_ustu",ad:"📈 POC Üstü"},{k:"poc_alti",ad:"📉 POC Altı"},{k:"taban_alti",ad:"⚠️ Taban Altı"},{k:"yaklasan",ad:"📋 Yaklaşanlar (tümü)"}];
 /* "🎯 Yaklaşanlar" — henüz kırmamış ama POC'un üstünde/Value Area
    içinde olup kırılıma en yakın olanlar. taban_alti (zayıf bölge)
    dışlanır — oradan kırılıma mesafe hem büyük hem güvenilmez. */
 function hpYaklasanMi(x){return x.konum==="poc_ustu"||x.konum==="poc_alti"}
-var hpFiltre="tumu";
+/* 🎯 ADAY HİSSELER — kullanıcı isteği: "bir ton filtre var ama hangi
+   hisseyi alacağım net değil". Bu TEK sekme, elle bakılması gereken
+   4-5 filtreyi (Yaklaşanlar + Sağlamlık skoru eşiği + mesafe sınırı)
+   tek bir "adam gibi akıllı" listeye indiriyor: henüz kırmamış AMA
+   kırılıma en fazla %HP_ADAY_MESAFE_UFUK kalmış VE sağlamlık skoru
+   HP_ADAY_SKOR_ESIGİ'nin altında olmayan hisseler. Aşağıda mesafeye
+   göre 3 net kovaya (Çok yakın / Yaklaşıyor / Biraz uzak) ayrılıp
+   her kovanın içinde skora göre sıralanıyor — "keskin ayrım yok"
+   şikayetinin cevabı burada: kova sınırı zaten keskin bir çizgi. */
+var HP_ADAY_SKOR_ESIGI=45, HP_ADAY_MESAFE_UFUK=10;
+function hpAdayMi(x){
+  return hpYaklasanMi(x) && x.kirilimMesafe!=null && x.kirilimMesafe<=HP_ADAY_MESAFE_UFUK
+    && (x.saglamlikSkoru||0)>=HP_ADAY_SKOR_ESIGI;
+}
+var HP_ADAY_KOVALAR=[
+  {lo:0,hi:3,ad:"🔥 Çok yakın · kırılıma %0-3"},
+  {lo:3,hi:6,ad:"🟡 Yaklaşıyor · kırılıma %3-6"},
+  {lo:6,hi:10.0001,ad:"🟠 Biraz uzak · kırılıma %6-10"}
+];
+/* Varsayılan açılış sekmesi artık "aday" — kullanıcı uygulamayı açar
+   açmaz zaten süzülmüş, akıllı listeyi görsün diye. Diğer sekmeler
+   (Tümü/Kırılım/POC Üstü/…) hâlâ elde duruyor, isteyen elle bakabilir. */
+var hpFiltre="aday";
 /* 🏆 "varsayilan" = eski davranış (POC gücüne / mesafeye göre), "skor" =
    yeni otomatik Sağlamlık Skoru sıralaması. Sunucu hesaplıyor, burada
-   sadece hangi alana göre sıralanacağı seçiliyor — elle veri girmek yok. */
+   sadece hangi alana göre sıralanacağı seçiliyor — elle veri girmek yok.
+   "aday" sekmesinde bu seçim gösterilmiyor, kova mantığı zaten sıralıyor. */
 var hpSiralamaModu="varsayilan";
 function hpMesafeSatiri(x){
-  if(x.kirilimMesafe==null)return"";
-  if(x.konum==="kirilim")
-    return '<div class="altbilgi" style="margin-top:2px;opacity:.75">🚀 Kırılım seviyesinin %'+Math.abs(x.kirilimMesafe)+' üstünde</div>';
-  return '<div class="altbilgi" style="margin-top:2px;opacity:.75">🎯 Kırılıma mesafe: <b>%'+x.kirilimMesafe+'</b></div>';
+  var parcalar=[];
+  if(x.kirilimMesafe!=null){
+    parcalar.push(x.konum==="kirilim"
+      ? '🚀 Kırılımın <b>%'+Math.abs(x.kirilimMesafe)+'</b> üstünde'
+      : '🎯 Kırılıma <b>%'+x.kirilimMesafe+'</b> kaldı');
+  }
+  if(x.pocMesafe!=null&&x.konum!=="kirilim"){
+    parcalar.push(x.pocMesafe>=0
+      ? '📍 POC\'a <b>%'+x.pocMesafe+'</b> kaldı'
+      : '📍 POC\'un <b>%'+Math.abs(x.pocMesafe)+'</b> üstünde');
+  }
+  if(!parcalar.length)return"";
+  return '<div class="altbilgi" style="margin-top:2px;opacity:.85">'+parcalar.join(' · ')+'</div>';
 }
 function hpSinyalSatiri(x){
   if(x.sinyalKarYuzde==null)return"";
@@ -10116,14 +10164,14 @@ function hpGosterCanli(){
      'işaretlenir — en güçlü destek/direnç noktasıdır. Mevcut fiyatın altındaki '+
      've üstündeki yoğun bölgeler de destek ve direnç listesi olarak gösterilir. '+
      'Her satırda fiyatın o yoğun bölgeye göre KONUMU da (🚀 Kırılım / 📈 POC Üstü / '+
-     '📉 POC Altı / ⚠️ Taban Altı) rozet olarak işaretleniyor — filtrelerle sadece '+
-     'kırılım yapanları ayıklayabilir, 🎯 <b>Yaklaşanlar</b> ile kırılıma en yakın '+
-     'olanları (mesafeye göre sıralı) görebilirsin. Bir hisse Kırılım/POC Üstü '+
-     'olduğunda giriş fiyatı hatırlanır — 📌 satırında o andan bu yana kâr/zarar '+
-     'yüzdesi gösterilir; sinyal bozulunca 📊 Geçmiş sinyaller ekranına taşınır. '+
-     '🏆 <b>Sağlamlık Skoru</b> (0-100) her hissede otomatik hesaplanır — POC gücü, '+
-     'konum, üstteki direncin zayıflığı ve alttaki desteğin gücünü tek sayıda '+
-     'birleştirir; aşağıdaki sıralama düğmesiyle en sağlamdan en zayıfa dizebilirsin.</div>';
+     '📉 POC Altı / ⚠️ Taban Altı) rozet olarak işaretleniyor. 🎯 <b>Aday Hisseler</b> '+
+     'sekmesi bunların hepsini otomatik süzüp mesafeye göre gruplar — diğer sekmeler '+
+     '(Tümü/Kırılım/POC Üstü/…) elle bakmak isteyenler için hâlâ duruyor. Bir hisse '+
+     'Kırılım/POC Üstü olduğunda giriş fiyatı hatırlanır — 📌 satırında o andan bu '+
+     'yana kâr/zarar yüzdesi gösterilir; sinyal bozulunca 📊 Geçmiş sinyaller ekranına '+
+     'taşınır. 🏆 <b>Sağlamlık Skoru</b> (0-100) her hissede otomatik hesaplanır — '+
+     'kırılıma mesafe, POC gücü, üstteki direncin zayıflığı ve alttaki desteğin '+
+     'gücünü tek sayıda birleştirir.</div>';
   h+='<div class="kutu" style="margin:0 0 8px"><div class="sat"><span class="et">Tek hisse sorgula</span></div>'+
      '<div style="display:flex;gap:6px;margin-top:6px">'+
      '<input id="hpKod" type="text" placeholder="Örn: SASA" style="flex:1;background:var(--kart);'+
@@ -10150,23 +10198,35 @@ function hpGosterCanli(){
   var sayac={kirilim:0,poc_ustu:0,poc_alti:0,taban_alti:0};
   for(var si=0;si<tumListe.length;si++){var kk=tumListe[si].konum;if(sayac[kk]!==undefined)sayac[kk]++}
   sayac.yaklasan=tumListe.filter(hpYaklasanMi).length;
+  sayac.aday=tumListe.filter(hpAdayMi).length;
   h+='<div class="sirala" style="flex-wrap:wrap">'+HP_FILTRE_LISTE.map(function(f){
     var sayi=f.k==="tumu"?tumListe.length:(sayac[f.k]||0);
     return '<button class="sir'+(hpFiltre===f.k?" on":"")+'" data-filtre="'+f.k+'">'+f.ad+' ('+sayi+')</button>';
   }).join("")+'</div>';
-  var yaklasanMi=hpFiltre==="yaklasan";
-  /* 🏆 Sağlamlık Skoru sıralaması — kullanıcı isteği: "hangisi daha sağlam"
-     sorusuna elle veri girmeden, sunucunun zaten hesapladığı skorla cevap.
-     Filtre (Kırılım/POC Üstü/… veya Yaklaşanlar) AYNEN geçerli kalır,
-     sadece o filtrenin İÇİNDEKİ sıralama değişir. */
-  h+='<div class="sirala" style="flex-wrap:wrap">'+
-     '<button class="sir'+(hpSiralamaModu!=="skor"?" on":"")+'" data-sirala="varsayilan">'+
-       (yaklasanMi?"🎯 Mesafeye göre sırala":"📊 POC gücüne göre sırala")+'</button>'+
-     '<button class="sir'+(hpSiralamaModu==="skor"?" on":"")+'" data-sirala="skor">🏆 Sağlamlık skoruna göre sırala</button>'+
-     '</div>';
-  var skorSirali=hpSiralamaModu==="skor";
+  var yaklasanMi=hpFiltre==="yaklasan", adayMi=hpFiltre==="aday";
+  if(adayMi){
+    h+='<div class="uyari" style="margin-top:0"><b>🎯 Aday Hisseler nedir?</b><br>'+
+       'Diğer sekmelerdeki filtreleri tek listede birleştirir: henüz kırmamış '+
+       '(POC Üstü/Altı) ama kırılıma en fazla <b>%'+HP_ADAY_MESAFE_UFUK+'</b> kalmış '+
+       've Sağlamlık skoru <b>'+HP_ADAY_SKOR_ESIGI+'/100</b>\'ün altında olmayan hisseler. '+
+       'Aşağıda mesafeye göre üç net gruba ayrılmış: 🔥 en yakın en üstte.</div>';
+  }else{
+    /* 🏆 Sağlamlık Skoru sıralaması — kullanıcı isteği: "hangisi daha sağlam"
+       sorusuna elle veri girmeden, sunucunun zaten hesapladığı skorla cevap.
+       Filtre (Kırılım/POC Üstü/… veya Yaklaşanlar) AYNEN geçerli kalır,
+       sadece o filtrenin İÇİNDEKİ sıralama değişir. */
+    h+='<div class="sirala" style="flex-wrap:wrap">'+
+       '<button class="sir'+(hpSiralamaModu!=="skor"?" on":"")+'" data-sirala="varsayilan">'+
+         (yaklasanMi?"🎯 Mesafeye göre sırala":"📊 POC gücüne göre sırala")+'</button>'+
+       '<button class="sir'+(hpSiralamaModu==="skor"?" on":"")+'" data-sirala="skor">🏆 Sağlamlık skoruna göre sırala</button>'+
+       '</div>';
+  }
+  var skorSirali=hpSiralamaModu==="skor"&&!adayMi;
   var kaynakListe;
-  if(yaklasanMi){
+  if(adayMi){
+    kaynakListe=tumListe.filter(hpAdayMi)
+      .sort(function(a,b){return (a.kirilimMesafe||0)-(b.kirilimMesafe||0)});
+  }else if(yaklasanMi){
     kaynakListe=tumListe.filter(hpYaklasanMi)
       .sort(function(a,b){
         if(skorSirali)return (b.saglamlikSkoru||0)-(a.saglamlikSkoru||0);
@@ -10179,12 +10239,23 @@ function hpGosterCanli(){
         return (b.pocYuzde||0)-(a.pocYuzde||0);
       });
   }
-  h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse — '+
-     (skorSirali?"🏆 Sağlamlık skoruna göre (en sağlam önde) sıralı":
-       (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı"))+'</div>';
+  h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse'+
+     (adayMi?"":' — '+(skorSirali?"🏆 Sağlamlık skoruna göre (en sağlam önde) sıralı":
+       (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı")))+'</div>';
   if(!kaynakListe.length){
-    h+='<div class="bos"><b>'+(calisiyor&&!tumListe.length?"Ölçülüyor…":"Bu filtrede hisse yok")+'</b><br><br>'+
-       (calisiyor&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Farklı bir filtre dene veya tarama tamamlansın.")+'</div>';
+    h+='<div class="bos"><b>'+(calisiyor&&!tumListe.length?"Ölçülüyor…":(adayMi?"Şu an kriterlere uyan aday yok":"Bu filtrede hisse yok"))+'</b><br><br>'+
+       (calisiyor&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":
+         (adayMi?"Ya kırılıma çok az hisse kalmış ya da skoru "+HP_ADAY_SKOR_ESIGI+"'in altında — 📋 Yaklaşanlar (tümü) sekmesinden gevşek listeye bakabilirsin.":"Farklı bir filtre dene veya tarama tamamlansın."))+'</div>';
+  }else if(adayMi){
+    /* Kova kova grupla — "keskin ayrım yok" şikayetinin cevabı: her
+       kovanın sınırı net bir yüzde çizgisi, kova içi skora göre sıralı. */
+    HP_ADAY_KOVALAR.forEach(function(kova2){
+      var grup=kaynakListe.filter(function(x){return x.kirilimMesafe>=kova2.lo&&x.kirilimMesafe<kova2.hi})
+        .sort(function(a,b){return (b.saglamlikSkoru||0)-(a.saglamlikSkoru||0)});
+      if(!grup.length)return;
+      h+='<div style="margin:14px 0 6px;font-weight:700;font-size:13.5px;opacity:.92">'+kova2.ad+' ('+grup.length+')</div>';
+      h+=grup.map(hpSatir).join("");
+    });
   }else{
     h+=kaynakListe.map(hpSatir).join("");
   }
