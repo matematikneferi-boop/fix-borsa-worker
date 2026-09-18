@@ -10163,7 +10163,7 @@ function hpGecmisSatir(x){
 function hpGecmisGoster(liste){
   var h='<div class="sirala"><button class="sir" id="hpGecmisGeri">← Taramaya dön</button></div>';
   h+='<div class="uyari" style="margin-top:0"><b>📊 Geçmiş sinyaller — '+(HP_TF_ADI[hpTf]||hpTf)+'</b><br>'+
-     'Bir hisse 🚀 Kırılım veya 📈 POC Üstü olduktan sonra tekrar 📉 POC Altı / ⚠️ Taban Altı\'na '+
+     'Bir hisse 🚀 Kırılım veya 📈 POC Üstü olduktan sonra tekrar 📉 POC Altı / ⚠️ Taban Altı\\'na '+
      'düştüğünde buraya düşer — giriş anındaki fiyata göre ne kadar kâr/zarar ettirdiği hesaplanır. '+
      'Sinyal hâlâ sürüyorsa (henüz bozulmadıysa) burada görünmez, taramadaki 📌 satırında görünür.</div>';
   if(!liste.length){
