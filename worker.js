@@ -2633,6 +2633,9 @@ async function mbEvren(A,ekKodlar){return tamEvren(A,ekKodlar)}
    round-robin tarama iskeleti (aynı desen, ayrı havuz/KV anahtarı). */
 const HP_TF_LISTE=["1SA","4SA","1G"];
 const HP_MIN_BAR=30, HP_MAX_BAR=180, HP_BIN=30;
+/* Canlı toplu ölçüm parametreleri — mbOlc (Hisse Tarama) ile birebir
+   aynı değerler, aynı gerekçeyle (bkz. is:"olc" bloğu). */
+const HP_OLC_AZAMI=16, HP_ES_CANLI=16;
 /* 2026-09-18: kullanıcı geri bildirimi — 4SA/1G dilimlerinde geriye
    ~5-9 aylık bar kullanılınca (HP_MAX_BAR=180), düşüşten ÖNCEKİ uzun
    bir konsolidasyonun toplam hacmi, düşüşten SONRAKİ taze hacmi eziyor;
@@ -9812,32 +9815,115 @@ function kumeGoster(v){
       .catch(function(){de.disabled=false})};
 }
 /* ================== 📐 HACİM PROFİLİ SEKMESİ ==================
-   Hacim Artışı/Küme ile aynı iskelet: 3 zaman dilimi (1SA/4SA/1G) arka
-   planda sırayla taranır. Ek olarak tek hisse sorgu kutusu var — Yahoo
-   hacim verisinden anlık POC/destek/direnç hesaplar, taramayı beklemez.
+   2026-09-18: İlk sürüm KV/cron havuzunu (Hacim Artışı/Küme ile aynı
+   round-robin desen) kullanıyordu — kullanıcı geri bildirimi: 444
+   hissenin tamamını taramak onlarca dakika sürüyor, sekme her açıldığında
+   "az/0 sonuç" görünüyordu. Çözüm: "Hisse Tarama" (mbOlc) modülünün
+   ZATEN kanıtlanmış çözümüyle AYNI mimariye geçildi — KV yok, uygulama
+   kendi evrenini alıp HP_OLC_AZAMI'lık parçalara böler, HP_KANAL kadar
+   paralel istekte CANLI ölçtürür. Sonuç dakikalar değil, saniyeler
+   içinde dolar. Tek hisse sorgu kutusu ayrı ve zaten anlıktı, değişmedi.
    Aynı sonuç Telegram üzerinden de /hp KODU komutuyla alınabilir. */
 var HP_TF_ARAYUZ=[{k:"1SA",ad:"1 Saat",ik:"🕐"},{k:"4SA",ad:"4 Saat",ik:"🕓"},{k:"1G",ad:"Günlük",ik:"📅"}];
 var HP_TF_ADI={"1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
 var HP_GUC_AD={guclu:"güçlü",orta:"orta",zayif:"zayıf"};
 var HP_GUC_RENK={guclu:"var(--yes)",orta:"var(--sar)",zayif:"var(--soluk)"};
-var hpD=null, hpTf="1G", hpTek=null;
+var HP_KANAL=6, HP_ISTEK_ZAMAN=20000, HP_HATA_TAVAN=60, HP_PARCA=16;
+var hpTf="1G", hpTek=null, hpEvren=null, hpEvrenKaynak="", hpOlcum={}, hpTaraDurum=null, hpNobetci=null;
+function hpKuyrukKur(){
+  var k=[];
+  for(var i=0;i<hpEvren.length;i+=HP_PARCA)k.push(hpEvren.slice(i,i+HP_PARCA));
+  return k;
+}
+function hpNobetciKapat(){if(hpNobetci){clearInterval(hpNobetci);hpNobetci=null}}
+function hpNobetciKur(){
+  if(hpNobetci)return;
+  hpNobetci=setInterval(function(){
+    var d=hpTaraDurum;
+    if(!d||!d.suruyor){hpNobetciKapat();return}
+    var simdi=Date.now();
+    for(var i=d.ucusta.length-1;i>=0;i--){
+      if(simdi-d.ucusta[i].ts>HP_ISTEK_ZAMAN){
+        var u=d.ucusta.splice(i,1)[0];
+        u.olu=true;d.kuyruk.push(u.kodlar);d.acik=Math.max(0,d.acik-1);d.hata++;
+      }
+    }
+    if(d.acik===0&&d.kuyruk.length)hpTaraTur();
+    else if(d.acik===0&&!d.kuyruk.length){d.suruyor=false;hpNobetciKapat();
+      if(hpTaraDurum===d&&!hpTek)hpGosterCanli()}
+  },4000);
+}
+function hpTaraTur(){
+  var d=hpTaraDurum;
+  if(!d||!d.suruyor||d.tf!==hpTf)return;
+  while(d.acik<HP_KANAL&&d.kuyruk.length){
+    var kodlar=d.kuyruk.shift();
+    d.acik++;
+    var kayit={kodlar:kodlar,ts:Date.now(),olu:false};
+    d.ucusta.push(kayit);
+    (function(kodlar2,kyt){
+      var bitir=function(){
+        if(kyt.olu)return true;
+        kyt.olu=true;
+        var y=d.ucusta.indexOf(kyt);if(y>=0)d.ucusta.splice(y,1);
+        d.acik=Math.max(0,d.acik-1);d.sonHareket=Date.now();
+        return false;
+      };
+      post("/api/hacimprofil",{is:"olc",tf:d.tf,kodlar:kodlar2}).then(function(r){
+        if(bitir())return;
+        if(hpTaraDurum!==d)return;
+        if(r&&r.ok&&r.olcum){
+          if(!hpOlcum[d.tf])hpOlcum[d.tf]={};
+          for(var k in r.olcum)hpOlcum[d.tf][k]=r.olcum[k];
+        }else{
+          d.hata++;
+          if(d.hata<HP_HATA_TAVAN)d.kuyruk.push(kodlar2);
+        }
+        if(!hpTek)hpGosterCanli();
+        setTimeout(hpTaraTur,20);
+      }).catch(function(){
+        if(bitir())return;
+        if(hpTaraDurum!==d)return;
+        d.hata++;
+        if(d.hata<HP_HATA_TAVAN){d.kuyruk.push(kodlar2);
+          if(!hpTek)hpGosterCanli();setTimeout(hpTaraTur,1200)}
+        else{d.suruyor=false;hpNobetciKapat();if(!hpTek)hpGosterCanli()}
+      });
+    })(kodlar,kayit);
+  }
+}
+function hpTaraBaslat(){
+  hpNobetciKapat();
+  if(!hpOlcum[hpTf])hpOlcum[hpTf]={};
+  hpTaraDurum={suruyor:true,tf:hpTf,kuyruk:hpKuyrukKur(),ucusta:[],acik:0,hata:0,sonHareket:Date.now()};
+  hpNobetciKur();
+  hpGosterCanli();
+  hpTaraTur();
+}
 function hpCiz(){
   if(hpTek){hpTekGoster(hpTek);return}
-  if(hpD&&hpD.tf===hpTf){hpGoster(hpD);return}
-  el("govde").innerHTML='<div class="yukleniyor">hacim profili hesaplanıyor… (ilk açılış 10-20 sn sürebilir)</div>';
-  post("/api/hacimprofil",{tf:hpTf}).then(function(v){hpGoster(v)})
-    .catch(function(){el("govde").innerHTML='<div class="bos">Ölçüm alınamadı. Birazdan tekrar dene.</div>'});
+  if(!hpEvren){
+    el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
+    post("/api/hacimprofil",{is:"evren"}).then(function(r){
+      if(!r||!r.ok||!r.kodlar||!r.kodlar.length){
+        el("govde").innerHTML='<div class="bos">Hisse listesi alınamadı.</div>';return}
+      hpEvren=r.kodlar;hpEvrenKaynak=r.kaynak||"";
+      hpTaraBaslat();
+    }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
+    return;
+  }
+  if(hpTaraDurum&&hpTaraDurum.tf===hpTf){hpGosterCanli();return}
+  hpTaraBaslat();
 }
 function hpDegerYaz(x){
-  var renk=HP_GUC_RENK[x.guc]||"var(--ciz)";
+  var renk=HP_GUC_RENK[x.guc]||"var(--soluk)";
   return '<span style="color:'+renk+'">'+x.fiyat+' <span style="opacity:.6">('+(HP_GUC_AD[x.guc]||"")+')</span></span>';
 }
 function hpSatir(x){
   var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
   var destekTxt=(x.destekler&&x.destekler.length)?x.destekler.map(hpDegerYaz).join(", "):"—";
   return '<div class="satir" style="border-left-color:var(--sar);align-items:flex-start">'+
-    '<div class="sol"><div class="kod">'+E(x.kod)+
-    (x.takipte?' <span class="rozet">⭐ izlediğin</span>':"")+'</div>'+
+    '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
     '<div class="altbilgi">fiyat <b>'+x.fiyat+'</b> · POC <b>'+x.poc+'</b> (hacim payı %'+x.pocYuzde+')</div>'+
     '<div class="altbilgi" style="margin-top:3px">🔴 Direnç '+direncTxt+'</div>'+
     '<div class="altbilgi" style="margin-top:2px">🟢 Destek '+destekTxt+'</div>'+
@@ -9845,11 +9931,15 @@ function hpSatir(x){
     '<div class="sag"><div class="yuzde" style="color:var(--sar)">%'+x.pocYuzde+'</div>'+
     '<div class="altbilgi">POC gücü</div></div></div>';
 }
-function hpGoster(v){
-  hpD=v;
-  var calisiyor=!v||v.calisiyor!==false;
+function hpGosterCanli(){
+  var d=hpTaraDurum;
+  var calisiyor=!!(d&&d.suruyor);
+  var evren=hpEvren?hpEvren.length:0;
+  var sonuc=hpOlcum[hpTf]||{};
+  var olculen=Object.keys(sonuc).length;
+  var kalan=Math.max(0,evren-olculen);
   var h='<div class="sirala"><button class="sir" id="hpYenile">🔄 Yenile</button>'+
-        (D.yon?'<button class="sir" id="hpDur">'+(calisiyor?"⏸ Taramayı durdur":"▶️ Taramayı sürdür")+'</button>':"")+
+        '<button class="sir" id="hpDur">'+(calisiyor?"⏸ Taramayı durdur":"▶️ Taramayı sürdür")+'</button>'+
         '</div>';
   h+='<div class="uyari" style="margin-top:0"><b>📐 Hacim Profili nedir?</b><br>'+
      'Seçtiğin zaman diliminde son barların hacmi fiyat aralığına dağıtılıp '+
@@ -9867,45 +9957,43 @@ function hpGoster(v){
   h+='<div class="sirala" style="flex-wrap:wrap">'+HP_TF_ARAYUZ.map(function(t){
     return '<button class="sir'+(hpTf===t.k?" on":"")+'" data-tf="'+t.k+'">'+t.ik+' '+t.ad+'</button>';
   }).join("")+'</div>';
-  var evren=(v&&v.evren)||0, olculen=(v&&v.olculen)||0;
   var yuzde=evren?Math.min(100,Math.round(olculen/evren*100)):0;
   h+='<div class="kutu" style="margin:0 0 8px;padding:9px 11px">'+
      '<div class="altbilgi" style="opacity:.85">'+
-     (calisiyor?"🔄 Arka planda taranıyor":"⏸ Tarama durduruldu")+
-     ' · son ölçüm '+((v&&v.yas)||0)+' dk önce · dilim: '+(HP_TF_ADI[hpTf]||hpTf)+'</div>'+
-     '<div class="altbilgi" style="margin-top:4px">ölçülen <b>'+olculen+'</b> / '+evren+'  ·  kalan <b>'+((v&&v.kalan)||0)+'</b></div>'+
-     ((v&&v.kaynak)?'<div class="altbilgi" style="margin-top:3px;opacity:.55">evren kaynağı: '+E(v.kaynak)+'</div>':"")+
+     (calisiyor?"🚀 Canlı taranıyor":(kalan?"⏸ Tarama durduruldu":"✅ Tarama tamamlandı"))+
+     ' · dilim: '+(HP_TF_ADI[hpTf]||hpTf)+'</div>'+
+     '<div class="altbilgi" style="margin-top:4px">ölçülen <b>'+olculen+'</b> / '+evren+'  ·  kalan <b>'+kalan+'</b></div>'+
+     (hpEvrenKaynak?'<div class="altbilgi" style="margin-top:3px;opacity:.55">evren kaynağı: '+E(hpEvrenKaynak)+'</div>':"")+
      '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
-     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
-     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Üç zaman dilimi sırayla arka planda tazelenir; sekmeyi kapatsan da tarama devam eder.</div>'+
+     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":(kalan?"var(--sar)":"var(--yes)"))+'"></div></div>'+
+     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Paralel canlı ölçüm — sekmeden çıkmadan bekle, birkaç saniyede dolar.</div>'+
      '</div>';
-  var kaynakListe=(v&&v.liste)||[];
+  var kaynakListe=Object.keys(sonuc).map(function(k){return sonuc[k]})
+    .sort(function(a,b){return (b.pocYuzde||0)-(a.pocYuzde||0)});
   h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse — POC gücüne göre sıralı</div>';
   if(!kaynakListe.length){
-    h+='<div class="bos"><b>Henüz ölçüm yok</b><br><br>Tarama devam ediyor, birazdan tekrar bak.</div>';
+    h+='<div class="bos"><b>'+(calisiyor?"Ölçülüyor…":"Henüz ölçüm yok")+'</b><br><br>'+
+       (calisiyor?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Yenile ile tekrar dene.")+'</div>';
   }else{
     h+=kaynakListe.map(hpSatir).join("");
   }
   el("govde").innerHTML=h;
   [].forEach.call(el("govde").querySelectorAll("[data-tf]"),function(bt){
-    bt.onclick=function(){tit();hpTf=bt.dataset.tf;
-      el("govde").innerHTML='<div class="yukleniyor">'+(HP_TF_ADI[hpTf]||hpTf)+' hesaplanıyor…</div>';
-      post("/api/hacimprofil",{tf:hpTf}).then(function(v2){hpGoster(v2)})};
+    bt.onclick=function(){tit();hpTf=bt.dataset.tf;hpTaraBaslat()};
   });
-  var y=el("hpYenile");if(y)y.onclick=function(){tit();
-    el("govde").innerHTML='<div class="yukleniyor">yeniden hesaplanıyor…</div>';
-    post("/api/hacimprofil",{tf:hpTf}).then(function(v2){hpGoster(v2)})};
-  var dd=el("hpDur");if(dd)dd.onclick=function(){tit();dd.disabled=true;
-    post("/api/hacimprofil",{tf:hpTf,dur:calisiyor?1:0}).then(function(v2){hpGoster(v2)})
-      .catch(function(){dd.disabled=false})};
+  var y=el("hpYenile");if(y)y.onclick=function(){tit();hpOlcum[hpTf]={};hpTaraBaslat()};
+  var dd=el("hpDur");if(dd)dd.onclick=function(){tit();
+    var dur=hpTaraDurum;if(!dur)return;
+    if(dur.suruyor){dur.suruyor=false;hpNobetciKapat();hpGosterCanli()}
+    else{dur.suruyor=true;hpNobetciKur();hpGosterCanli();hpTaraTur()}};
   var kb=el("hpKodBtn"),ki=el("hpKod");
   var hpAra=function(){
     var k=String((ki&&ki.value)||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
     if(k.length<3)return;tit();
     el("govde").innerHTML='<div class="yukleniyor">'+k+' — üç zaman dilimi hesaplanıyor…</div>';
     post("/api/hacimprofil",{kod:k}).then(function(v2){
-      if(v2&&v2.ok&&v2.tek){hpTek=v2.tek;hpTekGoster(hpTek)}else{hpD=null;hpCiz()}})
-      .catch(function(){hpD=null;hpCiz()})};
+      if(v2&&v2.ok&&v2.tek){hpTek=v2.tek;hpTekGoster(hpTek)}else{hpCiz()}})
+      .catch(function(){hpCiz()})};
   if(kb)kb.onclick=hpAra;
   if(ki)ki.onkeydown=function(e2){if(e2.key==="Enter")hpAra()};
 }
@@ -14341,6 +14429,32 @@ if(kodTek){
   const rTek=await hpTekHisse(kodTek).catch(()=>null);
   if(!rTek)return JS({ok:!1,hata:"ölçüm alınamadı"});
   return JS({ok:!0,tek:rTek});
+}
+/* 🚀 CANLI TOPLU ÖLÇÜM (2026-09-18 — "Hisse Tarama" ile aynı çözüm):
+   KV/cron havuzu dakikada birkaç yüz hisse ilerleyen bir arka plan
+   turuna bağlıydı, tam kapsamaya ulaşması onlarca dakika sürüyordu —
+   kullanıcı sekmeyi her açtığında "hep az/0" görüyordu. mbOlc (is:"olc")
+   ile BİREBİR AYNI desen: uygulama kendi evrenini alır, HP_OLC_AZAMI'lık
+   parçalara böler, her parçayı ayrı bir istekte CANLI ölçtürür — KV yok,
+   bekleme yok, sonuç anında ve TAM kapsamalı. */
+if(gov&&gov.is==="evren"){
+  const ev=await tamEvren(A);
+  return JS({ok:!0,kodlar:ev.slice(),kaynak:ev.kaynak||"",sayi:ev.length});
+}
+if(gov&&gov.is==="olc"){
+  const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
+  const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[])
+    .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,HP_OLC_AZAMI);
+  const olcum={};
+  let sira=0;
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      const kod=kodlar[sira++];
+      try{const s=await hpTekOlc(kod,tf);if(s)olcum[kod]=Object.assign({kod:kod,tf:tf},s)}catch(_){}
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(HP_ES_CANLI,kodlar.length)},isci));
+  return JS({ok:!0,tf:tf,olcum:olcum,istenen:kodlar.length});
 }
 if(gov&&(gov.dur===1||gov.dur===0)){
   if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
