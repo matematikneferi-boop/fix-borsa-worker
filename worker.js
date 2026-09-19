@@ -1196,7 +1196,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-09-09-c · 🚨 KÖKTEN DÜZELTME — canlı havuz (1SA/4SA) 443/444'e ulaştıktan SONRA tekrar 36'ya küçüldü. Sebep: mbDilimTara'nın 6 saatten eski kaydı silen \"bayat ölçüm\" temizliği — KV kotasını korumak için tarama yavaşlatılınca (2026-09-08-e) tam bir tur artık 6 saatten uzun sürebiliyordu, yeni hisseler eklenirken eskiler siliniyordu, havuz asla tam dolamıyordu. Çözüm: Tavan Kombi'ye özel daha büyük bir parti boyutu (TVK_CANLI_ANLIK_AZAMI=30, mbModulTara'nın paylaştığı ortak sabitten ayrıldı — KV yazma sayısı artmıyor, hâlâ tek PUT) ve silme eşiği 6 saatten 24 saate çıkarıldı · 2026-09-09-b · 🌹 Yeni işaret: son 13 GÜNLÜK barda kaç kez GERÇEKTEN tavan yapmış (o günün kendi kapanışı bir önceki güne göre ≥%7 — geriye dönük tahmin değil, somut yakın geçmiş). 0 ise hiç gösterilmiyor, varsa hisse adının yanına 🌹N ekleniyor. Hem eşleşen hisse listesinde hem /tavankombi Telegram özetinde görünüyor. Bu bir birikim değil — her tarandığında o hissenin GÜNCEL son-13-bar durumuyla üzerine yazılıyor (toplanmıyor) · 2026-09-09-a · ⚡📋 İki yeni özellik: (1) son 60 bardaki ORTALAMA volatilite (yüksek-düşük/kapanış%, zaten çekilmiş mum verisinden, ek istek yok) artık her hissede hesaplanıyor, eşleşen hisse listesinde %2.7'nin üstündekiler ⚡ ile işaretleniyor; (2) yeni /tavankombi komutu (yalnız yönetici) — en iyi kombinasyonları ve şu an karşılayan hisseleri doğrudan Telegram mesajı olarak gönderiyor, mini app'e girmeye gerek yok. İç script ayrıca çıkarılıp diff ile doğrulandı (yalnız istenen satır değişti) · 2026-09-08-i · 🚨 KÖKTEN DÜZELTME — geçmiş tarama saatlerce 14:14'te donuk kalmıştı, /tavantani'den ELLE çağrılınca sorunsuz çalıştığı görüldü: sorun tvkGecmisAdimYap'ta değil, onu tetikleyen \"dk%10===0\" dakika kapısındaymış (muhtemelen ev.scheduledTime bu ortamda beklendiği gibi davranmıyor). Dakika aritmetiğine güvenmeyen, işin/havuzun KENDİ son güncelleme zamanına bakan bir kapıya geçildi — hem daha güvenilir hem daha basit · 2026-09-08-h · 🔬 /tavantani artık tvkGecmisAdimYap'ı DOĞRUDAN, hemen çalıştırıp sonucunu (veya fırlatırsa tam hata+stack'ini) gösteriyor — cron'un neden 14:14'ten beri hiç ilerlemediğini beklemeden, anında kesin cevap için · 2026-09-08-g · 🎯 hisseSayac neden hep 0 kalıyordu bulundu: tur 1 zaten TAMAMLANMIŞTI (444/444) ve ciftTakip her şeyi \"zaten sayıldı\" işaretlemişti — hisseSayac özelliği bundan SONRA eklendiği için hiç çalışma şansı olmamıştı. Çözüm: hisseSayac artık kendi AYRI (gün|kod) takibini (hisseCiftTakip, boş başlıyor) kullanıyor — combo istatistikleri (ciftTakip) hâlâ korunuyor, ÇİFT SAYILMIYOR, ama hisseSayac bir kerelik geriye dönük olarak dolduruluyor. Bir sonraki otomatik tur (20 dk + 10 dk cron penceresi içinde) başlayınca hisse alışkanlığı verisi artık gerçekten dolacak · 2026-09-08-f · 🔬 /tavantani'ye geçmiş tarama işinin (tvkGecmisIs3) durumu eklendi — tamam/toplam/tamamlandi/son güncelleme/son hatalar görünüyor, hisseSayac neden dolmuyor sorusuna kesin cevap için · 2026-09-08-e · 🚨 BUGÜNKÜ KESİNTİNİN SEBEBİ BULUNDU: Cloudflare KV ücretsiz plan günlük 1000 yazma sınırı, dakikada 2 kez çalışan tvkGecmisAdim+tvkCanli tarafından aşılmıştı (\"KV put() limit exceeded for the day\"). Şimdi tvkCanli 3 dakikada bir, tvkGecmisAdim 10 dakikada bir, ikisi de dakikada 1 kez (2 değil) çalışıyor — günlük yazma hacmi ~10-15 kat azaldı. Kalıcı/kesin çözüm Cloudflare Workers Paid plana ($5/ay) geçmek; bu sınırı tamamen kaldırır · 2026-09-08-d · 🔬 /tavantani'ye hisseSayac (tavan alışkanlığı verisi) kontrolü eklendi — kaç hisse için dolu, örnek değerler neler, doğrudan Telegram'dan görülebiliyor (mini app'e dokunmuyor) · 2026-09-08-c · 🎯 Kombinasyon eşleşen hisse listesine hissenin KENDİ tavan alışkanlığı eklendi — bir kombinasyon THYAO'yu eşleştirse bile THYAO'nun tarihte nadiren tavan yaptığını, SASA gibi bir hissenin sık yaptığını artık her hissenin adının altında \"tavan alışkanlığı: %X (N gün)\" olarak görebiliyorsun (20'den az gözlemde hiç gösterilmiyor — güvenilmez). İç script sözdizimi ayrıca çıkarılıp doğrulandı, diff ile yalnız istenen satırların değiştiği teyit edildi (-e'deki dondurma riskine karşı) · 2026-09-08-b · 🔁 Tavan Kombi geçmiş tarama artık TAM OTOMATİK ve KALICI BİRİKİMLİ: (1) her tur bitince 20 dakika sonra cron kendiliğinden yeni bir tur başlatıyor — kimsenin sayfayı elle açmasına gerek yok; (2) yeni turlar artık tvkArsiv2'yi SIFIRLAMIYOR — bunun yerine her (gün,hisse) çifti kalıcı bir takip listesine (ciftTakip) işleniyor, bir sonraki tur aynı çifte rastlarsa atlıyor, yalnız GERÇEKTEN yeni olan günler/hisseler arşive ekleniyor. Geçişte çift sayımı önlemek için KV anahtarları tvkArsiv2→tvkArsiv3, tvkGecmisIs2→tvkGecmisIs3 olarak değiştirildi (tek seferlik temiz başlangıç, bundan sonra hiç sıfırlanmayacak) · 2026-09-08-a · 🚨 KÖKTEN DÜZELTME — Tavan Kombi geçmiş tarama işinin (tvkGecmisIs2) KV kaydında 24 saatlik TTL vardı: tarama 24 saat içinde bitmezse kayıt kendiliğinden siliniyor, sistem \\\"iş yok\\\" sanıp SIFIRDAN yeni bir tam tur başlatıyordu — bu da o turun tvkArsiv2 istatistiklerini SIFIRLIYORDU (bkz. -h notundaki \\\"yeni tam tur başlarken tvkArsiv2 sıfırlanır\\\" mantığı, kendi başına doğruydu ama TTL'in tetiklediği İSTENMEYEN sıfırlanmalar için de aynı şekilde çalışıyordu). TTL tamamen kaldırıldı — iş artık yalnızca gerçekten tamamlanınca ya da sayfa/panelden elle sıfırlanınca yeniden başlar, süre dolduğu için asla kendiliğinden sıfırlanmaz · 2026-09-06-i · 🎯 Tavan Kombi'nin CANLI havuzu (1SA/4SA) artık geçmiş tarama gibi cron'a bağlı — kimse mini app'i açmasa bile dakikada birkaç hisse otomatik taranıp yazılıyor, uygulamayı her açan kişiyle sınırlı kalmıyor · 2026-09-06-h · ▶️⏸ /tavantani ile kesin sebep bulundu: çalışıyor=false, yani tarama sistemi DURDURULMUŞ durumdaydı — tvkCanliDoldur bu yüzden hiçbir şey denemeden çıkıyordu (sonTur hep null). Panele girmeden çözebilmek için iki yeni komut eklendi: /baslat (tarama sistemini açar) ve /durdur (kapatır) — ikisi de yalnız yönetici, ikisi de mini app'e dokunmuyor · 2026-09-06-g · 🔬 Cloudflare paneline hiç girmeden ham teşhis almak için YENİ komut: /tavantani (yalnız yönetici). Gerçek bir tarama denemesi tetikleyip calisiyor/evrenSayisi/yazmaHata/sonTur verisini doğrudan Telegram mesajı olarak gönderiyor — mini app'in kendi koduna (MINIAPP client script'ine) HİÇ dokunmuyor, o yüzden -e'deki donma riski burada yok · 2026-09-06-f · ⏪ -e GERİ ALINDI: teşhis mesajına eklenen ham JSON debug satırından sonra Tavan Kombi mini app'i splash ekranında donmaya başladı (kullanıcı hem mobil veri hem WiFi'de doğruladı). Sözdizimi kontrolleri (hem dış dosya hem MINIAPP içindeki <script> ayrıca çıkarılıp) temiz çıkıyor, ama riski göze almak yerine son KANITLANMIŞ ÇALIŞAN hâle (d) dönüldü — -e'nin tek farkı olan ham-JSON satırı kaldırıldı, başka hiçbir şey değişmedi · 2026-09-06-e · 🔬 GEÇİCİ TEŞHİS: bir önceki düzeltmelerin (a/b/c) neden hiç tetiklenmediğini tahminle çözmek yerine, Tavan Kombi teşhis mesajının SONUNA ham sunucu durumu (calisiyor/evrenSayisi/yazmaHata/sonTur) doğrudan JSON olarak eklendi — bu satır yalnız kanıt toplamak için, kalıcı değil · 2026-09-06-d · 🚨 /surum HİÇ CEVAP VERMİYORDU (sessizce): bu WORKER_SURUM notu her düzeltmede başına eklene ede 10.000+ karaktere ulaşmıştı, Telegram sendMessage'ın ~4096 karakter sınırını aşınca Telegram isteği tamamen reddediyordu ve bot bunu hiç bildirmiyordu. Artık /surum yalnız EN SON notu gösteriyor (bu satır), tam günlük burada — WORKER_SURUM'un geri kalanı sırf kayıt amaçlı, ekrana basılmıyor · 2026-09-06-c · 🚨 KÖKTEN SEBEP bulundu: sunucu kodunda AYNI isimde iki fonksiyon var — E(e,t) (VIP üye listesini KV'den okuyan, async) ve E2(s) (HTML özel karakterlerini kaçıran, senkron). /surum ekranı ve birkaç bildirim mesajı yanlışlıkla E2 yerine E çağırıyordu; JS'te aynı isimli iki fonksiyon tanımlanınca SONUNCUSU geçerli olur, o yüzden E her zaman VIP-listesi Promise'i döndürüyordu — String'e çevrilince \"[object Promise]\" çıkıyordu. tgTarihSaat düzeltmesi bu kesintiyi (Okunamadı.) gizliyordu, o kesilme kalkınca bu ikinci hata görünür oldu. 4 çağrı noktası da (🖥 Tarayıcı satırı, 📦 Beklenen satırı, ⚙️ Worker satırı, /tara ve toplu bildirimdeki durum mesajları) artık doğru E2'yi kullanıyor · 2026-09-06-b · 🩺 -a düzeltmesi yalnız TARAMA TAMAMLANDIĞINDA kayıt bırakıyordu; mbDilimTara en baştaki kontrollerden biri (tarama o an durdurulmuş / evren o an boş geldi) yüzünden ERKEN çıkarsa hiçbir iz kalmıyordu, birkaç satır sonra AYNI kontroller teşhis tarafından YENİDEN yapıldığında durum artık normale dönmüş olabiliyordu — böylece o anlık/geçici arıza hiç yakalanamıyordu. Artık mbDilimTara'nın HER çıkış noktası (erken dönüşler dahil) kendi gerçek sebebini kaydediyor, teşhis mesajı bunu en üst öncelikle gösteriyor. Ayrıca AYRI ve İLGİSİZ bir hata bulunup düzeltildi: /surum komutu tanımsız bir fonksiyonu (tgTarihSaat) çağırıyordu, bu da mesajı ⚙️ Worker sürüm satırına gelmeden yarıda kesiyordu — deploy'un tutup tutmadığı hiç doğrulanamıyordu · 2026-09-06-a · 🩺 Teşhise DÖRDÜNCÜ ve gerçek bir ihtimal eklendi: KV yazma/durdurulmuş/evren-boş kontrollerinin HİÇBİRİ tetiklenmediği halde havuz hâlâ boş kalıyorsa artık gerçek sebep şu olabiliyor — tvkCanliDoldur zaten çalışıp hisseleri TEK TEK deniyor ama Yahoo'dan hiçbirinde veri alamıyor (query1 ve query2 ikisi de başarısız), bu sessizce yutuluyordu. Artık her tarama turunun kaç hisse denendiği/kaçının başarılı olduğu ve varsa örnek Yahoo hata mesajı isolate belleğinde tutuluyor; teşhis ekranı bunu görürse artık Cron Triggera bak demiyor, doğrudan tarama deneniyor ama Yahoodan veri gelmiyor diyor ve örnek hatayı gösteriyor — 1SA/4SA satırlarının yanına da o turun X/Y başarılı özeti eklendi · 2026-09-03-j · 🩺 Teşhise ÜÇÜNCÜ ve gerçek bir ihtimal eklendi: Cloudflare Workers KV ücretsiz planında YAZMA (put) günde yalnız 1000 kez yapılabilir — list() kotasından ayrı ve çok daha kolay dolan bir sınır (cron dakikada bir yazıyor + her kullanıcı taraması da yazıyor). Kota dolunca A.VERI.put(...) sessizce reddediliyordu, bellekte \"az önce yazıldı\" görünse bile KV'ye hiçbir şey inmiyordu — sonraki her istek sıfırdan başlıyor, ekranda sürekli \"hiç yazılmamış\" görünüyordu (\"tarama açık, evren dolu\" olduğu halde havuz hiç dolmuyordu). Artık teşhis gerçek bir deneme yazması yapıp sonucu doğrudan gösteriyor: kota doluysa \"KV YAZMA BAŞARISIZ\" diye açıkça söylüyor (kota TR saatiyle ~03:00'te sıfırlanır; kalıcı çözüm Workers Paid plan, $5/ay) · 2026-09-03-i · 🩺 Tavan Kombi'de \"Tümünü şimdi tara\" hâlâ \"0 hisse tarandı / hiç yazılmamış\" veriyorsa artık sebebi NET söyleniyor: teşhis artık botun DURDURULMUŞ olup olmadığını ve hisse listesinin (evren) boş olup olmadığını da okuyup mesaja ekliyor — \"tarama durdurulmuş, yeniden başlat\" ya da \"hisse listesi boş\" diyorsa sorun Cron Trigger değil budur; Cron Trigger önerisi artık yalnız ikisi de normalken (tarama açık, evren dolu) hâlâ boşsa gösteriliyor · 2026-09-03-h · 🚨 KÖKTEN DÜZELTME — tamamlanmış bir Tavan Kombi geçmiş taraması sayfası her yeniden açıldığında sessizce YENİ bir tam tur başlıyor, ama önceki turda zaten sayılmış aynı (gün,hisse) çiftleri tvkArsiv2'nin sayaçlarına TEKRAR ekleniyordu (birleştirme tekilleştirme yapmıyor, yalnız topluyor) — sayfa her açılışta toplam gözlem/oran sayıları katbekat şişiyordu. Artık yeni bir TAM tur başlarken (önceki iş tamamlanmış ya da hiç yoksa) tvkArsiv2 de sıfırlanıyor: her tam tur kendi başına tek ve tekrarsız bir ölçüm, üst üste birikmiyor. Yarım kalmış bir işe (sayfa kapanıp tekrar açılması) dokunulmadı, o kaldığı yerden aynı job ile devam ediyor · 2026-09-03-g · 🚨 KÖKTEN DÜZELTME — Tavan Kombi canlı tarama hep \"0 hisse tarandı\" / \"1SA: 0 hisse ölçülü (son yazım: hiç yazılmamış)\" veriyordu. SEBEP: tvkGunSnapUret, TVK_TF (1SA/4SA) havuzunu yalnız OKUYORDU, kendisi hiçbir zaman tarama BAŞLATMIYORDU — bu iki dilim başka hiçbir ekrandan (alarm modülü/KISA-ORTA görünümü) aktif istenmiyorsa ve Cron Trigger tetiklenmiyorsa havuz sonsuza dek boş kalıyordu. Artık Tavan Kombi'nin üç canlı ucu (/api/tavankombi, /tara, /taraTumu) her çağrıldığında kendi kendine en boş/bayat dilimi bir adım ilerletiyor (tvkCanliDoldur) — özellik artık Cron Trigger kurulu olsun olmasın, sekmeyi her açan kullanıcıyla kendini doldurur. Cloudflare panelinde Settings → Triggers → Cron Triggers altında * * * * * kurulu olup olmadığını yine de kontrol etmekte fayda var — kurulu değilse yalnız Tavan Kombi değil, KISA/ORTA/UZUN canlı alarm motoru da beklenenden yavaş tazelenir · 2026-09-03-f · 🚨 KÖKTEN DÜZELTME — \"KV list() limit exceeded for the day\": mbParcalariKat (parça verilerini birleştiren fonksiyon) HER kullanıcı isteğinde gerçek bir KV list() çağrısı yapıyordu; free plan günde yalnız 1000 list() işleminе izin verdiğinden kullanıcı arttıkça kota gün ortasında tükenip panel/mini app'i tamamen çökertiyordu. Artık dilim başına gerçek list() en fazla 3 dakikada bir yapılıyor, arada gelen istekler önbellekteki sonucu kullanıyor; mbParcalariBirlestir'in silme adımı da AYRI bir list() çağırmıyor, aynı önbelleği yeniden kullanıyor (parçalar zaten 6 saatlik TTL ile yazıldığı için veri kaybı yok). Kalıcı çözüm için Workers Paid plana ($5/ay, list() kotası ayda 1M'e çıkıyor) geçiş önerilir. Ayrıca: ISATR gibi çok seyrek işlem gören hisselerin \"60dk veri yetersiz\" mesajı (Yahoo'da gerçekten intraday bar yok, hisse günlerce 0 lot işlem görüyor) artık kalıcı Hatalar kaydını kirletmiyor — taramanın ilerleme ekranında görünmeye devam ediyor ama gerçek sistem hatası değil, aksiyon gerekmiyor · 2026-09-03-e · 🐂 Tavan Kombi KRİTİK DÜZELTME: DİP (dip/dip382/dip236) ve PİVOT KIRILIM elemanlarında BOĞA şartı hiç YOKTU — yalnız SEVİYE BÖLGESİ (b1..b6) bantlarında vardı, yani bu elemanlar hissenin ayı olduğu durumlarda da 'geçti' sayılıyordu. Artık 10 elemanın HEPSİNDE (dip/dip382/dip236/b1..b6/pivot) boğa şartı zorunlu — hem canlı anlık taramada (tvkGunSnapUret / 🔍 Bu kombinasyonla şimdi tara) hem geçmiş taramasında (tvkGecmisHisseTara) aynı düzeltme. Eski sayaçlar bu yüzden GEÇERSİZDİ: tvkArsiv→tvkArsiv2 ve tvkGecmisIs→tvkGecmisIs2 anahtarlarına geçildi, böylece /tavankombi/gecmis'e bir sonraki girişte otomatik olarak SIFIRDAN, düzeltilmiş kurallarla tam yeniden tarama başlar (evrendeki tüm hisseler baştan işlenir) · 2026-09-03-d · 🔍 Tavan Kombi'ye canlı tarama eklendi: her satırın altında artık \"🔍 Bu kombinasyonla şimdi tara\" butonu var — eskiden 🪜 Bölge/⬇️ Dip filtreleri her elemanda TEK ortak dilim dayattığı için \"1SA'de b3 VE 4SA'de b6\" gibi eleman-başına-farklı-dilim kombinasyonları canlı taramada kurulamıyordu; artık backtest raporundaki HERHANGİ bir satıra tıklayınca o kombinasyonu ŞU AN karşılayan hisseler listeleniyor (yeni /api/tavankombi/tara, mevcut tvkGunSnapUret'i kullanıyor — ek Yahoo isteği yok) · 2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-09-19-hp · 🎯 Hacim Profili: yeni varsayılan ADAY HİSSELER görünümü — her hisse için kırılıma yakınlık, otomatik stop/hedef, risk/ödül ve 0-100 aday puanı; 🟢 Al bölgesi / 🟡 Hazırlan / 🔵 İzle olarak üç net gruba ayrılıyor, gerisi elenip nedeni yazılıyor. Eski filtreli liste Tüm liste düğmesinin arkasında aynen duruyor. Yalnız istemci tarafı, sunucu ve KV değişmedi · 2026-09-09-c · 🚨 KÖKTEN DÜZELTME — canlı havuz (1SA/4SA) 443/444'e ulaştıktan SONRA tekrar 36'ya küçüldü. Sebep: mbDilimTara'nın 6 saatten eski kaydı silen \"bayat ölçüm\" temizliği — KV kotasını korumak için tarama yavaşlatılınca (2026-09-08-e) tam bir tur artık 6 saatten uzun sürebiliyordu, yeni hisseler eklenirken eskiler siliniyordu, havuz asla tam dolamıyordu. Çözüm: Tavan Kombi'ye özel daha büyük bir parti boyutu (TVK_CANLI_ANLIK_AZAMI=30, mbModulTara'nın paylaştığı ortak sabitten ayrıldı — KV yazma sayısı artmıyor, hâlâ tek PUT) ve silme eşiği 6 saatten 24 saate çıkarıldı · 2026-09-09-b · 🌹 Yeni işaret: son 13 GÜNLÜK barda kaç kez GERÇEKTEN tavan yapmış (o günün kendi kapanışı bir önceki güne göre ≥%7 — geriye dönük tahmin değil, somut yakın geçmiş). 0 ise hiç gösterilmiyor, varsa hisse adının yanına 🌹N ekleniyor. Hem eşleşen hisse listesinde hem /tavankombi Telegram özetinde görünüyor. Bu bir birikim değil — her tarandığında o hissenin GÜNCEL son-13-bar durumuyla üzerine yazılıyor (toplanmıyor) · 2026-09-09-a · ⚡📋 İki yeni özellik: (1) son 60 bardaki ORTALAMA volatilite (yüksek-düşük/kapanış%, zaten çekilmiş mum verisinden, ek istek yok) artık her hissede hesaplanıyor, eşleşen hisse listesinde %2.7'nin üstündekiler ⚡ ile işaretleniyor; (2) yeni /tavankombi komutu (yalnız yönetici) — en iyi kombinasyonları ve şu an karşılayan hisseleri doğrudan Telegram mesajı olarak gönderiyor, mini app'e girmeye gerek yok. İç script ayrıca çıkarılıp diff ile doğrulandı (yalnız istenen satır değişti) · 2026-09-08-i · 🚨 KÖKTEN DÜZELTME — geçmiş tarama saatlerce 14:14'te donuk kalmıştı, /tavantani'den ELLE çağrılınca sorunsuz çalıştığı görüldü: sorun tvkGecmisAdimYap'ta değil, onu tetikleyen \"dk%10===0\" dakika kapısındaymış (muhtemelen ev.scheduledTime bu ortamda beklendiği gibi davranmıyor). Dakika aritmetiğine güvenmeyen, işin/havuzun KENDİ son güncelleme zamanına bakan bir kapıya geçildi — hem daha güvenilir hem daha basit · 2026-09-08-h · 🔬 /tavantani artık tvkGecmisAdimYap'ı DOĞRUDAN, hemen çalıştırıp sonucunu (veya fırlatırsa tam hata+stack'ini) gösteriyor — cron'un neden 14:14'ten beri hiç ilerlemediğini beklemeden, anında kesin cevap için · 2026-09-08-g · 🎯 hisseSayac neden hep 0 kalıyordu bulundu: tur 1 zaten TAMAMLANMIŞTI (444/444) ve ciftTakip her şeyi \"zaten sayıldı\" işaretlemişti — hisseSayac özelliği bundan SONRA eklendiği için hiç çalışma şansı olmamıştı. Çözüm: hisseSayac artık kendi AYRI (gün|kod) takibini (hisseCiftTakip, boş başlıyor) kullanıyor — combo istatistikleri (ciftTakip) hâlâ korunuyor, ÇİFT SAYILMIYOR, ama hisseSayac bir kerelik geriye dönük olarak dolduruluyor. Bir sonraki otomatik tur (20 dk + 10 dk cron penceresi içinde) başlayınca hisse alışkanlığı verisi artık gerçekten dolacak · 2026-09-08-f · 🔬 /tavantani'ye geçmiş tarama işinin (tvkGecmisIs3) durumu eklendi — tamam/toplam/tamamlandi/son güncelleme/son hatalar görünüyor, hisseSayac neden dolmuyor sorusuna kesin cevap için · 2026-09-08-e · 🚨 BUGÜNKÜ KESİNTİNİN SEBEBİ BULUNDU: Cloudflare KV ücretsiz plan günlük 1000 yazma sınırı, dakikada 2 kez çalışan tvkGecmisAdim+tvkCanli tarafından aşılmıştı (\"KV put() limit exceeded for the day\"). Şimdi tvkCanli 3 dakikada bir, tvkGecmisAdim 10 dakikada bir, ikisi de dakikada 1 kez (2 değil) çalışıyor — günlük yazma hacmi ~10-15 kat azaldı. Kalıcı/kesin çözüm Cloudflare Workers Paid plana ($5/ay) geçmek; bu sınırı tamamen kaldırır · 2026-09-08-d · 🔬 /tavantani'ye hisseSayac (tavan alışkanlığı verisi) kontrolü eklendi — kaç hisse için dolu, örnek değerler neler, doğrudan Telegram'dan görülebiliyor (mini app'e dokunmuyor) · 2026-09-08-c · 🎯 Kombinasyon eşleşen hisse listesine hissenin KENDİ tavan alışkanlığı eklendi — bir kombinasyon THYAO'yu eşleştirse bile THYAO'nun tarihte nadiren tavan yaptığını, SASA gibi bir hissenin sık yaptığını artık her hissenin adının altında \"tavan alışkanlığı: %X (N gün)\" olarak görebiliyorsun (20'den az gözlemde hiç gösterilmiyor — güvenilmez). İç script sözdizimi ayrıca çıkarılıp doğrulandı, diff ile yalnız istenen satırların değiştiği teyit edildi (-e'deki dondurma riskine karşı) · 2026-09-08-b · 🔁 Tavan Kombi geçmiş tarama artık TAM OTOMATİK ve KALICI BİRİKİMLİ: (1) her tur bitince 20 dakika sonra cron kendiliğinden yeni bir tur başlatıyor — kimsenin sayfayı elle açmasına gerek yok; (2) yeni turlar artık tvkArsiv2'yi SIFIRLAMIYOR — bunun yerine her (gün,hisse) çifti kalıcı bir takip listesine (ciftTakip) işleniyor, bir sonraki tur aynı çifte rastlarsa atlıyor, yalnız GERÇEKTEN yeni olan günler/hisseler arşive ekleniyor. Geçişte çift sayımı önlemek için KV anahtarları tvkArsiv2→tvkArsiv3, tvkGecmisIs2→tvkGecmisIs3 olarak değiştirildi (tek seferlik temiz başlangıç, bundan sonra hiç sıfırlanmayacak) · 2026-09-08-a · 🚨 KÖKTEN DÜZELTME — Tavan Kombi geçmiş tarama işinin (tvkGecmisIs2) KV kaydında 24 saatlik TTL vardı: tarama 24 saat içinde bitmezse kayıt kendiliğinden siliniyor, sistem \\\"iş yok\\\" sanıp SIFIRDAN yeni bir tam tur başlatıyordu — bu da o turun tvkArsiv2 istatistiklerini SIFIRLIYORDU (bkz. -h notundaki \\\"yeni tam tur başlarken tvkArsiv2 sıfırlanır\\\" mantığı, kendi başına doğruydu ama TTL'in tetiklediği İSTENMEYEN sıfırlanmalar için de aynı şekilde çalışıyordu). TTL tamamen kaldırıldı — iş artık yalnızca gerçekten tamamlanınca ya da sayfa/panelden elle sıfırlanınca yeniden başlar, süre dolduğu için asla kendiliğinden sıfırlanmaz · 2026-09-06-i · 🎯 Tavan Kombi'nin CANLI havuzu (1SA/4SA) artık geçmiş tarama gibi cron'a bağlı — kimse mini app'i açmasa bile dakikada birkaç hisse otomatik taranıp yazılıyor, uygulamayı her açan kişiyle sınırlı kalmıyor · 2026-09-06-h · ▶️⏸ /tavantani ile kesin sebep bulundu: çalışıyor=false, yani tarama sistemi DURDURULMUŞ durumdaydı — tvkCanliDoldur bu yüzden hiçbir şey denemeden çıkıyordu (sonTur hep null). Panele girmeden çözebilmek için iki yeni komut eklendi: /baslat (tarama sistemini açar) ve /durdur (kapatır) — ikisi de yalnız yönetici, ikisi de mini app'e dokunmuyor · 2026-09-06-g · 🔬 Cloudflare paneline hiç girmeden ham teşhis almak için YENİ komut: /tavantani (yalnız yönetici). Gerçek bir tarama denemesi tetikleyip calisiyor/evrenSayisi/yazmaHata/sonTur verisini doğrudan Telegram mesajı olarak gönderiyor — mini app'in kendi koduna (MINIAPP client script'ine) HİÇ dokunmuyor, o yüzden -e'deki donma riski burada yok · 2026-09-06-f · ⏪ -e GERİ ALINDI: teşhis mesajına eklenen ham JSON debug satırından sonra Tavan Kombi mini app'i splash ekranında donmaya başladı (kullanıcı hem mobil veri hem WiFi'de doğruladı). Sözdizimi kontrolleri (hem dış dosya hem MINIAPP içindeki <script> ayrıca çıkarılıp) temiz çıkıyor, ama riski göze almak yerine son KANITLANMIŞ ÇALIŞAN hâle (d) dönüldü — -e'nin tek farkı olan ham-JSON satırı kaldırıldı, başka hiçbir şey değişmedi · 2026-09-06-e · 🔬 GEÇİCİ TEŞHİS: bir önceki düzeltmelerin (a/b/c) neden hiç tetiklenmediğini tahminle çözmek yerine, Tavan Kombi teşhis mesajının SONUNA ham sunucu durumu (calisiyor/evrenSayisi/yazmaHata/sonTur) doğrudan JSON olarak eklendi — bu satır yalnız kanıt toplamak için, kalıcı değil · 2026-09-06-d · 🚨 /surum HİÇ CEVAP VERMİYORDU (sessizce): bu WORKER_SURUM notu her düzeltmede başına eklene ede 10.000+ karaktere ulaşmıştı, Telegram sendMessage'ın ~4096 karakter sınırını aşınca Telegram isteği tamamen reddediyordu ve bot bunu hiç bildirmiyordu. Artık /surum yalnız EN SON notu gösteriyor (bu satır), tam günlük burada — WORKER_SURUM'un geri kalanı sırf kayıt amaçlı, ekrana basılmıyor · 2026-09-06-c · 🚨 KÖKTEN SEBEP bulundu: sunucu kodunda AYNI isimde iki fonksiyon var — E(e,t) (VIP üye listesini KV'den okuyan, async) ve E2(s) (HTML özel karakterlerini kaçıran, senkron). /surum ekranı ve birkaç bildirim mesajı yanlışlıkla E2 yerine E çağırıyordu; JS'te aynı isimli iki fonksiyon tanımlanınca SONUNCUSU geçerli olur, o yüzden E her zaman VIP-listesi Promise'i döndürüyordu — String'e çevrilince \"[object Promise]\" çıkıyordu. tgTarihSaat düzeltmesi bu kesintiyi (Okunamadı.) gizliyordu, o kesilme kalkınca bu ikinci hata görünür oldu. 4 çağrı noktası da (🖥 Tarayıcı satırı, 📦 Beklenen satırı, ⚙️ Worker satırı, /tara ve toplu bildirimdeki durum mesajları) artık doğru E2'yi kullanıyor · 2026-09-06-b · 🩺 -a düzeltmesi yalnız TARAMA TAMAMLANDIĞINDA kayıt bırakıyordu; mbDilimTara en baştaki kontrollerden biri (tarama o an durdurulmuş / evren o an boş geldi) yüzünden ERKEN çıkarsa hiçbir iz kalmıyordu, birkaç satır sonra AYNI kontroller teşhis tarafından YENİDEN yapıldığında durum artık normale dönmüş olabiliyordu — böylece o anlık/geçici arıza hiç yakalanamıyordu. Artık mbDilimTara'nın HER çıkış noktası (erken dönüşler dahil) kendi gerçek sebebini kaydediyor, teşhis mesajı bunu en üst öncelikle gösteriyor. Ayrıca AYRI ve İLGİSİZ bir hata bulunup düzeltildi: /surum komutu tanımsız bir fonksiyonu (tgTarihSaat) çağırıyordu, bu da mesajı ⚙️ Worker sürüm satırına gelmeden yarıda kesiyordu — deploy'un tutup tutmadığı hiç doğrulanamıyordu · 2026-09-06-a · 🩺 Teşhise DÖRDÜNCÜ ve gerçek bir ihtimal eklendi: KV yazma/durdurulmuş/evren-boş kontrollerinin HİÇBİRİ tetiklenmediği halde havuz hâlâ boş kalıyorsa artık gerçek sebep şu olabiliyor — tvkCanliDoldur zaten çalışıp hisseleri TEK TEK deniyor ama Yahoo'dan hiçbirinde veri alamıyor (query1 ve query2 ikisi de başarısız), bu sessizce yutuluyordu. Artık her tarama turunun kaç hisse denendiği/kaçının başarılı olduğu ve varsa örnek Yahoo hata mesajı isolate belleğinde tutuluyor; teşhis ekranı bunu görürse artık Cron Triggera bak demiyor, doğrudan tarama deneniyor ama Yahoodan veri gelmiyor diyor ve örnek hatayı gösteriyor — 1SA/4SA satırlarının yanına da o turun X/Y başarılı özeti eklendi · 2026-09-03-j · 🩺 Teşhise ÜÇÜNCÜ ve gerçek bir ihtimal eklendi: Cloudflare Workers KV ücretsiz planında YAZMA (put) günde yalnız 1000 kez yapılabilir — list() kotasından ayrı ve çok daha kolay dolan bir sınır (cron dakikada bir yazıyor + her kullanıcı taraması da yazıyor). Kota dolunca A.VERI.put(...) sessizce reddediliyordu, bellekte \"az önce yazıldı\" görünse bile KV'ye hiçbir şey inmiyordu — sonraki her istek sıfırdan başlıyor, ekranda sürekli \"hiç yazılmamış\" görünüyordu (\"tarama açık, evren dolu\" olduğu halde havuz hiç dolmuyordu). Artık teşhis gerçek bir deneme yazması yapıp sonucu doğrudan gösteriyor: kota doluysa \"KV YAZMA BAŞARISIZ\" diye açıkça söylüyor (kota TR saatiyle ~03:00'te sıfırlanır; kalıcı çözüm Workers Paid plan, $5/ay) · 2026-09-03-i · 🩺 Tavan Kombi'de \"Tümünü şimdi tara\" hâlâ \"0 hisse tarandı / hiç yazılmamış\" veriyorsa artık sebebi NET söyleniyor: teşhis artık botun DURDURULMUŞ olup olmadığını ve hisse listesinin (evren) boş olup olmadığını da okuyup mesaja ekliyor — \"tarama durdurulmuş, yeniden başlat\" ya da \"hisse listesi boş\" diyorsa sorun Cron Trigger değil budur; Cron Trigger önerisi artık yalnız ikisi de normalken (tarama açık, evren dolu) hâlâ boşsa gösteriliyor · 2026-09-03-h · 🚨 KÖKTEN DÜZELTME — tamamlanmış bir Tavan Kombi geçmiş taraması sayfası her yeniden açıldığında sessizce YENİ bir tam tur başlıyor, ama önceki turda zaten sayılmış aynı (gün,hisse) çiftleri tvkArsiv2'nin sayaçlarına TEKRAR ekleniyordu (birleştirme tekilleştirme yapmıyor, yalnız topluyor) — sayfa her açılışta toplam gözlem/oran sayıları katbekat şişiyordu. Artık yeni bir TAM tur başlarken (önceki iş tamamlanmış ya da hiç yoksa) tvkArsiv2 de sıfırlanıyor: her tam tur kendi başına tek ve tekrarsız bir ölçüm, üst üste birikmiyor. Yarım kalmış bir işe (sayfa kapanıp tekrar açılması) dokunulmadı, o kaldığı yerden aynı job ile devam ediyor · 2026-09-03-g · 🚨 KÖKTEN DÜZELTME — Tavan Kombi canlı tarama hep \"0 hisse tarandı\" / \"1SA: 0 hisse ölçülü (son yazım: hiç yazılmamış)\" veriyordu. SEBEP: tvkGunSnapUret, TVK_TF (1SA/4SA) havuzunu yalnız OKUYORDU, kendisi hiçbir zaman tarama BAŞLATMIYORDU — bu iki dilim başka hiçbir ekrandan (alarm modülü/KISA-ORTA görünümü) aktif istenmiyorsa ve Cron Trigger tetiklenmiyorsa havuz sonsuza dek boş kalıyordu. Artık Tavan Kombi'nin üç canlı ucu (/api/tavankombi, /tara, /taraTumu) her çağrıldığında kendi kendine en boş/bayat dilimi bir adım ilerletiyor (tvkCanliDoldur) — özellik artık Cron Trigger kurulu olsun olmasın, sekmeyi her açan kullanıcıyla kendini doldurur. Cloudflare panelinde Settings → Triggers → Cron Triggers altında * * * * * kurulu olup olmadığını yine de kontrol etmekte fayda var — kurulu değilse yalnız Tavan Kombi değil, KISA/ORTA/UZUN canlı alarm motoru da beklenenden yavaş tazelenir · 2026-09-03-f · 🚨 KÖKTEN DÜZELTME — \"KV list() limit exceeded for the day\": mbParcalariKat (parça verilerini birleştiren fonksiyon) HER kullanıcı isteğinde gerçek bir KV list() çağrısı yapıyordu; free plan günde yalnız 1000 list() işleminе izin verdiğinden kullanıcı arttıkça kota gün ortasında tükenip panel/mini app'i tamamen çökertiyordu. Artık dilim başına gerçek list() en fazla 3 dakikada bir yapılıyor, arada gelen istekler önbellekteki sonucu kullanıyor; mbParcalariBirlestir'in silme adımı da AYRI bir list() çağırmıyor, aynı önbelleği yeniden kullanıyor (parçalar zaten 6 saatlik TTL ile yazıldığı için veri kaybı yok). Kalıcı çözüm için Workers Paid plana ($5/ay, list() kotası ayda 1M'e çıkıyor) geçiş önerilir. Ayrıca: ISATR gibi çok seyrek işlem gören hisselerin \"60dk veri yetersiz\" mesajı (Yahoo'da gerçekten intraday bar yok, hisse günlerce 0 lot işlem görüyor) artık kalıcı Hatalar kaydını kirletmiyor — taramanın ilerleme ekranında görünmeye devam ediyor ama gerçek sistem hatası değil, aksiyon gerekmiyor · 2026-09-03-e · 🐂 Tavan Kombi KRİTİK DÜZELTME: DİP (dip/dip382/dip236) ve PİVOT KIRILIM elemanlarında BOĞA şartı hiç YOKTU — yalnız SEVİYE BÖLGESİ (b1..b6) bantlarında vardı, yani bu elemanlar hissenin ayı olduğu durumlarda da 'geçti' sayılıyordu. Artık 10 elemanın HEPSİNDE (dip/dip382/dip236/b1..b6/pivot) boğa şartı zorunlu — hem canlı anlık taramada (tvkGunSnapUret / 🔍 Bu kombinasyonla şimdi tara) hem geçmiş taramasında (tvkGecmisHisseTara) aynı düzeltme. Eski sayaçlar bu yüzden GEÇERSİZDİ: tvkArsiv→tvkArsiv2 ve tvkGecmisIs→tvkGecmisIs2 anahtarlarına geçildi, böylece /tavankombi/gecmis'e bir sonraki girişte otomatik olarak SIFIRDAN, düzeltilmiş kurallarla tam yeniden tarama başlar (evrendeki tüm hisseler baştan işlenir) · 2026-09-03-d · 🔍 Tavan Kombi'ye canlı tarama eklendi: her satırın altında artık \"🔍 Bu kombinasyonla şimdi tara\" butonu var — eskiden 🪜 Bölge/⬇️ Dip filtreleri her elemanda TEK ortak dilim dayattığı için \"1SA'de b3 VE 4SA'de b6\" gibi eleman-başına-farklı-dilim kombinasyonları canlı taramada kurulamıyordu; artık backtest raporundaki HERHANGİ bir satıra tıklayınca o kombinasyonu ŞU AN karşılayan hisseler listeleniyor (yeni /api/tavankombi/tara, mevcut tvkGunSnapUret'i kullanıyor — ek Yahoo isteği yok) · 2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2703,44 +2703,28 @@ function hpHesapla(mumlar){
        Pozitif = fiyat hâlâ VAH'ın altında, o kadar % kalmış.
        Negatif = fiyat VAH'ı zaten geçmiş (kirilim), o kadar % üstünde. */
     const kirilimMesafe=Math.round(((vahDeger-sonKapanis)/sonKapanis)*1000)/10;
-    /* 📍 POC'a mesafe (%) — aynı mantık, ayrı eksen: kırılım VAH'a göre,
-       bu POC'un kendisine göre. Pozitif = fiyat POC'un altında, o kadar
-       % kalmış. Negatif = fiyat POC'u zaten geçmiş, o kadar % üstünde. */
-    const pocMesafe=Math.round(((pocDeger-sonKapanis)/sonKapanis)*1000)/10;
     const pocYuzde=Math.round(kova[pocI]/toplam*1000)/10;
-    /* 🏆 SAĞLAMLIK SKORU (0-100) — v2, kullanıcı geri bildirimi: eski
-       sürüm çoğu hissede aynı sayıya (ör. 60) düşüyordu çünkü mesafe
-       hiç puana katılmıyordu, yalnız 3 kategorili (zayıf/orta/güçlü)
-       direnç-destek etiketleri katılıyordu — az sayıda olası kombinasyon
-       yüzünden çok fazla eşitlik (tie) oluşuyordu. v2'de KIRILIMA MESAFE
-       sürekli (continuous) bir değişken olarak en büyük payı alıyor, bu
-       da her hissede farklı bir ondalık sonuç üretip sıralamayı gerçekten
-       ayırt edici hale getiriyor. Ayrıca direnç/destek artık yalnız EN
-       YAKIN seviyeye değil, üstteki/alttaki üç seviyenin ORTALAMASINA
-       bakıyor — üç güçlü destek, tek güçlü destekten daha çok puan alır.
-         - Kırılıma yakınlık → 0-35 puan (kirilim'de tavan 35; değilse
-           mesafe arttıkça 0'a doğru sürekli azalır, 15%+ mesafede ≈0)
-         - POC gücü          → 0-25 puan (pocYuzde arttıkça artar)
-         - Destek kalitesi   → 0-20 puan (alttaki 3 seviyenin ortalama gücü)
-         - Direnç açıklığı   → 0-20 puan (üstteki 3 seviye ne kadar zayıfsa/
-           azsa o kadar yüksek — yol o kadar açık) */
-    const HP_DESTEK_PUAN={zayif:5,orta:10,guclu:20};
+    /* 🏆 SAĞLAMLIK SKORU (0-100) — kullanıcı isteği: "bu hisse daha sağlam,
+       bu hisse daha iyi" diye otomatik ayrım. Elle veri girmeye gerek
+       kalmasın diye tamamen bu fonksiyonun zaten hesapladığı değerlerden
+       (pocYuzde/konum/en yakın direnç-destek gücü) türetilir, ek bir
+       ölçüm/istek gerektirmez:
+         - POC gücü       → 0-35 puan (pocYuzde ne kadar yüksekse o kadar)
+         - Konum          → 0-25 puan (kirilim en güçlü, taban_alti en zayıf)
+         - Üstteki direnç → 0-20 puan (direnç zayıfsa/yoksa yol daha açık)
+         - Alttaki destek → 0-20 puan (destek güçlüyse taban daha sağlam) */
+    const HP_KONUM_PUAN={kirilim:25,poc_ustu:15,poc_alti:5,taban_alti:0};
     const HP_DIRENC_PUAN={zayif:20,orta:10,guclu:0};
-    function hpOrtalamaGuc(liste,tablo,yoksaPuan){
-      if(!liste||!liste.length)return yoksaPuan;
-      var toplam=0;
-      for(var gi=0;gi<liste.length;gi++)toplam+=(tablo[liste[gi].guc]!=null?tablo[liste[gi].guc]:yoksaPuan);
-      return toplam/liste.length;
-    }
-    const YAKINLIK_UFUK=15; // % — bu mesafenin ötesi artık "yakın" sayılmaz, puan ≈0
-    const yakinlikPuani=konum==="kirilim"?35:Math.max(0,35*(1-Math.min(kirilimMesafe,YAKINLIK_UFUK)/YAKINLIK_UFUK));
-    const pocGucPuani=Math.max(0,Math.min(25,(pocYuzde/80)*25));
-    const destekPuani=hpOrtalamaGuc(destekler,HP_DESTEK_PUAN,0);
-    const direncPuani=hpOrtalamaGuc(direncler,HP_DIRENC_PUAN,20);
-    const saglamlikSkoru=Math.round(yakinlikPuani+pocGucPuani+destekPuani+direncPuani);
+    const HP_DESTEK_PUAN={zayif:5,orta:10,guclu:20};
+    const enYakinDirenc=direncler[0]?direncler[0].guc:null;
+    const enYakinDestek=destekler[0]?destekler[0].guc:null;
+    const pocGucPuani=Math.max(0,Math.min(35,(pocYuzde/100)*35));
+    const direncPuani=enYakinDirenc!=null?(HP_DIRENC_PUAN[enYakinDirenc]!=null?HP_DIRENC_PUAN[enYakinDirenc]:10):20;
+    const destekPuani=enYakinDestek!=null?(HP_DESTEK_PUAN[enYakinDestek]!=null?HP_DESTEK_PUAN[enYakinDestek]:10):0;
+    const saglamlikSkoru=Math.round((HP_KONUM_PUAN[konum]||0)+pocGucPuani+direncPuani+destekPuani);
     return{fiyat:sonKapanis,poc:pocDeger,pocYuzde:pocYuzde,
       vah:vahDeger,val:valDeger,destekler:destekler,direncler:direncler,konum:konum,
-      kirilimMesafe:kirilimMesafe,pocMesafe:pocMesafe,saglamlikSkoru:saglamlikSkoru,
+      kirilimMesafe:kirilimMesafe,saglamlikSkoru:saglamlikSkoru,
       barSayisi:veri.length,zaman:veri[veri.length-1].time};
   }catch(e){return null}
 }
@@ -10060,53 +10044,21 @@ var HP_KONUM_BILGI={
   poc_alti:{ad:"📉 POC Altı",renk:"var(--soluk)",ack:"Fiyat POC altında ama hâlâ yoğun bölge içinde"},
   taban_alti:{ad:"⚠️ Taban Altı",renk:"var(--kir)",ack:"Fiyat, yoğun bölgenin de altına düşmüş — zayıf"}
 };
-var HP_FILTRE_LISTE=[{k:"aday",ad:"🎯 Aday Hisseler"},{k:"tumu",ad:"Tümü"},{k:"kirilim",ad:"🚀 Kırılım"},{k:"poc_ustu",ad:"📈 POC Üstü"},{k:"poc_alti",ad:"📉 POC Altı"},{k:"taban_alti",ad:"⚠️ Taban Altı"},{k:"yaklasan",ad:"📋 Yaklaşanlar (tümü)"}];
+var HP_FILTRE_LISTE=[{k:"tumu",ad:"Tümü"},{k:"kirilim",ad:"🚀 Kırılım"},{k:"poc_ustu",ad:"📈 POC Üstü"},{k:"poc_alti",ad:"📉 POC Altı"},{k:"taban_alti",ad:"⚠️ Taban Altı"},{k:"yaklasan",ad:"🎯 Yaklaşanlar"}];
 /* "🎯 Yaklaşanlar" — henüz kırmamış ama POC'un üstünde/Value Area
    içinde olup kırılıma en yakın olanlar. taban_alti (zayıf bölge)
    dışlanır — oradan kırılıma mesafe hem büyük hem güvenilmez. */
 function hpYaklasanMi(x){return x.konum==="poc_ustu"||x.konum==="poc_alti"}
-/* 🎯 ADAY HİSSELER — kullanıcı isteği: "bir ton filtre var ama hangi
-   hisseyi alacağım net değil". Bu TEK sekme, elle bakılması gereken
-   4-5 filtreyi (Yaklaşanlar + Sağlamlık skoru eşiği + mesafe sınırı)
-   tek bir "adam gibi akıllı" listeye indiriyor: henüz kırmamış AMA
-   kırılıma en fazla %HP_ADAY_MESAFE_UFUK kalmış VE sağlamlık skoru
-   HP_ADAY_SKOR_ESIGİ'nin altında olmayan hisseler. Aşağıda mesafeye
-   göre 3 net kovaya (Çok yakın / Yaklaşıyor / Biraz uzak) ayrılıp
-   her kovanın içinde skora göre sıralanıyor — "keskin ayrım yok"
-   şikayetinin cevabı burada: kova sınırı zaten keskin bir çizgi. */
-var HP_ADAY_SKOR_ESIGI=45, HP_ADAY_MESAFE_UFUK=10;
-function hpAdayMi(x){
-  return hpYaklasanMi(x) && x.kirilimMesafe!=null && x.kirilimMesafe<=HP_ADAY_MESAFE_UFUK
-    && (x.saglamlikSkoru||0)>=HP_ADAY_SKOR_ESIGI;
-}
-var HP_ADAY_KOVALAR=[
-  {lo:0,hi:3,ad:"🔥 Çok yakın · kırılıma %0-3"},
-  {lo:3,hi:6,ad:"🟡 Yaklaşıyor · kırılıma %3-6"},
-  {lo:6,hi:10.0001,ad:"🟠 Biraz uzak · kırılıma %6-10"}
-];
-/* Varsayılan açılış sekmesi artık "aday" — kullanıcı uygulamayı açar
-   açmaz zaten süzülmüş, akıllı listeyi görsün diye. Diğer sekmeler
-   (Tümü/Kırılım/POC Üstü/…) hâlâ elde duruyor, isteyen elle bakabilir. */
-var hpFiltre="aday";
+var hpFiltre="tumu";
 /* 🏆 "varsayilan" = eski davranış (POC gücüne / mesafeye göre), "skor" =
    yeni otomatik Sağlamlık Skoru sıralaması. Sunucu hesaplıyor, burada
-   sadece hangi alana göre sıralanacağı seçiliyor — elle veri girmek yok.
-   "aday" sekmesinde bu seçim gösterilmiyor, kova mantığı zaten sıralıyor. */
+   sadece hangi alana göre sıralanacağı seçiliyor — elle veri girmek yok. */
 var hpSiralamaModu="varsayilan";
 function hpMesafeSatiri(x){
-  var parcalar=[];
-  if(x.kirilimMesafe!=null){
-    parcalar.push(x.konum==="kirilim"
-      ? '🚀 Kırılımın <b>%'+Math.abs(x.kirilimMesafe)+'</b> üstünde'
-      : '🎯 Kırılıma <b>%'+x.kirilimMesafe+'</b> kaldı');
-  }
-  if(x.pocMesafe!=null&&x.konum!=="kirilim"){
-    parcalar.push(x.pocMesafe>=0
-      ? '📍 POC\'a <b>%'+x.pocMesafe+'</b> kaldı'
-      : '📍 POC\'un <b>%'+Math.abs(x.pocMesafe)+'</b> üstünde');
-  }
-  if(!parcalar.length)return"";
-  return '<div class="altbilgi" style="margin-top:2px;opacity:.85">'+parcalar.join(' · ')+'</div>';
+  if(x.kirilimMesafe==null)return"";
+  if(x.konum==="kirilim")
+    return '<div class="altbilgi" style="margin-top:2px;opacity:.75">🚀 Kırılım seviyesinin %'+Math.abs(x.kirilimMesafe)+' üstünde</div>';
+  return '<div class="altbilgi" style="margin-top:2px;opacity:.75">🎯 Kırılıma mesafe: <b>%'+x.kirilimMesafe+'</b></div>';
 }
 function hpSinyalSatiri(x){
   if(x.sinyalKarYuzde==null)return"";
@@ -10126,6 +10078,177 @@ function hpSinyalSatiri(x){
 function hpSkorRenk(s){
   if(s==null)return"var(--soluk)";
   return s>=70?"var(--yes)":(s>=40?"var(--sar)":"var(--kir)");
+}
+/* 🎯 ADAY HİSSE MOTORU — kullanıcı isteği (2026-09-19): "Bir ton filtre var
+   ama hala hangi hisseyi alacağım net değil". Yeni VARSAYILAN görünüm tek
+   soruya cevap verir: "şu an hangi hisse, hangi seviyeden girilir, stop ve
+   hedef nerede, risk/ödül değer mi?". Tamamen İSTEMCİDE, sunucunun zaten
+   döndürdüğü alanlardan (fiyat/poc/vah/val/destekler/direncler/konum/
+   kirilimMesafe) türetilir — sunucuya, KV ye ve mevcut Sağlamlık Skoruna
+   DOKUNMAZ. Eski filtreli liste "Tüm liste" modunda AYNEN duruyor.
+   Eşikler aşağıdaki sabitlerden ayarlanır. */
+var HP_ADAY_AL_MAX=3;    /* kırılımın en fazla bu % üstündeyse "Al bölgesi" */
+var HP_ADAY_YAKIN=3;     /* kırılıma en fazla bu % kaldıysa "Hazırlan" */
+var HP_ADAY_IZLE_MAX=8;  /* kırılıma en fazla bu % kaldıysa "İzle" */
+var HP_ADAY_GEC=6;       /* kırılımın bu % üstüne çıktıysa artık kovalama — elenir */
+var HP_ADAY_POC_MAX=3;   /* POC nin altında, POC a en fazla bu % kaldıysa "İzle" */
+var HP_ADAY_RR_AL=1.5;   /* Al/Hazırlan için asgari risk/ödül */
+var HP_ADAY_RR_IZLE=1.0; /* İzle için asgari risk/ödül */
+var HP_ADAY_PUAN_AL=55;  /* Al/Hazırlan için asgari puan (altı İzle ye düşer) */
+var HP_ADAY_MIN_STOP=1.5;/* stop en az bu % aşağıda olmalı (gürültüye takılmasın) */
+var HP_ADAY_TIER={
+  al:{ad:"🟢 AL BÖLGESİ",renk:"var(--yes)",ack:"Kırılım yeni gerçekleşmiş, fiyat kırılım seviyesinden çok uzaklaşmamış"},
+  haz:{ad:"🟡 HAZIRLAN",renk:"var(--sar)",ack:"Kırılım seviyesine çok az kalmış — tetik gelirse Al bölgesine geçer"},
+  izle:{ad:"🔵 İZLE",renk:"var(--mavi)",ack:"Biraz uzak ya da risk/ödül henüz zayıf — bekle, gerekirse alarm kur"}
+};
+var hpModu="aday";
+var hpBilgiAcik=false;
+var hpAdayAcik={al:false,haz:false,izle:false};
+function hpY(n){return Math.round(Number(n)*10)/10}
+function hpBasamak(v,tablo){for(var i=0;i<tablo.length;i++){if(v<=tablo[i][0])return tablo[i][1]}return 0}
+function hpAday(x){
+  var f=Number(x.fiyat);
+  if(!(f>0)||x.konum==null)return{tier:null,red:"veri yok"};
+  if(x.konum==="taban_alti")return{tier:null,red:"taban altı"};
+  var vahMes=(x.kirilimMesafe!=null)?Number(x.kirilimMesafe):((Number(x.vah)-f)/f*100);
+  var pocMes=(Number(x.poc)-f)/f*100;
+  var tip,mes;
+  if(x.konum==="kirilim"){tip="kirilim";mes=Math.max(0,-vahMes)}
+  else if(x.konum==="poc_ustu"){tip="yaklasan";mes=Math.max(0,vahMes)}
+  else{tip="pocgeri";mes=Math.max(0,pocMes)}
+  if(tip==="kirilim"&&mes>HP_ADAY_GEC)return{tier:null,red:"kırılım geç kalmış"};
+  if(tip==="yaklasan"&&mes>HP_ADAY_IZLE_MAX)return{tier:null,red:"kırılıma uzak"};
+  if(tip==="pocgeri"&&mes>HP_ADAY_POC_MAX)return{tier:null,red:"POC altında ve uzak"};
+  /* STOP: fiyatın altındaki, en az %HP_ADAY_MIN_STOP aşağıdaki, en yakın
+     GÜÇLÜ/ORTA destek (POC de destek sayılır). Yoksa en yakın herhangi biri. */
+  var dst=[];
+  (x.destekler||[]).forEach(function(d){if(d&&Number(d.fiyat)<f)dst.push({fiyat:Number(d.fiyat),guc:d.guc})});
+  if(Number(x.poc)<f)dst.push({fiyat:Number(x.poc),guc:"guclu"});
+  dst.sort(function(a,b){return b.fiyat-a.fiyat});
+  var minStop=f*(1-HP_ADAY_MIN_STOP/100);
+  var stop=null,i,j,k;
+  for(i=0;i<dst.length&&!stop;i++){if(dst[i].fiyat<=minStop&&(dst[i].guc==="guclu"||dst[i].guc==="orta"))stop=dst[i]}
+  for(j=0;j<dst.length&&!stop;j++){if(dst[j].fiyat<=minStop)stop=dst[j]}
+  var stopYok=false;
+  if(!stop){stop={fiyat:Math.round(f*0.95*100)/100,guc:null};stopYok=true}
+  var risk=(f-stop.fiyat)/f*100;
+  /* HEDEF: tetik seviyesinin ÖTESİNDEKİ ilk GÜÇLÜ direnç (duvar); yoksa son
+     direnç; hiç direnç yoksa Value Area yüksekliği kadar ölçülü hedef.
+     Kırılıma yaklaşan hissede kırılım seviyesinin (VAH) kendisi, POC altındaki
+     hissede POC nin kendisi hedef sayılmaz — onlar TETİK, hedef değil. */
+  var ref=f;
+  if(tip==="yaklasan")ref=Math.max(f,Number(x.vah)*1.002);
+  else if(tip==="pocgeri")ref=Math.max(f,Number(x.poc)*1.002);
+  var dr=(x.direncler||[]).filter(function(d){return d&&Number(d.fiyat)>ref})
+    .map(function(d){return{fiyat:Number(d.fiyat),guc:d.guc}})
+    .sort(function(a,b){return a.fiyat-b.fiyat});
+  var hedef=null;
+  for(k=0;k<dr.length&&!hedef;k++){if(dr[k].guc==="guclu")hedef=dr[k].fiyat}
+  if(!hedef&&dr.length)hedef=dr[dr.length-1].fiyat;
+  if(!hedef){
+    var va=Number(x.vah)-Number(x.val);
+    hedef=Math.round((tip==="pocgeri"?Math.max(Number(x.vah),f*1.05):Math.max(Number(x.vah)+va,f*1.05))*100)/100;
+  }
+  var odul=(hedef-f)/f*100;
+  var rr=risk>0?Math.round(odul/risk*10)/10:0;
+  /* PUAN (0-100): tetik yakınlığı 35 + risk/ödül 30 + yol açıklığı 20 + destek kalitesi 15 */
+  var d0=dr[0]||null;
+  var yolPuan=!d0?20:(d0.guc==="zayif"?20:(d0.guc==="orta"?10:0));
+  var destPuan=stopYok?0:(stop.guc==="guclu"?15:(stop.guc==="orta"?9:4));
+  var tetikPuan;
+  if(tip==="kirilim")tetikPuan=hpBasamak(mes,[[1,35],[2,30],[3,24],[6,12]]);
+  else if(tip==="yaklasan")tetikPuan=hpBasamak(mes,[[1,33],[2,29],[3,24],[5,14],[8,8]]);
+  else tetikPuan=hpBasamak(mes,[[1,18],[2,14],[3,10]]);
+  var rrPuan=rr>=3?30:(rr>=2.5?27:(rr>=2?23:(rr>=1.5?17:(rr>=1?8:0))));
+  var puan=Math.round(tetikPuan+rrPuan+yolPuan+destPuan);
+  var tier=null;
+  if(tip==="kirilim"){
+    if(mes<=HP_ADAY_AL_MAX&&rr>=HP_ADAY_RR_AL)tier="al";
+    else if(rr>=HP_ADAY_RR_IZLE)tier="izle";
+  }else if(tip==="yaklasan"){
+    if(mes<=HP_ADAY_YAKIN&&rr>=HP_ADAY_RR_AL)tier="haz";
+    else if(rr>=HP_ADAY_RR_IZLE)tier="izle";
+  }else{
+    if(rr>=HP_ADAY_RR_AL)tier="izle";
+  }
+  if(!tier)return{tier:null,red:"risk/ödül zayıf"};
+  if((tier==="al"||tier==="haz")&&puan<HP_ADAY_PUAN_AL)tier="izle";
+  var tetikMetin;
+  if(tip==="kirilim")tetikMetin="Kırılım seviyesi "+x.vah+" — fiyat %"+hpY(mes)+" üstünde";
+  else if(tip==="yaklasan")tetikMetin="Kırılıma %"+hpY(mes)+" kaldı (seviye "+x.vah+")";
+  else tetikMetin="POC "+x.poc+" seviyesine %"+hpY(mes)+" kaldı (şu an altında)";
+  var iyi=[],uy=[];
+  if(!d0)iyi.push("önünde direnç yok");
+  else if(d0.guc==="zayif")iyi.push("direnç zayıf");
+  else if(d0.guc==="guclu")uy.push("hemen üstte güçlü direnç ("+d0.fiyat+")");
+  if(stopYok)uy.push("belirgin destek yok");
+  else if(stop.guc==="guclu")iyi.push("destek güçlü");
+  else if(stop.guc==="zayif")uy.push("destek zayıf");
+  if(risk>10)uy.push("stop uzak (%"+hpY(risk)+")");
+  if(tip==="kirilim"&&mes>2)uy.push("kırılımdan biraz uzaklaşmış");
+  if(tip==="pocgeri")uy.push("henüz POC nin altında");
+  return{tier:tier,puan:puan,tip:tip,mes:mes,tetikMetin:tetikMetin,
+    stop:stop.fiyat,risk:hpY(risk),hedef:hedef,odul:hpY(odul),rr:rr,iyi:iyi,uy:uy};
+}
+function hpAdaySatir(x,a,t){
+  var pr=a.puan>=70?"var(--yes)":(a.puan>=55?"var(--sar)":"var(--soluk)");
+  var rrr=a.rr>=2?"var(--yes)":(a.rr>=1.5?"var(--sar)":"var(--soluk)");
+  return '<div class="satir" style="border-left-color:'+t.renk+';align-items:flex-start">'+
+    '<div class="sol"><div class="kod">'+E(x.kod)+' <span class="altbilgi" style="opacity:.7">fiyat '+x.fiyat+'</span></div>'+
+    '<div class="altbilgi" style="margin-top:3px"><b>'+a.tetikMetin+'</b></div>'+
+    '<div class="altbilgi" style="margin-top:3px">🛡 Stop <b>'+a.stop+'</b> altı (−%'+a.risk+') · 🎯 Hedef <b>'+a.hedef+'</b> (+%'+a.odul+')</div>'+
+    '<div class="altbilgi" style="margin-top:2px">⚖️ Risk/ödül <b style="color:'+rrr+'">'+a.rr+'</b></div>'+
+    (a.iyi.length?'<div class="altbilgi" style="margin-top:3px;color:var(--yes)">✅ '+a.iyi.join(" · ")+'</div>':"")+
+    (a.uy.length?'<div class="altbilgi" style="margin-top:2px;color:var(--sar)">⚠️ '+a.uy.join(" · ")+'</div>':"")+
+    hpSinyalSatiri(x)+
+    '</div><div class="sag"><div class="yuzde" style="color:'+pr+';font-size:22px">'+a.puan+'</div>'+
+    '<div class="altbilgi">aday puanı</div></div></div>';
+}
+function hpAdayGovde(tumListe,calisiyor){
+  var gr={al:[],haz:[],izle:[]},red={},toplam=tumListe.length;
+  for(var i=0;i<tumListe.length;i++){
+    var x=tumListe[i],a=hpAday(x);
+    if(a.tier)gr[a.tier].push({x:x,a:a});
+    else red[a.red]=(red[a.red]||0)+1;
+  }
+  ["al","haz","izle"].forEach(function(k){
+    gr[k].sort(function(p,q){return (q.a.puan-p.a.puan)||(p.a.mes-q.a.mes)});
+  });
+  var aday=gr.al.length+gr.haz.length+gr.izle.length;
+  var redTxt=Object.keys(red).sort(function(p,q){return red[q]-red[p]})
+    .map(function(k){return red[k]+" "+k}).join(" · ");
+  var h='<div class="kutu" style="margin:0 0 8px;padding:9px 11px">'+
+    '<div class="altbilgi"><b style="color:var(--yes)">'+aday+' aday</b> / '+toplam+' hisse ölçüldü</div>'+
+    '<div class="altbilgi" style="margin-top:3px">🟢 Al '+gr.al.length+' · 🟡 Hazırlan '+gr.haz.length+' · 🔵 İzle '+gr.izle.length+'</div>'+
+    (redTxt?'<div class="altbilgi" style="margin-top:3px;opacity:.55">elenen: '+redTxt+'</div>':"")+
+    '</div>';
+  if(!toplam){
+    return h+'<div class="bos"><b>'+(calisiyor?"Ölçülüyor…":"Henüz ölçüm yok")+'</b><br><br>İlk sonuçlar birkaç saniyede düşmeye başlar.</div>';
+  }
+  var LIM=6;
+  ["al","haz","izle"].forEach(function(k){
+    var t=HP_ADAY_TIER[k],liste=gr[k];
+    h+='<div style="margin:12px 0 6px"><div style="font-weight:700;color:'+t.renk+'">'+t.ad+' ('+liste.length+')</div>'+
+       '<div class="altbilgi" style="opacity:.7">'+t.ack+'</div></div>';
+    if(!liste.length){h+='<div class="altbilgi" style="opacity:.5;margin:0 0 6px">— şu an yok</div>';return}
+    var acik=!!hpAdayAcik[k];
+    h+=(acik?liste:liste.slice(0,LIM)).map(function(p){return hpAdaySatir(p.x,p.a,t)}).join("");
+    if(liste.length>LIM)h+='<div class="sirala"><button class="sir" data-acik="'+k+'">'+
+      (acik?"▲ Daha az göster":"▼ Tümünü göster ("+liste.length+")")+'</button></div>';
+  });
+  h+='<div class="uyari">Bu ekran bir tarama aracıdır, yatırım tavsiyesi değildir. Stop/hedef hacim profilinden otomatik türetilir.</div>';
+  return h;
+}
+function hpAdayBilgiKutu(){
+  return '<div class="uyari" style="margin-top:0;text-align:left"><b>🎯 Aday puanı nasıl hesaplanır?</b><br>'+
+    '1) <b>Tetik yakınlığı</b> (35 puan): fiyat kırılım seviyesine (Value Area üst sınırı) ne kadar yakın.<br>'+
+    '2) <b>Risk/ödül</b> (30): stop = en az %'+HP_ADAY_MIN_STOP+' aşağıdaki en yakın güçlü/orta destek; hedef = üstteki ilk güçlü direnç (yoksa son direnç).<br>'+
+    '3) <b>Yol açıklığı</b> (20): hemen üstteki direnç zayıfsa ya da yoksa yüksek.<br>'+
+    '4) <b>Destek kalitesi</b> (15): stop seviyesindeki hacim gücü.<br><br>'+
+    '🟢 <b>Al bölgesi</b>: kırılım oldu, en fazla %'+HP_ADAY_AL_MAX+' uzaklaşmış, risk/ödül en az '+HP_ADAY_RR_AL+', puan en az '+HP_ADAY_PUAN_AL+'.<br>'+
+    '🟡 <b>Hazırlan</b>: kırılıma en fazla %'+HP_ADAY_YAKIN+' kalmış, aynı risk/ödül ve puan şartı.<br>'+
+    '🔵 <b>İzle</b>: kırılıma %'+HP_ADAY_YAKIN+'–'+HP_ADAY_IZLE_MAX+' kalmış, ya da risk/ödül '+HP_ADAY_RR_IZLE+'–'+HP_ADAY_RR_AL+' arası, ya da POC nin hemen altında.<br>'+
+    'Taban altındakiler, kırılımı %'+HP_ADAY_GEC+' geçenler ve risk/ödülü '+HP_ADAY_RR_IZLE+' altında kalanlar elenir.</div>';
 }
 function hpSatir(x){
   var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
@@ -10157,21 +10280,23 @@ function hpGosterCanli(){
   var h='<div class="sirala"><button class="sir" id="hpYenile">🔄 Yenile</button>'+
         '<button class="sir" id="hpDur">'+(calisiyor?"⏸ Taramayı durdur":"▶️ Taramayı sürdür")+'</button>'+
         '<button class="sir" id="hpGecmisBtn">📊 Geçmiş sinyaller</button>'+
+        '<button class="sir'+(hpBilgiAcik?" on":"")+'" id="hpBilgiBtn">ℹ️ Nasıl çalışır?</button>'+
         '</div>';
-  h+='<div class="uyari" style="margin-top:0"><b>📐 Hacim Profili nedir?</b><br>'+
+  if(hpBilgiAcik)h+=hpAdayBilgiKutu();
+  if(hpBilgiAcik)h+='<div class="uyari" style="margin-top:0"><b>📐 Hacim Profili nedir?</b><br>'+
      'Seçtiğin zaman diliminde son barların hacmi fiyat aralığına dağıtılıp '+
      'yoğunluk haritası çıkarılır (Volume Profile). En yoğun bölge POC olarak '+
      'işaretlenir — en güçlü destek/direnç noktasıdır. Mevcut fiyatın altındaki '+
      've üstündeki yoğun bölgeler de destek ve direnç listesi olarak gösterilir. '+
      'Her satırda fiyatın o yoğun bölgeye göre KONUMU da (🚀 Kırılım / 📈 POC Üstü / '+
-     '📉 POC Altı / ⚠️ Taban Altı) rozet olarak işaretleniyor. 🎯 <b>Aday Hisseler</b> '+
-     'sekmesi bunların hepsini otomatik süzüp mesafeye göre gruplar — diğer sekmeler '+
-     '(Tümü/Kırılım/POC Üstü/…) elle bakmak isteyenler için hâlâ duruyor. Bir hisse '+
-     'Kırılım/POC Üstü olduğunda giriş fiyatı hatırlanır — 📌 satırında o andan bu '+
-     'yana kâr/zarar yüzdesi gösterilir; sinyal bozulunca 📊 Geçmiş sinyaller ekranına '+
-     'taşınır. 🏆 <b>Sağlamlık Skoru</b> (0-100) her hissede otomatik hesaplanır — '+
-     'kırılıma mesafe, POC gücü, üstteki direncin zayıflığı ve alttaki desteğin '+
-     'gücünü tek sayıda birleştirir.</div>';
+     '📉 POC Altı / ⚠️ Taban Altı) rozet olarak işaretleniyor — filtrelerle sadece '+
+     'kırılım yapanları ayıklayabilir, 🎯 <b>Yaklaşanlar</b> ile kırılıma en yakın '+
+     'olanları (mesafeye göre sıralı) görebilirsin. Bir hisse Kırılım/POC Üstü '+
+     'olduğunda giriş fiyatı hatırlanır — 📌 satırında o andan bu yana kâr/zarar '+
+     'yüzdesi gösterilir; sinyal bozulunca 📊 Geçmiş sinyaller ekranına taşınır. '+
+     '🏆 <b>Sağlamlık Skoru</b> (0-100) her hissede otomatik hesaplanır — POC gücü, '+
+     'konum, üstteki direncin zayıflığı ve alttaki desteğin gücünü tek sayıda '+
+     'birleştirir; aşağıdaki sıralama düğmesiyle en sağlamdan en zayıfa dizebilirsin.</div>';
   h+='<div class="kutu" style="margin:0 0 8px"><div class="sat"><span class="et">Tek hisse sorgula</span></div>'+
      '<div style="display:flex;gap:6px;margin-top:6px">'+
      '<input id="hpKod" type="text" placeholder="Örn: SASA" style="flex:1;background:var(--kart);'+
@@ -10195,38 +10320,29 @@ function hpGosterCanli(){
      '<div class="altbilgi" style="margin-top:6px;opacity:.6">Paralel canlı ölçüm — sekmeden çıkmadan bekle, birkaç saniyede dolar.</div>'+
      '</div>';
   var tumListe=Object.keys(sonuc).map(function(k){return sonuc[k]});
+  h+='<div class="sirala"><button class="sir'+(hpModu!=="liste"?" on":"")+'" data-mod="aday">🎯 Aday hisseler</button>'+
+     '<button class="sir'+(hpModu==="liste"?" on":"")+'" data-mod="liste">🗂 Tüm liste (eski filtreler)</button></div>';
+  if(hpModu!=="liste"){h+=hpAdayGovde(tumListe,calisiyor)}else{
   var sayac={kirilim:0,poc_ustu:0,poc_alti:0,taban_alti:0};
   for(var si=0;si<tumListe.length;si++){var kk=tumListe[si].konum;if(sayac[kk]!==undefined)sayac[kk]++}
   sayac.yaklasan=tumListe.filter(hpYaklasanMi).length;
-  sayac.aday=tumListe.filter(hpAdayMi).length;
   h+='<div class="sirala" style="flex-wrap:wrap">'+HP_FILTRE_LISTE.map(function(f){
     var sayi=f.k==="tumu"?tumListe.length:(sayac[f.k]||0);
     return '<button class="sir'+(hpFiltre===f.k?" on":"")+'" data-filtre="'+f.k+'">'+f.ad+' ('+sayi+')</button>';
   }).join("")+'</div>';
-  var yaklasanMi=hpFiltre==="yaklasan", adayMi=hpFiltre==="aday";
-  if(adayMi){
-    h+='<div class="uyari" style="margin-top:0"><b>🎯 Aday Hisseler nedir?</b><br>'+
-       'Diğer sekmelerdeki filtreleri tek listede birleştirir: henüz kırmamış '+
-       '(POC Üstü/Altı) ama kırılıma en fazla <b>%'+HP_ADAY_MESAFE_UFUK+'</b> kalmış '+
-       've Sağlamlık skoru <b>'+HP_ADAY_SKOR_ESIGI+'/100</b>\'ün altında olmayan hisseler. '+
-       'Aşağıda mesafeye göre üç net gruba ayrılmış: 🔥 en yakın en üstte.</div>';
-  }else{
-    /* 🏆 Sağlamlık Skoru sıralaması — kullanıcı isteği: "hangisi daha sağlam"
-       sorusuna elle veri girmeden, sunucunun zaten hesapladığı skorla cevap.
-       Filtre (Kırılım/POC Üstü/… veya Yaklaşanlar) AYNEN geçerli kalır,
-       sadece o filtrenin İÇİNDEKİ sıralama değişir. */
-    h+='<div class="sirala" style="flex-wrap:wrap">'+
-       '<button class="sir'+(hpSiralamaModu!=="skor"?" on":"")+'" data-sirala="varsayilan">'+
-         (yaklasanMi?"🎯 Mesafeye göre sırala":"📊 POC gücüne göre sırala")+'</button>'+
-       '<button class="sir'+(hpSiralamaModu==="skor"?" on":"")+'" data-sirala="skor">🏆 Sağlamlık skoruna göre sırala</button>'+
-       '</div>';
-  }
-  var skorSirali=hpSiralamaModu==="skor"&&!adayMi;
+  var yaklasanMi=hpFiltre==="yaklasan";
+  /* 🏆 Sağlamlık Skoru sıralaması — kullanıcı isteği: "hangisi daha sağlam"
+     sorusuna elle veri girmeden, sunucunun zaten hesapladığı skorla cevap.
+     Filtre (Kırılım/POC Üstü/… veya Yaklaşanlar) AYNEN geçerli kalır,
+     sadece o filtrenin İÇİNDEKİ sıralama değişir. */
+  h+='<div class="sirala" style="flex-wrap:wrap">'+
+     '<button class="sir'+(hpSiralamaModu!=="skor"?" on":"")+'" data-sirala="varsayilan">'+
+       (yaklasanMi?"🎯 Mesafeye göre sırala":"📊 POC gücüne göre sırala")+'</button>'+
+     '<button class="sir'+(hpSiralamaModu==="skor"?" on":"")+'" data-sirala="skor">🏆 Sağlamlık skoruna göre sırala</button>'+
+     '</div>';
+  var skorSirali=hpSiralamaModu==="skor";
   var kaynakListe;
-  if(adayMi){
-    kaynakListe=tumListe.filter(hpAdayMi)
-      .sort(function(a,b){return (a.kirilimMesafe||0)-(b.kirilimMesafe||0)});
-  }else if(yaklasanMi){
+  if(yaklasanMi){
     kaynakListe=tumListe.filter(hpYaklasanMi)
       .sort(function(a,b){
         if(skorSirali)return (b.saglamlikSkoru||0)-(a.saglamlikSkoru||0);
@@ -10239,27 +10355,24 @@ function hpGosterCanli(){
         return (b.pocYuzde||0)-(a.pocYuzde||0);
       });
   }
-  h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse'+
-     (adayMi?"":' — '+(skorSirali?"🏆 Sağlamlık skoruna göre (en sağlam önde) sıralı":
-       (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı")))+'</div>';
+  h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse — '+
+     (skorSirali?"🏆 Sağlamlık skoruna göre (en sağlam önde) sıralı":
+       (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı"))+'</div>';
   if(!kaynakListe.length){
-    h+='<div class="bos"><b>'+(calisiyor&&!tumListe.length?"Ölçülüyor…":(adayMi?"Şu an kriterlere uyan aday yok":"Bu filtrede hisse yok"))+'</b><br><br>'+
-       (calisiyor&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":
-         (adayMi?"Ya kırılıma çok az hisse kalmış ya da skoru "+HP_ADAY_SKOR_ESIGI+"'in altında — 📋 Yaklaşanlar (tümü) sekmesinden gevşek listeye bakabilirsin.":"Farklı bir filtre dene veya tarama tamamlansın."))+'</div>';
-  }else if(adayMi){
-    /* Kova kova grupla — "keskin ayrım yok" şikayetinin cevabı: her
-       kovanın sınırı net bir yüzde çizgisi, kova içi skora göre sıralı. */
-    HP_ADAY_KOVALAR.forEach(function(kova2){
-      var grup=kaynakListe.filter(function(x){return x.kirilimMesafe>=kova2.lo&&x.kirilimMesafe<kova2.hi})
-        .sort(function(a,b){return (b.saglamlikSkoru||0)-(a.saglamlikSkoru||0)});
-      if(!grup.length)return;
-      h+='<div style="margin:14px 0 6px;font-weight:700;font-size:13.5px;opacity:.92">'+kova2.ad+' ('+grup.length+')</div>';
-      h+=grup.map(hpSatir).join("");
-    });
+    h+='<div class="bos"><b>'+(calisiyor&&!tumListe.length?"Ölçülüyor…":"Bu filtrede hisse yok")+'</b><br><br>'+
+       (calisiyor&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Farklı bir filtre dene veya tarama tamamlansın.")+'</div>';
   }else{
     h+=kaynakListe.map(hpSatir).join("");
   }
+  }
   el("govde").innerHTML=h;
+  [].forEach.call(el("govde").querySelectorAll("[data-mod]"),function(bt){
+    bt.onclick=function(){tit();hpModu=bt.dataset.mod;hpGosterCanli()};
+  });
+  [].forEach.call(el("govde").querySelectorAll("[data-acik]"),function(bt){
+    bt.onclick=function(){tit();var k2=bt.dataset.acik;hpAdayAcik[k2]=!hpAdayAcik[k2];hpGosterCanli()};
+  });
+  var bi=el("hpBilgiBtn");if(bi)bi.onclick=function(){tit();hpBilgiAcik=!hpBilgiAcik;hpGosterCanli()};
   [].forEach.call(el("govde").querySelectorAll("[data-tf]"),function(bt){
     bt.onclick=function(){tit();hpTf=bt.dataset.tf;hpTaraBaslat()};
   });
