@@ -10492,6 +10492,12 @@ function hpGunIlerlemeKutu(olculen,evren,kalan,calisiyor){
     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Seçilen günden önce yeterli bar yoksa (en az '+30+' bar) hisse listeye girmez.</div></div>';
 }
+function hpGunBarSatiri(x){
+  if(!hpGun||!x||!x.sonBar)return "";
+  var b=x.sonBar,z=hpSaatMetni(b[0]);
+  return '<div class="altbilgi" style="margin-top:3px;opacity:.75">📆 Kullanılan son bar: <b>'+(x.gun||"")+'</b>'+(z&&hpTf!=="1G"?(" "+z):"")+
+    ' · A '+hpP(b[1])+' · Y '+hpP(b[2])+' · D '+hpP(b[3])+' · K '+hpP(b[4])+' · hacim '+hpBin(b[5])+'</div>';
+}
 function hpGunBagla(){
   var g=el("hpGunInput");
   if(g)g.onchange=function(){hpGunSec(g.value)};
@@ -10818,6 +10824,7 @@ function hpAdaySatir(x,a,t){
   return '<div class="satir" style="border-left-color:'+t.renk+';align-items:flex-start">'+
     '<div class="sol"><div class="kod">'+E(x.kod)+rozet+'</div>'+
     miniH+
+    hpGunBarSatiri(x)+
     '<div class="altbilgi" style="margin-top:3px"><b>'+a.tetikMetin+'</b></div>'+
     '<div class="altbilgi" style="margin-top:3px">🛡 Stop <b>'+hpP(a.stop)+'</b> altı (−%'+a.risk+') · 🎯 Hedef <b>'+hpP(a.hedef)+'</b> (+%'+a.odul+')</div>'+
     '<div class="altbilgi" style="margin-top:2px">⚖️ Risk/ödül <b style="color:'+rrr+'">'+a.rr+'</b></div>'+
@@ -11168,7 +11175,7 @@ function hpSatir(x){
   return '<div class="satir" style="border-left-color:'+(kb?kb.renk:"var(--sar)")+';align-items:flex-start">'+
     '<div class="sol"><div class="kod">'+E(x.kod)+konumRozet+'</div>'+
     '<div class="altbilgi">fiyat <b>'+hpP(x.fiyat)+'</b> · POC <b>'+hpP(x.poc)+'</b> (ciro payı %'+x.pocYuzde+((x.pocTemas!=null&&x.pocTemas>0)?' · son temas '+x.pocTemas+' bar önce':'')+')</div>'+
-    hpMesafeSatiri(x)+hpSinyalSatiri(x)+
+    hpMesafeSatiri(x)+hpSinyalSatiri(x)+hpGunBarSatiri(x)+
     '<div class="altbilgi" style="margin-top:3px">🔴 Direnç '+direncTxt+'</div>'+
     '<div class="altbilgi" style="margin-top:2px">🟢 Destek '+destekTxt+'</div>'+
     '<div class="altbilgi" style="opacity:.6;margin-top:2px">Value Area '+hpP(x.val)+' – '+hpP(x.vah)+'</div>'+
@@ -15959,7 +15966,8 @@ if(gov&&gov.is==="olcgun"){
         if(kes.length<HP_MIN_BAR)continue;
         const s=hpHesapla(kes);
         if(s)olcum[kod]=Object.assign({kod:kod,tf:tf,gecmis:1,
-          gun:new Date((kes[kes.length-1].time+10800)*1e3).toISOString().slice(0,10)},s);
+          gun:new Date((kes[kes.length-1].time+10800)*1e3).toISOString().slice(0,10),
+          sonBar:[kes[kes.length-1].time,kes[kes.length-1].open,kes[kes.length-1].high,kes[kes.length-1].low,kes[kes.length-1].close,kes[kes.length-1].hacim]},s);
       }catch(_){}
     }
   };
