@@ -10121,8 +10121,13 @@ var HP_GUC_RENK={guclu:"var(--yes)",orta:"var(--sar)",zayif:"var(--soluk)"};
 var HP_KANAL=6, HP_ISTEK_ZAMAN=20000, HP_HATA_TAVAN=60, HP_PARCA=16;
 var hpTf="1G", hpTek=null, hpEvren=null, hpEvrenKaynak="", hpOlcum={}, hpTaraDurum=null, hpNobetci=null;
 function hpKuyrukKur(){
-  var k=[];
-  for(var i=0;i<hpEvren.length;i+=HP_PARCA)k.push(hpEvren.slice(i,i+HP_PARCA));
+  /* 🔗 2026-09-19-havuz: cron'un arka planda (sekme kapalıyken bile)
+     biriktirdiği kodlar artık hpTaraBaslat() başında hpOlcum'a önceden
+     gömülüyor — kuyruk sadece HÂLÂ ölçülmemiş kodları içeriyor, aynı
+     hisse iki kez taranmıyor. */
+  var k=[],mevcut=hpOlcum[hpTf]||{},kalanlar=[];
+  for(var i=0;i<hpEvren.length;i++){if(!mevcut[hpEvren[i]])kalanlar.push(hpEvren[i])}
+  for(var j=0;j<kalanlar.length;j+=HP_PARCA)k.push(kalanlar.slice(j,j+HP_PARCA));
   return k;
 }
 function hpNobetciKapat(){if(hpNobetci){clearInterval(hpNobetci);hpNobetci=null}}
@@ -10163,6 +10168,7 @@ function hpTaraTur(){
         if(bitir())return;
         if(hpTaraDurum!==d)return;
         if(r&&r.ok&&r.olcum){
+          d.ardisikHata=0;
           if(!hpOlcum[d.tf])hpOlcum[d.tf]={};
           for(var k in r.olcum)hpOlcum[d.tf][k]=r.olcum[k];
         }else{
@@ -10175,23 +10181,56 @@ function hpTaraTur(){
         if(bitir())return;
         if(hpTaraDurum!==d)return;
         d.hata++;
-        if(d.hata<HP_HATA_TAVAN){d.kuyruk.push(kodlar2);
-          if(!hpTek)hpGosterCanli();setTimeout(hpTaraTur,1200)}
-        else{d.suruyor=false;hpNobetciKapat();if(!hpTek)hpGosterCanli()}
+        /* 🩺 2026-09-19-otomatik-toparlanma: kullanıcı isteği — "sebepsiz
+           duruyor, otomatik hemen tarasın". Eskiden HP_HATA_TAVAN (60)
+           hataya ulaşınca tarama KALICI OLARAK duruyordu (d.suruyor=false),
+           elle "▶️ Taramayı sürdür"e basılması gerekiyordu — zayıf mobil
+           bağlantıda (bu tam da ekran görüntüsündeki durum: zayıf sinyal,
+           düşük pil) bu eşik hızla doluyor ve kullanıcı sekmeyi her açtığında
+           donuk bir "durduruldu" ekranıyla karşılaşıyordu. Artık asla kalıcı
+           durmuyor — art arda hata sayısına göre artan (ama tavanlı) bir
+           bekleme ile SONSUZA DEK kendiliğinden yeniden deniyor; bu, kod
+           tabanındaki mbAlarm bekçisiyle (8sn zaman aşımı + 5sn'de bir
+           kendiliğinden yeniden deneme) aynı, kanıtlanmış deseni izliyor. */
+        d.kuyruk.push(kodlar2);
+        var ardisikHata=(d.ardisikHata=(d.ardisikHata||0)+1);
+        var bekleme=Math.min(30000,1200*ardisikHata);
+        if(!hpTek)hpGosterCanli();
+        setTimeout(hpTaraTur,bekleme);
       });
     })(kodlar,kayit);
   }
 }
-function hpTaraBaslat(){
+function hpTaraBaslat(havuzAtla){
   hpNobetciKapat();
   if(!hpOlcum[hpTf])hpOlcum[hpTf]={};
-  hpTaraDurum={suruyor:true,tf:hpTf,kuyruk:hpKuyrukKur(),ucusta:[],acik:0,hata:0,sonHareket:Date.now()};
-  hpNobetciKur();
-  hpGosterCanli();
-  hpTaraTur();
+  var tfBu=hpTf;
+  function basla(){
+    if(hpTf!==tfBu)return; /* kullanıcı bu arada başka dilime geçmiş, bu cevap artık geçersiz */
+    hpTaraDurum={suruyor:true,tf:hpTf,kuyruk:hpKuyrukKur(),ucusta:[],acik:0,hata:0,ardisikHata:0,sonHareket:Date.now()};
+    hpNobetciKur();
+    hpGosterCanli();
+    hpTaraTur();
+  }
+  /* 🔗 2026-09-19-havuz: kullanıcı isteği — "sekmeye hiç girmeden bile
+     hazır olsun". Sekme her açıldığında SIFIRDAN taramak yerine, önce
+     cron'un arka planda (sekme kapalıyken de) biriktirdiği sonucu
+     çekip hpOlcum'a gömüyoruz — yalnız GERÇEKTEN eksik kalan hisseler
+     canlı taranıyor. "🔄 Yenile" bilerek bunu atlıyor (havuzAtla=true),
+     çünkü orada niyet açıkça "gerçekten baştan ölç". */
+  if(havuzAtla){basla();return}
+  post("/api/hacimprofil",{is:"havuz",tf:hpTf}).then(function(r){
+    if(hpTf!==tfBu)return;
+    if(r&&r.ok&&r.sonuc){
+      if(!hpOlcum[tfBu])hpOlcum[tfBu]={};
+      for(var k in r.sonuc)if(!hpOlcum[tfBu][k])hpOlcum[tfBu][k]=r.sonuc[k];
+    }
+    basla();
+  }).catch(function(){basla()});
 }
 function hpCiz(){
   hpBtEkranda=false;
+  hpGecmisEkranda=false;
   if(hpTek){hpTekGoster(hpTek);return}
   if(!hpEvren){
     el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
@@ -10203,7 +10242,13 @@ function hpCiz(){
     }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
     return;
   }
-  if(hpTaraDurum&&hpTaraDurum.tf===hpTf){hpGosterCanli();return}
+  if(hpTaraDurum&&hpTaraDurum.tf===hpTf){
+    /* 2026-09-19: kullanıcı isteği — sekme her açıldığında, daha önce
+       (hata ya da elle) durmuş olsa bile otomatik devam etsin, elle
+       "▶️ Taramayı sürdür"e basmak gerekmesin. */
+    if(!hpTaraDurum.suruyor){hpTaraDurum.suruyor=true;hpNobetciKur();hpTaraTur()}
+    hpGosterCanli();return;
+  }
   hpTaraBaslat();
 }
 function hpDegerYaz(x){
@@ -10491,6 +10536,7 @@ function hpBtOnbellekOku(tf){
 function hpBtOnbellekYaz(tf,o){try{localStorage.setItem("hpBt3:"+tf,JSON.stringify(o))}catch(e){}}
 function hpBtAc(){
   hpBtEkranda=true;
+  hpGecmisEkranda=false;
   if(!hpBtSonuc[hpBtTf]){var c=hpBtOnbellekOku(hpBtTf);if(c)hpBtSonuc[hpBtTf]=c}
   var d=hpBtDurum;
   var devam=d&&d.tf===hpBtTf&&(d.suruyor||d.durdu);
@@ -10499,6 +10545,7 @@ function hpBtAc(){
 }
 function hpBtBaslat(){
   hpBtEkranda=true;
+  hpGecmisEkranda=false;
   if(!hpEvren){
     el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
     post("/api/hacimprofil",{is:"evren"}).then(function(r){
@@ -10693,6 +10740,7 @@ function hpSatir(x){
 }
 function hpGosterCanli(){
   if(hpBtEkranda)return;
+  if(hpGecmisEkranda)return;
   var d=hpTaraDurum;
   var calisiyor=!!(d&&d.suruyor);
   var evren=hpEvren?hpEvren.length:0;
@@ -10817,7 +10865,7 @@ function hpGosterCanli(){
   [].forEach.call(el("govde").querySelectorAll("[data-sirala]"),function(bt){
     bt.onclick=function(){tit();hpSiralamaModu=bt.dataset.sirala;hpGosterCanli()};
   });
-  var y=el("hpYenile");if(y)y.onclick=function(){tit();hpOlcum[hpTf]={};hpTaraBaslat()};
+  var y=el("hpYenile");if(y)y.onclick=function(){tit();hpOlcum[hpTf]={};hpTaraBaslat(!0)};
   var dd=el("hpDur");if(dd)dd.onclick=function(){tit();
     var dur=hpTaraDurum;if(!dur)return;
     if(dur.suruyor){dur.suruyor=false;hpNobetciKapat();hpGosterCanli()}
@@ -10838,10 +10886,19 @@ function hpGosterCanli(){
 /* 📊 GEÇMİŞ SİNYALLER — bir hisse 🚀 Kırılım/📈 POC Üstü olduktan sonra
    zayıf tarafa dönünce buraya düşer: ne kadar kâr/zarar ettirdi, kaç
    saat/gün sürdü. "Zarar edenler olduysa durum nedir" cevabı burada. */
-var hpGecmisD=null, hpGecmisFiltre="tumu";
+var hpGecmisD=null, hpGecmisFiltre="tumu", hpGecmisEkranda=false;
 var HP_GECMIS_FILTRE_LISTE=[{k:"tumu",ad:"Tümü"},{k:"kirilim",ad:"🚀 Kırılım"},{k:"poc_ustu",ad:"📈 POC Üstü"}];
 function hpGecmisAc(){
   hpBtEkranda=false;
+  /* 🐞 2026-09-19-gecmis-donus: hpGosterCanli() 4 saniyede bir çalışan
+     "nöbetçi" (hpNobetciKur) tarafından tarama sürerken tekrar tekrar
+     çağrılıyordu — bu ekran o bayrağı hiç set etmediği için nöbetçi
+     birkaç saniye içinde geçmiş sinyaller ekranının üstüne tekrar canlı
+     tarama görünümünü çiziyordu (kullanıcı: "tık yok, kendiliğinden geri
+     dönüyor"). Tıpkı 🧪 Tarihsel backtest ekranının hpBtEkranda ile
+     kendini koruması gibi, burası da hpGecmisEkranda ile korunuyor —
+     hpGosterCanli() bu bayrak true iken hiçbir şey çizmiyor. */
+  hpGecmisEkranda=true;
   el("govde").innerHTML='<div class="yukleniyor">geçmiş sinyaller yükleniyor…</div>';
   post("/api/hacimprofil",{is:"gecmis",tf:hpTf}).then(function(r){
     hpGecmisD=(r&&r.ok&&r.gecmis)||[];
@@ -10894,7 +10951,7 @@ function hpGecmisGoster(liste){
     h+='<div class="bos"><b>Henüz kapanmış sinyal yok</b><br><br>Bir sinyal bozulduğunda (kırılım/POC üstü '+
        'durumundan zayıf tarafa dönünce) burada listelenecek.</div>';
     el("govde").innerHTML=h;
-    var g0=el("hpGecmisGeri");if(g0)g0.onclick=function(){tit();hpGosterCanli()};
+    var g0=el("hpGecmisGeri");if(g0)g0.onclick=function(){tit();hpGecmisEkranda=false;hpGosterCanli()};
     return;
   }
   /* 🎯 Kırılım vs POC Üstü ayrımı — hangi tetikleyicinin daha isabetli
@@ -10916,13 +10973,14 @@ function hpGecmisGoster(liste){
   h+=gosterilecek.length?gosterilecek.map(hpGecmisSatir).join(""):
      '<div class="bos">bu filtrede kapanmış sinyal yok</div>';
   el("govde").innerHTML=h;
-  var g=el("hpGecmisGeri");if(g)g.onclick=function(){tit();hpGosterCanli()};
+  var g=el("hpGecmisGeri");if(g)g.onclick=function(){tit();hpGecmisEkranda=false;hpGosterCanli()};
   [].forEach.call(document.querySelectorAll("[data-hgf]"),function(b){
     b.onclick=function(){tit();hpGecmisFiltre=b.dataset.hgf;hpGecmisGoster(hpGecmisD||liste)};
   });
 }
 function hpTekGoster(t){
   hpBtEkranda=false;
+  hpGecmisEkranda=false;
   var s=t.satir||[];
   var h='<div class="sirala"><button class="sir" id="hpGeri">← Taramaya dön</button>'+
         '<button class="sir" id="hpTekYenile">🔄 Yenile</button></div>';
@@ -15368,6 +15426,22 @@ if(kodTek){
 if(gov&&gov.is==="evren"){
   const ev=await tamEvren(A);
   return JS({ok:!0,kodlar:ev.slice(),kaynak:ev.kaynak||"",sayi:ev.length});
+}
+/* 🔗 2026-09-19-havuz: kullanıcı isteği — "sekmeye hiç girmeden bile
+   hazır olsun". Cron (scheduled()) zaten dakikada bir, sekme açık
+   olsun olmasın, arka planda hpDilimTara ile bu tf'i ilerletiyor ve
+   sonucu KV'ye ("hacimProfili") yazıyor — ama istemcinin canlı taraması
+   bunu hiç OKUMUYORDU, her sekme açılışında SIFIRDAN başlıyordu. Bu yeni
+   uç, cron'un o ana kadar biriktirdiği TÜM ölçümü (hpTara'nın aksine
+   150'yle SINIRLAMADAN) döndürür — istemci bunu hpTaraBaslat()'ın en
+   başında hpOlcum'a gömüp yalnızca GERİYE KALANI canlı tarar. KV'ye
+   YAZMAZ, yalnız okur — mevcut cron/KV akışına hiçbir riski yok. */
+if(gov&&gov.is==="havuz"){
+  const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
+  let bir=_hpBirikimBellek;
+  if(!bir){try{const h=await A.VERI.get("hacimProfili");if(h)bir=JSON.parse(h)}catch(_){}}
+  const sonuc=(bir&&bir.surum===HP_SURUM&&bir.sonuc&&bir.sonuc[tf])||{};
+  return JS({ok:!0,tf:tf,sonuc:sonuc,sayi:Object.keys(sonuc).length});
 }
 if(gov&&gov.is==="olc"){
   const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
