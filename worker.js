@@ -10423,7 +10423,7 @@ function hpGunBaslat(zorla){
   if(!hpGunDenendi[ga])hpGunDenendi[ga]={};
   var den=hpGunDenendi[ga],kal=[],kuyruk=[];
   for(var i=0;i<hpEvren.length;i++){if(!den[hpEvren[i]])kal.push(hpEvren[i])}
-  for(var j=0;j<kal.length;j+=HP_PARCA)kuyruk.push(kal.slice(j,j+HP_PARCA));
+  for(var j=0;j<kal.length;j+=8)kuyruk.push(kal.slice(j,j+8));
   var d={anahtar:ga,tf:hpTf,gun:hpGun,kuyruk:kuyruk,acik:0,hata:0,ardisik:0,bitti:!kuyruk.length};
   hpGunDurum=d;
   hpGunCiz(true);
@@ -10431,7 +10431,7 @@ function hpGunBaslat(zorla){
 }
 function hpGunTur(d){
   if(hpGunDurum!==d)return;
-  while(d.acik<HP_KANAL&&d.kuyruk.length){
+  while(d.acik<3&&d.kuyruk.length){
     var parca=d.kuyruk.shift();
     d.acik++;
     hpGunIstek(d,parca);
@@ -10458,7 +10458,7 @@ function hpGunIstek(d,parca){
     hpGunCiz();
     setTimeout(function(){hpGunTur(d)},(r&&r.ok)?20:Math.min(15000,1200*(d.ardisik||1)));
   }
-  zt=setTimeout(function(){bitir(null)},HP_ISTEK_ZAMAN);
+  zt=setTimeout(function(){bitir(null)},35000);
   post("/api/hacimprofil",{is:"olcgun",tf:d.tf,gun:d.gun,kodlar:parca}).then(bitir).catch(function(){bitir(null)});
 }
 /* seçilen gün seans değilse (hafta sonu/tatil) sunucu en yakın önceki seansı kullanır — en sık görülen gerçek gün */
@@ -10492,7 +10492,7 @@ function hpGunIlerlemeKutu(olculen,evren,kalan,calisiyor){
     '<div class="altbilgi" style="margin-top:4px">işlenen <b>'+(evren-kalan)+'</b> / '+evren+' · profili çıkan <b>'+olculen+'</b></div>'+
     '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
-    (hpGunDurum&&hpGunDurum.hata?'<div class="altbilgi" style="margin-top:5px;color:var(--sar)">⚠️ '+hpGunDurum.hata+' istek hatası (yeniden deneniyor): '+E(String(hpGunDurum.sonHata||""))+'</div>':"")+
+    (hpGunDurum&&hpGunDurum.hata?'<div class="altbilgi" style="margin-top:5px;color:var(--sar);white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word">⚠️ '+hpGunDurum.hata+' istek hatası (yeniden deneniyor): '+E(String(hpGunDurum.sonHata||""))+'</div>':"")+
     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Seçilen günden önce yeterli bar yoksa (en az '+30+' bar) hisse listeye girmez.</div></div>';
 }
 function hpGunBarSatiri(x){
@@ -15954,6 +15954,7 @@ if(gov&&gov.is==="havuz"){
    sinyal kayıtlarını kirletmesin. Her ölçüme gun (gerçekte kullanılan son barın TR tarihi) eklenir;
    seçilen gün tatil/hafta sonuysa istemci en yakın önceki seansı gösterdiğini söyleyebilsin. */
 if(gov&&gov.is==="olcgun"){
+ try{
   const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
   const gunM=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(gov.gun||""));
   if(!gunM||Number(gunM[1])<2000)return JS({ok:!1,hata:"geçersiz tarih"});
@@ -15977,8 +15978,9 @@ if(gov&&gov.is==="olcgun"){
       }catch(_){}
     }
   };
-  await Promise.all(Array.from({length:Math.min(HP_ES_CANLI,kodlar.length)},isci));
+  await Promise.all(Array.from({length:Math.min(6,kodlar.length)},isci));
   return JS({ok:!0,tf:tf,gun:String(gov.gun),olcum:olcum,istenen:kodlar.length});
+ }catch(e){return JS({ok:!1,hata:"olcgun istisna: "+String(e&&e.message||e).slice(0,160)})}
 }
 if(gov&&gov.is==="olc"){
   const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
