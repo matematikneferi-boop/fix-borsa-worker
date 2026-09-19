@@ -1196,7 +1196,7 @@ const alarmTazeEsik=x=>x.canli
    ulasiyor. Tek eksik, listeyi mesaj olarak isteyebilecegi bir komut yoktu.
    /sinyal · /canli komutlari bu boslugu kapatiyor. */
 /* Yeni surum ciktikca BU IKI SATIR guncellenir. */
-const WORKER_SURUM="2026-09-19-bt · 🧪 Hacim Profili: TARİHSEL BACKTEST eklendi (🧪 Tarihsel backtest düğmesi) — Yahoo geçmişi her barda geriye dönük yeniden yürütülüp POC üstüne geçiş / kırılım (POC üstünden gelerek vs POC yu atlayarak) / kırılıma ve POC ye %2-3-5-8 yaklaşma / Aday modeli (Al-Hazırlan-İzle, stop-hedef planıyla) sonrası t+5/10/20 getirisi sinyalsiz güne kıyasla gösteriliyor; Aday ekranına ≤%2/3/5/8 tetiğe uzaklık seçici eklendi · 2026-09-19-hp · 🎯 Hacim Profili: yeni varsayılan ADAY HİSSELER görünümü — her hisse için kırılıma yakınlık, otomatik stop/hedef, risk/ödül ve 0-100 aday puanı; 🟢 Al bölgesi / 🟡 Hazırlan / 🔵 İzle olarak üç net gruba ayrılıyor, gerisi elenip nedeni yazılıyor. Eski filtreli liste Tüm liste düğmesinin arkasında aynen duruyor. Yalnız istemci tarafı, sunucu ve KV değişmedi · 2026-09-09-c · 🚨 KÖKTEN DÜZELTME — canlı havuz (1SA/4SA) 443/444'e ulaştıktan SONRA tekrar 36'ya küçüldü. Sebep: mbDilimTara'nın 6 saatten eski kaydı silen \"bayat ölçüm\" temizliği — KV kotasını korumak için tarama yavaşlatılınca (2026-09-08-e) tam bir tur artık 6 saatten uzun sürebiliyordu, yeni hisseler eklenirken eskiler siliniyordu, havuz asla tam dolamıyordu. Çözüm: Tavan Kombi'ye özel daha büyük bir parti boyutu (TVK_CANLI_ANLIK_AZAMI=30, mbModulTara'nın paylaştığı ortak sabitten ayrıldı — KV yazma sayısı artmıyor, hâlâ tek PUT) ve silme eşiği 6 saatten 24 saate çıkarıldı · 2026-09-09-b · 🌹 Yeni işaret: son 13 GÜNLÜK barda kaç kez GERÇEKTEN tavan yapmış (o günün kendi kapanışı bir önceki güne göre ≥%7 — geriye dönük tahmin değil, somut yakın geçmiş). 0 ise hiç gösterilmiyor, varsa hisse adının yanına 🌹N ekleniyor. Hem eşleşen hisse listesinde hem /tavankombi Telegram özetinde görünüyor. Bu bir birikim değil — her tarandığında o hissenin GÜNCEL son-13-bar durumuyla üzerine yazılıyor (toplanmıyor) · 2026-09-09-a · ⚡📋 İki yeni özellik: (1) son 60 bardaki ORTALAMA volatilite (yüksek-düşük/kapanış%, zaten çekilmiş mum verisinden, ek istek yok) artık her hissede hesaplanıyor, eşleşen hisse listesinde %2.7'nin üstündekiler ⚡ ile işaretleniyor; (2) yeni /tavankombi komutu (yalnız yönetici) — en iyi kombinasyonları ve şu an karşılayan hisseleri doğrudan Telegram mesajı olarak gönderiyor, mini app'e girmeye gerek yok. İç script ayrıca çıkarılıp diff ile doğrulandı (yalnız istenen satır değişti) · 2026-09-08-i · 🚨 KÖKTEN DÜZELTME — geçmiş tarama saatlerce 14:14'te donuk kalmıştı, /tavantani'den ELLE çağrılınca sorunsuz çalıştığı görüldü: sorun tvkGecmisAdimYap'ta değil, onu tetikleyen \"dk%10===0\" dakika kapısındaymış (muhtemelen ev.scheduledTime bu ortamda beklendiği gibi davranmıyor). Dakika aritmetiğine güvenmeyen, işin/havuzun KENDİ son güncelleme zamanına bakan bir kapıya geçildi — hem daha güvenilir hem daha basit · 2026-09-08-h · 🔬 /tavantani artık tvkGecmisAdimYap'ı DOĞRUDAN, hemen çalıştırıp sonucunu (veya fırlatırsa tam hata+stack'ini) gösteriyor — cron'un neden 14:14'ten beri hiç ilerlemediğini beklemeden, anında kesin cevap için · 2026-09-08-g · 🎯 hisseSayac neden hep 0 kalıyordu bulundu: tur 1 zaten TAMAMLANMIŞTI (444/444) ve ciftTakip her şeyi \"zaten sayıldı\" işaretlemişti — hisseSayac özelliği bundan SONRA eklendiği için hiç çalışma şansı olmamıştı. Çözüm: hisseSayac artık kendi AYRI (gün|kod) takibini (hisseCiftTakip, boş başlıyor) kullanıyor — combo istatistikleri (ciftTakip) hâlâ korunuyor, ÇİFT SAYILMIYOR, ama hisseSayac bir kerelik geriye dönük olarak dolduruluyor. Bir sonraki otomatik tur (20 dk + 10 dk cron penceresi içinde) başlayınca hisse alışkanlığı verisi artık gerçekten dolacak · 2026-09-08-f · 🔬 /tavantani'ye geçmiş tarama işinin (tvkGecmisIs3) durumu eklendi — tamam/toplam/tamamlandi/son güncelleme/son hatalar görünüyor, hisseSayac neden dolmuyor sorusuna kesin cevap için · 2026-09-08-e · 🚨 BUGÜNKÜ KESİNTİNİN SEBEBİ BULUNDU: Cloudflare KV ücretsiz plan günlük 1000 yazma sınırı, dakikada 2 kez çalışan tvkGecmisAdim+tvkCanli tarafından aşılmıştı (\"KV put() limit exceeded for the day\"). Şimdi tvkCanli 3 dakikada bir, tvkGecmisAdim 10 dakikada bir, ikisi de dakikada 1 kez (2 değil) çalışıyor — günlük yazma hacmi ~10-15 kat azaldı. Kalıcı/kesin çözüm Cloudflare Workers Paid plana ($5/ay) geçmek; bu sınırı tamamen kaldırır · 2026-09-08-d · 🔬 /tavantani'ye hisseSayac (tavan alışkanlığı verisi) kontrolü eklendi — kaç hisse için dolu, örnek değerler neler, doğrudan Telegram'dan görülebiliyor (mini app'e dokunmuyor) · 2026-09-08-c · 🎯 Kombinasyon eşleşen hisse listesine hissenin KENDİ tavan alışkanlığı eklendi — bir kombinasyon THYAO'yu eşleştirse bile THYAO'nun tarihte nadiren tavan yaptığını, SASA gibi bir hissenin sık yaptığını artık her hissenin adının altında \"tavan alışkanlığı: %X (N gün)\" olarak görebiliyorsun (20'den az gözlemde hiç gösterilmiyor — güvenilmez). İç script sözdizimi ayrıca çıkarılıp doğrulandı, diff ile yalnız istenen satırların değiştiği teyit edildi (-e'deki dondurma riskine karşı) · 2026-09-08-b · 🔁 Tavan Kombi geçmiş tarama artık TAM OTOMATİK ve KALICI BİRİKİMLİ: (1) her tur bitince 20 dakika sonra cron kendiliğinden yeni bir tur başlatıyor — kimsenin sayfayı elle açmasına gerek yok; (2) yeni turlar artık tvkArsiv2'yi SIFIRLAMIYOR — bunun yerine her (gün,hisse) çifti kalıcı bir takip listesine (ciftTakip) işleniyor, bir sonraki tur aynı çifte rastlarsa atlıyor, yalnız GERÇEKTEN yeni olan günler/hisseler arşive ekleniyor. Geçişte çift sayımı önlemek için KV anahtarları tvkArsiv2→tvkArsiv3, tvkGecmisIs2→tvkGecmisIs3 olarak değiştirildi (tek seferlik temiz başlangıç, bundan sonra hiç sıfırlanmayacak) · 2026-09-08-a · 🚨 KÖKTEN DÜZELTME — Tavan Kombi geçmiş tarama işinin (tvkGecmisIs2) KV kaydında 24 saatlik TTL vardı: tarama 24 saat içinde bitmezse kayıt kendiliğinden siliniyor, sistem \\\"iş yok\\\" sanıp SIFIRDAN yeni bir tam tur başlatıyordu — bu da o turun tvkArsiv2 istatistiklerini SIFIRLIYORDU (bkz. -h notundaki \\\"yeni tam tur başlarken tvkArsiv2 sıfırlanır\\\" mantığı, kendi başına doğruydu ama TTL'in tetiklediği İSTENMEYEN sıfırlanmalar için de aynı şekilde çalışıyordu). TTL tamamen kaldırıldı — iş artık yalnızca gerçekten tamamlanınca ya da sayfa/panelden elle sıfırlanınca yeniden başlar, süre dolduğu için asla kendiliğinden sıfırlanmaz · 2026-09-06-i · 🎯 Tavan Kombi'nin CANLI havuzu (1SA/4SA) artık geçmiş tarama gibi cron'a bağlı — kimse mini app'i açmasa bile dakikada birkaç hisse otomatik taranıp yazılıyor, uygulamayı her açan kişiyle sınırlı kalmıyor · 2026-09-06-h · ▶️⏸ /tavantani ile kesin sebep bulundu: çalışıyor=false, yani tarama sistemi DURDURULMUŞ durumdaydı — tvkCanliDoldur bu yüzden hiçbir şey denemeden çıkıyordu (sonTur hep null). Panele girmeden çözebilmek için iki yeni komut eklendi: /baslat (tarama sistemini açar) ve /durdur (kapatır) — ikisi de yalnız yönetici, ikisi de mini app'e dokunmuyor · 2026-09-06-g · 🔬 Cloudflare paneline hiç girmeden ham teşhis almak için YENİ komut: /tavantani (yalnız yönetici). Gerçek bir tarama denemesi tetikleyip calisiyor/evrenSayisi/yazmaHata/sonTur verisini doğrudan Telegram mesajı olarak gönderiyor — mini app'in kendi koduna (MINIAPP client script'ine) HİÇ dokunmuyor, o yüzden -e'deki donma riski burada yok · 2026-09-06-f · ⏪ -e GERİ ALINDI: teşhis mesajına eklenen ham JSON debug satırından sonra Tavan Kombi mini app'i splash ekranında donmaya başladı (kullanıcı hem mobil veri hem WiFi'de doğruladı). Sözdizimi kontrolleri (hem dış dosya hem MINIAPP içindeki <script> ayrıca çıkarılıp) temiz çıkıyor, ama riski göze almak yerine son KANITLANMIŞ ÇALIŞAN hâle (d) dönüldü — -e'nin tek farkı olan ham-JSON satırı kaldırıldı, başka hiçbir şey değişmedi · 2026-09-06-e · 🔬 GEÇİCİ TEŞHİS: bir önceki düzeltmelerin (a/b/c) neden hiç tetiklenmediğini tahminle çözmek yerine, Tavan Kombi teşhis mesajının SONUNA ham sunucu durumu (calisiyor/evrenSayisi/yazmaHata/sonTur) doğrudan JSON olarak eklendi — bu satır yalnız kanıt toplamak için, kalıcı değil · 2026-09-06-d · 🚨 /surum HİÇ CEVAP VERMİYORDU (sessizce): bu WORKER_SURUM notu her düzeltmede başına eklene ede 10.000+ karaktere ulaşmıştı, Telegram sendMessage'ın ~4096 karakter sınırını aşınca Telegram isteği tamamen reddediyordu ve bot bunu hiç bildirmiyordu. Artık /surum yalnız EN SON notu gösteriyor (bu satır), tam günlük burada — WORKER_SURUM'un geri kalanı sırf kayıt amaçlı, ekrana basılmıyor · 2026-09-06-c · 🚨 KÖKTEN SEBEP bulundu: sunucu kodunda AYNI isimde iki fonksiyon var — E(e,t) (VIP üye listesini KV'den okuyan, async) ve E2(s) (HTML özel karakterlerini kaçıran, senkron). /surum ekranı ve birkaç bildirim mesajı yanlışlıkla E2 yerine E çağırıyordu; JS'te aynı isimli iki fonksiyon tanımlanınca SONUNCUSU geçerli olur, o yüzden E her zaman VIP-listesi Promise'i döndürüyordu — String'e çevrilince \"[object Promise]\" çıkıyordu. tgTarihSaat düzeltmesi bu kesintiyi (Okunamadı.) gizliyordu, o kesilme kalkınca bu ikinci hata görünür oldu. 4 çağrı noktası da (🖥 Tarayıcı satırı, 📦 Beklenen satırı, ⚙️ Worker satırı, /tara ve toplu bildirimdeki durum mesajları) artık doğru E2'yi kullanıyor · 2026-09-06-b · 🩺 -a düzeltmesi yalnız TARAMA TAMAMLANDIĞINDA kayıt bırakıyordu; mbDilimTara en baştaki kontrollerden biri (tarama o an durdurulmuş / evren o an boş geldi) yüzünden ERKEN çıkarsa hiçbir iz kalmıyordu, birkaç satır sonra AYNI kontroller teşhis tarafından YENİDEN yapıldığında durum artık normale dönmüş olabiliyordu — böylece o anlık/geçici arıza hiç yakalanamıyordu. Artık mbDilimTara'nın HER çıkış noktası (erken dönüşler dahil) kendi gerçek sebebini kaydediyor, teşhis mesajı bunu en üst öncelikle gösteriyor. Ayrıca AYRI ve İLGİSİZ bir hata bulunup düzeltildi: /surum komutu tanımsız bir fonksiyonu (tgTarihSaat) çağırıyordu, bu da mesajı ⚙️ Worker sürüm satırına gelmeden yarıda kesiyordu — deploy'un tutup tutmadığı hiç doğrulanamıyordu · 2026-09-06-a · 🩺 Teşhise DÖRDÜNCÜ ve gerçek bir ihtimal eklendi: KV yazma/durdurulmuş/evren-boş kontrollerinin HİÇBİRİ tetiklenmediği halde havuz hâlâ boş kalıyorsa artık gerçek sebep şu olabiliyor — tvkCanliDoldur zaten çalışıp hisseleri TEK TEK deniyor ama Yahoo'dan hiçbirinde veri alamıyor (query1 ve query2 ikisi de başarısız), bu sessizce yutuluyordu. Artık her tarama turunun kaç hisse denendiği/kaçının başarılı olduğu ve varsa örnek Yahoo hata mesajı isolate belleğinde tutuluyor; teşhis ekranı bunu görürse artık Cron Triggera bak demiyor, doğrudan tarama deneniyor ama Yahoodan veri gelmiyor diyor ve örnek hatayı gösteriyor — 1SA/4SA satırlarının yanına da o turun X/Y başarılı özeti eklendi · 2026-09-03-j · 🩺 Teşhise ÜÇÜNCÜ ve gerçek bir ihtimal eklendi: Cloudflare Workers KV ücretsiz planında YAZMA (put) günde yalnız 1000 kez yapılabilir — list() kotasından ayrı ve çok daha kolay dolan bir sınır (cron dakikada bir yazıyor + her kullanıcı taraması da yazıyor). Kota dolunca A.VERI.put(...) sessizce reddediliyordu, bellekte \"az önce yazıldı\" görünse bile KV'ye hiçbir şey inmiyordu — sonraki her istek sıfırdan başlıyor, ekranda sürekli \"hiç yazılmamış\" görünüyordu (\"tarama açık, evren dolu\" olduğu halde havuz hiç dolmuyordu). Artık teşhis gerçek bir deneme yazması yapıp sonucu doğrudan gösteriyor: kota doluysa \"KV YAZMA BAŞARISIZ\" diye açıkça söylüyor (kota TR saatiyle ~03:00'te sıfırlanır; kalıcı çözüm Workers Paid plan, $5/ay) · 2026-09-03-i · 🩺 Tavan Kombi'de \"Tümünü şimdi tara\" hâlâ \"0 hisse tarandı / hiç yazılmamış\" veriyorsa artık sebebi NET söyleniyor: teşhis artık botun DURDURULMUŞ olup olmadığını ve hisse listesinin (evren) boş olup olmadığını da okuyup mesaja ekliyor — \"tarama durdurulmuş, yeniden başlat\" ya da \"hisse listesi boş\" diyorsa sorun Cron Trigger değil budur; Cron Trigger önerisi artık yalnız ikisi de normalken (tarama açık, evren dolu) hâlâ boşsa gösteriliyor · 2026-09-03-h · 🚨 KÖKTEN DÜZELTME — tamamlanmış bir Tavan Kombi geçmiş taraması sayfası her yeniden açıldığında sessizce YENİ bir tam tur başlıyor, ama önceki turda zaten sayılmış aynı (gün,hisse) çiftleri tvkArsiv2'nin sayaçlarına TEKRAR ekleniyordu (birleştirme tekilleştirme yapmıyor, yalnız topluyor) — sayfa her açılışta toplam gözlem/oran sayıları katbekat şişiyordu. Artık yeni bir TAM tur başlarken (önceki iş tamamlanmış ya da hiç yoksa) tvkArsiv2 de sıfırlanıyor: her tam tur kendi başına tek ve tekrarsız bir ölçüm, üst üste birikmiyor. Yarım kalmış bir işe (sayfa kapanıp tekrar açılması) dokunulmadı, o kaldığı yerden aynı job ile devam ediyor · 2026-09-03-g · 🚨 KÖKTEN DÜZELTME — Tavan Kombi canlı tarama hep \"0 hisse tarandı\" / \"1SA: 0 hisse ölçülü (son yazım: hiç yazılmamış)\" veriyordu. SEBEP: tvkGunSnapUret, TVK_TF (1SA/4SA) havuzunu yalnız OKUYORDU, kendisi hiçbir zaman tarama BAŞLATMIYORDU — bu iki dilim başka hiçbir ekrandan (alarm modülü/KISA-ORTA görünümü) aktif istenmiyorsa ve Cron Trigger tetiklenmiyorsa havuz sonsuza dek boş kalıyordu. Artık Tavan Kombi'nin üç canlı ucu (/api/tavankombi, /tara, /taraTumu) her çağrıldığında kendi kendine en boş/bayat dilimi bir adım ilerletiyor (tvkCanliDoldur) — özellik artık Cron Trigger kurulu olsun olmasın, sekmeyi her açan kullanıcıyla kendini doldurur. Cloudflare panelinde Settings → Triggers → Cron Triggers altında * * * * * kurulu olup olmadığını yine de kontrol etmekte fayda var — kurulu değilse yalnız Tavan Kombi değil, KISA/ORTA/UZUN canlı alarm motoru da beklenenden yavaş tazelenir · 2026-09-03-f · 🚨 KÖKTEN DÜZELTME — \"KV list() limit exceeded for the day\": mbParcalariKat (parça verilerini birleştiren fonksiyon) HER kullanıcı isteğinde gerçek bir KV list() çağrısı yapıyordu; free plan günde yalnız 1000 list() işleminе izin verdiğinden kullanıcı arttıkça kota gün ortasında tükenip panel/mini app'i tamamen çökertiyordu. Artık dilim başına gerçek list() en fazla 3 dakikada bir yapılıyor, arada gelen istekler önbellekteki sonucu kullanıyor; mbParcalariBirlestir'in silme adımı da AYRI bir list() çağırmıyor, aynı önbelleği yeniden kullanıyor (parçalar zaten 6 saatlik TTL ile yazıldığı için veri kaybı yok). Kalıcı çözüm için Workers Paid plana ($5/ay, list() kotası ayda 1M'e çıkıyor) geçiş önerilir. Ayrıca: ISATR gibi çok seyrek işlem gören hisselerin \"60dk veri yetersiz\" mesajı (Yahoo'da gerçekten intraday bar yok, hisse günlerce 0 lot işlem görüyor) artık kalıcı Hatalar kaydını kirletmiyor — taramanın ilerleme ekranında görünmeye devam ediyor ama gerçek sistem hatası değil, aksiyon gerekmiyor · 2026-09-03-e · 🐂 Tavan Kombi KRİTİK DÜZELTME: DİP (dip/dip382/dip236) ve PİVOT KIRILIM elemanlarında BOĞA şartı hiç YOKTU — yalnız SEVİYE BÖLGESİ (b1..b6) bantlarında vardı, yani bu elemanlar hissenin ayı olduğu durumlarda da 'geçti' sayılıyordu. Artık 10 elemanın HEPSİNDE (dip/dip382/dip236/b1..b6/pivot) boğa şartı zorunlu — hem canlı anlık taramada (tvkGunSnapUret / 🔍 Bu kombinasyonla şimdi tara) hem geçmiş taramasında (tvkGecmisHisseTara) aynı düzeltme. Eski sayaçlar bu yüzden GEÇERSİZDİ: tvkArsiv→tvkArsiv2 ve tvkGecmisIs→tvkGecmisIs2 anahtarlarına geçildi, böylece /tavankombi/gecmis'e bir sonraki girişte otomatik olarak SIFIRDAN, düzeltilmiş kurallarla tam yeniden tarama başlar (evrendeki tüm hisseler baştan işlenir) · 2026-09-03-d · 🔍 Tavan Kombi'ye canlı tarama eklendi: her satırın altında artık \"🔍 Bu kombinasyonla şimdi tara\" butonu var — eskiden 🪜 Bölge/⬇️ Dip filtreleri her elemanda TEK ortak dilim dayattığı için \"1SA'de b3 VE 4SA'de b6\" gibi eleman-başına-farklı-dilim kombinasyonları canlı taramada kurulamıyordu; artık backtest raporundaki HERHANGİ bir satıra tıklayınca o kombinasyonu ŞU AN karşılayan hisseler listeleniyor (yeni /api/tavankombi/tara, mevcut tvkGunSnapUret'i kullanıyor — ek Yahoo isteği yok) · 2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
+const WORKER_SURUM="2026-09-19-gecmis-bt · 📊🧪 Hacim Profili: \"Geçmiş sinyaller\" ekranı artık boş kalmıyor — canlı takip (hpGecmisEkle/hpSinyalIsle, hiç değişmedi) henüz kapanmış sinyal biriktirmediyse bile, 🧪 Tarihsel backtest'in (hpBtHisse) zaten geriye dönük taradığı barlar üzerinde AYNI aç/kapa kuralı (HP_GUCLU'ya girince pozisyon aç, poc_alti/taban_altı'na dönünce kapat) tek ek geçişte çalıştırılıp gerçek giriş/çıkış-fiyatlı, gerçek süreli kapanış kayıtları üretiliyor (sabit t+5/10/20 ufku değil). Bu kayıtlar sunucu yanıtında acc'nin YANINDA ayrı bir \"gecmis\" alanında taşınıyor (hpBtBirlestir'in n/h/x/hit/plan bekleyen genel birleştirme döngüsüne hiç girmiyor, karıştırılırsa hata verirdi), istemcide Tarihsel backtest önbelleğine (hpBtSonuc/localStorage) ek bir alan olarak yazılıyor. \"Geçmiş sinyaller\" ekranı açılırken bu önbellek (varsa) canlı listeyle SALT GÖRÜNTÜLEMEDE birleştiriliyor (aynı kod+çıkış-zamanı ikilenmesin diye elenerek) — iki kaynak da kendi yerinde AYNEN duruyor, biri diğerini silmiyor/değiştirmiyor; Tarihsel backtest hiç çalıştırılmadıysa davranış birebir eskisiyle aynı · 2026-09-19-bt · 🧪 Hacim Profili: TARİHSEL BACKTEST eklendi (🧪 Tarihsel backtest düğmesi) — Yahoo geçmişi her barda geriye dönük yeniden yürütülüp POC üstüne geçiş / kırılım (POC üstünden gelerek vs POC yu atlayarak) / kırılıma ve POC ye %2-3-5-8 yaklaşma / Aday modeli (Al-Hazırlan-İzle, stop-hedef planıyla) sonrası t+5/10/20 getirisi sinyalsiz güne kıyasla gösteriliyor; Aday ekranına ≤%2/3/5/8 tetiğe uzaklık seçici eklendi · 2026-09-19-hp · 🎯 Hacim Profili: yeni varsayılan ADAY HİSSELER görünümü — her hisse için kırılıma yakınlık, otomatik stop/hedef, risk/ödül ve 0-100 aday puanı; 🟢 Al bölgesi / 🟡 Hazırlan / 🔵 İzle olarak üç net gruba ayrılıyor, gerisi elenip nedeni yazılıyor. Eski filtreli liste Tüm liste düğmesinin arkasında aynen duruyor. Yalnız istemci tarafı, sunucu ve KV değişmedi · 2026-09-09-c · 🚨 KÖKTEN DÜZELTME — canlı havuz (1SA/4SA) 443/444'e ulaştıktan SONRA tekrar 36'ya küçüldü. Sebep: mbDilimTara'nın 6 saatten eski kaydı silen \"bayat ölçüm\" temizliği — KV kotasını korumak için tarama yavaşlatılınca (2026-09-08-e) tam bir tur artık 6 saatten uzun sürebiliyordu, yeni hisseler eklenirken eskiler siliniyordu, havuz asla tam dolamıyordu. Çözüm: Tavan Kombi'ye özel daha büyük bir parti boyutu (TVK_CANLI_ANLIK_AZAMI=30, mbModulTara'nın paylaştığı ortak sabitten ayrıldı — KV yazma sayısı artmıyor, hâlâ tek PUT) ve silme eşiği 6 saatten 24 saate çıkarıldı · 2026-09-09-b · 🌹 Yeni işaret: son 13 GÜNLÜK barda kaç kez GERÇEKTEN tavan yapmış (o günün kendi kapanışı bir önceki güne göre ≥%7 — geriye dönük tahmin değil, somut yakın geçmiş). 0 ise hiç gösterilmiyor, varsa hisse adının yanına 🌹N ekleniyor. Hem eşleşen hisse listesinde hem /tavankombi Telegram özetinde görünüyor. Bu bir birikim değil — her tarandığında o hissenin GÜNCEL son-13-bar durumuyla üzerine yazılıyor (toplanmıyor) · 2026-09-09-a · ⚡📋 İki yeni özellik: (1) son 60 bardaki ORTALAMA volatilite (yüksek-düşük/kapanış%, zaten çekilmiş mum verisinden, ek istek yok) artık her hissede hesaplanıyor, eşleşen hisse listesinde %2.7'nin üstündekiler ⚡ ile işaretleniyor; (2) yeni /tavankombi komutu (yalnız yönetici) — en iyi kombinasyonları ve şu an karşılayan hisseleri doğrudan Telegram mesajı olarak gönderiyor, mini app'e girmeye gerek yok. İç script ayrıca çıkarılıp diff ile doğrulandı (yalnız istenen satır değişti) · 2026-09-08-i · 🚨 KÖKTEN DÜZELTME — geçmiş tarama saatlerce 14:14'te donuk kalmıştı, /tavantani'den ELLE çağrılınca sorunsuz çalıştığı görüldü: sorun tvkGecmisAdimYap'ta değil, onu tetikleyen \"dk%10===0\" dakika kapısındaymış (muhtemelen ev.scheduledTime bu ortamda beklendiği gibi davranmıyor). Dakika aritmetiğine güvenmeyen, işin/havuzun KENDİ son güncelleme zamanına bakan bir kapıya geçildi — hem daha güvenilir hem daha basit · 2026-09-08-h · 🔬 /tavantani artık tvkGecmisAdimYap'ı DOĞRUDAN, hemen çalıştırıp sonucunu (veya fırlatırsa tam hata+stack'ini) gösteriyor — cron'un neden 14:14'ten beri hiç ilerlemediğini beklemeden, anında kesin cevap için · 2026-09-08-g · 🎯 hisseSayac neden hep 0 kalıyordu bulundu: tur 1 zaten TAMAMLANMIŞTI (444/444) ve ciftTakip her şeyi \"zaten sayıldı\" işaretlemişti — hisseSayac özelliği bundan SONRA eklendiği için hiç çalışma şansı olmamıştı. Çözüm: hisseSayac artık kendi AYRI (gün|kod) takibini (hisseCiftTakip, boş başlıyor) kullanıyor — combo istatistikleri (ciftTakip) hâlâ korunuyor, ÇİFT SAYILMIYOR, ama hisseSayac bir kerelik geriye dönük olarak dolduruluyor. Bir sonraki otomatik tur (20 dk + 10 dk cron penceresi içinde) başlayınca hisse alışkanlığı verisi artık gerçekten dolacak · 2026-09-08-f · 🔬 /tavantani'ye geçmiş tarama işinin (tvkGecmisIs3) durumu eklendi — tamam/toplam/tamamlandi/son güncelleme/son hatalar görünüyor, hisseSayac neden dolmuyor sorusuna kesin cevap için · 2026-09-08-e · 🚨 BUGÜNKÜ KESİNTİNİN SEBEBİ BULUNDU: Cloudflare KV ücretsiz plan günlük 1000 yazma sınırı, dakikada 2 kez çalışan tvkGecmisAdim+tvkCanli tarafından aşılmıştı (\"KV put() limit exceeded for the day\"). Şimdi tvkCanli 3 dakikada bir, tvkGecmisAdim 10 dakikada bir, ikisi de dakikada 1 kez (2 değil) çalışıyor — günlük yazma hacmi ~10-15 kat azaldı. Kalıcı/kesin çözüm Cloudflare Workers Paid plana ($5/ay) geçmek; bu sınırı tamamen kaldırır · 2026-09-08-d · 🔬 /tavantani'ye hisseSayac (tavan alışkanlığı verisi) kontrolü eklendi — kaç hisse için dolu, örnek değerler neler, doğrudan Telegram'dan görülebiliyor (mini app'e dokunmuyor) · 2026-09-08-c · 🎯 Kombinasyon eşleşen hisse listesine hissenin KENDİ tavan alışkanlığı eklendi — bir kombinasyon THYAO'yu eşleştirse bile THYAO'nun tarihte nadiren tavan yaptığını, SASA gibi bir hissenin sık yaptığını artık her hissenin adının altında \"tavan alışkanlığı: %X (N gün)\" olarak görebiliyorsun (20'den az gözlemde hiç gösterilmiyor — güvenilmez). İç script sözdizimi ayrıca çıkarılıp doğrulandı, diff ile yalnız istenen satırların değiştiği teyit edildi (-e'deki dondurma riskine karşı) · 2026-09-08-b · 🔁 Tavan Kombi geçmiş tarama artık TAM OTOMATİK ve KALICI BİRİKİMLİ: (1) her tur bitince 20 dakika sonra cron kendiliğinden yeni bir tur başlatıyor — kimsenin sayfayı elle açmasına gerek yok; (2) yeni turlar artık tvkArsiv2'yi SIFIRLAMIYOR — bunun yerine her (gün,hisse) çifti kalıcı bir takip listesine (ciftTakip) işleniyor, bir sonraki tur aynı çifte rastlarsa atlıyor, yalnız GERÇEKTEN yeni olan günler/hisseler arşive ekleniyor. Geçişte çift sayımı önlemek için KV anahtarları tvkArsiv2→tvkArsiv3, tvkGecmisIs2→tvkGecmisIs3 olarak değiştirildi (tek seferlik temiz başlangıç, bundan sonra hiç sıfırlanmayacak) · 2026-09-08-a · 🚨 KÖKTEN DÜZELTME — Tavan Kombi geçmiş tarama işinin (tvkGecmisIs2) KV kaydında 24 saatlik TTL vardı: tarama 24 saat içinde bitmezse kayıt kendiliğinden siliniyor, sistem \\\"iş yok\\\" sanıp SIFIRDAN yeni bir tam tur başlatıyordu — bu da o turun tvkArsiv2 istatistiklerini SIFIRLIYORDU (bkz. -h notundaki \\\"yeni tam tur başlarken tvkArsiv2 sıfırlanır\\\" mantığı, kendi başına doğruydu ama TTL'in tetiklediği İSTENMEYEN sıfırlanmalar için de aynı şekilde çalışıyordu). TTL tamamen kaldırıldı — iş artık yalnızca gerçekten tamamlanınca ya da sayfa/panelden elle sıfırlanınca yeniden başlar, süre dolduğu için asla kendiliğinden sıfırlanmaz · 2026-09-06-i · 🎯 Tavan Kombi'nin CANLI havuzu (1SA/4SA) artık geçmiş tarama gibi cron'a bağlı — kimse mini app'i açmasa bile dakikada birkaç hisse otomatik taranıp yazılıyor, uygulamayı her açan kişiyle sınırlı kalmıyor · 2026-09-06-h · ▶️⏸ /tavantani ile kesin sebep bulundu: çalışıyor=false, yani tarama sistemi DURDURULMUŞ durumdaydı — tvkCanliDoldur bu yüzden hiçbir şey denemeden çıkıyordu (sonTur hep null). Panele girmeden çözebilmek için iki yeni komut eklendi: /baslat (tarama sistemini açar) ve /durdur (kapatır) — ikisi de yalnız yönetici, ikisi de mini app'e dokunmuyor · 2026-09-06-g · 🔬 Cloudflare paneline hiç girmeden ham teşhis almak için YENİ komut: /tavantani (yalnız yönetici). Gerçek bir tarama denemesi tetikleyip calisiyor/evrenSayisi/yazmaHata/sonTur verisini doğrudan Telegram mesajı olarak gönderiyor — mini app'in kendi koduna (MINIAPP client script'ine) HİÇ dokunmuyor, o yüzden -e'deki donma riski burada yok · 2026-09-06-f · ⏪ -e GERİ ALINDI: teşhis mesajına eklenen ham JSON debug satırından sonra Tavan Kombi mini app'i splash ekranında donmaya başladı (kullanıcı hem mobil veri hem WiFi'de doğruladı). Sözdizimi kontrolleri (hem dış dosya hem MINIAPP içindeki <script> ayrıca çıkarılıp) temiz çıkıyor, ama riski göze almak yerine son KANITLANMIŞ ÇALIŞAN hâle (d) dönüldü — -e'nin tek farkı olan ham-JSON satırı kaldırıldı, başka hiçbir şey değişmedi · 2026-09-06-e · 🔬 GEÇİCİ TEŞHİS: bir önceki düzeltmelerin (a/b/c) neden hiç tetiklenmediğini tahminle çözmek yerine, Tavan Kombi teşhis mesajının SONUNA ham sunucu durumu (calisiyor/evrenSayisi/yazmaHata/sonTur) doğrudan JSON olarak eklendi — bu satır yalnız kanıt toplamak için, kalıcı değil · 2026-09-06-d · 🚨 /surum HİÇ CEVAP VERMİYORDU (sessizce): bu WORKER_SURUM notu her düzeltmede başına eklene ede 10.000+ karaktere ulaşmıştı, Telegram sendMessage'ın ~4096 karakter sınırını aşınca Telegram isteği tamamen reddediyordu ve bot bunu hiç bildirmiyordu. Artık /surum yalnız EN SON notu gösteriyor (bu satır), tam günlük burada — WORKER_SURUM'un geri kalanı sırf kayıt amaçlı, ekrana basılmıyor · 2026-09-06-c · 🚨 KÖKTEN SEBEP bulundu: sunucu kodunda AYNI isimde iki fonksiyon var — E(e,t) (VIP üye listesini KV'den okuyan, async) ve E2(s) (HTML özel karakterlerini kaçıran, senkron). /surum ekranı ve birkaç bildirim mesajı yanlışlıkla E2 yerine E çağırıyordu; JS'te aynı isimli iki fonksiyon tanımlanınca SONUNCUSU geçerli olur, o yüzden E her zaman VIP-listesi Promise'i döndürüyordu — String'e çevrilince \"[object Promise]\" çıkıyordu. tgTarihSaat düzeltmesi bu kesintiyi (Okunamadı.) gizliyordu, o kesilme kalkınca bu ikinci hata görünür oldu. 4 çağrı noktası da (🖥 Tarayıcı satırı, 📦 Beklenen satırı, ⚙️ Worker satırı, /tara ve toplu bildirimdeki durum mesajları) artık doğru E2'yi kullanıyor · 2026-09-06-b · 🩺 -a düzeltmesi yalnız TARAMA TAMAMLANDIĞINDA kayıt bırakıyordu; mbDilimTara en baştaki kontrollerden biri (tarama o an durdurulmuş / evren o an boş geldi) yüzünden ERKEN çıkarsa hiçbir iz kalmıyordu, birkaç satır sonra AYNI kontroller teşhis tarafından YENİDEN yapıldığında durum artık normale dönmüş olabiliyordu — böylece o anlık/geçici arıza hiç yakalanamıyordu. Artık mbDilimTara'nın HER çıkış noktası (erken dönüşler dahil) kendi gerçek sebebini kaydediyor, teşhis mesajı bunu en üst öncelikle gösteriyor. Ayrıca AYRI ve İLGİSİZ bir hata bulunup düzeltildi: /surum komutu tanımsız bir fonksiyonu (tgTarihSaat) çağırıyordu, bu da mesajı ⚙️ Worker sürüm satırına gelmeden yarıda kesiyordu — deploy'un tutup tutmadığı hiç doğrulanamıyordu · 2026-09-06-a · 🩺 Teşhise DÖRDÜNCÜ ve gerçek bir ihtimal eklendi: KV yazma/durdurulmuş/evren-boş kontrollerinin HİÇBİRİ tetiklenmediği halde havuz hâlâ boş kalıyorsa artık gerçek sebep şu olabiliyor — tvkCanliDoldur zaten çalışıp hisseleri TEK TEK deniyor ama Yahoo'dan hiçbirinde veri alamıyor (query1 ve query2 ikisi de başarısız), bu sessizce yutuluyordu. Artık her tarama turunun kaç hisse denendiği/kaçının başarılı olduğu ve varsa örnek Yahoo hata mesajı isolate belleğinde tutuluyor; teşhis ekranı bunu görürse artık Cron Triggera bak demiyor, doğrudan tarama deneniyor ama Yahoodan veri gelmiyor diyor ve örnek hatayı gösteriyor — 1SA/4SA satırlarının yanına da o turun X/Y başarılı özeti eklendi · 2026-09-03-j · 🩺 Teşhise ÜÇÜNCÜ ve gerçek bir ihtimal eklendi: Cloudflare Workers KV ücretsiz planında YAZMA (put) günde yalnız 1000 kez yapılabilir — list() kotasından ayrı ve çok daha kolay dolan bir sınır (cron dakikada bir yazıyor + her kullanıcı taraması da yazıyor). Kota dolunca A.VERI.put(...) sessizce reddediliyordu, bellekte \"az önce yazıldı\" görünse bile KV'ye hiçbir şey inmiyordu — sonraki her istek sıfırdan başlıyor, ekranda sürekli \"hiç yazılmamış\" görünüyordu (\"tarama açık, evren dolu\" olduğu halde havuz hiç dolmuyordu). Artık teşhis gerçek bir deneme yazması yapıp sonucu doğrudan gösteriyor: kota doluysa \"KV YAZMA BAŞARISIZ\" diye açıkça söylüyor (kota TR saatiyle ~03:00'te sıfırlanır; kalıcı çözüm Workers Paid plan, $5/ay) · 2026-09-03-i · 🩺 Tavan Kombi'de \"Tümünü şimdi tara\" hâlâ \"0 hisse tarandı / hiç yazılmamış\" veriyorsa artık sebebi NET söyleniyor: teşhis artık botun DURDURULMUŞ olup olmadığını ve hisse listesinin (evren) boş olup olmadığını da okuyup mesaja ekliyor — \"tarama durdurulmuş, yeniden başlat\" ya da \"hisse listesi boş\" diyorsa sorun Cron Trigger değil budur; Cron Trigger önerisi artık yalnız ikisi de normalken (tarama açık, evren dolu) hâlâ boşsa gösteriliyor · 2026-09-03-h · 🚨 KÖKTEN DÜZELTME — tamamlanmış bir Tavan Kombi geçmiş taraması sayfası her yeniden açıldığında sessizce YENİ bir tam tur başlıyor, ama önceki turda zaten sayılmış aynı (gün,hisse) çiftleri tvkArsiv2'nin sayaçlarına TEKRAR ekleniyordu (birleştirme tekilleştirme yapmıyor, yalnız topluyor) — sayfa her açılışta toplam gözlem/oran sayıları katbekat şişiyordu. Artık yeni bir TAM tur başlarken (önceki iş tamamlanmış ya da hiç yoksa) tvkArsiv2 de sıfırlanıyor: her tam tur kendi başına tek ve tekrarsız bir ölçüm, üst üste birikmiyor. Yarım kalmış bir işe (sayfa kapanıp tekrar açılması) dokunulmadı, o kaldığı yerden aynı job ile devam ediyor · 2026-09-03-g · 🚨 KÖKTEN DÜZELTME — Tavan Kombi canlı tarama hep \"0 hisse tarandı\" / \"1SA: 0 hisse ölçülü (son yazım: hiç yazılmamış)\" veriyordu. SEBEP: tvkGunSnapUret, TVK_TF (1SA/4SA) havuzunu yalnız OKUYORDU, kendisi hiçbir zaman tarama BAŞLATMIYORDU — bu iki dilim başka hiçbir ekrandan (alarm modülü/KISA-ORTA görünümü) aktif istenmiyorsa ve Cron Trigger tetiklenmiyorsa havuz sonsuza dek boş kalıyordu. Artık Tavan Kombi'nin üç canlı ucu (/api/tavankombi, /tara, /taraTumu) her çağrıldığında kendi kendine en boş/bayat dilimi bir adım ilerletiyor (tvkCanliDoldur) — özellik artık Cron Trigger kurulu olsun olmasın, sekmeyi her açan kullanıcıyla kendini doldurur. Cloudflare panelinde Settings → Triggers → Cron Triggers altında * * * * * kurulu olup olmadığını yine de kontrol etmekte fayda var — kurulu değilse yalnız Tavan Kombi değil, KISA/ORTA/UZUN canlı alarm motoru da beklenenden yavaş tazelenir · 2026-09-03-f · 🚨 KÖKTEN DÜZELTME — \"KV list() limit exceeded for the day\": mbParcalariKat (parça verilerini birleştiren fonksiyon) HER kullanıcı isteğinde gerçek bir KV list() çağrısı yapıyordu; free plan günde yalnız 1000 list() işleminе izin verdiğinden kullanıcı arttıkça kota gün ortasında tükenip panel/mini app'i tamamen çökertiyordu. Artık dilim başına gerçek list() en fazla 3 dakikada bir yapılıyor, arada gelen istekler önbellekteki sonucu kullanıyor; mbParcalariBirlestir'in silme adımı da AYRI bir list() çağırmıyor, aynı önbelleği yeniden kullanıyor (parçalar zaten 6 saatlik TTL ile yazıldığı için veri kaybı yok). Kalıcı çözüm için Workers Paid plana ($5/ay, list() kotası ayda 1M'e çıkıyor) geçiş önerilir. Ayrıca: ISATR gibi çok seyrek işlem gören hisselerin \"60dk veri yetersiz\" mesajı (Yahoo'da gerçekten intraday bar yok, hisse günlerce 0 lot işlem görüyor) artık kalıcı Hatalar kaydını kirletmiyor — taramanın ilerleme ekranında görünmeye devam ediyor ama gerçek sistem hatası değil, aksiyon gerekmiyor · 2026-09-03-e · 🐂 Tavan Kombi KRİTİK DÜZELTME: DİP (dip/dip382/dip236) ve PİVOT KIRILIM elemanlarında BOĞA şartı hiç YOKTU — yalnız SEVİYE BÖLGESİ (b1..b6) bantlarında vardı, yani bu elemanlar hissenin ayı olduğu durumlarda da 'geçti' sayılıyordu. Artık 10 elemanın HEPSİNDE (dip/dip382/dip236/b1..b6/pivot) boğa şartı zorunlu — hem canlı anlık taramada (tvkGunSnapUret / 🔍 Bu kombinasyonla şimdi tara) hem geçmiş taramasında (tvkGecmisHisseTara) aynı düzeltme. Eski sayaçlar bu yüzden GEÇERSİZDİ: tvkArsiv→tvkArsiv2 ve tvkGecmisIs→tvkGecmisIs2 anahtarlarına geçildi, böylece /tavankombi/gecmis'e bir sonraki girişte otomatik olarak SIFIRDAN, düzeltilmiş kurallarla tam yeniden tarama başlar (evrendeki tüm hisseler baştan işlenir) · 2026-09-03-d · 🔍 Tavan Kombi'ye canlı tarama eklendi: her satırın altında artık \"🔍 Bu kombinasyonla şimdi tara\" butonu var — eskiden 🪜 Bölge/⬇️ Dip filtreleri her elemanda TEK ortak dilim dayattığı için \"1SA'de b3 VE 4SA'de b6\" gibi eleman-başına-farklı-dilim kombinasyonları canlı taramada kurulamıyordu; artık backtest raporundaki HERHANGİ bir satıra tıklayınca o kombinasyonu ŞU AN karşılayan hisseler listeleniyor (yeni /api/tavankombi/tara, mevcut tvkGunSnapUret'i kullanıyor — ek Yahoo isteği yok) · 2026-09-03-c · 🎯 Tavan Kombi GENİŞLETİLDİ: DİP artık tek kademe değil 3 ayrı eleman (dip/dip382/dip236), SEVİYE BÖLGESİ artık tek kaba koşul değil 6 ayrı bant (b1..b6) — TVK_ELEMAN 3'ten 10'a çıktı, kombinasyon sayısı 26'dan 59.048'e çıktı. Yeni ölçüm YOK, kaynak zaten hesaplıyordu — yalnız ayrımlar artık ayrı ayrı sayılıyor. Gözlem başına eşleştirme artık 59.048'i tek tek gezmiyor (CPU bütçesini patlatırdı); tvkGecenIdleriUret yalnız o gözlemde GERÇEKTEN geçen dalları üretiyor (pratikte gözlem başına birkaç yüz kombinasyon). ⚠️ Veri havuzu aynı kaldığı için çoğu satır artık \\\"az örnek\\\" işaretli — genişletme öncesi 26 kombinasyonlu satırlar hâlâ en güvenilir olanlar, yeni ince satırlara ihtiyatla bak · 2026-09-03-b · 🕰 Tavan Kombi geçmiş tarama artık tarayıcı sekmesine bağımlı DEĞİL — kalıcı çözüm: iş, native Cloudflare Cron Trigger'a (scheduled(), zaten dakikada bir çalışıyor) bağlandı, her tetiklemede birkaç adım kendiliğinden ilerliyor; sekme kapansa, telefon kilitlense, hız sınırına takılsa bile tarama durmuyor. Sayfa açıksa oradaki adım isteği de aynı işe (kilit korumalı) katkı sağlıyor, çakışma yok. Ayrıca sayfadaki polling artık hataya (ör. 429 hız sınırı) takılınca tamamen durmuyor, otomatik ve artan aralıkla (2sn→15sn) yeniden deniyor; sonuçlar da iş %100 bitmeden her adımda kalıcı arşive işleniyor — Tavan Kombi sekmesi tarama sürerken de o ana kadarki sonuçları gösteriyor (sekmeden çıkıp tekrar girmek gerekir, o an tazelenir) · 2026-08-31-a · 🔔 Anlık uyarı: KISA (1 saat) artık ORTA ve UZUN ile birlikte bildirim kapsamına girdi — ama gürültü yapmasın diye üçü de (KISA/ORTA/UZUN) artık yalnızca ⭐⭐⭐ 3 Yıldız (3/3 hava şartı: ⚓ ortalama üstü + 📚 kalın raf + 📐 temiz trend) sağlayan sinyallerde bildirim gönderiyor. Alıcılar değişmedi: yalnızca Anlık Uyarı'yı açmış yönetici + Süper Üyeler · 2026-08-30-a · 🔔 Filtre alarmı: MODÜL-ÖZEL DİLİM tamamen kayboluyordu — bir modül (MAL/DİP/Bölge/Enerji/AL-BOĞA) ekranda GENEL'den farklı kendi dilimini kullanıyorsa, alarma eklerken sunucu bunu hiç kaydetmiyordu (yalnız genel dilim saklanıyordu); yuva geri yüklenirken de istemci bu alanı ayrıca null'a zorluyordu; arka plan bildirim motoru da yalnız tek bir genel dilimle çalışıyordu. Üçü de düzeltildi: modül-özel dilim artık kaydediliyor, aynen geri yükleniyor ve bildirimler de modül başına doğru dilimde taranıyor. Yuva özetinde artık özel dilim varsa [dilim] olarak ayrıca gösteriliyor — hangi yuvanın hangi dilimde kurulu olduğu net görülüyor · 2026-08-24-i · 🔔 Filtre alarmı: 'alınıyor…' yazısının SONSUZA dek asılı kalma hatası bulundu ve düzeltildi — istek başarısız/geç olursa artık kilit HER ZAMAN çözülüyor ve ekran yeniden çiziliyor (eskiden hem kilit hem ekran donuk kalıyordu) + 8 saniyelik zaman aşımı + 5 saniyede bir kendiliğinden yeniden deneyen bekçi eklendi + arayüzdeki ekle/sil butonları da artık süper üyelere açık (eskiden HTML hâlâ yalnız yöneticiyi gösteriyordu) · 📢 Toplu duyuru: kalıcı olmayan başarısızlar arka planda otomatik tekrar deniyor + botu engelleyenler ayrı tespit ediliyor · 📊 Panel: net aktif/hiç kullanmayan/botu engellemiş segmentleri ve filtresi";
 const BEKLENEN_TARAYICI_SURUM="2026-08-20-e";
 async function sinyalMetniUret(A,yalnizCanli){
   const L=await g(A);
@@ -2953,11 +2953,22 @@ function hpBtGozle(acc,anahtar,m,t,f,seviye,plan){
   }
 }
 function hpBtYakinIdx(v){for(let i=0;i<HP_BT_YAKIN.length;i++){if(v<=HP_BT_YAKIN[i])return i}return -1}
-function hpBtHisse(m,acc,tf){
+function hpBtHisse(m,acc,tf,kod,gecmisListe){
   const N=m.length;
   const tavan=HP_BT_MAXBAR[tf]||750;
   const bas=Math.max(HP_MIN_BAR-1,N-tavan);
   let onceki=null,oYk=-1,oPk=-1,oTier=null;
+  /* 🧪📊 2026-09-19-gecmis-bt: mevcut sayaç/istatistik akışına (yukarıdaki
+     hpBtGozle çağrıları, acc) HİÇ DOKUNMADAN — aynı t döngüsü içinde,
+     canlı hpSinyalIsle ile BİREBİR aynı aç/kapa kuralını (HP_GUCLU'ya
+     girince pozisyon aç, çıkınca kapat) geriye dönük tek geçişte
+     yürütüyoruz. Amaç: "Geçmiş sinyaller" ekranı canlı takip henüz
+     kapanmış sinyal biriktirmediyse bile, yıllarca geçmişten üretilmiş
+     GERÇEK giriş/çıkış çiftleriyle (sabit 5/10/20 bar ufku DEĞİL, gerçek
+     süre ve gerçek çıkış fiyatı) beslenebilsin. gecmisListe verilmezse
+     (eski çağrı biçimi) bu blok tamamen atlanır — geriye dönük uyumlu. */
+  let poz=null;
+  const yerelGecmis=gecmisListe?[]:null;
   for(let t=bas;t<N-5;t++){
     const r=hpHesapla(m.slice(Math.max(0,t-HP_MAX_BAR+1),t+1));
     if(!r){onceki=null;oYk=-1;oPk=-1;oTier=null;continue}
@@ -2978,36 +2989,22 @@ function hpBtHisse(m,acc,tf){
     if(pk>=0&&(oPk<0||pk<oPk))hpBtGozle(acc,"pk_"+HP_BT_YAKIN[pk],m,t,f,r.poc,null);
     const a=hpAdayS(r);
     if(a.tier&&a.tier!==oTier)hpBtGozle(acc,"ad_"+a.tier,m,t,f,0,{stop:a.stop,hedef:a.hedef});
+    if(yerelGecmis){
+      if(HP_GUCLU.has(k)){
+        if(!poz)poz={fiyat:f,ts:Math.round((m[t].time||0)*1000),konum:k};
+      }else if(poz){
+        const kar=Math.round(((f-poz.fiyat)/poz.fiyat)*1000)/10;
+        yerelGecmis.push({kod:kod,girisFiyat:poz.fiyat,cikisFiyat:f,karYuzde:kar,
+          girisTs:poz.ts,cikisTs:Math.round((m[t].time||0)*1000),enYuksekKonum:poz.konum});
+        poz=null;
+      }
+    }
     onceki=k;oYk=yk;oPk=pk;oTier=a.tier||null;
   }
-}
-/* 🕰 2026-09-19-gecmis-doldur: kullanıcı sorusu — "Geçmiş sinyaller ekranı
-   bomboş, geçmiş veriden az da olsa yakalama şansı yok mu?" Cevap: var —
-   hpBtHisse'nin ZATEN taradığı aynı uzun geçmiş (yfMumlar/hpMumlarAl,
-   1G için 5 yıl) üzerinde, ama farklı bir şey aranıyor: hpBtHisse yalnız
-   TOPLU istatistik biriktirir (kaç olay, ortalama getiri), kod/tarih/fiyat
-   gibi somut TEK TEK kayıt tutmaz. Bu yeni fonksiyon aynı barları tarar
-   ama hpSinyalIsle'nin CANLI mantığının (güçlü→zayıf dönüşünde bir kayıt
-   kapat) birebir AYNISINI geriye dönük uygular — mevcut hpBtHisse'ye ve
-   "🧪 Tarihsel backtest" ekranına HİÇ dokunmuyor, tamamen ayrı bir yol. */
-function hpBtHisseGecmis(m,tf,kod){
-  const N=m.length;
-  const olaylar=[];
-  let giris=null;
-  for(let t=HP_MIN_BAR-1;t<N;t++){
-    const r=hpHesapla(m.slice(Math.max(0,t-HP_MAX_BAR+1),t+1));
-    if(!r)continue;
-    const guclumu=HP_GUCLU.has(r.konum);
-    if(guclumu){
-      if(!giris)giris={fiyat:r.fiyat,ts:m[t].time,konum:r.konum};
-    }else if(giris){
-      const kar=Math.round(((r.fiyat-giris.fiyat)/giris.fiyat)*1000)/10;
-      olaylar.push({kod:kod,girisFiyat:giris.fiyat,cikisFiyat:r.fiyat,karYuzde:kar,
-        girisTs:giris.ts*1000,cikisTs:m[t].time*1000,enYuksekKonum:giris.konum});
-      giris=null;
-    }
-  }
-  return olaylar.slice(-20); /* çok oynak bir hissede bile makul sayıda kayıt */
+  /* Hisse başına en fazla son 20 kapanış — hem yanıt boyutu makul kalsın
+     hem de tek bir aşırı-hareketli hissenin listeye baskın gelmesi
+     engellensin. */
+  if(yerelGecmis&&yerelGecmis.length)gecmisListe.push.apply(gecmisListe,yerelGecmis.slice(-20));
 }
 async function hpTekHisse(kod){
   const satir=[];
@@ -10613,7 +10610,7 @@ function hpBtBaslat(){
     }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
     return;
   }
-  var d={tf:hpBtTf,kuyruk:[],acc:{},toplam:hpEvren.length,tamam:0,islenen:0,ucusta:0,hata:0,eksik:0,suruyor:true,durdu:false,ts:Date.now()};
+  var d={tf:hpBtTf,kuyruk:[],acc:{},gecmis:[],toplam:hpEvren.length,tamam:0,islenen:0,ucusta:0,hata:0,eksik:0,suruyor:true,durdu:false,ts:Date.now()};
   for(var i=0;i<hpEvren.length;i+=HP_BT_PARCA)d.kuyruk.push(hpEvren.slice(i,i+HP_BT_PARCA));
   hpBtDurum=d;
   hpBtGoster();
@@ -10625,7 +10622,12 @@ function hpBtTur(d){
     if(d.ucusta===0){
       d.suruyor=false;
       if(d.eksik>0){d.durdu=true;hpBtGoster();return}
-      var o={acc:d.acc,ts:Date.now(),islenen:d.islenen,toplam:d.toplam};
+      /* 🧪📊 2026-09-19-gecmis-bt: biriken tüm geçmiş kapanışları en
+         yeniden eskiye sırala, aşırı büyümesin diye üst sınırla kes.
+         Sadece bu ekranın kendi önbelleğine ek bir alan — acc'ye
+         dokunmuyor, hpBtBirlestir'i etkilemiyor. */
+      var g=(d.gecmis||[]).slice().sort(function(a,b){return b.cikisTs-a.cikisTs}).slice(0,300);
+      var o={acc:d.acc,gecmis:g,ts:Date.now(),islenen:d.islenen,toplam:d.toplam};
       hpBtSonuc[d.tf]=o;hpBtOnbellekYaz(d.tf,o);
       hpBtGoster();
     }
@@ -10638,6 +10640,7 @@ function hpBtTur(d){
     if(hpBtDurum!==d)return;
     if(r&&r.ok&&r.acc){hpBtBirlestir(d.acc,r.acc);d.islenen+=(r.islenen||0);d.tamam+=parca.length}
     else{d.hata++;if(d.hata<HP_BT_HATA_TAVAN)d.kuyruk.push(parca);else d.eksik++}
+    if(r&&r.ok&&Array.isArray(r.gecmis)&&r.gecmis.length){(d.gecmis||(d.gecmis=[])).push.apply(d.gecmis,r.gecmis)}
     if(Date.now()-(d.sonCiz||0)>3000){d.sonCiz=Date.now();hpBtGoster()}
     hpBtTur(d);
   }).catch(function(){
@@ -10961,65 +10964,27 @@ function hpGecmisAc(){
   el("govde").innerHTML='<div class="yukleniyor">geçmiş sinyaller yükleniyor…</div>';
   post("/api/hacimprofil",{is:"gecmis",tf:hpTf}).then(function(r){
     hpGecmisD=(r&&r.ok&&r.gecmis)||[];
-    hpGecmisGoster(hpGecmisD);
-  }).catch(function(){hpGecmisD=[];hpGecmisGoster([])});
+    hpGecmisGoster(hpGecmisBirlesikListe());
+  }).catch(function(){hpGecmisD=[];hpGecmisGoster(hpGecmisBirlesikListe())});
 }
-/* 🕰 2026-09-19-gecmis-doldur: kullanıcı sorusu — "geçmiş veriden az da
-   olsa yakalama şansı yok mu?" — evet. "🧪 Tarihsel backtest" ekranının
-   AYNI kanıtlanmış tarama desenini (HP_BT_PARCA/HP_BT_KANAL/hata toleransı,
-   bkz. hpBtBaslat/hpBtTur) birebir taklit ediyor, tek fark: toplu istatistik
-   yerine somut kapanmış-sinyal kayıtları biriktiriyor ve en sonda TEK bir
-   yazma isteğiyle kalıcı listeye ekliyor. */
-var hpGecmisDoldurDurum=null;
-function hpGecmisDoldurBaslat(){
-  if(!hpEvren){
-    el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
-    post("/api/hacimprofil",{is:"evren"}).then(function(r){
-      if(r&&r.ok&&r.kodlar&&r.kodlar.length){hpEvren=r.kodlar;hpEvrenKaynak=r.kaynak||"";hpGecmisDoldurBaslat()}
-      else el("govde").innerHTML='<div class="bos">Hisse listesi alınamadı.</div>';
-    }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
-    return;
-  }
-  var d={tf:hpTf,kuyruk:[],olaylar:[],toplam:hpEvren.length,tamam:0,islenen:0,ucusta:0,hata:0,suruyor:true};
-  for(var i=0;i<hpEvren.length;i+=HP_BT_PARCA)d.kuyruk.push(hpEvren.slice(i,i+HP_BT_PARCA));
-  hpGecmisDoldurDurum=d;
-  hpGecmisDoldurGoster(d);
-  for(var k=0;k<HP_BT_KANAL;k++)hpGecmisDoldurTur(d);
-}
-function hpGecmisDoldurGoster(d){
-  el("govde").innerHTML='<div class="sirala"><button class="sir" id="hpGecmisDoldurIptal">← İptal / taramaya dön</button></div>'+
-    '<div class="kutu" style="margin:8px 0"><b>🕰 Geçmişten dolduruluyor…</b>'+
-    '<div class="altbilgi" style="margin-top:4px">'+d.tamam+' / '+d.toplam+' hisse tarandı · '+
-    '<b style="color:var(--yes)">'+d.olaylar.length+'</b> kapanmış sinyal bulundu</div></div>';
-  var g=el("hpGecmisDoldurIptal");if(g)g.onclick=function(){tit();d.suruyor=false;hpGecmisDoldurDurum=null;
-    hpGecmisEkranda=false;hpGosterCanli()};
-}
-function hpGecmisDoldurTur(d){
-  if(hpGecmisDoldurDurum!==d||!d.suruyor)return;
-  if(!d.kuyruk.length){
-    if(d.ucusta===0){
-      d.suruyor=false;
-      post("/api/hacimprofil",{is:"gecmisDoldur",tf:d.tf,olaylar:d.olaylar}).then(function(){
-        hpGecmisDoldurDurum=null;hpGecmisAc();
-      }).catch(function(){hpGecmisDoldurDurum=null;hpGecmisGoster(hpGecmisD||[])});
-    }
-    return;
-  }
-  var parca=d.kuyruk.shift();
-  d.ucusta++;
-  post("/api/hacimprofil",{is:"btGecmis",tf:d.tf,kodlar:parca}).then(function(r){
-    d.ucusta--;
-    if(hpGecmisDoldurDurum!==d)return;
-    if(r&&r.ok){d.olaylar=d.olaylar.concat(r.olaylar||[]);d.islenen+=(r.islenen||0);d.tamam+=parca.length}
-    else{d.hata++;if(d.hata<HP_BT_HATA_TAVAN)d.kuyruk.push(parca)}
-    if(Date.now()-(d.sonCiz||0)>3000){d.sonCiz=Date.now();hpGecmisDoldurGoster(d)}
-    hpGecmisDoldurTur(d);
-  }).catch(function(){
-    d.ucusta--;
-    if(hpGecmisDoldurDurum!==d)return;
-    d.hata++;if(d.hata<HP_BT_HATA_TAVAN)d.kuyruk.push(parca);
-    setTimeout(function(){hpGecmisDoldurTur(d)},1500);
-  });
+/* 🧪📊 2026-09-19-gecmis-bt: canlı takip (hpGecmisD — yalnız takip
+   başladığından beri gerçekleşen kapanışlar) ile 🧪 Tarihsel backtest'in
+   (varsa, hpBtSonuc/localStorage önbelleğinde) yıllarca geçmişten ürettiği
+   kapanmış sinyaller BURADA, salt görüntüleme anında birleştirilir.
+   İkisi de kendi kaynağında AYNEN kalır — biri diğerini silmez/değiştirmez;
+   Tarihsel backtest hiç çalıştırılmadıysa (önbellek yoksa) davranış eskisiyle
+   birebir aynıdır (yalnızca canlı liste gösterilir). Aynı kapanış iki kez
+   sayılmasın diye kod+çıkış-zamanı eşleşenler tarihsel taraftan elenir. */
+function hpGecmisBirlesikListe(){
+  var canli=hpGecmisD||[];
+  var btC=hpBtSonuc[hpTf]||hpBtOnbellekOku(hpTf);
+  var tarihsel=(btC&&Array.isArray(btC.gecmis))?btC.gecmis:[];
+  if(!tarihsel.length)return canli;
+  var gorulen={};
+  canli.forEach(function(x){gorulen[x.kod+"|"+x.cikisTs]=1});
+  var ek=tarihsel.filter(function(x){return !gorulen[x.kod+"|"+x.cikisTs]});
+  if(!ek.length)return canli;
+  return canli.concat(ek).sort(function(a,b){return b.cikisTs-a.cikisTs});
 }
 function hpGecmisSatir(x){
   var pozitif=x.karYuzde>=0;
@@ -11064,18 +11029,11 @@ function hpGecmisGoster(liste){
      'düştüğünde buraya düşer — giriş anındaki fiyata göre ne kadar kâr/zarar ettirdiği hesaplanır. '+
      'Sinyal hâlâ sürüyorsa (henüz bozulmadıysa) burada görünmez, taramadaki 📌 satırında görünür.</div>';
   if(!liste.length){
-    h+='<div class="bos"><b>Henüz kapanmış sinyal yok</b><br><br>Bu normal — takip bugün başladı, şu an '+
-       '📌 işaretli her hisse için bir "giriş" kaydı yeni yeni oluşuyor. Bir sinyal bozulduğunda '+
-       '(kırılım/POC üstü durumundan zayıf tarafa dönünce) burada listelenecek — bu saatler, günlük '+
-       'dilimde günler sürebilir. Kapanmayı beklerken şu anki durumu taramadaki 📌 satırından '+
-       'takip edebilirsin.</div>';
-    h+='<div class="sirala" style="margin-top:8px"><button class="sir" id="hpGecmisDoldurBtn">🕰 Geçmişten doldur (tek seferlik)</button></div>'+
-       '<div class="altbilgi" style="margin-top:4px;opacity:.65">Yahoo Finance geçmiş verisini ('+HP_TF_ADI[hpTf]+' için '+
-       (hpTf==="1G"?"5 yıllık":"2 yıllık")+') geriye dönük tarayıp GERÇEKTEN kapanmış sinyalleri bulur — '+
-       '444 hissenin tamamı için biraz sürer, bir kere yapman yeterli.</div>';
+    h+='<div class="bos"><b>Henüz kapanmış sinyal yok</b><br><br>Bir sinyal bozulduğunda (kırılım/POC üstü '+
+       'durumundan zayıf tarafa dönünce) burada listelenecek. 🧪 Tarihsel backtest özelliğini bir kez '+
+       'çalıştırırsan, geçmişten üretilen kapanışlar da otomatik olarak burada görünür.</div>';
     el("govde").innerHTML=h;
     var g0=el("hpGecmisGeri");if(g0)g0.onclick=function(){tit();hpGecmisEkranda=false;hpGosterCanli()};
-    var gd0=el("hpGecmisDoldurBtn");if(gd0)gd0.onclick=function(){tit();hpGecmisDoldurBaslat()};
     return;
   }
   /* 🎯 Kırılım vs POC Üstü ayrımı — hangi tetikleyicinin daha isabetli
@@ -11099,7 +11057,7 @@ function hpGecmisGoster(liste){
   el("govde").innerHTML=h;
   var g=el("hpGecmisGeri");if(g)g.onclick=function(){tit();hpGecmisEkranda=false;hpGosterCanli()};
   [].forEach.call(document.querySelectorAll("[data-hgf]"),function(b){
-    b.onclick=function(){tit();hpGecmisFiltre=b.dataset.hgf;hpGecmisGoster(hpGecmisD||liste)};
+    b.onclick=function(){tit();hpGecmisFiltre=b.dataset.hgf;hpGecmisGoster(liste)};
   });
 }
 function hpTekGoster(t){
@@ -15593,18 +15551,24 @@ if(gov&&gov.is==="bt"){
   const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[])
     .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,HP_BT_AZAMI);
   const acc={};
+  const gecmisAcc=[];
   let sira=0,islenen=0;
   const isci=async()=>{
     while(sira<kodlar.length){
       const kod=kodlar[sira++];
       try{
         const m=await hpMumlarAl(kod,tf);
-        if(m&&m.length>=HP_MIN_BAR+21){hpBtHisse(m,acc,tf);islenen++}
+        if(m&&m.length>=HP_MIN_BAR+21){hpBtHisse(m,acc,tf,kod,gecmisAcc);islenen++}
       }catch(_){}
     }
   };
   await Promise.all(Array.from({length:Math.min(3,kodlar.length)},isci));
-  return JS({ok:!0,tf:tf,islenen:islenen,istenen:kodlar.length,acc:acc});
+  /* 🧪📊 2026-09-19-gecmis-bt: gecmisAcc BİLEREK acc'nin İÇİNE değil, ayrı
+     bir üst-seviye alana konuyor — hpBtBirlestir(d.acc,r.acc) yalnızca
+     hpBtGrup şeklindeki (n/h/x/hit/plan) nesneleri anladığından, buraya
+     bir dizi karışırsa merge sırasında hata verirdi. Bu yüzden mevcut
+     acc/hpBtBirlestir yapısına dokunulmadı, istemci bunu ayrıca toplar. */
+  return JS({ok:!0,tf:tf,islenen:islenen,istenen:kodlar.length,acc:acc,gecmis:gecmisAcc});
 }
 /* 📊 Geçmiş Sinyaller — bir hisse 🚀 Kırılım/📈 POC Üstü'nden zayıf tarafa
    döndüğünde kapanan kayıtlar. "Zarar edenler olduysa durum nedir" cevabı. */
@@ -15612,44 +15576,6 @@ if(gov&&gov.is==="gecmis"){
   const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
   const liste=await hpGecmisAl(A,tf);
   return JS({ok:!0,tf:tf,gecmis:liste});
-}
-/* 🕰 2026-09-19-gecmis-doldur: yalnız OKUR/HESAPLAR, KV'ye yazmaz — "bt"
-   ile birebir aynı maliyet profili (aynı hpMumlarAl, aynı parça boyutu).
-   İstemci tüm evreni bu uçla tarayıp olayları biriktirir, sonda TEK bir
-   is:"gecmisDoldur" çağrısıyla kalıcı listeye yazılır — KV yazma sayısı
-   444 hisse için de yalnız 1 PUT, kota riski yok. */
-if(gov&&gov.is==="btGecmis"){
-  const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
-  const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[])
-    .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,HP_BT_AZAMI);
-  let sira=0,islenen=0;const olaylar=[];
-  const isci=async()=>{
-    while(sira<kodlar.length){
-      const kod=kodlar[sira++];
-      try{
-        const m=await hpMumlarAl(kod,tf);
-        if(m&&m.length>=HP_MIN_BAR+1){olaylar.push(...hpBtHisseGecmis(m,tf,kod));islenen++}
-      }catch(_){}
-    }
-  };
-  await Promise.all(Array.from({length:Math.min(3,kodlar.length)},isci));
-  return JS({ok:!0,tf:tf,islenen:islenen,istenen:kodlar.length,olaylar:olaylar});
-}
-/* İstemcinin tüm evreni tarayıp topladığı olayları TEK seferde kalıcı
-   listeye yazar — mevcut canlı takiple (hpGecmisEkle) aynı KV anahtarını
-   paylaşır, üstüne eklenir, tarihe göre sıralanıp aynı üst sınırla kırpılır. */
-if(gov&&gov.is==="gecmisDoldur"){
-  const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
-  const gelenler=Array.isArray(gov.olaylar)?gov.olaylar:[];
-  const temiz=gelenler.filter(x=>x&&KOD_GECERLI.test(KOD(x.kod||""))&&isFinite(Number(x.karYuzde))&&x.girisTs&&x.cikisTs)
-    .map(x=>({kod:KOD(x.kod),girisFiyat:Number(x.girisFiyat),cikisFiyat:Number(x.cikisFiyat),
-      karYuzde:Number(x.karYuzde),girisTs:Number(x.girisTs),cikisTs:Number(x.cikisTs),
-      enYuksekKonum:(x.enYuksekKonum==="kirilim"||x.enYuksekKonum==="poc_ustu")?x.enYuksekKonum:"poc_ustu"}));
-  let mevcut=await hpGecmisAl(A,tf);
-  if(!Array.isArray(mevcut))mevcut=[];
-  const hepsi=mevcut.concat(temiz).sort((a,b)=>b.cikisTs-a.cikisTs).slice(0,HP_SINYAL_GECMIS_AZAMI);
-  try{await A.VERI.put("hpGecmis:"+tf,JSON.stringify(hepsi),{expirationTtl:HP_SINYAL_TTL});}catch(_){}
-  return JS({ok:!0,eklenen:temiz.length,toplam:hepsi.length});
 }
 if(gov&&(gov.dur===1||gov.dur===0)){
   if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
