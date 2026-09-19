@@ -10374,6 +10374,7 @@ function hpHavuzPollKur(){
    sunucuda ayrı uç (is:olcgun). Geçmiş modda canlı tarama duraklatılır, Bugün e dönünce hpCiz kaldığı yerden sürdürür.
    Aday/Tüm liste ekranları AYNI fonksiyonlarla (hpAdayGovde/hpSatir) çizilir; yalnız Merdiven rozeti (bugünün
    üst dilim verisine bağlı) ve giriş/çıkış takibi (canlı KV kaydı) geçmiş modda kapalıdır. */
+var hpGunOdak=0;
 var hpGun=null, hpGunOlcum={}, hpGunDenendi={}, hpGunDurum=null, hpGunSonCiz=0, hpGunZmn=null;
 var HP_HAFTA_GUN=["Pazar","Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi"];
 function hpBugunStr(){return new Date(Date.now()+10800000).toISOString().slice(0,10)}
@@ -10388,7 +10389,7 @@ function hpCanliCiz(){if(hpGun)return;hpGosterCanli()}
 function hpGunCiz(zorla){
   if(!hpGun||sekme!=="hprofil"||hpTek||hpBtEkranda||hpGecmisEkranda)return;
   var ae=document.activeElement;
-  if(ae&&(ae.id==="hpGunInput"||ae.id==="hpKod"))return;
+  if(ae&&((ae.id==="hpGunInput"&&Date.now()-hpGunOdak<15000)||ae.id==="hpKod"))return;
   var t=Date.now();
   if(!zorla&&t-hpGunSonCiz<1200){
     if(!hpGunZmn)hpGunZmn=setTimeout(function(){hpGunZmn=null;hpGunCiz(true)},1300);
@@ -10450,6 +10451,7 @@ function hpGunIstek(d,parca){
       for(var i=0;i<parca.length;i++)den[parca[i]]=1;
     }else{
       d.hata++;d.ardisik=(d.ardisik||0)+1;
+      d.sonHata=(r&&(r.mesaj||r.hata))||"yanıt gelmedi (zaman aşımı/bağlantı)";
       if(d.hata<HP_HATA_TAVAN)d.kuyruk.push(parca);
       else if(den){for(var j=0;j<parca.length;j++)den[parca[j]]=1}
     }
@@ -10490,6 +10492,7 @@ function hpGunIlerlemeKutu(olculen,evren,kalan,calisiyor){
     '<div class="altbilgi" style="margin-top:4px">işlenen <b>'+(evren-kalan)+'</b> / '+evren+' · profili çıkan <b>'+olculen+'</b></div>'+
     '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
+    (hpGunDurum&&hpGunDurum.hata?'<div class="altbilgi" style="margin-top:5px;color:var(--sar)">⚠️ '+hpGunDurum.hata+' istek hatası (yeniden deneniyor): '+E(String(hpGunDurum.sonHata||""))+'</div>':"")+
     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Seçilen günden önce yeterli bar yoksa (en az '+30+' bar) hisse listeye girmez.</div></div>';
 }
 function hpGunBarSatiri(x){
@@ -10500,7 +10503,10 @@ function hpGunBarSatiri(x){
 }
 function hpGunBagla(){
   var g=el("hpGunInput");
-  if(g)g.onchange=function(){hpGunSec(g.value)};
+  if(g){
+    g.onfocus=g.onclick=g.ontouchstart=function(){hpGunOdak=Date.now()};
+    g.onchange=function(){hpGunOdak=0;var v=g.value;try{g.blur()}catch(e){}hpGunSec(v)};
+  }
   var a=el("hpGunGeri");if(a)a.onclick=function(){tit();hpGunKaydir(-1)};
   var b=el("hpGunIleri");if(b)b.onclick=function(){tit();hpGunKaydir(1)};
   var c=el("hpGunBugun");if(c)c.onclick=function(){tit();hpGunBugune()};
