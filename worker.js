@@ -16950,15 +16950,21 @@ async scheduled(ev,A,ctx){
          bile cron havuzu dakikada bir adım ilerletsin.
          🚀 2026-09-19-hız: eskiden 3 zaman dilimi (1SA/4SA/1G) SIRAYLA
          round-robin ilerliyordu — her dilim dakikada 1 kez değil, 3
-         dakikada 1 kez adım atıyordu (444 hisseyi bir dilimde baştan sona
-         taramak saatler sürüyordu, "Aday hisseler" ekranı bu yüzden uzun
-         süre neredeyse boş kalıyordu). Artık üçü de HER dakika, ayrı ayrı
-         zorunluTf ile paralel ilerletiliyor — üç kat hızlı dolar. KV kota
-         riskine karşı yazma hâlâ aynı HP_YAZMA_ARALIK (10dk) sınırına tabi,
-         yalnız bellek-içi ilerleme hızlanıyor, KV put() sayısı artmıyor. */
-      await Promise.all(HP_TF_LISTE.map(tf=>
-        kilitli(A,"hpDilim-"+tf,50,()=>hpDilimTara(A,[],tf)).catch(err=>hataYaz(A,"hpDilim-cron-"+tf,err,null).catch(()=>{}))
-      ));
+         dakikada 1 kez adım atıyordu.
+         🐞 2026-09-19-hız-DÜZELTME: ilk denemede üçünü Promise.all ile
+         PARALEL çalıştırmıştım — ama hpDilimTara paylaşılan TEK bir bellek
+         nesnesini (_hpBirikimBellek) okuyup en sonunda ona geri yazıyor.
+         Üç çağrı aynı anda başlayınca hepsi aynı eski kopyayı okuyor, kendi
+         dilimini işliyor, ama en son biten kendi kopyasını geri yazarken
+         diğer ikisinin az önce yazdığı ilerlemeyi SİLİYORDU — sonuç: yalnız
+         bir dilim (en son biten) doluyor, diğer ikisi hep 0/444 kalıyordu
+         (bildirilen bug tam olarak buydu). Artık SIRAYLA (await ile, biri
+         bitmeden diğeri başlamıyor) çalıştırılıyor — hâlâ eskisine göre 3
+         kat hızlı (dakikada 3 dilim ilerliyor, 1 değil), ama artık aynı
+         bellek nesnesi üstünde çakışma yok. */
+      for(const tf of HP_TF_LISTE){
+        await kilitli(A,"hpDilim-"+tf,50,()=>hpDilimTara(A,[],tf)).catch(err=>hataYaz(A,"hpDilim-cron-"+tf,err,null).catch(()=>{}));
+      }
     }catch(err){
       try{await hataYaz(A,"scheduled",err,null)}catch(e){}
     }
