@@ -2981,6 +2981,34 @@ function hpBtHisse(m,acc,tf){
     onceki=k;oYk=yk;oPk=pk;oTier=a.tier||null;
   }
 }
+/* 🕰 2026-09-19-gecmis-doldur: kullanıcı sorusu — "Geçmiş sinyaller ekranı
+   bomboş, geçmiş veriden az da olsa yakalama şansı yok mu?" Cevap: var —
+   hpBtHisse'nin ZATEN taradığı aynı uzun geçmiş (yfMumlar/hpMumlarAl,
+   1G için 5 yıl) üzerinde, ama farklı bir şey aranıyor: hpBtHisse yalnız
+   TOPLU istatistik biriktirir (kaç olay, ortalama getiri), kod/tarih/fiyat
+   gibi somut TEK TEK kayıt tutmaz. Bu yeni fonksiyon aynı barları tarar
+   ama hpSinyalIsle'nin CANLI mantığının (güçlü→zayıf dönüşünde bir kayıt
+   kapat) birebir AYNISINI geriye dönük uygular — mevcut hpBtHisse'ye ve
+   "🧪 Tarihsel backtest" ekranına HİÇ dokunmuyor, tamamen ayrı bir yol. */
+function hpBtHisseGecmis(m,tf,kod){
+  const N=m.length;
+  const olaylar=[];
+  let giris=null;
+  for(let t=HP_MIN_BAR-1;t<N;t++){
+    const r=hpHesapla(m.slice(Math.max(0,t-HP_MAX_BAR+1),t+1));
+    if(!r)continue;
+    const guclumu=HP_GUCLU.has(r.konum);
+    if(guclumu){
+      if(!giris)giris={fiyat:r.fiyat,ts:m[t].time,konum:r.konum};
+    }else if(giris){
+      const kar=Math.round(((r.fiyat-giris.fiyat)/giris.fiyat)*1000)/10;
+      olaylar.push({kod:kod,girisFiyat:giris.fiyat,cikisFiyat:r.fiyat,karYuzde:kar,
+        girisTs:giris.ts*1000,cikisTs:m[t].time*1000,enYuksekKonum:giris.konum});
+      giris=null;
+    }
+  }
+  return olaylar.slice(-20); /* çok oynak bir hissede bile makul sayıda kayıt */
+}
 async function hpTekHisse(kod){
   const satir=[];
   for(const t of HP_TF_LISTE){
@@ -10936,6 +10964,63 @@ function hpGecmisAc(){
     hpGecmisGoster(hpGecmisD);
   }).catch(function(){hpGecmisD=[];hpGecmisGoster([])});
 }
+/* 🕰 2026-09-19-gecmis-doldur: kullanıcı sorusu — "geçmiş veriden az da
+   olsa yakalama şansı yok mu?" — evet. "🧪 Tarihsel backtest" ekranının
+   AYNI kanıtlanmış tarama desenini (HP_BT_PARCA/HP_BT_KANAL/hata toleransı,
+   bkz. hpBtBaslat/hpBtTur) birebir taklit ediyor, tek fark: toplu istatistik
+   yerine somut kapanmış-sinyal kayıtları biriktiriyor ve en sonda TEK bir
+   yazma isteğiyle kalıcı listeye ekliyor. */
+var hpGecmisDoldurDurum=null;
+function hpGecmisDoldurBaslat(){
+  if(!hpEvren){
+    el("govde").innerHTML='<div class="yukleniyor">hisse listesi alınıyor…</div>';
+    post("/api/hacimprofil",{is:"evren"}).then(function(r){
+      if(r&&r.ok&&r.kodlar&&r.kodlar.length){hpEvren=r.kodlar;hpEvrenKaynak=r.kaynak||"";hpGecmisDoldurBaslat()}
+      else el("govde").innerHTML='<div class="bos">Hisse listesi alınamadı.</div>';
+    }).catch(function(){el("govde").innerHTML='<div class="bos">Bağlantı kurulamadı.</div>'});
+    return;
+  }
+  var d={tf:hpTf,kuyruk:[],olaylar:[],toplam:hpEvren.length,tamam:0,islenen:0,ucusta:0,hata:0,suruyor:true};
+  for(var i=0;i<hpEvren.length;i+=HP_BT_PARCA)d.kuyruk.push(hpEvren.slice(i,i+HP_BT_PARCA));
+  hpGecmisDoldurDurum=d;
+  hpGecmisDoldurGoster(d);
+  for(var k=0;k<HP_BT_KANAL;k++)hpGecmisDoldurTur(d);
+}
+function hpGecmisDoldurGoster(d){
+  el("govde").innerHTML='<div class="sirala"><button class="sir" id="hpGecmisDoldurIptal">← İptal / taramaya dön</button></div>'+
+    '<div class="kutu" style="margin:8px 0"><b>🕰 Geçmişten dolduruluyor…</b>'+
+    '<div class="altbilgi" style="margin-top:4px">'+d.tamam+' / '+d.toplam+' hisse tarandı · '+
+    '<b style="color:var(--yes)">'+d.olaylar.length+'</b> kapanmış sinyal bulundu</div></div>';
+  var g=el("hpGecmisDoldurIptal");if(g)g.onclick=function(){tit();d.suruyor=false;hpGecmisDoldurDurum=null;
+    hpGecmisEkranda=false;hpGosterCanli()};
+}
+function hpGecmisDoldurTur(d){
+  if(hpGecmisDoldurDurum!==d||!d.suruyor)return;
+  if(!d.kuyruk.length){
+    if(d.ucusta===0){
+      d.suruyor=false;
+      post("/api/hacimprofil",{is:"gecmisDoldur",tf:d.tf,olaylar:d.olaylar}).then(function(){
+        hpGecmisDoldurDurum=null;hpGecmisAc();
+      }).catch(function(){hpGecmisDoldurDurum=null;hpGecmisGoster(hpGecmisD||[])});
+    }
+    return;
+  }
+  var parca=d.kuyruk.shift();
+  d.ucusta++;
+  post("/api/hacimprofil",{is:"btGecmis",tf:d.tf,kodlar:parca}).then(function(r){
+    d.ucusta--;
+    if(hpGecmisDoldurDurum!==d)return;
+    if(r&&r.ok){d.olaylar=d.olaylar.concat(r.olaylar||[]);d.islenen+=(r.islenen||0);d.tamam+=parca.length}
+    else{d.hata++;if(d.hata<HP_BT_HATA_TAVAN)d.kuyruk.push(parca)}
+    if(Date.now()-(d.sonCiz||0)>3000){d.sonCiz=Date.now();hpGecmisDoldurGoster(d)}
+    hpGecmisDoldurTur(d);
+  }).catch(function(){
+    d.ucusta--;
+    if(hpGecmisDoldurDurum!==d)return;
+    d.hata++;if(d.hata<HP_BT_HATA_TAVAN)d.kuyruk.push(parca);
+    setTimeout(function(){hpGecmisDoldurTur(d)},1500);
+  });
+}
 function hpGecmisSatir(x){
   var pozitif=x.karYuzde>=0;
   var renk=pozitif?"var(--yes)":"var(--kir)";
@@ -10979,10 +11064,18 @@ function hpGecmisGoster(liste){
      'düştüğünde buraya düşer — giriş anındaki fiyata göre ne kadar kâr/zarar ettirdiği hesaplanır. '+
      'Sinyal hâlâ sürüyorsa (henüz bozulmadıysa) burada görünmez, taramadaki 📌 satırında görünür.</div>';
   if(!liste.length){
-    h+='<div class="bos"><b>Henüz kapanmış sinyal yok</b><br><br>Bir sinyal bozulduğunda (kırılım/POC üstü '+
-       'durumundan zayıf tarafa dönünce) burada listelenecek.</div>';
+    h+='<div class="bos"><b>Henüz kapanmış sinyal yok</b><br><br>Bu normal — takip bugün başladı, şu an '+
+       '📌 işaretli her hisse için bir "giriş" kaydı yeni yeni oluşuyor. Bir sinyal bozulduğunda '+
+       '(kırılım/POC üstü durumundan zayıf tarafa dönünce) burada listelenecek — bu saatler, günlük '+
+       'dilimde günler sürebilir. Kapanmayı beklerken şu anki durumu taramadaki 📌 satırından '+
+       'takip edebilirsin.</div>';
+    h+='<div class="sirala" style="margin-top:8px"><button class="sir" id="hpGecmisDoldurBtn">🕰 Geçmişten doldur (tek seferlik)</button></div>'+
+       '<div class="altbilgi" style="margin-top:4px;opacity:.65">Yahoo Finance geçmiş verisini ('+HP_TF_ADI[hpTf]+' için '+
+       (hpTf==="1G"?"5 yıllık":"2 yıllık")+') geriye dönük tarayıp GERÇEKTEN kapanmış sinyalleri bulur — '+
+       '444 hissenin tamamı için biraz sürer, bir kere yapman yeterli.</div>';
     el("govde").innerHTML=h;
     var g0=el("hpGecmisGeri");if(g0)g0.onclick=function(){tit();hpGecmisEkranda=false;hpGosterCanli()};
+    var gd0=el("hpGecmisDoldurBtn");if(gd0)gd0.onclick=function(){tit();hpGecmisDoldurBaslat()};
     return;
   }
   /* 🎯 Kırılım vs POC Üstü ayrımı — hangi tetikleyicinin daha isabetli
@@ -15519,6 +15612,44 @@ if(gov&&gov.is==="gecmis"){
   const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
   const liste=await hpGecmisAl(A,tf);
   return JS({ok:!0,tf:tf,gecmis:liste});
+}
+/* 🕰 2026-09-19-gecmis-doldur: yalnız OKUR/HESAPLAR, KV'ye yazmaz — "bt"
+   ile birebir aynı maliyet profili (aynı hpMumlarAl, aynı parça boyutu).
+   İstemci tüm evreni bu uçla tarayıp olayları biriktirir, sonda TEK bir
+   is:"gecmisDoldur" çağrısıyla kalıcı listeye yazılır — KV yazma sayısı
+   444 hisse için de yalnız 1 PUT, kota riski yok. */
+if(gov&&gov.is==="btGecmis"){
+  const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
+  const kodlar=[...new Set((Array.isArray(gov.kodlar)?gov.kodlar:[])
+    .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,HP_BT_AZAMI);
+  let sira=0,islenen=0;const olaylar=[];
+  const isci=async()=>{
+    while(sira<kodlar.length){
+      const kod=kodlar[sira++];
+      try{
+        const m=await hpMumlarAl(kod,tf);
+        if(m&&m.length>=HP_MIN_BAR+1){olaylar.push(...hpBtHisseGecmis(m,tf,kod));islenen++}
+      }catch(_){}
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(3,kodlar.length)},isci));
+  return JS({ok:!0,tf:tf,islenen:islenen,istenen:kodlar.length,olaylar:olaylar});
+}
+/* İstemcinin tüm evreni tarayıp topladığı olayları TEK seferde kalıcı
+   listeye yazar — mevcut canlı takiple (hpGecmisEkle) aynı KV anahtarını
+   paylaşır, üstüne eklenir, tarihe göre sıralanıp aynı üst sınırla kırpılır. */
+if(gov&&gov.is==="gecmisDoldur"){
+  const tf=HP_TF_LISTE.indexOf(gov.tf)>=0?gov.tf:"1G";
+  const gelenler=Array.isArray(gov.olaylar)?gov.olaylar:[];
+  const temiz=gelenler.filter(x=>x&&KOD_GECERLI.test(KOD(x.kod||""))&&isFinite(Number(x.karYuzde))&&x.girisTs&&x.cikisTs)
+    .map(x=>({kod:KOD(x.kod),girisFiyat:Number(x.girisFiyat),cikisFiyat:Number(x.cikisFiyat),
+      karYuzde:Number(x.karYuzde),girisTs:Number(x.girisTs),cikisTs:Number(x.cikisTs),
+      enYuksekKonum:(x.enYuksekKonum==="kirilim"||x.enYuksekKonum==="poc_ustu")?x.enYuksekKonum:"poc_ustu"}));
+  let mevcut=await hpGecmisAl(A,tf);
+  if(!Array.isArray(mevcut))mevcut=[];
+  const hepsi=mevcut.concat(temiz).sort((a,b)=>b.cikisTs-a.cikisTs).slice(0,HP_SINYAL_GECMIS_AZAMI);
+  try{await A.VERI.put("hpGecmis:"+tf,JSON.stringify(hepsi),{expirationTtl:HP_SINYAL_TTL});}catch(_){}
+  return JS({ok:!0,eklenen:temiz.length,toplam:hepsi.length});
 }
 if(gov&&(gov.dur===1||gov.dur===0)){
   if(!YON)return JS({ok:!1,hata:"yetkisiz"},403);
