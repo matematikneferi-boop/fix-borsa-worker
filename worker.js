@@ -10415,11 +10415,42 @@ function hpAday(x){
   return{tier:tier,puan:puan,tip:tip,mes:mes,tetikMetin:tetikMetin,
     stop:stop.fiyat,risk:hpY(risk),hedef:hedef,odul:hpY(odul),rr:rr,iyi:iyi,uy:uy};
 }
+/* 🕐 Son bar zamanı (Yahoo epoch saniye, UTC) → TR yerel saat metni.
+   trGun()'daki ile aynı +10800sn (3 saat) TR ofseti kullanılıyor. */
+function hpSaatMetni(sn){
+  if(!sn)return null;
+  var d=new Date(Number(sn)*1000+10800000);
+  function iki(n){return(n<10?"0":"")+n}
+  return iki(d.getUTCHours())+":"+iki(d.getUTCMinutes());
+}
+/* 🎴 2026-09-19-minikart: kullanıcı isteği — "güncel fiyat/saat, POC ve
+   kırılım seviyesi, kırılımdan önce/sonra net belirgin renkli minicik
+   kartlar hâlinde". Tek satır metin yerine küçük, renk kodlu kutucuklar. */
+function hpMiniKart(baslik,deger,renk,altyazi){
+  return '<div style="flex:1 1 78px;min-width:78px;background:rgba(255,255,255,.05);'+
+    'border:1px solid rgba(255,255,255,.09);border-radius:9px;padding:6px 8px;text-align:center">'+
+    '<div style="font-size:10px;color:var(--soluk);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+baslik+'</div>'+
+    '<div style="font-size:15px;font-weight:800;color:'+renk+';margin-top:2px;white-space:nowrap">'+deger+'</div>'+
+    (altyazi?'<div style="font-size:9.5px;color:var(--soluk);margin-top:1px;white-space:nowrap">'+altyazi+'</div>':"")+
+    '</div>';
+}
 function hpAdaySatir(x,a,t){
   var pr=a.puan>=70?"var(--yes)":(a.puan>=55?"var(--sar)":"var(--soluk)");
   var rrr=a.rr>=2?"var(--yes)":(a.rr>=1.5?"var(--sar)":"var(--soluk)");
+  var saat=hpSaatMetni(x.zaman);
+  var oncesiVar=x.sinyalFiyat!=null&&x.sinyalKarYuzde!=null;
+  var oncesiRenk=oncesiVar?(x.sinyalKarYuzde>=0?"var(--yes)":"var(--kir)"):"var(--soluk)";
+  var oncesiDeger=oncesiVar?((x.sinyalKarYuzde>=0?"+":"")+x.sinyalKarYuzde+"%"):"—";
+  var oncesiAlt=oncesiVar?(x.sinyalFiyat+" → "+x.fiyat):"henüz sinyal yok";
+  var miniH='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;margin-bottom:2px">'+
+    hpMiniKart("💰 Güncel fiyat",x.fiyat,"#fff",saat?("saat "+saat):null)+
+    hpMiniKart("🎯 POC",x.poc,"var(--sar)",null)+
+    hpMiniKart("🚀 Kırılım",x.vah,"var(--yes)",null)+
+    hpMiniKart("📌 Önce→Sonra",oncesiDeger,oncesiRenk,oncesiAlt)+
+    '</div>';
   return '<div class="satir" style="border-left-color:'+t.renk+';align-items:flex-start">'+
-    '<div class="sol"><div class="kod">'+E(x.kod)+' <span class="altbilgi" style="opacity:.7">fiyat '+x.fiyat+'</span></div>'+
+    '<div class="sol"><div class="kod">'+E(x.kod)+'</div>'+
+    miniH+
     '<div class="altbilgi" style="margin-top:3px"><b>'+a.tetikMetin+'</b></div>'+
     '<div class="altbilgi" style="margin-top:3px">🛡 Stop <b>'+a.stop+'</b> altı (−%'+a.risk+') · 🎯 Hedef <b>'+a.hedef+'</b> (+%'+a.odul+')</div>'+
     '<div class="altbilgi" style="margin-top:2px">⚖️ Risk/ödül <b style="color:'+rrr+'">'+a.rr+'</b></div>'+
