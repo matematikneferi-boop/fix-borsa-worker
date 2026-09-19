@@ -2998,7 +2998,20 @@ async function hpDurdurAyarla(A,dur){
 }
 const HP_DILIM_TABAN=8, HP_DILIM_TAVAN=100;
 const HP_SURE_TAVAN_MS=1e4;
-const HP_ES=6;
+/* 🚀 2026-09-19-eszaman: kullanıcı "aynı anda daha fazla paralel tarama
+   işe yarar mı" diye sordu — cevap: EVET ama doğru yerde. Birden fazla
+   hpDilimTara ÇAĞRISINI aynı anda çalıştırmak (dış paralellik) az önce
+   düzeltilen bellek-üzerine-yazma hatasını geri getirir, çünkü hepsi aynı
+   paylaşılan _hpBirikimBellek nesnesine yazar. Ama TEK bir çağrının
+   İÇİNDEKİ paralellik (aynı anda kaç hisseyi Yahoo'dan çektiği) tamamen
+   güvenli — o paralellik zaten burada, HP_ES ile. Eskiden 6'ydı (temkinli
+   seçilmiş, sert bir platform sınırına dayanmıyor), 12'ye çıkarıldı — her
+   10 saniyelik pencerede iki katı hisse ölçülür. Eğer bu değişiklikten
+   sonra hata/timeout sıklığında belirgin artış görülürse (Yahoo'nun
+   kısa sürede çok istek atınca 429 vermesi ihtimali var) 8-10 aralığına
+   geri çekilebilir — dilim boyutu zaten kendi kendine küçülüyor (aşağıdaki
+   "hata olursa %20 küçült" mantığı) ama HP_ES sabit kalıyor. */
+const HP_ES=12;
 const HP_BIRIKIM_TTL=7200;
 const HP_YAZMA_ARALIK=6e5;
 const HP_CACHE_MS=18e5;
