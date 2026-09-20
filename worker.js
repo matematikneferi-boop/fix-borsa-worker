@@ -539,7 +539,7 @@ const YF_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML
    aynı gün ise son barı günceller, farklı günse yeni (oluşmakta olan) bar
    ekler. Grafik ile "Şimdi" fiyatı hep aynı kaynağı göstersin diye. */
 async function yfMumCek(host,kod,interval,range){interval=interval||"1d";range=range||"6mo"
-;const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?range="+range+"&interval="+interval+"&_="+Date.now()
+;const u="https://"+host+"/v8/finance/chart/"+encodeURIComponent(kod+".IS")+"?"+((String(range).indexOf("p:")===0)?("period1="+String(range).split(":")[1]+"&period2="+String(range).split(":")[2]):("range="+range))+"&interval="+interval+"&_="+Date.now()
 ;let res;try{const _ac=new AbortController();const _to=setTimeout(()=>_ac.abort(),8000);try{res=await fetch(u,{headers:Object.assign({},YF_HEADERS,{"Cache-Control":"no-cache"}),cache:"no-store",signal:_ac.signal})}finally{clearTimeout(_to)}}catch(e){return{hata:"fetch istisnası (zaman aşımı olabilir): "+(e&&e.message||e)}}
 ;if(!res.ok)return{hata:"HTTP "+res.status+" ("+host+")"};const j=await res.json().catch(()=>null)
 ;if(!j)return{hata:"JSON parse edilemedi ("+host+")"}
@@ -2833,10 +2833,14 @@ async function hpGecmisAl(A,tf){
   try{const h=await A.VERI.get("hpGecmis:"+tf);return h?(JSON.parse(h)||[]):[]}catch(_){return[]}
 }
 let _hpSonNeden="";
+/* 2026-09-20-cpu: Hacim Profili yalnız SON HP_MAX_BAR (180) bara bakıyor ama 1G için 5 yıllık, 1SA/4SA için 2 yıllık
+   (3500+ saatlik bar) veri çekip ayrıştırıyordu -> "Worker exceeded resource limit" (HTTP 503 / Cloudflare 1102).
+   Artık yalnız gereken kadar geriye gidilir; sonuç birebir aynı (180 barın ötesi zaten kullanılmıyor). */
+const HP_CANLI_ARALIK={"1SA":"3mo","4SA":"6mo","1G":"1y"};
 async function hpTekOlc(kod,tfKod){
 
   const tf=MB_TF[mbTfNormal(tfKod)];
-  const r=await yfMumlar(kod,tf.interval,tf.range);
+  const r=await yfMumlar(kod,tf.interval,HP_CANLI_ARALIK[mbTfNormal(tfKod)]||tf.range);
   const ham=(r&&r.veri)||[];
   if(!ham.length){_hpSonNeden=((r&&r.hatalar&&r.hatalar.join(" | "))||"veri yok").slice(0,180);return null}
   const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
@@ -2870,9 +2874,9 @@ const HP_BT_MAXBAR={"1G":750,"4SA":1000,"1SA":1500};
 const HP_BT_KOVA=61;
 const HP_BT_AZAMI=6;
 const HP_BT_YAKIN=[2,3,5,8];
-async function hpMumlarAl(kod,tfKod){
+async function hpMumlarAl(kod,tfKod,aralik){
   const tf=MB_TF[mbTfNormal(tfKod)];
-  const r=await yfMumlar(kod,tf.interval,tf.range);
+  const r=await yfMumlar(kod,tf.interval,aralik||tf.range);
   const ham=(r&&r.veri)||[];
   if(!ham.length)return null;
   const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
@@ -10212,7 +10216,7 @@ var HP_TF_ARAYUZ=[{k:"1SA",ad:"1 Saat",ik:"🕐"},{k:"4SA",ad:"4 Saat",ik:"🕓"
 var HP_TF_ADI={"1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
 var HP_GUC_AD={guclu:"güçlü",orta:"orta",zayif:"zayıf"};
 var HP_GUC_RENK={guclu:"var(--yes)",orta:"var(--sar)",zayif:"var(--soluk)"};
-var HP_KANAL=10, HP_ISTEK_ZAMAN=35000, HP_HATA_TAVAN=60, HP_PARCA=4;
+var HP_KANAL=8, HP_ISTEK_ZAMAN=35000, HP_HATA_TAVAN=60, HP_PARCA=4;
 var hpTf="1G", hpTek=null, hpEvren=null, hpEvrenKaynak="", hpOlcum={}, hpTaraDurum=null, hpNobetci=null;
 var hpCronDurum={calisiyor:true}, hpCronGorulen={}, hpHavuzZaman=null, hpHavuzSon=0, hpMinTs={}, hpGorunurKurulu=false;
 function hpKuyrukKur(){
@@ -10459,7 +10463,7 @@ function hpGunBaslat(zorla){
   if(!hpGunDenendi[ga])hpGunDenendi[ga]={};
   var den=hpGunDenendi[ga],kal=[],kuyruk=[];
   for(var i=0;i<hpEvren.length;i++){if(!den[hpEvren[i]])kal.push(hpEvren[i])}
-  for(var j=0;j<kal.length;j+=8)kuyruk.push(kal.slice(j,j+8));
+  for(var j=0;j<kal.length;j+=4)kuyruk.push(kal.slice(j,j+4));
   var d={anahtar:ga,tf:hpTf,gun:hpGun,kuyruk:kuyruk,acik:0,hata:0,ardisik:0,bitti:!kuyruk.length};
   hpGunDurum=d;
   hpGunCiz(true);
@@ -10467,12 +10471,24 @@ function hpGunBaslat(zorla){
 }
 function hpGunTur(d){
   if(hpGunDurum!==d)return;
-  while(d.acik<3&&d.kuyruk.length){
+  while(d.acik<4&&d.kuyruk.length){
     var parca=d.kuyruk.shift();
     d.acik++;
     hpGunIstek(d,parca);
   }
-  if(!d.acik&&!d.kuyruk.length&&!d.bitti){d.bitti=true;hpGunCiz(true)}
+  if(!d.acik&&!d.kuyruk.length&&!d.bekleyen&&!d.bitti){d.bitti=true;hpGunCiz(true)}
+}
+/* Yahoo/sunucu hatası olan hisseler KESİN sayılmaz: hisse başına en çok 10 kez, artan beklemeyle yeniden denenir.
+   Yalnız verisi gerçekten yetersiz olanlar (sunucu "tekrar" listesine koymaz) işlendi sayılır. */
+function hpGunYenidenDene(d,kodlar,bekle){
+  if(!kodlar.length)return;
+  d.bekleyen=(d.bekleyen||0)+1;
+  setTimeout(function(){
+    d.bekleyen=Math.max(0,(d.bekleyen||1)-1);
+    if(hpGunDurum!==d)return;
+    for(var j=0;j<kodlar.length;j+=3)d.kuyruk.push(kodlar.slice(j,j+3));
+    hpGunTur(d);
+  },bekle);
 }
 function hpGunIstek(d,parca){
   var kapandi=false,zt=null;
@@ -10481,18 +10497,36 @@ function hpGunIstek(d,parca){
     kapandi=true;clearTimeout(zt);
     d.acik=Math.max(0,d.acik-1);
     var depo=hpGunOlcum[d.anahtar],den=hpGunDenendi[d.anahtar];
+    if(!d.deneme)d.deneme={};
+    var tekrarla=[],enCok=0,i;
     if(r&&r.ok&&depo&&den){
       d.ardisik=0;
       for(var k in r.olcum)depo[k]=r.olcum[k];
-      for(var i=0;i<parca.length;i++)den[parca[i]]=1;
+      if(r.neden)d.sonNeden=r.neden;
+      var tk={};
+      if(r.tekrar){for(i=0;i<r.tekrar.length;i++)tk[r.tekrar[i]]=1}
+      for(i=0;i<parca.length;i++){
+        var kk=parca[i];
+        if(tk[kk]&&!depo[kk]){
+          d.deneme[kk]=(d.deneme[kk]||0)+1;
+          if(d.deneme[kk]<10){tekrarla.push(kk);if(d.deneme[kk]>enCok)enCok=d.deneme[kk]}
+          else den[kk]=1;
+        }else den[kk]=1;
+      }
+      if(tekrarla.length){d.tekrarSay=(d.tekrarSay||0)+1;hpGunYenidenDene(d,tekrarla,Math.min(12000,1500*enCok))}
     }else{
       d.hata++;d.ardisik=(d.ardisik||0)+1;
       d.sonHata=(r&&(r.mesaj||r.hata))||"yanıt gelmedi (zaman aşımı/bağlantı)";
-      if(d.hata<HP_HATA_TAVAN)d.kuyruk.push(parca);
-      else if(den){for(var j=0;j<parca.length;j++)den[parca[j]]=1}
+      if(parca.length>1){var yr=Math.ceil(parca.length/2);d.kuyruk.push(parca.slice(0,yr));d.kuyruk.push(parca.slice(yr))}
+      else{
+        var kd=parca[0];
+        d.deneme[kd]=(d.deneme[kd]||0)+1;
+        if(d.deneme[kd]<10)hpGunYenidenDene(d,[kd],Math.min(12000,1500*d.deneme[kd]));
+        else if(den)den[kd]=1;
+      }
     }
     hpGunCiz();
-    setTimeout(function(){hpGunTur(d)},(r&&r.ok)?20:Math.min(15000,1200*(d.ardisik||1)));
+    setTimeout(function(){hpGunTur(d)},(r&&r.ok)?20:Math.min(8000,800*(d.ardisik||1)));
   }
   zt=setTimeout(function(){bitir(null)},35000);
   post("/api/hacimprofil",{is:"olcgun",tf:d.tf,gun:d.gun,kodlar:parca}).then(bitir).catch(function(){bitir(null)});
@@ -10528,7 +10562,9 @@ function hpGunIlerlemeKutu(olculen,evren,kalan,calisiyor){
     '<div class="altbilgi" style="margin-top:4px">işlenen <b>'+(evren-kalan)+'</b> / '+evren+' · profili çıkan <b>'+olculen+'</b></div>'+
     '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
     '<div style="height:100%;width:'+yuzde+'%;background:'+(calisiyor?"var(--yes)":"var(--sar)")+'"></div></div>'+
-    (hpGunDurum&&hpGunDurum.hata?'<div class="altbilgi" style="margin-top:5px;color:var(--sar);white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word">⚠️ '+hpGunDurum.hata+' istek hatası (yeniden deneniyor): '+E(String(hpGunDurum.sonHata||""))+'</div>':"")+
+    (hpGunDurum&&(hpGunDurum.hata||hpGunDurum.sonNeden)?'<div class="altbilgi" style="margin-top:5px;color:var(--sar);white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word">⚠️ '+hpGunDurum.hata+' sunucu hatası · yeniden denenen '+(hpGunDurum.bekleyen||0)+' grup'+
+      (hpGunDurum.sonHata?('<br>sunucu: '+E(String(hpGunDurum.sonHata))):'')+
+      (hpGunDurum.sonNeden?('<br>Yahoo: '+E(String(hpGunDurum.sonNeden))):'')+'</div>':"")+
     '<div class="altbilgi" style="margin-top:6px;opacity:.6">Seçilen günden önce yeterli bar yoksa (en az '+30+' bar) hisse listeye girmez.</div></div>';
 }
 function hpGunBarSatiri(x){
@@ -16109,12 +16145,26 @@ if(gov&&gov.is==="olcgun"){
     .map(k=>KOD(k)).filter(k=>KOD_GECERLI.test(k)))].slice(0,HP_OLC_AZAMI);
   const olcum={};
   let sira=0;
+  const geriGun={"1G":420,"1SA":100,"4SA":220}[tf]||420;
+  const aralikGun="p:"+Math.floor(kesim-geriGun*86400)+":"+Math.floor(kesim);
+  const tekrar=[];let neden="";
+  const tf0=MB_TF[mbTfNormal(tf)];
   const isci=async()=>{
     while(sira<kodlar.length){
       const kod=kodlar[sira++];
       try{
-        const m=await hpMumlarAl(kod,tf);
-        if(!m)continue;
+        /* 2026-09-20-tekrar: Yahoo'dan veri ALINAMAYAN hisse (429/zaman aşımı/HTTP hata) ile verisi gerçekten YETERSİZ olan
+           hisse ayrılır. Eskiden ikisi de sessizce atlanıyor, istemci "işlendi" sayıyordu -> 444 işlendi ama yalnız 19 profil. */
+        const r=await yfMumlar(kod,tf0.interval,aralikGun);
+        const ham=(r&&r.veri)||[];
+        if(!ham.length){
+          const hs=(r&&r.hatalar)||[];
+          const kesin=hs.length>0&&hs.every(h=>String(h).indexOf("sadece")===0);
+          if(!kesin){tekrar.push(kod);neden=hs.join(" | ").slice(0,160)}
+          continue;
+        }
+        const temiz=tf0.hayaletAt?mbHayaletAt(ham):ham;
+        const m=tf0.grupSaat?mbGrupla(temiz,tf0.grupSaat):temiz;
         const kes=m.filter(b=>b.time<kesim);
         if(kes.length<HP_MIN_BAR)continue;
         const s=hpHesapla(kes);
@@ -16124,8 +16174,8 @@ if(gov&&gov.is==="olcgun"){
       }catch(_){}
     }
   };
-  await Promise.all(Array.from({length:Math.min(6,kodlar.length)},isci));
-  return JS({ok:!0,tf:tf,gun:String(gov.gun),olcum:olcum,istenen:kodlar.length});
+  await Promise.all(Array.from({length:Math.min(4,kodlar.length)},isci));
+  return JS({ok:!0,tf:tf,gun:String(gov.gun),olcum:olcum,istenen:kodlar.length,tekrar:tekrar,neden:neden});
  }catch(e){return JS({ok:!1,hata:"olcgun istisna: "+String(e&&e.message||e).slice(0,160)})}
 }
 if(gov&&gov.is==="olc"){
