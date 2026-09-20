@@ -10666,6 +10666,17 @@ function hpAday(x){
     var va=Number(x.vah)-Number(x.val);
     hedef=Math.round((tip==="pocgeri"?Math.max(Number(x.vah),f*1.05):Math.max(Number(x.vah)+va,f*1.05))*100)/100;
   }
+  /* 2026-09-20-hedef: kırılım/yaklaşan hissede hedef, Tüm liste ile AYNI hesaptan (hpKirHedef: ilk duvar /
+     ölçülü hareket) gelir; fiyat Hedef 1 i geçtiyse risk/ödül sıradaki hedefe göre hesaplanır. POC altındaki
+     (pocgeri) hissede eski mantık (POC üstü ilk güçlü direnç) aynen kalır. */
+  if(tip!=="pocgeri"){
+    var kt=hpKirHedef(x);
+    if(kt){
+      var hl=[kt.h1.fiyat];
+      if(kt.h2)hl.push(kt.h2.fiyat);
+      for(var q=0;q<hl.length;q++){if(hl[q]>f*1.005){hedef=hl[q];break}}
+    }
+  }
   var odul=(hedef-f)/f*100;
   var rr=risk>0?Math.round(odul/risk*10)/10:0;
   /* PUAN (0-100): tetik yakınlığı 35 + risk/ödül 30 + yol açıklığı 20 + destek kalitesi 15 */
@@ -10808,6 +10819,7 @@ function hpMerdivenRozet(x){
     "🪜 Merdiven — hedefi bir üst dilimin ("+HP_MERDIVEN_SONRA[hpTf]+") kırılımının üstünde";
   return '<div class="altbilgi" style="margin-top:3px;color:var(--yes)">'+txt+'</div>';
 }
+var HP_SARIL="white-space:normal;overflow:visible;text-overflow:clip;font-size:13px";
 function hpAdaySatir(x,a,t){
   x.__aday_hedef=a.hedef;
   var pr=a.puan>=70?"var(--yes)":(a.puan>=55?"var(--sar)":"var(--soluk)");
@@ -10818,7 +10830,7 @@ function hpAdaySatir(x,a,t){
      Artık kırılım SEVİYESİ ile şimdiki fiyat karşılaştırılıyor (gerçek mesafe). */
   var kirMes=hpSeviyeYuzde(x.fiyat,x.vah),pocMes=hpSeviyeYuzde(x.fiyat,x.poc);
   var kirRenk=kirMes==null?"var(--soluk)":(kirMes>=0?"var(--yes)":"var(--sar)");
-  var kirDeger=kirMes==null?"—":((kirMes>=0?"+":"-")+Math.abs(kirMes).toFixed(1)+"%");
+  var kirDeger=kirMes==null?"—":((Math.round(kirMes*10)>=0?"+":"-")+Math.abs(kirMes).toFixed(1)+"%");
   var pocAlt=pocMes==null?null:("%"+Math.abs(pocMes).toFixed(1)+(pocMes>=0?" üstünde":" altında"));
   var bl=HP_BOLGE_ROZET[x.konum];
   var rozet=bl?' <span class="rozet" style="background:'+bl.renk+';color:#0e1116">'+bl.ad+'</span>':"";
@@ -10832,11 +10844,14 @@ function hpAdaySatir(x,a,t){
     '<div class="sol"><div class="kod">'+E(x.kod)+rozet+'</div>'+
     miniH+
     hpGunBarSatiri(x)+
-    '<div class="altbilgi" style="margin-top:3px"><b>'+a.tetikMetin+'</b></div>'+
-    '<div class="altbilgi" style="margin-top:3px">🛡 Stop <b>'+hpP(a.stop)+'</b> altı (−%'+a.risk+') · 🎯 Hedef <b>'+hpP(a.hedef)+'</b> (+%'+a.odul+')</div>'+
-    '<div class="altbilgi" style="margin-top:2px">⚖️ Risk/ödül <b style="color:'+rrr+'">'+a.rr+'</b></div>'+
-    (a.iyi.length?'<div class="altbilgi" style="margin-top:3px;color:var(--yes)">✅ '+a.iyi.join(" · ")+'</div>':"")+
-    (a.uy.length?'<div class="altbilgi" style="margin-top:2px;color:var(--sar)">⚠️ '+a.uy.join(" · ")+'</div>':"")+
+    '<div class="altbilgi" style="margin-top:4px;'+HP_SARIL+'"><b>'+a.tetikMetin+'</b></div>'+
+    (a.tip!=="pocgeri"?hpHedefMiniler(x,true):"")+
+    '<div class="altbilgi" style="margin-top:5px;'+HP_SARIL+'">🛡 Stop <b>'+hpP(a.stop)+'</b> altı (−%'+a.risk+')'+
+      (a.tip==="pocgeri"?(' · 🎯 Hedef <b>'+hpP(a.hedef)+'</b> (+%'+a.odul+')'):'')+'</div>'+
+    '<div class="altbilgi" style="margin-top:3px;'+HP_SARIL+'">⚖️ Risk/ödül <b style="color:'+rrr+'">'+a.rr+'</b>'+
+      (a.tip!=="pocgeri"?(' <span style="opacity:.7">(sıradaki hedefe göre: '+hpP(a.hedef)+')</span>'):'')+'</div>'+
+    (a.iyi.length?'<div class="altbilgi" style="margin-top:4px;color:var(--yes);'+HP_SARIL+'">✅ '+a.iyi.join(" · ")+'</div>':"")+
+    (a.uy.length?'<div class="altbilgi" style="margin-top:3px;color:var(--sar);'+HP_SARIL+'">⚠️ '+a.uy.join(" · ")+'</div>':"")+
     hpMerdivenRozet(x)+
     hpSinyalSatiri(x)+
     '</div><div class="sag"><div class="yuzde" style="color:'+pr+';font-size:22px">'+a.puan+'</div>'+
@@ -11177,8 +11192,8 @@ function hpSatirMiniler(x){
   var pocMes=hpSeviyeYuzde(x.fiyat,x.poc),kirMes=hpSeviyeYuzde(x.fiyat,sev);
   var pocRenk=pocMes==null?"var(--soluk)":(pocMes>=0?"var(--yes)":"var(--sar)");
   var kirRenk=kirMes==null?"var(--soluk)":(kirMes>=0?"var(--yes)":"var(--sar)");
-  var pocDeg=pocMes==null?"—":((pocMes>=0?"+":"-")+Math.abs(pocMes).toFixed(1)+"%");
-  var kirDeg=kirMes==null?"—":((kirMes>=0?"+":"-")+Math.abs(kirMes).toFixed(1)+"%");
+  var pocDeg=pocMes==null?"—":((Math.round(pocMes*10)>=0?"+":"-")+Math.abs(pocMes).toFixed(1)+"%");
+  var kirDeg=kirMes==null?"—":((Math.round(kirMes*10)>=0?"+":"-")+Math.abs(kirMes).toFixed(1)+"%");
   var kirAlt="";
   if(x.konum==="kirilim"){
     if(x.kirilimYas!=null)kirAlt=(x.kirilimYas<=1)?"bugün aştı":(x.kirilimYas+" bardır üstünde");
@@ -11239,21 +11254,22 @@ function hpKirHedef(x){
     rr1:rrOf(h1.fiyat),rr2:h2?rrOf(h2.fiyat):null,henuz:(f<sev)};
 }
 function hpYuzdeMetin(a,b){var v=hpSeviyeYuzde(a,b);if(v==null)return"—";return(v>=0?"+":"-")+"%"+Math.abs(v).toFixed(1)}
-function hpHedefMiniler(x){
+function hpHedefMiniler(x,sade){
   var t=hpKirHedef(x);
   if(!t)return "";
   function hedefKart(baslik,h,renk){
     var gecti=t.f>=h.fiyat;
-    var ust=(h.fiyat/t.f-1)*100,kir=(h.fiyat/t.sev-1)*100;
-    var alt=gecti?"aşıldı ✅ (fiyat üstünde)":("fiyattan +%"+ust.toFixed(1)+" · kırılımdan +%"+kir.toFixed(1));
-    return hpMiniKart(baslik+" · "+h.tur,hpP(h.fiyat),renk,alt);
+    var kalan=(h.fiyat/t.f-1)*100,kir=(h.fiyat/t.sev-1)*100;
+    var alt=gecti?("✅ GERÇEKLEŞTİ · fiyat hedefin %"+Math.abs(kalan).toFixed(1)+" üstünde"):
+      ("hedefe kalan <b>+%"+kalan.toFixed(1)+"</b> · kırılımdan +%"+kir.toFixed(1));
+    return hpMiniKart((gecti?"✅ ":"🎯 ")+baslik+" · "+h.tur,hpP(h.fiyat),gecti?"var(--yes)":renk,alt);
   }
   var rrRenk=function(r){return r==null?"var(--soluk)":(r>=2?"var(--yes)":(r>=1.5?"var(--sar)":"var(--kir)"))};
   var h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+
     hedefKart("🎯 Hedef 1",t.h1,"var(--yes)")+
     (t.h2?hedefKart("🎯 Hedef 2",t.h2,"var(--mavi)"):"")+
-    hpMiniKart("🛡 Stop",hpP(t.stop),"var(--kir)","fiyattan −%"+t.risk.toFixed(1)+" · "+t.stopTur)+
-    hpMiniKart("⚖️ Risk/ödül",t.rr1==null?"—":String(t.rr1),rrRenk(t.rr1),t.h2?("Hedef 2 için: "+(t.rr2==null?"—":t.rr2)):"Hedef 1 için")+
+    (sade?"":hpMiniKart("🛡 Stop",hpP(t.stop),"var(--kir)","fiyattan −%"+t.risk.toFixed(1)+" · "+t.stopTur))+
+    (sade?"":hpMiniKart("⚖️ Risk/ödül",t.rr1==null?"—":String(t.rr1),rrRenk(t.rr1),t.h2?("Hedef 2 için: "+(t.rr2==null?"—":t.rr2)):"Hedef 1 için"))+
     '</div>';
   h+='<div class="altbilgi" style="margin-top:4px;opacity:.7;white-space:normal;overflow:visible;text-overflow:clip;font-size:12px">'+
     (t.henuz?"⏳ Kırılım henüz olmadı — hedefler kırılım gerçekleşirse geçerli. ":"")+
