@@ -10211,7 +10211,7 @@ var HP_TF_ARAYUZ=[{k:"1SA",ad:"1 Saat",ik:"🕐"},{k:"4SA",ad:"4 Saat",ik:"🕓"
 var HP_TF_ADI={"1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
 var HP_GUC_AD={guclu:"güçlü",orta:"orta",zayif:"zayıf"};
 var HP_GUC_RENK={guclu:"var(--yes)",orta:"var(--sar)",zayif:"var(--soluk)"};
-var HP_KANAL=6, HP_ISTEK_ZAMAN=20000, HP_HATA_TAVAN=60, HP_PARCA=16;
+var HP_KANAL=6, HP_ISTEK_ZAMAN=35000, HP_HATA_TAVAN=60, HP_PARCA=8;
 var hpTf="1G", hpTek=null, hpEvren=null, hpEvrenKaynak="", hpOlcum={}, hpTaraDurum=null, hpNobetci=null;
 var hpCronDurum={calisiyor:true}, hpCronGorulen={}, hpHavuzZaman=null, hpHavuzSon=0, hpMinTs={}, hpGorunurKurulu=false;
 function hpKuyrukKur(){
@@ -10238,7 +10238,20 @@ function hpNobetciKur(){
       }
     }
     if(d.acik===0&&d.kuyruk.length)hpTaraTur();
-    else if(d.acik===0&&!d.kuyruk.length){d.suruyor=false;d.bitti=d.hata<HP_HATA_TAVAN;hpNobetciKapat();
+    else if(d.acik===0&&!d.kuyruk.length){
+      /* 2026-09-20-hizli-tarama: kullanıcı "ara ara kendiliğinden duruyor" dedi. Sebep: sunucu Yahoo dan verisini
+         alamadığı hisseyi cevaptan SESSİZCE çıkarıyor, istemci ise kuyruk boşalınca "bitti" sayıp duruyordu.
+         Şimdi eksik kalan hisseler otomatik yeniden kuyruğa girer (en çok 5 tur; verisi hiç olmayan hisseler
+         sonsuz döngü yapmasın). */
+      var mvc=hpOlcum[d.tf]||{},eksik=[];
+      if(hpEvren){for(var e=0;e<hpEvren.length;e++){if(!mvc[hpEvren[e]])eksik.push(hpEvren[e])}}
+      if(eksik.length&&(d.tur||0)<5&&hpTaraDurum===d){
+        d.tur=(d.tur||0)+1;
+        for(var g=0;g<eksik.length;g+=HP_PARCA)d.kuyruk.push(eksik.slice(g,g+HP_PARCA));
+        hpTaraTur();
+        return;
+      }
+      d.suruyor=false;d.bitti=d.hata<HP_HATA_TAVAN||(d.tur||0)>=5;hpNobetciKapat();
       if(hpTaraDurum===d&&!hpTek)hpCanliCiz()}
   },4000);
 }
@@ -10316,12 +10329,16 @@ function hpTaraBaslat(havuzAtla){
      çekip hpOlcum'a gömüyoruz — yalnız GERÇEKTEN eksik kalan hisseler
      canlı taranıyor. "🔄 Yenile" bilerek bunu atlıyor (havuzAtla=true),
      çünkü orada niyet açıkça "gerçekten baştan ölç". */
-  if(havuzAtla){basla();return}
-  post("/api/hacimprofil",{is:"havuz",tf:hpTf}).then(function(r){
+  /* 2026-09-20-hizli-tarama: kullanıcı isteği — "şak diye taramıyor". Eskiden canlı tarama, KV havuz isteği
+     (büyük JSON, deploy sonrası soğuk/boş) DÖNENE kadar hiç başlamıyordu. Artık tarama hemen başlar; havuz isteği
+     paralel gider, gelen ölçümler hpOlcum'a gömülür (hpTaraTur zaten ölçülmüş kodları atlıyor). */
+  basla();
+  if(havuzAtla)return;
+  post("/api/hacimprofil",{is:"havuz",tf:tfBu}).then(function(r){
     if(hpTf!==tfBu)return;
-    hpHavuzBirles(tfBu,r);
-    basla();
-  }).catch(function(){basla()});
+    var yeni=hpHavuzBirles(tfBu,r);
+    if(yeni&&!hpGun&&sekme==="hprofil"&&!hpTek)hpCanliCiz();
+  }).catch(function(){});
 }
 /* 🕰 2026-09-19-hp-cron: sunucu cron'unun biriktirdiği ölçümü sekme açıkken de
    düzenli çeker — canlı ölçüm durmuş/yavaş olsa bile ekran dolar. */
@@ -10356,7 +10373,11 @@ function hpHavuzPollKur(){
   if(!hpGorunurKurulu){
     hpGorunurKurulu=true;
     document.addEventListener("visibilitychange",function(){
-      if(!document.hidden&&sekme==="hprofil"&&hpEvren)hpHavuzTazele();
+      if(!document.hidden&&sekme==="hprofil"&&hpEvren){
+        hpHavuzTazele();
+        var dd=hpTaraDurum;
+        if(!hpGun&&dd&&dd.tf===hpTf&&dd.suruyor&&!dd.bitti){hpNobetciKur();hpTaraTur()}
+      }
     });
   }
   if(hpHavuzZaman)return;
