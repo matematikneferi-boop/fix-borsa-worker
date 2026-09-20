@@ -10498,7 +10498,7 @@ function hpGunIlerlemeKutu(olculen,evren,kalan,calisiyor){
 function hpGunBarSatiri(x){
   if(!hpGun||!x||!x.sonBar)return "";
   var b=x.sonBar,z=hpSaatMetni(b[0]);
-  return '<div class="altbilgi" style="margin-top:3px;opacity:.75">📆 Kullanılan son bar: <b>'+(x.gun||"")+'</b>'+(z&&hpTf!=="1G"?(" "+z):"")+
+  return '<div class="altbilgi" style="margin-top:4px;opacity:.85;white-space:normal;overflow:visible;text-overflow:clip;font-size:12.5px">📆 Kullanılan son bar: <b>'+(x.gun||"")+'</b>'+(z&&hpTf!=="1G"?(" "+z):"")+
     ' · A '+hpP(b[1])+' · Y '+hpP(b[2])+' · D '+hpP(b[3])+' · K '+hpP(b[4])+' · hacim '+hpBin(b[5])+'</div>';
 }
 function hpGunBagla(){
@@ -10719,11 +10719,12 @@ function hpSaatMetni(sn){
    kırılım seviyesi, kırılımdan önce/sonra net belirgin renkli minicik
    kartlar hâlinde". Tek satır metin yerine küçük, renk kodlu kutucuklar. */
 function hpMiniKart(baslik,deger,renk,altyazi){
-  return '<div style="flex:1 1 78px;min-width:78px;background:rgba(255,255,255,.05);'+
-    'border:1px solid rgba(255,255,255,.09);border-radius:9px;padding:6px 8px;text-align:center">'+
-    '<div style="font-size:10px;color:var(--soluk);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+baslik+'</div>'+
-    '<div style="font-size:15px;font-weight:800;color:'+renk+';margin-top:2px;white-space:nowrap">'+deger+'</div>'+
-    (altyazi?'<div style="font-size:9.5px;color:var(--soluk);margin-top:1px;white-space:nowrap">'+altyazi+'</div>':"")+
+  /* 2026-09-20: kullanıcı "gözlerim görmüyor" dedi — yazılar büyütüldü, kesilmek yerine alt satıra sarılıyor */
+  return '<div style="flex:1 1 104px;min-width:104px;background:rgba(255,255,255,.06);'+
+    'border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 9px;text-align:center">'+
+    '<div style="font-size:12.5px;color:var(--soluk);line-height:1.25">'+baslik+'</div>'+
+    '<div style="font-size:22px;font-weight:800;color:'+renk+';margin-top:3px;white-space:nowrap">'+deger+'</div>'+
+    (altyazi?'<div style="font-size:12px;color:var(--soluk);margin-top:2px;line-height:1.25">'+altyazi+'</div>':"")+
     '</div>';
 }
 function hpP(n){var v=Number(n);return isFinite(v)?v.toFixed(2):"—"}
@@ -11171,6 +11172,94 @@ function hpBtBagla(){
     bt.onclick=function(){tit();hpBtUfuk=Number(bt.dataset.bu);hpBtGoster()};
   });
 }
+function hpSatirMiniler(x){
+  var sev=(x.kirilimSeviye!=null)?x.kirilimSeviye:x.vah;
+  var pocMes=hpSeviyeYuzde(x.fiyat,x.poc),kirMes=hpSeviyeYuzde(x.fiyat,sev);
+  var pocRenk=pocMes==null?"var(--soluk)":(pocMes>=0?"var(--yes)":"var(--sar)");
+  var kirRenk=kirMes==null?"var(--soluk)":(kirMes>=0?"var(--yes)":"var(--sar)");
+  var pocDeg=pocMes==null?"—":((pocMes>=0?"+":"-")+Math.abs(pocMes).toFixed(1)+"%");
+  var kirDeg=kirMes==null?"—":((kirMes>=0?"+":"-")+Math.abs(kirMes).toFixed(1)+"%");
+  var kirAlt="";
+  if(x.konum==="kirilim"){
+    if(x.kirilimYas!=null)kirAlt=(x.kirilimYas<=1)?"bugün aştı":(x.kirilimYas+" bardır üstünde");
+    if(x.taze===false)kirAlt=(kirAlt?kirAlt+" · ":"")+"eski kırılım";
+  }
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+
+    hpMiniKart(hpGun?"💰 Kapanış":"💰 Fiyat",hpP(x.fiyat),"#fff",null)+
+    hpMiniKart("🎯 POC",hpP(x.poc),"var(--sar)","ciro payı %"+x.pocYuzde)+
+    hpMiniKart("🚀 Kırılım seviyesi",hpP(sev),"var(--yes)",kirAlt||null)+
+    hpMiniKart("📊 POC’a göre",pocDeg,pocRenk,pocMes==null?null:(pocMes>=0?"fiyat üstünde":"fiyat altında"))+
+    hpMiniKart("📌 Kırılıma göre",kirDeg,kirRenk,kirMes==null?null:(kirMes>=0?"fiyat üstünde":"fiyat altında"))+
+    '</div>';
+}
+/* 🎯 2026-09-20-hedef: kullanıcı isteği — Tüm liste kartında "kırılım seviyesine göre hedef değeri yok, ekle,
+   iyi hesapla". Yalnız istemcide, sunucunun zaten döndürdüğü alanlardan (fiyat/kirilimSeviye/vah/val/direncler/
+   destekler/poc) türetilir; sunucuya ve Aday motoruna (hpAday) dokunmaz.
+   HEDEF mantığı iki kaynaktan gelir, yakın olan Hedef 1, uzak olan Hedef 2 olur:
+   (a) İLK DUVAR: kırılım seviyesinin (ve fiyatın) en az %1 ötesindeki ilk GÜÇLÜ/ORTA direnç (yoksa en yakın direnç);
+   (b) ÖLÇÜLÜ HAREKET: kırılım + Value Area yüksekliği (VAH-VAL), kırılım seviyesinin %4 ila %30 üstüyle sınırlı
+       (klasik kutu kırılımı hedefi: kırılan bölgenin yüksekliği kadar ileri).
+   İki hedef %1.5 den yakınsa tek hedef sayılır. STOP: fiyat kırılımın üstündeyse kırılım seviyesinin %1.5 altı
+   (kırılım bozulursa çıkış); kırılım henüz olmadıysa fiyatın en az %1.5 altındaki en yakın güçlü/orta destek
+   (POC dahil), yoksa herhangi destek, o da yoksa -%5. Risk/ödül = (hedef-fiyat)/(fiyat-stop). */
+function hpKirHedef(x){
+  var f=Number(x.fiyat),vah=Number(x.vah),val=Number(x.val);
+  var sev=Number((x.kirilimSeviye!=null)?x.kirilimSeviye:x.vah);
+  if(!(f>0)||!(sev>0))return null;
+  var va=vah-val;
+  if(!(va>0))va=sev*0.05;
+  var ref=Math.max(f,sev)*1.01;
+  var dr=(x.direncler||[]).map(function(d){return{fiyat:Number(d&&d.fiyat),guc:d&&d.guc}})
+    .filter(function(d){return d.fiyat>ref}).sort(function(a,b){return a.fiyat-b.fiyat});
+  var duvar=null,i;
+  for(i=0;i<dr.length&&!duvar;i++){if(dr[i].guc==="guclu"||dr[i].guc==="orta")duvar=dr[i]}
+  if(!duvar&&dr.length)duvar=dr[0];
+  var olcu=Math.min(Math.max(sev+va,sev*1.04),sev*1.30);
+  var liste=[{fiyat:olcu,tur:"ölçülü hareket"}];
+  if(duvar)liste.push({fiyat:duvar.fiyat,tur:"ilk duvar"});
+  liste.sort(function(a,b){return a.fiyat-b.fiyat});
+  var h1=liste[0],h2=liste[1]||null;
+  if(h2&&h2.fiyat<=h1.fiyat*1.015){h1={fiyat:h1.fiyat,tur:"duvar + ölçülü hareket"};h2=null}
+  var stop,stopTur;
+  if(f>=sev){stop=sev*0.985;stopTur="kırılımın %1.5 altı"}
+  else{
+    var dst=[];
+    (x.destekler||[]).forEach(function(d){if(d&&Number(d.fiyat)<f)dst.push({fiyat:Number(d.fiyat),guc:d.guc})});
+    if(Number(x.poc)<f)dst.push({fiyat:Number(x.poc),guc:"guclu"});
+    dst.sort(function(a,b){return b.fiyat-a.fiyat});
+    var minStop=f*0.985,st=null,j,k;
+    for(j=0;j<dst.length&&!st;j++){if(dst[j].fiyat<=minStop&&(dst[j].guc==="guclu"||dst[j].guc==="orta"))st=dst[j]}
+    for(k=0;k<dst.length&&!st;k++){if(dst[k].fiyat<=minStop)st=dst[k]}
+    if(st){stop=st.fiyat;stopTur="en yakın destek"}
+    else{stop=f*0.95;stopTur="belirgin destek yok · −%5"}
+  }
+  var risk=(f-stop)/f*100;
+  function rrOf(t){return(t>f&&risk>0)?Math.round((t-f)/(f-stop)*10)/10:null}
+  return{f:f,sev:sev,va:va,h1:h1,h2:h2,stop:stop,stopTur:stopTur,risk:risk,
+    rr1:rrOf(h1.fiyat),rr2:h2?rrOf(h2.fiyat):null,henuz:(f<sev)};
+}
+function hpYuzdeMetin(a,b){var v=hpSeviyeYuzde(a,b);if(v==null)return"—";return(v>=0?"+":"-")+"%"+Math.abs(v).toFixed(1)}
+function hpHedefMiniler(x){
+  var t=hpKirHedef(x);
+  if(!t)return "";
+  function hedefKart(baslik,h,renk){
+    var gecti=t.f>=h.fiyat;
+    var ust=(h.fiyat/t.f-1)*100,kir=(h.fiyat/t.sev-1)*100;
+    var alt=gecti?"aşıldı ✅ (fiyat üstünde)":("fiyattan +%"+ust.toFixed(1)+" · kırılımdan +%"+kir.toFixed(1));
+    return hpMiniKart(baslik+" · "+h.tur,hpP(h.fiyat),renk,alt);
+  }
+  var rrRenk=function(r){return r==null?"var(--soluk)":(r>=2?"var(--yes)":(r>=1.5?"var(--sar)":"var(--kir)"))};
+  var h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+
+    hedefKart("🎯 Hedef 1",t.h1,"var(--yes)")+
+    (t.h2?hedefKart("🎯 Hedef 2",t.h2,"var(--mavi)"):"")+
+    hpMiniKart("🛡 Stop",hpP(t.stop),"var(--kir)","fiyattan −%"+t.risk.toFixed(1)+" · "+t.stopTur)+
+    hpMiniKart("⚖️ Risk/ödül",t.rr1==null?"—":String(t.rr1),rrRenk(t.rr1),t.h2?("Hedef 2 için: "+(t.rr2==null?"—":t.rr2)):"Hedef 1 için")+
+    '</div>';
+  h+='<div class="altbilgi" style="margin-top:4px;opacity:.7;white-space:normal;overflow:visible;text-overflow:clip;font-size:12px">'+
+    (t.henuz?"⏳ Kırılım henüz olmadı — hedefler kırılım gerçekleşirse geçerli. ":"")+
+    'İlk duvar = kırılımın ötesindeki ilk güçlü/orta direnç · ölçülü hareket = kırılım + Value Area yüksekliği ('+hpP(t.va)+').</div>';
+  return h;
+}
 function hpSatir(x){
   var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
   var destekTxt=(x.destekler&&x.destekler.length)?x.destekler.map(hpDegerYaz).join(", "):"—";
@@ -11180,11 +11269,13 @@ function hpSatir(x){
   var skorRenk=hpSkorRenk(x.saglamlikSkoru);
   return '<div class="satir" style="border-left-color:'+(kb?kb.renk:"var(--sar)")+';align-items:flex-start">'+
     '<div class="sol"><div class="kod">'+E(x.kod)+konumRozet+'</div>'+
-    '<div class="altbilgi">fiyat <b>'+hpP(x.fiyat)+'</b> · POC <b>'+hpP(x.poc)+'</b> (ciro payı %'+x.pocYuzde+((x.pocTemas!=null&&x.pocTemas>0)?' · son temas '+x.pocTemas+' bar önce':'')+')</div>'+
-    hpMesafeSatiri(x)+hpSinyalSatiri(x)+hpGunBarSatiri(x)+
-    '<div class="altbilgi" style="margin-top:3px">🔴 Direnç '+direncTxt+'</div>'+
-    '<div class="altbilgi" style="margin-top:2px">🟢 Destek '+destekTxt+'</div>'+
-    '<div class="altbilgi" style="opacity:.6;margin-top:2px">Value Area '+hpP(x.val)+' – '+hpP(x.vah)+'</div>'+
+    hpSatirMiniler(x)+
+    hpHedefMiniler(x)+
+    ((x.pocTemas!=null&&x.pocTemas>0)?'<div class="altbilgi" style="margin-top:3px;white-space:normal;overflow:visible;text-overflow:clip;font-size:12.5px">POC ye son temas '+x.pocTemas+' bar önce</div>':"")+
+    hpSinyalSatiri(x)+hpGunBarSatiri(x)+
+    '<div class="altbilgi" style="margin-top:5px;white-space:normal;overflow:visible;text-overflow:clip;font-size:13px">🔴 Direnç '+direncTxt+'</div>'+
+    '<div class="altbilgi" style="margin-top:3px;white-space:normal;overflow:visible;text-overflow:clip;font-size:13px">🟢 Destek '+destekTxt+'</div>'+
+    '<div class="altbilgi" style="opacity:.75;margin-top:3px;white-space:normal;overflow:visible;text-overflow:clip;font-size:12.5px">Value Area '+hpP(x.val)+' – '+hpP(x.vah)+'</div>'+
     (x.saglamlikSkoru!=null?'<div class="altbilgi" style="margin-top:3px">🏆 Sağlamlık: <b style="color:'+skorRenk+'">'+x.saglamlikSkoru+'/100</b></div>':"")+
     '</div>'+
     '<div class="sag"><div class="yuzde" style="color:var(--sar)">%'+x.pocYuzde+'</div>'+
