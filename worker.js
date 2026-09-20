@@ -2832,12 +2832,13 @@ async function hpSinyalIsle(A,tf,kod,s){
 async function hpGecmisAl(A,tf){
   try{const h=await A.VERI.get("hpGecmis:"+tf);return h?(JSON.parse(h)||[]):[]}catch(_){return[]}
 }
+let _hpSonNeden="";
 async function hpTekOlc(kod,tfKod){
 
   const tf=MB_TF[mbTfNormal(tfKod)];
   const r=await yfMumlar(kod,tf.interval,tf.range);
   const ham=(r&&r.veri)||[];
-  if(!ham.length)return null;
+  if(!ham.length){_hpSonNeden=((r&&r.hatalar&&r.hatalar.join(" | "))||"veri yok").slice(0,180);return null}
   const temiz=tf.hayaletAt?mbHayaletAt(ham):ham;
   const m=tf.grupSaat?mbGrupla(temiz,tf.grupSaat):temiz;
   return hpHesapla(m);
@@ -10211,7 +10212,7 @@ var HP_TF_ARAYUZ=[{k:"1SA",ad:"1 Saat",ik:"🕐"},{k:"4SA",ad:"4 Saat",ik:"🕓"
 var HP_TF_ADI={"1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
 var HP_GUC_AD={guclu:"güçlü",orta:"orta",zayif:"zayıf"};
 var HP_GUC_RENK={guclu:"var(--yes)",orta:"var(--sar)",zayif:"var(--soluk)"};
-var HP_KANAL=6, HP_ISTEK_ZAMAN=35000, HP_HATA_TAVAN=60, HP_PARCA=8;
+var HP_KANAL=10, HP_ISTEK_ZAMAN=35000, HP_HATA_TAVAN=60, HP_PARCA=4;
 var hpTf="1G", hpTek=null, hpEvren=null, hpEvrenKaynak="", hpOlcum={}, hpTaraDurum=null, hpNobetci=null;
 var hpCronDurum={calisiyor:true}, hpCronGorulen={}, hpHavuzZaman=null, hpHavuzSon=0, hpMinTs={}, hpGorunurKurulu=false;
 function hpKuyrukKur(){
@@ -10245,13 +10246,21 @@ function hpNobetciKur(){
          sonsuz döngü yapmasın). */
       var mvc=hpOlcum[d.tf]||{},eksik=[];
       if(hpEvren){for(var e=0;e<hpEvren.length;e++){if(!mvc[hpEvren[e]])eksik.push(hpEvren[e])}}
-      if(eksik.length&&(d.tur||0)<5&&hpTaraDurum===d){
+      if(d.bekleyen)return;
+      if(eksik.length&&(d.tur||0)<12&&hpTaraDurum===d){
         d.tur=(d.tur||0)+1;
-        for(var g=0;g<eksik.length;g+=HP_PARCA)d.kuyruk.push(eksik.slice(g,g+HP_PARCA));
-        hpTaraTur();
+        var say=Object.keys(mvc).length,ilerledi=say>(d.sonSay||0);
+        d.sonSay=say;
+        d.bekleyen=true;
+        setTimeout(function(){
+          d.bekleyen=false;
+          if(hpTaraDurum!==d||!d.suruyor)return;
+          for(var g=0;g<eksik.length;g+=HP_PARCA)d.kuyruk.push(eksik.slice(g,g+HP_PARCA));
+          hpTaraTur();
+        },ilerledi?300:Math.min(15000,2000*d.tur));
         return;
       }
-      d.suruyor=false;d.bitti=d.hata<HP_HATA_TAVAN||(d.tur||0)>=5;hpNobetciKapat();
+      d.suruyor=false;d.bitti=d.hata<HP_HATA_TAVAN||(d.tur||0)>=12;hpNobetciKapat();
       if(hpTaraDurum===d&&!hpTek)hpCanliCiz()}
   },4000);
 }
@@ -10282,12 +10291,16 @@ function hpTaraTur(){
           d.ardisikHata=0;
           if(!hpOlcum[d.tf])hpOlcum[d.tf]={};
           for(var k in r.olcum)hpOlcum[d.tf][k]=r.olcum[k];
+          if(r.neden)d.sonNeden=r.neden;
         }else{
           d.hata++;
-          if(d.hata<HP_HATA_TAVAN)d.kuyruk.push(kodlar2);
+          d.sonHata=(r&&(r.mesaj||r.hata))||"yanıt yok";
+          /* 2026-09-20-paralel: sunucu hata verdiyse parçayı ikiye böl — küçük parça CPU/zaman sınırına takılmaz */
+          if(kodlar2.length>1){var yr=Math.ceil(kodlar2.length/2);d.kuyruk.push(kodlar2.slice(0,yr));d.kuyruk.push(kodlar2.slice(yr))}
+          else if(d.hata<HP_HATA_TAVAN)d.kuyruk.push(kodlar2);
         }
         if(!hpTek)hpCanliCiz();
-        setTimeout(hpTaraTur,20);
+        setTimeout(hpTaraTur,r&&r.ok?0:400);
       }).catch(function(){
         if(bitir())return;
         if(hpTaraDurum!==d)return;
@@ -10303,7 +10316,9 @@ function hpTaraTur(){
            bekleme ile SONSUZA DEK kendiliğinden yeniden deniyor; bu, kod
            tabanındaki mbAlarm bekçisiyle (8sn zaman aşımı + 5sn'de bir
            kendiliğinden yeniden deneme) aynı, kanıtlanmış deseni izliyor. */
-        d.kuyruk.push(kodlar2);
+        d.sonHata="bağlantı hatası";
+        if(kodlar2.length>1){var yr2=Math.ceil(kodlar2.length/2);d.kuyruk.push(kodlar2.slice(0,yr2));d.kuyruk.push(kodlar2.slice(yr2))}
+        else d.kuyruk.push(kodlar2);
         var ardisikHata=(d.ardisikHata=(d.ardisikHata||0)+1);
         var bekleme=Math.min(30000,1200*ardisikHata);
         if(!hpTek)hpCanliCiz();
@@ -11384,6 +11399,9 @@ function hpGosterCanli(){
      ' · dilim: '+(HP_TF_ADI[hpTf]||hpTf)+'</div>'+
      '<div class="altbilgi" style="margin-top:4px">ölçülen <b>'+olculen+'</b> / '+evren+'  ·  kalan <b>'+kalan+'</b></div>'+
      (hpEvrenKaynak?'<div class="altbilgi" style="margin-top:3px;opacity:.55">evren kaynağı: '+E(hpEvrenKaynak)+'</div>':"")+
+     ((d&&(d.sonHata||d.sonNeden)&&kalan>0)?'<div class="altbilgi" style="margin-top:4px;color:var(--sar);white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word">⚠️ '+
+       (d.sonHata?('sunucu hatası: '+E(String(d.sonHata))):'')+(d.sonNeden?((d.sonHata?' · ':'')+'Yahoo: '+E(String(d.sonNeden))):'')+
+       ' · '+d.hata+' hata · tur '+(d.tur||0)+'</div>':"")+
      '<div style="height:6px;background:var(--ciz);border-radius:4px;overflow:hidden;margin-top:7px">'+
      '<div style="height:100%;width:'+yuzde+'%;background:'+(aktif?"var(--yes)":(kalan?"var(--sar)":"var(--yes)"))+'"></div></div>'+
      '<div class="altbilgi" style="margin-top:6px;opacity:.6">Sunucu her dakika arka planda ölçüyor — sekmeyi kapatsan da ilerler; sekme açıkken canlı ölçüm ek hız verir.</div>'+
@@ -16127,7 +16145,8 @@ if(gov&&gov.is==="olc"){
     }
   };
   await Promise.all(Array.from({length:Math.min(HP_ES_CANLI,kodlar.length)},isci));
-  return JS({ok:!0,tf:tf,olcum:olcum,istenen:kodlar.length});
+  const eksikSay=kodlar.length-Object.keys(olcum).length;
+  return JS({ok:!0,tf:tf,olcum:olcum,istenen:kodlar.length,bos:eksikSay,neden:eksikSay>0?_hpSonNeden:""});
 }
 /* 🧪 TARİHSEL BACKTEST parçası — bkz. hpBtHisse. KV'ye YAZMAZ, yalnız
    toplanabilir sayaçlar döner; istemci parçaları toplar. */
