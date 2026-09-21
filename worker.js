@@ -1225,8 +1225,10 @@ async function alarmGonder(e,eski,yeni){if(!e.VERI||!e.BOT_TOKEN)return;
    KISA'nın gürültüsü geri gelmesin diye üçü de (KISA/ORTA/UZUN) artık
    yalnızca ⭐⭐⭐ 3 YILDIZ şartını (⚓ ortalama üstü + 📚 kalın raf + 📐 temiz
    trend, y3SartSayisi>=3 — bkz. satır ~265) birden sağlayan sinyallerde
-   bildirim gönderiyor. Alıcılar zaten Süper Üye + yönetici ile sınırlı
-   (bkz. alarmKullanicilari).
+   bildirim gönderiyor.
+   🔒 2026-09-21 (kullanıcı isteği): "Bildirimler sadece bana, yöneticiye
+   gitsin" — alıcılar artık YALNIZ yönetici (yoneticiListesi()); süper üye
+   ve ALARM_KANAL yayını tamamen kaldırıldı (aşağıda kanal gönderimi yok).
    Mükerrer gitmez: alarmAnahtar zaten kod|dilim|canlı olduğu için aynı
    hisse iki dilimde kırdıysa iki ayrı sinyaldir ve öyle sayılır. */
 const K=(yeni&&yeni.kartlar)||{};
@@ -1262,7 +1264,9 @@ const yeniGirenler=uygun.filter(x=>!bilinen.has(alarmAnahtar(x))
 if(!yeniGirenler.length)return;
 for(const x of yeniGirenler)bilinen.add(alarmAnahtar(x));
 await e.VERI.put("alarmGun",JSON.stringify({gun:onayDonemi(),kodlar:[...bilinen].slice(-600)}));
-const kullanicilar=await alarmKullanicilari(e);
+/* 🔒 2026-09-21: alarmKullanicilari() (yönetici + süper üye) yerine artık
+   yalnızca yönetici listesi kullanılıyor — bildirimler sadece admin'e gider. */
+const kullanicilar=yoneticiListesi();
 if(!kullanicilar.length)return;
 /* Anlik kirilim ile teyitli kirilim ayni baslikta gitmemeli — biri
    "su an oluyor", digeri "bar kapandi, teyitli". */
@@ -1278,15 +1282,9 @@ const metin=baslik+yeniGirenler.slice(0,6).map(hisse=>j(hisse)).join("\n")+
    kullanicilara saniyede ~30 mesaji kaldirir; 15'erli paralel gruplar
    hem bu sinirin altinda kalir hem sureyi ~1 saniyeye indirir.
    Bir alicinin dusmesi (bot engellenmis vb.) digerlerini durdurmasin
-   diye her gonderim kendi hatasini yutar. */
-/* 1) KANAL — tek istek, abone sayisindan bagimsiz, once bu gider. */
-const kanal=String((e.ALARM_KANAL||"")).trim();
-if(kanal){
-  await b(e.BOT_TOKEN,"sendMessage",{chat_id:kanal,text:metin,
-    parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
-}
-/* 2) OZEL MESAJ — kuyruga yaz, ilk parcayi hemen gonder, gerisi
-      sonraki /push turlarinda kaldigi yerden devam eder. */
+   diye her gonderim kendi hatasini yutar.
+   🔒 2026-09-21: kanal (abone) yayını kaldırıldı — alıcılar zaten yalnız
+   yönetici, kuyruk tek kişilik olduğundan ayrıca kanal göndermeye gerek yok. */
 await alarmKuyrugaKoy(e,metin,kullanicilar);
 await alarmKuyrukBosalt(e);}
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2805,6 +2803,45 @@ async function hpGecmisEkle(A,tf,kayit){
    s içinde. sinyalKonum = giriş ANINDAKİ tetikleyici (kirilim/poc_ustu) —
    fiyat sonradan kırılıma geçse de giriş hangi türdense o sabit kalır;
    böylece "Kırılım'dan mı POC'tan mı girdi" backtest'te net ayrılabiliyor. */
+/* ---------- 🔔 EN TAZE KIRILIM BİLDİRİMİ (yalnız yönetici) ----------
+   Kullanıcı isteği (2026-09-21): "Bildirimler sadece bana, yöneticiye
+   gitsin... sadece hisse taramadaki bildirimler ile bu POC ve kırılım
+   seviyesinin en taze kırılmaları bana gelsin". Bir hisse/dilim GERÇEKTEN
+   TAZE (bu bar ya da bir önceki barda seviyeyi aşmış, kirilimYas<=1) bir
+   kırılıma girdiğinde YALNIZ yöneticiye Telegram bildirimi gider.
+   Yukarıdaki sinyalKarYuzde takibinden (hpAktifAnahtar, kirilim VE
+   poc_ustu'yu birlikte kapsar) BAĞIMSIZ, kendi anahtarı (hpKirBildir) var
+   — yalnız GERÇEK kırılımı işaretler, POC üstüne yaklaşmayı değil.
+   Aynı kırılım episodu için tekrar göndermez: anahtar yalnız konum
+   "kirilim" olmaktan çıkınca silinir, bir sonraki GERÇEK yeni kırılımda
+   tekrar bildirir. */
+const HP_KIR_BILDIRIM_TTL=2*86400;
+const HP_TF_ADI_SUNUCU={"1SA":"1 Saat","4SA":"4 Saat","1G":"Günlük"};
+function hpKirBildirAnahtar(tf,kod){return "hpKirBildir:"+tf+":"+kod}
+async function hpKirilimBildir(A,tf,kod,s){
+  if(!A||!A.VERI||!A.BOT_TOKEN||!s)return;
+  const anahtar=hpKirBildirAnahtar(tf,kod);
+  let varMi=null;
+  try{varMi=await A.VERI.get(anahtar)}catch(_){}
+  if(s.konum!=="kirilim"){
+    if(varMi)await A.VERI.delete(anahtar).catch(()=>{});
+    return;
+  }
+  if(s.taze!==true||s.kirilimYas==null||s.kirilimYas>1)return;
+  if(varMi)return;
+  await A.VERI.put(anahtar,"1",{expirationTtl:HP_KIR_BILDIRIM_TTL}).catch(()=>{});
+  const alicilar=yoneticiListesi();
+  if(!alicilar.length)return;
+  const fy=n=>{const v=Number(n);return isFinite(v)?v.toFixed(2):"—"};
+  const metin="🚀 <b>TAZE KIRILIM</b> · "+E2(kod)+" · "+(HP_TF_ADI_SUNUCU[tf]||tf)+
+    "\nFiyat <b>"+fy(s.fiyat)+"</b> — kırılım seviyesi "+fy(s.vah)+" üstünde"+
+    "\n🎯 POC "+fy(s.poc)+" (ciro payı %"+s.pocYuzde+")"+
+    "\n📐 Value Area "+fy(s.val)+" – "+fy(s.vah);
+  for(const uid of alicilar){
+    await b(A.BOT_TOKEN,"sendMessage",{chat_id:uid,text:metin,
+      parse_mode:"HTML",disable_web_page_preview:!0}).catch(()=>{});
+  }
+}
 async function hpSinyalIsle(A,tf,kod,s){
   if(!s||!A||!A.VERI)return s;
   try{
@@ -2826,6 +2863,7 @@ async function hpSinyalIsle(A,tf,kod,s){
       await A.VERI.delete(anahtar).catch(()=>{});
     }
   }catch(_){}
+  await hpKirilimBildir(A,tf,kod,s).catch(()=>{});
   return s;
 }
 /* Mini App'in "📊 Geçmiş Sinyaller" ekranı bunu çağırır. */
