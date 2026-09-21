@@ -11028,6 +11028,13 @@ function hpAdayGovde(tumListe,calisiyor){
     bBtn("yaklasan","📈 POC–Kırılım arası",bsay.yaklasan)+
     bBtn("pocgeri","📉 POC altı",bsay.pocgeri)+
     '<button class="sir" data-bolgehepsi="1">🔁 Tümünü seç</button></div>';
+  /* 2026-09-21-bolge-vs-tier-not: bildirilen "kırılım üstü 4 diyor ama Al bölgesi 1"
+     karışıklığı — bölge butonları o FİYAT BÖLGESİNDEKİ TÜM hisseleri sayar (ham x.konum),
+     aşağıdaki 🟢 Al/🟡 Hazırlan/🔵 İzle grupları ise bunların İÇİNDEN yalnız risk/ödül,
+     puan ve tazelik şartlarını da geçenleri gösterir — bu yüzden sayılar hep FARKLI
+     olabilir, bu bir hesap hatası değil. Kafa karışıklığını azaltmak için açıklayıcı
+     bir not eklendi (hesap mantığı hiç değişmedi). */
+  h+='<div class="altbilgi" style="margin:2px 0 8px;opacity:.6">Yukarıdaki sayılar o bölgedeki TÜM hisseler; aşağıdaki 🟢🟡🔵 gruplar bunların içinden risk/ödül ve puan şartını da geçenler — bu yüzden sayılar birebir eşleşmeyebilir.</div>';
   h+='<div class="altbilgi" style="margin:8px 0 4px"><b>📏 Seviyeye ne kadar yakın?</b> <span style="opacity:.6">(kırılım / POC)</span></div>'+
     '<div class="sirala" style="flex-wrap:wrap">'+
     [2,3,5,8].map(function(v){return '<button class="sir'+(hpAdayYakin===v?" on":"")+'" data-yak="'+v+'">≤%'+v+'</button>'}).join("")+'</div>';
@@ -11508,16 +11515,28 @@ function hpGosterCanli(){
     return '<button class="sir'+(hpFiltre===f.k?" on":"")+'" data-filtre="'+f.k+'">'+f.ad+' ('+sayi+')</button>';
   }).join("")+'</div>';
   var yaklasanMi=hpFiltre==="yaklasan";
+  /* 2026-09-21-poc-mesafe: kullanıcı isteği — "POC kıranların, POC'a olan mesafe
+     taraması". "🚀 Kırılım (üstü)" filtresi seçiliyken (POC'u ZATEN kırıp geçmiş
+     hisseler) fiyatın POC'a göre ne kadar UZAKLAŞTIĞINI gösteren ayrı bir sıralama
+     — eskiden bu filtrede yalnız "POC gücüne" (ciro payı) göre sıralanabiliyordu,
+     POC'a mesafe hiç sıralama seçeneği değildi (kart içinde "POC'a göre" satırı
+     olarak görünüyordu ama listeyi ona göre dizmek mümkün değildi). Yalnız istemci,
+     sunucu/KV'ye dokunmuyor; diğer filtrelerin/sıralamaların davranışı değişmedi. */
+  var pocMesafeGoster=(hpFiltre==="kirilim"||hpFiltre==="taze");
+  if(hpSiralamaModu==="pocmesafe"&&!pocMesafeGoster)hpSiralamaModu="varsayilan";
   /* 🏆 Sağlamlık Skoru sıralaması — kullanıcı isteği: "hangisi daha sağlam"
      sorusuna elle veri girmeden, sunucunun zaten hesapladığı skorla cevap.
      Filtre (Kırılım/POC Üstü/… veya Yaklaşanlar) AYNEN geçerli kalır,
      sadece o filtrenin İÇİNDEKİ sıralama değişir. */
   h+='<div class="sirala" style="flex-wrap:wrap">'+
-     '<button class="sir'+(hpSiralamaModu!=="skor"?" on":"")+'" data-sirala="varsayilan">'+
+     '<button class="sir'+(hpSiralamaModu==="varsayilan"?" on":"")+'" data-sirala="varsayilan">'+
        (yaklasanMi?"🎯 Mesafeye göre sırala":"📊 POC gücüne göre sırala")+'</button>'+
+     (pocMesafeGoster?('<button class="sir'+(hpSiralamaModu==="pocmesafe"?" on":"")+'" data-sirala="pocmesafe">📏 POC’a mesafeye göre sırala</button>'):"")+
      '<button class="sir'+(hpSiralamaModu==="skor"?" on":"")+'" data-sirala="skor">🏆 Sağlamlık skoruna göre sırala</button>'+
      '</div>';
   var skorSirali=hpSiralamaModu==="skor";
+  var pocMesafeSirali=pocMesafeGoster&&hpSiralamaModu==="pocmesafe";
+  function pocUzaklikYuzde(x){var f=Number(x.fiyat),p=Number(x.poc);return(f>0&&p>0)?(f-p)/p*100:999}
   var kaynakListe;
   if(yaklasanMi){
     kaynakListe=tumListe.filter(hpYaklasanMi)
@@ -11529,12 +11548,14 @@ function hpGosterCanli(){
     kaynakListe=(hpFiltre==="tumu"?tumListe:tumListe.filter(function(x){return hpFiltre==="taze"?(x.konum==="kirilim"&&x.taze!==false):x.konum===hpFiltre}))
       .sort(function(a,b){
         if(skorSirali)return (b.saglamlikSkoru||0)-(a.saglamlikSkoru||0);
+        if(pocMesafeSirali)return pocUzaklikYuzde(a)-pocUzaklikYuzde(b);
         return (b.pocYuzde||0)-(a.pocYuzde||0);
       });
   }
   h+='<div class="altbilgi" style="margin:4px 0 8px">listelenen <b style="color:var(--yes)">'+kaynakListe.length+'</b> hisse — '+
      (skorSirali?"🏆 Sağlamlık skoruna göre (en sağlam önde) sıralı":
-       (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı"))+'</div>';
+       (pocMesafeSirali?"POC'a mesafeye göre (POC'a en yakın önde) sıralı":
+       (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı")))+'</div>';
   if(!kaynakListe.length){
     h+='<div class="bos"><b>'+(aktif&&!tumListe.length?"Ölçülüyor…":"Bu filtrede hisse yok")+'</b><br><br>'+
        (aktif&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Farklı bir filtre dene veya tarama tamamlansın.")+'</div>';
