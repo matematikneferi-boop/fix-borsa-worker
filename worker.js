@@ -10896,25 +10896,20 @@ function hpAdaySatir(x,a,t){
   x.__aday_hedef=a.hedef;
   var pr=a.puan>=70?"var(--yes)":(a.puan>=55?"var(--sar)":"var(--soluk)");
   var rrr=a.rr>=2?"var(--yes)":(a.rr>=1.5?"var(--sar)":"var(--soluk)");
-  var saat=hpSaatMetni(x.zaman);
-  /* 2026-09-19-sade: "Önce→Sonra" kartı eskiden sunucunun İLK GÖRDÜĞÜ fiyatla şimdiki
-     fiyatı karşılaştırıyordu — ilk ölçümde ikisi aynı olduğundan hep +0% çıkıyordu.
-     Artık kırılım SEVİYESİ ile şimdiki fiyat karşılaştırılıyor (gerçek mesafe). */
-  var kirMes=hpSeviyeYuzde(x.fiyat,x.vah),pocMes=hpSeviyeYuzde(x.fiyat,x.poc);
-  var kirRenk=kirMes==null?"var(--soluk)":(kirMes>=0?"var(--yes)":"var(--sar)");
-  var kirDeger=kirMes==null?"—":((Math.round(kirMes*10)>=0?"+":"-")+Math.abs(kirMes).toFixed(1)+"%");
-  var pocAlt=pocMes==null?null:("%"+Math.abs(pocMes).toFixed(1)+(pocMes>=0?" üstünde":" altında"));
   var bl=HP_BOLGE_ROZET[x.konum];
   var rozet=bl?' <span class="rozet" style="background:'+bl.renk+';color:#0e1116">'+bl.ad+'</span>':"";
-  var miniH='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;margin-bottom:2px">'+
-    hpMiniKart(hpGun?"💰 Kapanış":"💰 Güncel fiyat",hpP(x.fiyat),"#fff",saat?("saat "+saat):null)+
-    hpMiniKart("🎯 POC",hpP(x.poc),"var(--sar)",pocAlt)+
-    hpMiniKart("🚀 Kırılım",hpP(x.vah),"var(--yes)",null)+
-    hpMiniKart("📌 Kırılıma göre",kirDeger,kirRenk,hpP(x.vah)+" → "+hpP(x.fiyat))+
-    '</div>';
+  /* 2026-09-21-detay: kullanıcı isteği — "Aday hisseler eski filtreler kadar detaylı
+     olsun". Fiyat/POC/Kırılım/POC'a göre/Kırılıma göre mini kartları artık eski
+     listedeki hpSatirMiniler ile AYNI (önceden yalnız 4 kart vardı, "POC'a göre"
+     eksikti); Direnç/Destek/Value Area/POC gücü/Sağlamlık Skoru da eski listeden
+     aynen eklendi. Aday'a özgü kısımlar (tetik metni, hedef/stop/risk-ödül,
+     iyi/uyarı, merdiven, aday puanı, yıldız) hiç değişmedi. */
+  var direncTxt=(x.direncler&&x.direncler.length)?x.direncler.map(hpDegerYaz).join(", "):"—";
+  var destekTxt=(x.destekler&&x.destekler.length)?x.destekler.map(hpDegerYaz).join(", "):"—";
+  var skorRenk=hpSkorRenk(x.saglamlikSkoru);
   return '<div class="satir" style="border-left-color:'+t.renk+';align-items:flex-start">'+
     '<div class="sol"><div class="kod">'+E(x.kod)+rozet+'</div>'+
-    miniH+
+    hpSatirMiniler(x)+
     hpGunBarSatiri(x)+
     '<div class="altbilgi" style="margin-top:4px;'+HP_SARIL+'"><b>'+a.tetikMetin+'</b></div>'+
     (a.tip!=="pocgeri"?hpHedefMiniler(x,true):"")+
@@ -10926,8 +10921,16 @@ function hpAdaySatir(x,a,t){
     (a.uy.length?'<div class="altbilgi" style="margin-top:3px;color:var(--sar);'+HP_SARIL+'">⚠️ '+a.uy.join(" · ")+'</div>':"")+
     hpMerdivenRozet(x)+
     hpSinyalSatiri(x)+
+    ((x.pocTemas!=null&&x.pocTemas>0)?'<div class="altbilgi" style="margin-top:3px;'+HP_SARIL+'">POC ye son temas '+x.pocTemas+' bar önce</div>':"")+
+    '<div class="altbilgi" style="margin-top:5px;'+HP_SARIL+'">🔴 Direnç '+direncTxt+'</div>'+
+    '<div class="altbilgi" style="margin-top:3px;'+HP_SARIL+'">🟢 Destek '+destekTxt+'</div>'+
+    '<div class="altbilgi" style="opacity:.75;margin-top:3px;'+HP_SARIL+'">Value Area '+hpP(x.val)+' – '+hpP(x.vah)+'</div>'+
+    (x.saglamlikSkoru!=null?'<div class="altbilgi" style="margin-top:3px">🏆 Sağlamlık: <b style="color:'+skorRenk+'">'+x.saglamlikSkoru+'/100</b></div>':"")+
     '</div><div class="sag"><div class="yuzde" style="color:'+pr+';font-size:22px">'+a.puan+'</div>'+
-    '<div class="altbilgi">aday puanı</div>'+hpYildizRozet(hpYildizSayi(a))+'</div></div>';
+    '<div class="altbilgi">aday puanı</div>'+
+    '<div class="yuzde" style="color:var(--sar);margin-top:6px;font-size:15px">%'+x.pocYuzde+'</div>'+
+    '<div class="altbilgi">POC gücü</div>'+
+    hpYildizRozet(hpYildizSayi(a))+'</div></div>';
 }
 var HP_PUAN_SECENEK=[0,55,70,85];
 var HP_RR_SECENEK=[0,1,1.5,2,3];
@@ -10937,6 +10940,19 @@ function hpAdayGovde(tumListe,calisiyor){
   var gr={al:[],haz:[],izle:[]},red={},toplam=tumListe.length,
       puanElenen=0,rrElenen=0,gizliElenen=0,bolgeElenen=0,
       bsay={kirilim:0,yaklasan:0,pocgeri:0};
+  /* 2026-09-21-bolge-sayac: bildirilen bug — "Aday hisseler"deki bölge sayaçları
+     (🚀 Kırılım üstü vb.) ile "Tüm liste (eski filtreler)"deki aynı isimli sayaç
+     (🚀 Kırılım (N)) farklı çıkıyordu. Sebep: buradaki sayaç yalnız aday zincirinin
+     SONUNA kadar geçen (taze + mesafe + risk/ödül hepsi uygun) hisseleri sayıyordu,
+     eski liste ise ham x.konum'a bakıyordu. Artık ikisi de AYNI ham konum sayımını
+     kullanıyor — bölge butonları toplam bölge nüfusunu gösterir, aşağıdaki aday/
+     eleme mantığı (elenen: satırı, gr[...] doldurma) hiç değişmedi. */
+  for(var bi=0;bi<tumListe.length;bi++){
+    var bk=tumListe[bi].konum;
+    if(bk==="kirilim")bsay.kirilim++;
+    else if(bk==="poc_ustu")bsay.yaklasan++;
+    else if(bk==="poc_alti")bsay.pocgeri++;
+  }
   for(var i=0;i<tumListe.length;i++){
     var x=tumListe[i],a=hpAday(x);
     if(a.tier&&a.mes>hpAdayYakin){var yk="%"+hpAdayYakin+" den uzak";red[yk]=(red[yk]||0)+1}
@@ -10944,7 +10960,6 @@ function hpAdayGovde(tumListe,calisiyor){
     else if(a.tier&&a.rr<hpAdayMinRR){rrElenen++}
     else if(a.tier&&!hpAdayTierGoster[a.tier]){gizliElenen++}
     else if(a.tier){
-      bsay[a.tip]=(bsay[a.tip]||0)+1;
       if(!hpAdayBolgeSec[a.tip])bolgeElenen++;
       else gr[a.tier].push({x:x,a:a});
     }
