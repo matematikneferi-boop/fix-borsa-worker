@@ -2879,7 +2879,7 @@ async function hpKirilimBildir(A,tf,kod,s){
   await hpTazeBildirTek(A,"kirilim",tf,kod,s);
   await hpTazeBildirTek(A,"poc_ustu",tf,kod,s);
 }
-async function hpSinyalIsle(A,tf,kod,s){
+async function hpSinyalIsle(A,tf,kod,s,bildir){
   if(!s||!A||!A.VERI)return s;
   try{
     const anahtar=hpAktifAnahtar(tf,kod);
@@ -2900,7 +2900,21 @@ async function hpSinyalIsle(A,tf,kod,s){
       await A.VERI.delete(anahtar).catch(()=>{});
     }
   }catch(_){}
-  await hpKirilimBildir(A,tf,kod,s).catch(()=>{});
+  /* 🚨 2026-09-22-canli-tekil-bildirim: "bildir" parametresi eklendi.
+     SEBEP: kullanıcı "Hisse Profili" sekmesini AÇINCA (istemci /olc ucuyla
+     ekrandaki TÜM hisseleri tek seferde canlı ölçtürüyor) onlarca bildirim
+     birden geliyordu — kaynak saat değil, sekme açılışının kendisiydi;
+     arka planda zaten sürekli çalışan cron taraması (hpDilimTara, dakikada
+     bir, tüm evreni sırayla dolaşır) SESSİZCE ilerlerken, sekme açılışı
+     aynı anda onlarca "yeni geçiş" bulup hepsini birden bildiriyordu.
+     ÇÖZÜM: giriş/çıkış TAKİBİ (yukarısı) her zaman çalışır — sekmedeki
+     sayılar hep güncel — ama Telegram BİLDİRİMİ artık YALNIZ cron'dan
+     (hpDilimTara, bildir hiç verilmezse/varsayılan true) gönderiliyor;
+     sekme/istek yolu (is:"olc") bildir=false ile çağırıp bildirimi
+     bilerek atlıyor. Böylece "canlı canlı yakalama" arka planda sürekli
+     ilerleyen TEK bir akıştan geliyor, sekme açılışına bağlı toplu patlama
+     olmuyor. */
+  if(bildir!==!1)await hpKirilimBildir(A,tf,kod,s).catch(()=>{});
   return s;
 }
 /* Mini App'in "📊 Geçmiş Sinyaller" ekranı bunu çağırır. */
@@ -16413,7 +16427,7 @@ if(gov&&gov.is==="olc"){
       const kod=kodlar[sira++];
       try{
         let s=await hpTekOlc(kod,tf);
-        if(s)s=await hpSinyalIsle(A,tf,kod,s);
+        if(s)s=await hpSinyalIsle(A,tf,kod,s,!1);
         if(s)olcum[kod]=Object.assign({kod:kod,tf:tf},s);
       }catch(_){}
     }
