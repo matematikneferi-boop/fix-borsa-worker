@@ -18000,6 +18000,14 @@ async scheduled(ev,A,ctx){
          geçildi: her cron tetiklemesinde işin/havuzun KENDİ son güncelleme
          zaman damgasına bakılıyor — yeterince zaman geçmediyse atlanıyor,
          geçtiyse çalıştırılıyor. Bu hem daha güvenilir hem daha basit. */
+      /* 🚨 2026-09-22-kota-ayir: Kullanıcı isteği — KV günlük yazma
+         kotasını Hacim Profili + Malboğa'ya ayırmak için Tavan Kombi
+         (canlı+geçmiş) ve Küme cron'dan ÇIKARILDI. Bu iki modül artık
+         arka planda kendiliğinden ilerlemiyor — sekmeleri kimse açmazsa
+         donuk kalır (Tavan Kombi'nin /api/tavankombi, /tara, /taraTumu
+         uçları hâlâ kendi tetiklendiklerinde bir adım ilerletiyor, bkz.
+         2026-09-03-f notu; yalnız CRON GÜDÜMLÜ otomatik ilerleme kalktı).
+         Geri açmak istenirse: alttaki yorum satırlarının yorumunu kaldır.
       const gecmisJob=await tvkGecmisIsOku(A);
       if(!gecmisJob||Date.now()-(gecmisJob.guncelleme||0)>=9*6e4)
         await kilitli(A,"tvkGecmisAdim",50,()=>tvkGecmisAdimYap(A),!0).catch(err=>hataYaz(A,"tvkGecmisAdim-cron",err,null).catch(()=>{}));
@@ -18007,13 +18015,8 @@ async scheduled(ev,A,ctx){
       const canliSonYazim=Math.max((canliJob1&&canliJob1.ts)||0,(canliJob4&&canliJob4.ts)||0);
       if(Date.now()-canliSonYazim>=2*6e4)
         await kilitli(A,"tvkCanli",50,()=>tvkCanliDoldur(A),!0).catch(err=>hataYaz(A,"tvkCanli-cron",err,null).catch(()=>{}));
-      /* 📦 2026-09-11: Küme/Birikim artık TVK/malboğa gibi cron'a bağlı —
-         eskiden yalnız birisi Küme sekmesini açtığında (ya da herhangi bir
-         isteğin waitUntil'ında, bkz. fetch() içindeki kumeDilim kilidi)
-         ilerliyordu; kimse bakmıyorsa havuz donuk kalıyordu. Aynı "kilitli"
-         mekanizması (aynı kilit adı: "kumeDilim") kullanıldığı için
-         fetch()'teki waitUntil çağrısıyla ÇAKIŞMAZ, ikisi birbirini bekler. */
       await kilitli(A,"kumeDilim",50,()=>kumeDilimTara(A,[])).catch(err=>hataYaz(A,"kumeDilim-cron",err,null).catch(()=>{}));
+      */
       /* 📐 Hacim Profili — Küme ile aynı gerekçe: kimse sekmeyi açmasa
          bile cron havuzu dakikada bir adım ilerletsin.
          🚀 2026-09-19-hız: eskiden 3 zaman dilimi (1SA/4SA/1G) SIRAYLA
