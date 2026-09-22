@@ -2848,9 +2848,19 @@ async function hpTazeBildirTek(A,tip,tf,kod,s){
     if(varMi)await A.VERI.delete(anahtar).catch(()=>{});
     return;
   }
-  const tazeAlan=tip==="kirilim"?s.taze:s.pocTaze;
-  const yasAlan=tip==="kirilim"?s.kirilimYas:s.pocYas;
-  if(tazeAlan!==true||yasAlan==null||yasAlan>1)return;
+  /* 🚨 2026-09-22-surekli-alarm: "taze" (yasAlan<=1, yani geçişin en fazla
+     1 bar önce olması) şartı KALDIRILDI. Sebep: hpDilimTara evrenin
+     TAMAMINI değil, her turda küçük bir dilimini (imleçle round-robin)
+     tarıyor — bir hissenin sırası tekrar gelene kadar birkaç bar
+     geçebiliyor. O ana kadar "taze" penceresi (yas<=1) kapandığı için
+     GERÇEK bir POC/kırılım geçişi hiç bildirilmeden sessizce atlanıyordu
+     (kullanıcı bildirimi: "üste kıranlar alarmı gelmiyor"). Artık tarama
+     hangi hisseyi NE ZAMAN ölçerse ölçsün — geçiş 1 bar önce de olmuş
+     olsa 10 bar önce de olmuş olsa — konum hâlâ o tipteyse VE bu geçiş
+     için daha önce bildirim gönderilmemişse (aşağıdaki varMi kilidi)
+     bildirim gönderiliyor. Böylece sistem sürekli tarayıp her kırılımı
+     er ya da geç mutlaka bildiriyor; tekrar spam'i varMi kilidi (konum
+     o tipten çıkınca silinir) hâlâ engelliyor. */
   if(varMi)return;
   await A.VERI.put(anahtar,"1",{expirationTtl:HP_KIR_BILDIRIM_TTL}).catch(()=>{});
   const alicilar=yoneticiListesi();
