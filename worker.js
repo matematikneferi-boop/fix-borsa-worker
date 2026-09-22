@@ -6290,6 +6290,9 @@ body{margin:0;background:var(--bg);color:var(--yazi);
   border-radius:9px;padding:8px 10px;margin-bottom:5px}
 .hsol{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
 .hsag{text-align:right;flex:0 0 auto}
+.hgrupBaslik{font-size:12px;font-weight:800;margin:12px 0 6px;padding-bottom:4px;
+  border-bottom:1px solid;text-transform:uppercase;letter-spacing:.4px;opacity:.9}
+.hgrupBaslik:first-child{margin-top:0}
 .ahBlok{display:flex;flex-direction:column;gap:2px;margin-top:4px}
 .ahSat{font-size:12.5px;color:var(--yazi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ahSat b{font-variant-numeric:tabular-nums}
@@ -11483,8 +11486,14 @@ function hpSatir(x){
    kart (hedefler, direnç/destek, Value Area, mini kutular) burada YOK —
    yalnız kod, konum rozeti ve o an açık olan filtreyle en alakalı TEK
    değer. Hangi hisselerin listelendiği/sırası hpGosterCanli()'de zaten
-   belirleniyor, bu fonksiyon sadece görünümü değiştiriyor. */
-function hpSatirHizli(x){
+   belirleniyor, bu fonksiyon sadece görünümü değiştiriyor.
+   gizliRozet/gizliUst: hpHizliGruplar() gruplama başlığı zaten konumu ya
+   da tazelik yaşını gösterdiğinde, satırda AYNI bilgiyi tekrar etmemek
+   için — kullanıcı isteği (2026-09-22): "burada da gruplandırma olacak,
+   amacım çok hızlı okumak" — tekrarlanan rozet/etiket göz yorup okumayı
+   YAVAŞLATIYORDU, gruplu görünümde satır başına yalnız kod + tek değer
+   kalıyor. */
+function hpSatirHizli(x,gizliRozet,gizliUst){
   var kb=HP_KONUM_BILGI[x.konum];
   if(kb&&x.konum==="kirilim"&&x.taze===false)kb={ad:"Eski kırılım",renk:"var(--sar)"};
   var renk=kb?kb.renk:"var(--sar)";
@@ -11502,13 +11511,42 @@ function hpSatirHizli(x){
     ust="%"+x.pocYuzde;
     alt="POC gücü";
   }
+  var sagHtml=gizliUst?
+    ('<div class="yuzde" style="color:var(--sar)">'+alt+'</div>'):
+    ('<div class="yuzde" style="color:var(--sar)">'+ust+'</div><div class="altbilgi" style="margin-top:1px">'+alt+'</div>');
   return '<div class="hsat" style="border-left-color:'+renk+'">'+
     '<div class="hsol"><span class="kod">'+E(x.kod)+'</span>'+
-    (kb?' <span class="rozetKucuk" style="border-color:'+kb.renk+';color:'+kb.renk+'">'+kb.ad+'</span>':"")+
+    ((kb&&!gizliRozet)?' <span class="rozetKucuk" style="border-color:'+kb.renk+';color:'+kb.renk+'">'+kb.ad+'</span>':"")+
     '</div>'+
-    '<div class="hsag"><div class="yuzde" style="color:var(--sar)">'+ust+'</div>'+
-    '<div class="altbilgi" style="margin-top:1px">'+alt+'</div></div>'+
+    '<div class="hsag">'+sagHtml+'</div>'+
     '</div>';
+}
+/* ⚡ 2026-09-22: Hızlı listeyi GRUPLARA ayırır — "tumu"/"yaklaşan" konuma
+   göre (Kırılım/POC Üstü/POC Altı/Taban Altı), "taze"/"taze_poc" ise
+   tazelik yaşına göre (Bugün/Dün/Birkaç gün önce) gruplanır. kaynakListe
+   zaten sıralı geldiği için filter() sırayı bozmuyor — gruplama SADECE
+   görünümü böler, sıralamayı değiştirmez. Diğer filtreler (kirilim,
+   poc_ustu, poc_alti, taban_alti) zaten tek konumdan oluştuğu için
+   gruplanmaz, tek blok döner. */
+function hpHizliGruplar(kaynakListe){
+  var g=[];
+  if(hpFiltre==="tumu"||hpFiltre==="yaklasan"){
+    var sira=(hpFiltre==="tumu")?["kirilim","poc_ustu","poc_alti","taban_alti"]:["poc_ustu","poc_alti"];
+    sira.forEach(function(k){
+      var liste=kaynakListe.filter(function(x){return x.konum===k});
+      if(liste.length){var kb=HP_KONUM_BILGI[k];g.push({baslik:(kb?kb.ad:k)+" ("+liste.length+")",renk:kb?kb.renk:"var(--yazi)",liste:liste})}
+    });
+  }else if(hpFiltre==="taze"||hpFiltre==="taze_poc"){
+    var yasAlani=(hpFiltre==="taze")?"kirilimYas":"pocYas";
+    var kova={1:[],2:[],3:[]};
+    kaynakListe.forEach(function(x){var y=x[yasAlani];var k=(y==null?3:(y<=1?1:(y===2?2:3)));kova[k].push(x)});
+    if(kova[1].length)g.push({baslik:"🆕 Bugün ("+kova[1].length+")",renk:"var(--yes)",liste:kova[1]});
+    if(kova[2].length)g.push({baslik:"Dün ("+kova[2].length+")",renk:"var(--sar)",liste:kova[2]});
+    if(kova[3].length)g.push({baslik:"Birkaç gün önce ("+kova[3].length+")",renk:"var(--soluk)",liste:kova[3]});
+  }else{
+    g.push({baslik:null,renk:null,liste:kaynakListe});
+  }
+  return g;
 }
 function hpGosterCanli(){
   if(hpBtEkranda)return;
@@ -11652,7 +11690,14 @@ function hpGosterCanli(){
     h+='<div class="bos"><b>'+(aktif&&!tumListe.length?"Ölçülüyor…":"Bu filtrede hisse yok")+'</b><br><br>'+
        (aktif&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Farklı bir filtre dene veya tarama tamamlansın.")+'</div>';
   }else{
-    h+=kaynakListe.map(hpHizliListe?hpSatirHizli:hpSatir).join("");
+    h+=hpHizliListe?
+      hpHizliGruplar(kaynakListe).map(function(g){
+        var basHtml=g.baslik?('<div class="hgrupBaslik" style="border-color:'+g.renk+';color:'+g.renk+'">'+g.baslik+'</div>'):"";
+        var gizliRozet=(hpFiltre==="tumu"||hpFiltre==="yaklasan");
+        var gizliUst=(hpFiltre==="taze"||hpFiltre==="taze_poc");
+        return basHtml+g.liste.map(function(x){return hpSatirHizli(x,gizliRozet,gizliUst)}).join("");
+      }).join("")
+      :kaynakListe.map(hpSatir).join("");
   }
   }
   el("govde").innerHTML=h;
