@@ -6283,6 +6283,13 @@ body{margin:0;background:var(--bg);color:var(--yazi);
 .satir:active{background:var(--kart2)}
 .satir.adaySatir:active{background:var(--kart)}
 .satir .sol{flex:1;min-width:0}
+/* ⚡ Hızlı liste satırı — .satir'in küçük/tek satırlık hali (aynı kart
+   rengi/kenar mantığı, çok daha az dolgu, hedef/direnç/destek yok). */
+.hsat{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--kart);border:1px solid var(--ciz);border-left:3px solid var(--ciz);
+  border-radius:9px;padding:8px 10px;margin-bottom:5px}
+.hsol{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+.hsag{text-align:right;flex:0 0 auto}
 .ahBlok{display:flex;flex-direction:column;gap:2px;margin-top:4px}
 .ahSat{font-size:12.5px;color:var(--yazi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ahSat b{font-variant-numeric:tabular-nums}
@@ -10694,6 +10701,13 @@ var hpFiltre="tumu";
    yeni otomatik Sağlamlık Skoru sıralaması. Sunucu hesaplıyor, burada
    sadece hangi alana göre sıralanacağı seçiliyor — elle veri girmek yok. */
 var hpSiralamaModu="varsayilan";
+/* ⚡ 2026-09-22: "Hızlı liste" — kullanıcı isteği: "çok hızlı liste olarak
+   sadece hisse ve ilgili filtrenin özetin özeti şeklinde görünsün". Aktif
+   filtre/sıralama AYNEN kalır (hangi hisseler listelendiği, hangi sırada
+   olduğu değişmiyor) — yalnız her satırın GÖRSELİ, büyük kartlar (hedef,
+   direnç/destek, Value Area vb.) yerine tek satırlık kod+rozet+değer
+   özetine dönüşüyor. Ekrandan ekrana (filtre değiştirse de) hatırlanır. */
+var hpHizliListe=false;
 function hpMesafeSatiri(x){
   if(x.kirilimMesafe==null)return "";
   var sev=(x.kirilimSeviye!=null)?x.kirilimSeviye:x.vah;
@@ -11464,6 +11478,38 @@ function hpSatir(x){
     (x.saglamlikSkoru!=null?'<div class="yuzde" style="color:'+skorRenk+';margin-top:6px;font-size:15px">🏆'+x.saglamlikSkoru+'</div>':"")+
     '</div></div>';
 }
+/* ⚡ 2026-09-22: "Hızlı liste" satırı — kullanıcı isteği: "sadece hisse ve
+   ilgili filtrenin özetin özeti şeklinde görünsün". hpSatir()'daki bütün
+   kart (hedefler, direnç/destek, Value Area, mini kutular) burada YOK —
+   yalnız kod, konum rozeti ve o an açık olan filtreyle en alakalı TEK
+   değer. Hangi hisselerin listelendiği/sırası hpGosterCanli()'de zaten
+   belirleniyor, bu fonksiyon sadece görünümü değiştiriyor. */
+function hpSatirHizli(x){
+  var kb=HP_KONUM_BILGI[x.konum];
+  if(kb&&x.konum==="kirilim"&&x.taze===false)kb={ad:"Eski kırılım",renk:"var(--sar)"};
+  var renk=kb?kb.renk:"var(--sar)";
+  var ust,alt;
+  if(hpFiltre==="taze"){
+    ust=(x.kirilimYas!=null)?(x.kirilimYas<=1?"bugün kırdı":x.kirilimYas+" gündür kırık"):"—";
+    alt="fiyat %"+(x.kirilimMesafe!=null?x.kirilimMesafe:"—")+" üstünde";
+  }else if(hpFiltre==="taze_poc"){
+    ust=(x.pocYas!=null)?(x.pocYas<=1?"bugün geçti":x.pocYas+" gündür üstünde"):"—";
+    alt="POC gücü %"+x.pocYuzde;
+  }else if(hpFiltre==="yaklasan"){
+    ust=(x.kirilimMesafe!=null?"%"+x.kirilimMesafe:"—")+" kaldı";
+    alt="fiyat "+hpP(x.fiyat);
+  }else{
+    ust="%"+x.pocYuzde;
+    alt="POC gücü";
+  }
+  return '<div class="hsat" style="border-left-color:'+renk+'">'+
+    '<div class="hsol"><span class="kod">'+E(x.kod)+'</span>'+
+    (kb?' <span class="rozetKucuk" style="border-color:'+kb.renk+';color:'+kb.renk+'">'+kb.ad+'</span>':"")+
+    '</div>'+
+    '<div class="hsag"><div class="yuzde" style="color:var(--sar)">'+ust+'</div>'+
+    '<div class="altbilgi" style="margin-top:1px">'+alt+'</div></div>'+
+    '</div>';
+}
 function hpGosterCanli(){
   if(hpBtEkranda)return;
   if(hpGecmisEkranda)return;
@@ -11600,11 +11646,13 @@ function hpGosterCanli(){
      (skorSirali?"🏆 Sağlamlık skoruna göre (en sağlam önde) sıralı":
        (pocMesafeSirali?"POC'a mesafeye göre (POC'a en yakın önde) sıralı":
        (yaklasanMi?"kırılıma mesafeye göre (en yakın önde) sıralı":"POC gücüne göre sıralı")))+'</div>';
+  h+='<button class="sir'+(hpHizliListe?" on":"")+'" data-hizli="1" style="margin-bottom:8px">'+
+     (hpHizliListe?"📋 Detaylı karta dön":"⚡ Hızlı liste (özet satır)")+'</button>';
   if(!kaynakListe.length){
     h+='<div class="bos"><b>'+(aktif&&!tumListe.length?"Ölçülüyor…":"Bu filtrede hisse yok")+'</b><br><br>'+
        (aktif&&!tumListe.length?"İlk sonuçlar birkaç saniyede düşmeye başlar.":"Farklı bir filtre dene veya tarama tamamlansın.")+'</div>';
   }else{
-    h+=kaynakListe.map(hpSatir).join("");
+    h+=kaynakListe.map(hpHizliListe?hpSatirHizli:hpSatir).join("");
   }
   }
   el("govde").innerHTML=h;
@@ -11643,6 +11691,9 @@ function hpGosterCanli(){
   });
   [].forEach.call(el("govde").querySelectorAll("[data-sirala]"),function(bt){
     bt.onclick=function(){tit();hpSiralamaModu=bt.dataset.sirala;hpGosterCanli()};
+  });
+  [].forEach.call(el("govde").querySelectorAll("[data-hizli]"),function(bt){
+    bt.onclick=function(){tit();hpHizliListe=!hpHizliListe;hpGosterCanli()};
   });
   var y=el("hpYenile");if(y)y.onclick=function(){tit();if(hpGun){hpGunBaslat(true);return}hpOlcum[hpTf]={};hpMinTs[hpTf]=Date.now();hpCronGorulen[hpTf]=0;hpTaraBaslat(!0)};
   var dd=el("hpDur");if(dd)dd.onclick=function(){tit();
