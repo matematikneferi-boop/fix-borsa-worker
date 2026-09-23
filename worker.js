@@ -17725,6 +17725,48 @@ text:(s2.ok?"✅ ":"⚠️ ")+E2(s2.mesaj),parse_mode:"HTML",reply_markup:u(t.fr
   }
   mU+="\n<i>Not: bir stok-gün, o gün TRUE olan elemanların her alt kümesine (farklı uzunluklarda) katkı yapar — satırlar birbirini dışlamaz, \"tam N eleman\" değil \"N elemanlı şart arandığında ortalama isabet\" gösterir.</i>";
   await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:mU,parse_mode:"HTML",reply_markup:u(t.from.id)})})()),new Response("ok")
+;if(i&&n.startsWith("/hptani"))return q.waitUntil((async()=>{
+  /* 🔬 2026-09-23-hptani: /tavantani ile birebir aynı mantık — mini app'e
+     hiç dokunmadan, Hacim Profili taramasının o an GERÇEKTE ne yaptığını
+     Telegram'a döküyor: durduruldu mu, evren dolu mu, kilit tutuluyor mu,
+     KV'deki havuz ne kadar taze, ve üç zaman dilimini ŞİMDİ elle bir kez
+     çalıştırıp fırlatırsa hatayı olduğu gibi gösteriyor. */
+  if(!d(t.from.id)){await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,
+    text:"Bu komut yalnızca yöneticiye açık."});return}
+  await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:"🔬 Hacim Profili gerçek bir tarama denemesi yapıyor…"});
+  let m="🔬 <b>Hacim Profili — ham teşhis</b>\n\n";
+  try{
+    const durduruldu=await A.VERI.get("hpDurduruldu").catch(()=>null);
+    m+="durduruldu mu: <code>"+(durduruldu==="1"?"EVET — taramayı durdurmuşsunuz":"hayır, açık")+"</code>\n";
+    const evren=await tamEvren(A,[]);
+    m+="evren: <code>"+evren.length+" hisse, kaynak="+E2(evren.kaynak||"?")+"</code>\n";
+    let bir=null;
+    try{const h=await A.VERI.get("hacimProfili");if(h)bir=JSON.parse(h)}catch(_){}
+    if(bir){
+      const yasDk=bir.ts?Math.round((Date.now()-bir.ts)/6e4):null;
+      m+="KV havuz son yazım: <code>"+(yasDk==null?"hiç":yasDk+" dk önce")+"</code>, sürüm eşleşiyor mu: <code>"+(bir.surum===HP_SURUM)+"</code>\n";
+      for(const tf of HP_TF_LISTE){
+        const n2=(bir.olculen&&bir.olculen[tf])||0;
+        m+="· "+tf+": ölçülen "+n2+"/"+evren.length+", imleç "+(bir.imlec&&bir.imlec[tf]||0)+"\n";
+      }
+    }else m+="KV'de hiç havuz yok (hiç yazılmamış).\n";
+    m+="\n<b>Şimdi elle, sırayla, 3 dilim de çalıştırılıyor:</b>\n";
+    for(const tf of HP_TF_LISTE){
+      const t0=Date.now();
+      try{
+        await hpDilimTara(A,[],tf);
+        m+="· "+tf+": tamam ("+(Date.now()-t0)+" ms)\n";
+      }catch(e2){
+        m+="· "+tf+": ⚠️ FIRLATTI — <code>"+E2(String((e2&&e2.stack)||(e2&&e2.message)||e2).slice(0,300))+"</code>\n";
+      }
+    }
+    const hatalar=(await hatalariOku(A)).filter(x=>String(x.yer||"").indexOf("hpDilim")===0).slice(0,3);
+    if(hatalar.length){
+      m+="\n<b>Son kayıtlı hpDilim hataları:</b>\n";
+      for(const h2 of hatalar)m+="· "+new Date(h2.t*1000).toLocaleString("tr-TR",{timeZone:"Europe/Istanbul"})+" — <code>"+E2(h2.msg)+"</code>\n";
+    }
+  }catch(e){m+="\nHata: "+E2(String((e&&e.message)||e))}
+  await b(A.BOT_TOKEN,"sendMessage",{chat_id:t.chat.id,text:m,parse_mode:"HTML"})})()),new Response("ok")
 ;if(i&&n.startsWith("/tavantani"))return q.waitUntil((async()=>{
   /* 🔬 2026-09-06-g: /surum'daki gibi mini app'e (MINIAPP client script'ine)
      HİÇ dokunmuyor — tamamen sunucu tarafında çalışıp Telegram mesajı olarak
