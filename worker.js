@@ -2848,19 +2848,25 @@ async function hpTazeBildirTek(A,tip,tf,kod,s){
     if(varMi)await A.VERI.delete(anahtar).catch(()=>{});
     return;
   }
-  /* 🚨 2026-09-22-surekli-alarm: "taze" (yasAlan<=1, yani geçişin en fazla
-     1 bar önce olması) şartı KALDIRILDI. Sebep: hpDilimTara evrenin
-     TAMAMINI değil, her turda küçük bir dilimini (imleçle round-robin)
-     tarıyor — bir hissenin sırası tekrar gelene kadar birkaç bar
-     geçebiliyor. O ana kadar "taze" penceresi (yas<=1) kapandığı için
-     GERÇEK bir POC/kırılım geçişi hiç bildirilmeden sessizce atlanıyordu
-     (kullanıcı bildirimi: "üste kıranlar alarmı gelmiyor"). Artık tarama
-     hangi hisseyi NE ZAMAN ölçerse ölçsün — geçiş 1 bar önce de olmuş
-     olsa 10 bar önce de olmuş olsa — konum hâlâ o tipteyse VE bu geçiş
-     için daha önce bildirim gönderilmemişse (aşağıdaki varMi kilidi)
-     bildirim gönderiliyor. Böylece sistem sürekli tarayıp her kırılımı
-     er ya da geç mutlaka bildiriyor; tekrar spam'i varMi kilidi (konum
-     o tipten çıkınca silinir) hâlâ engelliyor. */
+  /* 🚨 2026-09-22-surekli-alarm: Önce "taze" (yasAlan<=1) şartı tamamen
+     KALDIRILMIŞTI — sebep: o zamanki tarama çok yavaştı (yalnız cron,
+     küçük dilimlerle round-robin), bugünkü gerçek kırılımlar bile o dar
+     pencerede yakalanamıyordu. Ardından tarama hem cron hem sekme yoluyla
+     (bildir hep açık, ikisi de aynı anda katkı sağlıyor) çok hızlandı.
+     2026-09-23-sadece-bugun notuyla "bugün" şartı BİLİNÇLİ OLARAK GERİ
+     KONDU aşağıda — artık tarama yeterince hızlı olduğundan bugünün
+     kırılımlarını kaçırmıyor, ama günler önce olmuş/geç fark edilen eski
+     geçişleri de artık bildirmiyor (kullanıcı isteği: "her zaman sadece
+     bugün kıranlar olacak"). */
+  /* 🚨 2026-09-23-sadece-bugun: Kullanıcı isteği — "her zaman sadece
+     bugün kıranlar olacak". "Bugün" şartı (yasAlan<=1, kod genelinde de
+     "1 = bugün aştı" olarak kullanılan aynı eşik) geri kondu — tarama
+     artık yeterince hızlı olduğundan bugünkü gerçek kırılımlar bu dar
+     pencerede de rahatça yakalanabiliyor. Günler önce olmuş, geç fark
+     edilen eski geçişler artık yine bildirilmiyor (varMi kilidi de
+     konmuyor — sessizce atlanıyor, spam yok). */
+  const yasAlan=tip==="kirilim"?s.kirilimYas:s.pocYas;
+  if(yasAlan==null||yasAlan>1)return;
   if(varMi)return;
   await A.VERI.put(anahtar,"1",{expirationTtl:HP_KIR_BILDIRIM_TTL}).catch(()=>{});
   const alicilar=yoneticiListesi();
