@@ -16427,7 +16427,7 @@ if(gov&&gov.is==="olc"){
       const kod=kodlar[sira++];
       try{
         let s=await hpTekOlc(kod,tf);
-        if(s)s=await hpSinyalIsle(A,tf,kod,s,!1);
+        if(s)s=await hpSinyalIsle(A,tf,kod,s);
         if(s)olcum[kod]=Object.assign({kod:kod,tf:tf},s);
       }catch(_){}
     }
